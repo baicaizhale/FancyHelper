@@ -235,14 +235,29 @@ public class CLIManager {
         // 根据 Todo.md，如果 AI 进行了思考，删除思考内容。
         String cleanResponse = response.replaceAll("(?s)<thought>.*?</thought>", "").trim();
         
-        // 分离工具调用
+        // 分离工具调用：从后往前找最后一个以 # 开头的行
         String content = cleanResponse;
         String toolCall = "";
         
-        int toolIndex = cleanResponse.lastIndexOf("#");
-        if (toolIndex != -1) {
-            content = cleanResponse.substring(0, toolIndex).trim();
-            toolCall = cleanResponse.substring(toolIndex).trim();
+        String[] lines = cleanResponse.split("\n");
+        StringBuilder contentBuilder = new StringBuilder();
+        boolean toolFound = false;
+
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].trim();
+            if (!toolFound && line.startsWith("#")) {
+                toolCall = line;
+                toolFound = true;
+            } else {
+                if (contentBuilder.length() > 0) {
+                    contentBuilder.insert(0, "\n");
+                }
+                contentBuilder.insert(0, lines[i]);
+            }
+        }
+        
+        if (toolFound) {
+            content = contentBuilder.toString().trim();
         }
 
         // 展示 Agent 内容
@@ -274,13 +289,40 @@ public class CLIManager {
 
     private void executeTool(Player player, String toolCall) {
         UUID uuid = player.getUniqueId();
-        String toolName = toolCall.split(":")[0].trim();
-        String args = toolCall.contains(":") ? toolCall.substring(toolCall.indexOf(":") + 1).trim() : "";
+        
+        // 改进的解析逻辑：兼容冒号和空格分隔符，且只分割第一次出现的标识符
+        String toolName;
+        String args = "";
+        
+        // 查找第一个冒号或空格的位置
+        int colonIndex = toolCall.indexOf(":");
+        int spaceIndex = toolCall.indexOf(" ");
+        
+        int splitIndex = -1;
+        if (colonIndex != -1 && spaceIndex != -1) {
+            splitIndex = Math.min(colonIndex, spaceIndex);
+        } else if (colonIndex != -1) {
+            splitIndex = colonIndex;
+        } else if (spaceIndex != -1) {
+            splitIndex = spaceIndex;
+        }
+
+        if (splitIndex != -1) {
+            toolName = toolCall.substring(0, splitIndex).trim();
+            args = toolCall.substring(splitIndex + 1).trim();
+        } else {
+            toolName = toolCall.trim();
+        }
 
         plugin.getLogger().info("[CLI] Executing tool for " + player.getName() + ": " + toolName + " (Args: " + args + ")");
+        
+        // 统一转换为小写进行匹配
+        String lowerToolName = toolName.toLowerCase();
+        
+        // 展示给玩家时只显示工具名
         player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
 
-        switch (toolName.toLowerCase()) {
+        switch (lowerToolName) {
             case "#over":
                 isGenerating.put(uuid, false);
                 break;
@@ -288,7 +330,12 @@ public class CLIManager {
                 exitCLI(player);
                 break;
             case "#run":
-                handleRunTool(player, args);
+                if (args.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "错误: #run 工具需要提供命令参数");
+                    isGenerating.put(uuid, false);
+                } else {
+                    handleRunTool(player, args);
+                }
                 break;
             case "#get":
                 handleGetTool(player, args);
@@ -308,9 +355,12 @@ public class CLIManager {
 
     private void handleRunTool(Player player, String command) {
         UUID uuid = player.getUniqueId();
-        pendingCommands.put(uuid, command);
+        
+        // 自动过滤掉领先的斜杠 /
+        String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
+        pendingCommands.put(uuid, cleanCommand);
 
-        TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + command + " ");
+        TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + cleanCommand + " ");
         
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/mineagent confirm"));
