@@ -245,7 +245,8 @@ public class CLIManager {
         isGenerating.put(uuid, true);
 
         player.sendMessage(ChatColor.GRAY + "◇ " + message);
-        player.sendMessage(ChatColor.GRAY + "◆ Thought...");
+        // 不再主动发送 Thought...，避免干扰用户
+        // player.sendMessage(ChatColor.GRAY + "◆ Thought...");
 
         plugin.getLogger().info("[CLI] Session " + player.getName() + " - History Size: " + session.getHistory().size() + ", Est. Tokens: " + session.getEstimatedTokens());
 
@@ -275,9 +276,13 @@ public class CLIManager {
 
         plugin.getLogger().info("[CLI] AI Response received for " + player.getName() + " (Length: " + response.length() + ")");
 
-        // 解析思考内容（如果有的话，通常 AI 会输出 <thought>...</thought> 或类似内容）
-        // 根据 Todo.md，如果 AI 进行了思考，删除思考内容。
-        String cleanResponse = response.replaceAll("(?s)<thought>.*?</thought>", "").trim();
+        // 解析并移除思考内容
+        // 移除 <thought>...</thought>
+        String cleanResponse = response.replaceAll("(?s)<thought>.*?</thought>", "");
+        // 移除 Markdown 风格的 Thought: 块或类似文本
+        cleanResponse = cleanResponse.replaceAll("(?i)^Thought:.*?\n", "");
+        cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
+        cleanResponse = cleanResponse.trim();
         
         // 增强的工具调用提取逻辑：使用正则表达式匹配末尾的工具调用
         // 匹配模式：最后一个 # 加上已知的工具名
@@ -598,19 +603,35 @@ public class CLIManager {
     }
 
     private void handleSearchTool(Player player, String query) {
-        player.sendMessage(ChatColor.GRAY + "〇 #search: " + query);
+        // 处理常见的拼写错误
+        String processedQuery = query;
+        Map<String, String> typos = new HashMap<>();
+        typos.put("litemotto", "litematica");
+        typos.put("litmatica", "litematica");
+        typos.put("we", "worldedit");
+        typos.put("wg", "worldguard");
         
+        for (Map.Entry<String, String> entry : typos.entrySet()) {
+            if (processedQuery.toLowerCase().contains(entry.getKey())) {
+                processedQuery = processedQuery.toLowerCase().replace(entry.getKey(), entry.getValue());
+                player.sendMessage(ChatColor.GRAY + "〇 检测到拼写错误，已自动更正为: " + entry.getValue());
+            }
+        }
+
+        player.sendMessage(ChatColor.GRAY + "〇 #search: " + processedQuery);
+        
+        final String finalQuery = processedQuery;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             String result;
-            if (query.toLowerCase().contains("widely")) {
-                String q = query.replace("widely", "").trim();
+            if (finalQuery.toLowerCase().contains("widely")) {
+                String q = finalQuery.replace("widely", "").trim();
                 result = fetchPublicSearchResult(q);
             } else {
-                result = fetchWikiResult(query);
+                result = fetchWikiResult(finalQuery);
                 // 如果 Wiki 没搜到，自动尝试全网搜索
                 if (result.equals("未找到相关 Wiki 条目。")) {
                     player.sendMessage(ChatColor.GRAY + "〇 Wiki 无结果，正在尝试全网搜索...");
-                    result = fetchPublicSearchResult(query);
+                    result = fetchPublicSearchResult(finalQuery);
                 }
             }
             
@@ -667,25 +688,27 @@ public class CLIManager {
              try (okhttp3.Response response = ai.getHttpClient().newCall(request).execute()) {
                  if (response.isSuccessful() && response.body() != null) {
                     com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(response.body().string()).getAsJsonObject();
-                    String abstractText = json.get("AbstractText").getAsString();
+                    String abstractText = json.has("AbstractText") ? json.get("AbstractText").getAsString() : "";
                     
                     if (!abstractText.isEmpty()) {
                         return "全网搜索摘要 (" + query + "): " + abstractText;
                     }
                     
                     // 如果没有摘要，尝试获取相关话题
-                    com.google.gson.JsonArray relatedTopics = json.getAsJsonArray("RelatedTopics");
-                    if (searchResultsExist(relatedTopics)) {
-                        StringBuilder sb = new StringBuilder("相关搜索结果：\n");
-                        int count = 0;
-                        for (int i = 0; i < relatedTopics.size() && count < 3; i++) {
-                            com.google.gson.JsonObject topic = relatedTopics.get(i).getAsJsonObject();
-                            if (topic.has("Text")) {
-                                sb.append("- ").append(topic.get("Text").getAsString()).append("\n");
-                                count++;
+                    if (json.has("RelatedTopics")) {
+                        com.google.gson.JsonArray relatedTopics = json.getAsJsonArray("RelatedTopics");
+                        if (searchResultsExist(relatedTopics)) {
+                            StringBuilder sb = new StringBuilder("相关搜索结果：\n");
+                            int count = 0;
+                            for (int i = 0; i < relatedTopics.size() && count < 3; i++) {
+                                com.google.gson.JsonObject topic = relatedTopics.get(i).getAsJsonObject();
+                                if (topic.has("Text")) {
+                                    sb.append("- ").append(topic.get("Text").getAsString()).append("\n");
+                                    count++;
+                                }
                             }
+                            if (count > 0) return sb.toString();
                         }
-                        return sb.toString();
                     }
                 }
             }
