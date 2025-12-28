@@ -1,7 +1,6 @@
 package org.YanPl.manager;
 
 import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
@@ -305,13 +304,13 @@ public class CLIManager {
         
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "y"));
-        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("确认执行命令").create()));
+        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("确认执行命令")));
 
         TextComponent spacer = new TextComponent(" / ");
 
         TextComponent nBtn = new TextComponent(ChatColor.RED + "[ N ]");
         nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "n"));
-        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("取消执行").create()));
+        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("取消执行")));
 
         message.addExtra(yBtn);
         message.addExtra(spacer);

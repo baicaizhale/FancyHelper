@@ -65,11 +65,12 @@ public class WorkspaceIndexer {
         File presetDir = new File(plugin.getDataFolder(), "preset");
         if (!presetDir.exists()) {
             presetDir.mkdirs();
-            // 保存默认预设文件
-            plugin.saveResource("preset/default.txt", false);
-            plugin.saveResource("preset/coreprotect.txt", false);
-            plugin.saveResource("preset/vault.txt", false);
         }
+        
+        // 确保基础预设文件存在
+        saveResourceIfNotExists("preset/default.txt");
+        saveResourceIfNotExists("preset/coreprotect.txt");
+        saveResourceIfNotExists("preset/vault.txt");
         
         File[] files = presetDir.listFiles();
         if (files != null) {
@@ -80,6 +81,21 @@ public class WorkspaceIndexer {
             }
         }
         plugin.getLogger().info("已索引 " + indexedPresets.size() + " 个预设文件。");
+    }
+
+    /**
+     * 如果资源文件不存在则保存
+     * @param resourcePath 资源路径
+     */
+    private void saveResourceIfNotExists(String resourcePath) {
+        File file = new File(plugin.getDataFolder(), resourcePath);
+        if (!file.exists()) {
+            try {
+                plugin.saveResource(resourcePath, false);
+            } catch (IllegalArgumentException e) {
+                // 如果资源在 JAR 中也不存在，忽略
+            }
+        }
     }
 
     public List<String> getIndexedCommands() {
