@@ -364,8 +364,10 @@ public class CLIManager {
         // 统一转换为小写进行匹配
         String lowerToolName = toolName.toLowerCase();
         
-        // 展示给玩家时只显示工具名
-        player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
+        // 展示给玩家时只显示工具名（如果不是 search 或 run 这种有自己显示逻辑的工具）
+        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run")) {
+            player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
+        }
 
         switch (lowerToolName) {
             case "#over":
@@ -603,35 +605,19 @@ public class CLIManager {
     }
 
     private void handleSearchTool(Player player, String query) {
-        // 处理常见的拼写错误
-        String processedQuery = query;
-        Map<String, String> typos = new HashMap<>();
-        typos.put("litemotto", "litematica");
-        typos.put("litmatica", "litematica");
-        typos.put("we", "worldedit");
-        typos.put("wg", "worldguard");
+        player.sendMessage(ChatColor.GRAY + "〇 #search: " + query);
         
-        for (Map.Entry<String, String> entry : typos.entrySet()) {
-            if (processedQuery.toLowerCase().contains(entry.getKey())) {
-                processedQuery = processedQuery.toLowerCase().replace(entry.getKey(), entry.getValue());
-                player.sendMessage(ChatColor.GRAY + "〇 检测到拼写错误，已自动更正为: " + entry.getValue());
-            }
-        }
-
-        player.sendMessage(ChatColor.GRAY + "〇 #search: " + processedQuery);
-        
-        final String finalQuery = processedQuery;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             String result;
-            if (finalQuery.toLowerCase().contains("widely")) {
-                String q = finalQuery.replace("widely", "").trim();
+            if (query.toLowerCase().contains("widely")) {
+                String q = query.replace("widely", "").trim();
                 result = fetchPublicSearchResult(q);
             } else {
-                result = fetchWikiResult(finalQuery);
+                result = fetchWikiResult(query);
                 // 如果 Wiki 没搜到，自动尝试全网搜索
                 if (result.equals("未找到相关 Wiki 条目。")) {
                     player.sendMessage(ChatColor.GRAY + "〇 Wiki 无结果，正在尝试全网搜索...");
-                    result = fetchPublicSearchResult(finalQuery);
+                    result = fetchPublicSearchResult(query);
                 }
             }
             
@@ -678,13 +664,30 @@ public class CLIManager {
     /**
      * 调用公开搜索接口 (DuckDuckGo Instant Answer)
      */
+    private void handleRelatedTopics(com.google.gson.JsonArray topics, StringBuilder sb, int[] count) {
+        for (int i = 0; i < topics.size() && count[0] < 3; i++) {
+            com.google.gson.JsonObject item = topics.get(i).getAsJsonObject();
+            if (item.has("Topics")) {
+                // 处理嵌套话题
+                handleRelatedTopics(item.getAsJsonArray("Topics"), sb, count);
+            } else if (item.has("Text")) {
+                sb.append("- ").append(item.get("Text").getAsString()).append("\n");
+                count[0]++;
+            }
+        }
+    }
+
     private String fetchPublicSearchResult(String query) {
         try {
-            // 使用 DuckDuckGo 的公开 API (虽然是 Instant Answer，但对简单查询有效)
+            // 使用 DuckDuckGo 的公开 API
             String url = "https://api.duckduckgo.com/?q=" + 
                          java.net.URLEncoder.encode(query, "UTF-8") + "&format=json&no_html=1&skip_disambig=1";
             
-            okhttp3.Request request = new okhttp3.Request.Builder().url(url).build();
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "MineAgent/1.0") // 添加 User-Agent
+                .build();
+                
              try (okhttp3.Response response = ai.getHttpClient().newCall(request).execute()) {
                  if (response.isSuccessful() && response.body() != null) {
                     com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(response.body().string()).getAsJsonObject();
@@ -694,21 +697,12 @@ public class CLIManager {
                         return "全网搜索摘要 (" + query + "): " + abstractText;
                     }
                     
-                    // 如果没有摘要，尝试获取相关话题
                     if (json.has("RelatedTopics")) {
                         com.google.gson.JsonArray relatedTopics = json.getAsJsonArray("RelatedTopics");
-                        if (searchResultsExist(relatedTopics)) {
-                            StringBuilder sb = new StringBuilder("相关搜索结果：\n");
-                            int count = 0;
-                            for (int i = 0; i < relatedTopics.size() && count < 3; i++) {
-                                com.google.gson.JsonObject topic = relatedTopics.get(i).getAsJsonObject();
-                                if (topic.has("Text")) {
-                                    sb.append("- ").append(topic.get("Text").getAsString()).append("\n");
-                                    count++;
-                                }
-                            }
-                            if (count > 0) return sb.toString();
-                        }
+                        StringBuilder sb = new StringBuilder("相关搜索结果：\n");
+                        int[] count = {0};
+                        handleRelatedTopics(relatedTopics, sb, count);
+                        if (count[0] > 0) return sb.toString();
                     }
                 }
             }
