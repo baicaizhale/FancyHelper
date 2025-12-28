@@ -137,6 +137,25 @@ public class CLIManager {
         sendExitMessage(player);
     }
 
+    public void handleConfirm(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (pendingCommands.containsKey(uuid)) {
+            String cmd = pendingCommands.remove(uuid);
+            if (!"CHOOSING".equals(cmd)) {
+                executeCommand(player, cmd);
+            }
+        }
+    }
+
+    public void handleCancel(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (pendingCommands.containsKey(uuid)) {
+            pendingCommands.remove(uuid);
+            player.sendMessage(ChatColor.GRAY + "⇒ 命令已取消");
+            isGenerating.put(uuid, false);
+        }
+    }
+
     /**
      * 处理玩家发送的消息
      */
