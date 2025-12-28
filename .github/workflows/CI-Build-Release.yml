@@ -5,9 +5,9 @@ name: CI-Build & Release
 on:
   push:
     tags: [ 'v*' ]
-    branches: [ main, dev ]
+    branches: [ master, dev ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ master, dev ]
   workflow_dispatch:
     inputs:
       build_type:
@@ -37,24 +37,24 @@ jobs:
       - name: Determine Release Type
         id: check_release
         run: |
-          git fetch origin main --tags
+          git fetch origin master --tags
           IS_RELEASE=false
           RELEASE_VERSION=""
 
           # 情况1: Push Tag
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "Event is Push Tag"
-            if git branch -r --contains ${{ github.sha }} | grep -q 'origin/main'; then
+            if git branch -r --contains ${{ github.sha }} | grep -q 'origin/master'; then
               IS_RELEASE=true
               RELEASE_VERSION=${GITHUB_REF_NAME#v}
-              echo "Tag is on main. Release verified."
+              echo "Tag is on master. Release verified."
             else
-              echo "Tag is NOT on main. Skipping release."
+              echo "Tag is NOT on master. Skipping release."
             fi
           
-          # 情况2: Push to Main
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "Event is Push to Main"
+          # 情况2: Push to master
+          elif [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            echo "Event is Push to master"
             TAG=$(git tag --points-at HEAD | grep '^v' | head -n 1)
             if [[ -n "$TAG" ]]; then
               IS_RELEASE=true
@@ -171,11 +171,11 @@ jobs:
 
       # 原有逻辑-发布预览Release
       - name: 发布预览 Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_release.outputs.IS_RELEASE != 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.check_release.outputs.IS_RELEASE != 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: target/MineAgent-*.jar
-          tag_name: main-${{ steps.sha.outputs.SHORT_SHA }}
+          tag_name: master-${{ steps.sha.outputs.SHORT_SHA }}
           name: Pre-Release ${{ steps.sha.outputs.SHORT_SHA }}
           draft: false
           prerelease: true
