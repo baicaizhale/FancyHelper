@@ -91,7 +91,8 @@ public class CloudFlareAI {
         String url = String.format(API_BASE_URL, accountId, model);
         plugin.getLogger().info("[AI Request] URL: " + url);
 
-        JsonObject bodyJson = new JsonObject();
+        // 根据文档：https://developers.cloudflare.com/workers-ai/models/gpt-oss-120b/
+        // input 字段应直接包含消息数组
         JsonArray messagesArray = new JsonArray();
 
         // 添加系统提示词
@@ -108,13 +109,10 @@ public class CloudFlareAI {
             messagesArray.add(m);
         }
 
-        bodyJson.add("messages", messagesArray);
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.add("input", messagesArray);
         
-        // 包装在 input 字段中，解决部分模型（如 GPT-OSS）报 400 错误的问题
-        JsonObject payloadJson = new JsonObject();
-        payloadJson.add("input", bodyJson);
-        
-        String jsonPayload = gson.toJson(payloadJson);
+        String jsonPayload = gson.toJson(bodyJson);
         plugin.getLogger().info("[AI Request] Body: " + jsonPayload);
 
         RequestBody body = RequestBody.create(
@@ -139,7 +137,7 @@ public class CloudFlareAI {
 
             JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
             
-            if (resultJson.has("result")) {
+            if (resultJson.has("result") && resultJson.getAsJsonObject("result").has("response")) {
                 return resultJson.getAsJsonObject("result").get("response").getAsString();
             } else {
                 throw new IOException("API 返回结果异常: " + responseBody);
