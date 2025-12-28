@@ -60,6 +60,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "cancel":
                 plugin.getCliManager().handleCancel(player);
                 return true;
+            case "select":
+                if (args.length > 1) {
+                    String selection = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+                    plugin.getCliManager().handleChat(player, selection);
+                }
+                return true;
             default:
                 player.sendMessage(ChatColor.RED + "未知子命令。用法: /cli [reload|status]");
                 break;

@@ -581,25 +581,25 @@ public class CLIManager {
 
     private void handleChooseTool(Player player, String optionsStr) {
         String[] options = optionsStr.split(",");
-        TextComponent message = new TextComponent(ChatColor.DARK_RED + "⨂ 【 ");
+        TextComponent message = new TextComponent(ChatColor.GRAY + "⨀ [ ");
         
         for (int i = 0; i < options.length; i++) {
             String opt = options[i].trim();
-            TextComponent optBtn = new TextComponent(ChatColor.YELLOW + opt);
-            optBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, opt));
-            optBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("选择 " + opt)));
+            TextComponent optBtn = new TextComponent(ChatColor.AQUA + opt);
+            // 设置点击事件，点击后执行 /cli select <opt>
+            optBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli select " + opt));
+            optBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击选择: " + ChatColor.AQUA + opt)));
             
             message.addExtra(optBtn);
             if (i < options.length - 1) {
-                message.addExtra(ChatColor.WHITE + " | ");
+                message.addExtra(ChatColor.GRAY + " | ");
             }
         }
-        message.addExtra(ChatColor.DARK_RED + " 】");
+        message.addExtra(ChatColor.GRAY + " ]");
         
         player.spigot().sendMessage(message);
-        // 等待玩家输入或点击，这里通过 handleChat 拦截
-        // 需要一个状态标记玩家正在进行选择
-        pendingCommands.put(player.getUniqueId(), "CHOOSING"); // 借用 pendingCommands 拦截输入
+        // 标记玩家正在进行选择，以便拦截点击后的 RUN_COMMAND
+        pendingCommands.put(player.getUniqueId(), "CHOOSING"); 
     }
 
     private void handleSearchTool(Player player, String query) {
