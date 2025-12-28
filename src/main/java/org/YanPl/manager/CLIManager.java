@@ -277,6 +277,7 @@ public class CLIManager {
         String toolName = toolCall.split(":")[0].trim();
         String args = toolCall.contains(":") ? toolCall.substring(toolCall.indexOf(":") + 1).trim() : "";
 
+        plugin.getLogger().info("[CLI] Executing tool for " + player.getName() + ": " + toolName + " (Args: " + args + ")");
         player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
 
         switch (toolName.toLowerCase()) {

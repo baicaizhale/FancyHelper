@@ -91,8 +91,6 @@ public class CloudFlareAI {
         String url = String.format(API_BASE_URL, accountId, model);
         plugin.getLogger().info("[AI Request] URL: " + url);
 
-        // 根据文档：https://developers.cloudflare.com/workers-ai/models/gpt-oss-120b/
-        // input 字段应直接包含消息数组
         JsonArray messagesArray = new JsonArray();
 
         // 添加系统提示词
@@ -109,14 +107,17 @@ public class CloudFlareAI {
             messagesArray.add(m);
         }
 
+        // 构建请求体
         JsonObject bodyJson = new JsonObject();
         bodyJson.add("input", messagesArray);
-        
-        String jsonPayload = gson.toJson(bodyJson);
-        plugin.getLogger().info("[AI Request] Body: " + jsonPayload);
+        String bodyString = gson.toJson(bodyJson);
+
+        plugin.getLogger().info("[AI Request] URL: " + url);
+        plugin.getLogger().info("[AI Request] Model: " + model);
+        plugin.getLogger().info("[AI Request] Payload: " + bodyString);
 
         RequestBody body = RequestBody.create(
-                jsonPayload,
+                bodyString,
                 MediaType.get("application/json; charset=utf-8")
         );
 
@@ -128,20 +129,50 @@ public class CloudFlareAI {
 
         try (Response response = httpClient.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
-            
+            plugin.getLogger().info("[AI Response] Code: " + response.code());
+            plugin.getLogger().info("[AI Response] Body: " + responseBody);
+
             if (!response.isSuccessful()) {
-                plugin.getLogger().severe("[AI Error] Code: " + response.code());
-                plugin.getLogger().severe("[AI Error] Response: " + responseBody);
-                throw new IOException("API 请求失败: " + response.code() + " " + response.message());
+                throw new IOException("AI 调用失败: " + response.code() + " - " + responseBody);
             }
 
             JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
-            
-            if (resultJson.has("result") && resultJson.getAsJsonObject("result").has("response")) {
-                return resultJson.getAsJsonObject("result").get("response").getAsString();
-            } else {
-                throw new IOException("API 返回结果异常: " + responseBody);
+            if (!resultJson.has("result")) {
+                throw new IOException("API 返回结果中缺少 'result' 字段: " + responseBody);
             }
+
+            // 1. 尝试处理 result 为 JsonPrimitive 的情况 (如直接返回字符串)
+            if (resultJson.get("result").isJsonPrimitive()) {
+                return resultJson.get("result").getAsString();
+            }
+
+            if (resultJson.get("result").isJsonObject()) {
+                JsonObject result = resultJson.getAsJsonObject("result");
+
+                // 2. 尝试解析旧格式 (result.response)
+                if (result.has("response")) {
+                    return result.get("response").getAsString();
+                }
+
+                // 3. 尝试解析新格式 (result.output 数组)
+                if (result.has("output") && result.get("output").isJsonArray()) {
+                    JsonArray outputArray = result.getAsJsonArray("output");
+                    for (int i = 0; i < outputArray.size(); i++) {
+                        JsonObject outputItem = outputArray.get(i).getAsJsonObject();
+                        if (outputItem.has("type") && "message".equals(outputItem.get("type").getAsString()) && outputItem.has("content")) {
+                            JsonArray contentArray = outputItem.getAsJsonArray("content");
+                            for (int j = 0; j < contentArray.size(); j++) {
+                                JsonObject contentItem = contentArray.get(j).getAsJsonObject();
+                                if (contentItem.has("type") && "output_text".equals(contentItem.get("type").getAsString())) {
+                                    return contentItem.get("text").getAsString();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            throw new IOException("无法从 API 响应中解析出结果文本: " + responseBody);
         }
     }
 }

@@ -24,8 +24,11 @@ public class ChatListener implements Listener {
 
         // 检查玩家是否处于 CLI 模式或正在等待协议
         if (plugin.getCliManager().handleChat(player, message)) {
-            // 尝试通过清除收件人来减少 Secure Chat 警告
+            // 在 1.19.1+ 中，直接取消事件会导致 Secure Chat 警告
+            // 我们通过清空收件人来隐藏消息，而不取消事件，以减少干扰
             event.getRecipients().clear();
+            // 仍然需要取消，否则某些服务端实现可能会因为没有收件人而报错或记录为空白行
+            // 但我们先清空收件人是最佳实践
             event.setCancelled(true);
         }
     }
