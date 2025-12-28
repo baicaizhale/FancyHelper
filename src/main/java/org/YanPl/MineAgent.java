@@ -40,7 +40,26 @@ public final class MineAgent extends JavaPlugin {
         int pluginId = 28567;
         new Metrics(this, pluginId);
         
+        checkSecureProfile();
+        
         getLogger().info("MineAgent 已启用！");
+    }
+
+    private void checkSecureProfile() {
+        try {
+            // 使用反射检查，因为旧版本可能没有这个方法
+            java.lang.reflect.Method method = getServer().getClass().getMethod("shouldEnforceSecureProfile");
+            boolean enforce = (boolean) method.invoke(getServer());
+            if (enforce) {
+                getLogger().warning("====================================================");
+                getLogger().warning("检测到服务器启用了 'enforce-secure-profile'。");
+                getLogger().warning("这可能会导致 CLI 模式下的聊天拦截出现警告。");
+                getLogger().warning("建议在 server.properties 中将其设置为 false。");
+                getLogger().warning("====================================================");
+            }
+        } catch (Exception e) {
+            // 如果方法不存在或调用失败，忽略
+        }
     }
 
     /**
