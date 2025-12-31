@@ -276,6 +276,9 @@ public class CLIManager {
 
         plugin.getLogger().info("[CLI] AI Response received for " + player.getName() + " (Length: " + response.length() + ")");
 
+        // 先将 AI 的回复加入历史记录，确保后续工具执行产生的反馈在回复之后
+        session.addMessage("assistant", response);
+
         // 解析并移除思考内容
         // 移除 <thought>...</thought>
         String cleanResponse = response.replaceAll("(?s)<thought>.*?</thought>", "");
@@ -317,8 +320,6 @@ public class CLIManager {
             isGenerating.put(uuid, false);
             checkTokenWarning(player, session);
         }
-
-        session.addMessage("assistant", response);
     }
 
     private void checkTokenWarning(Player player, DialogueSession session) {
@@ -379,7 +380,7 @@ public class CLIManager {
             case "#run":
                 if (args.isEmpty()) {
                     player.sendMessage(ChatColor.RED + "错误: #run 工具需要提供命令参数");
-                    isGenerating.put(uuid, false);
+                    feedbackToAI(player, "#error: #run 工具需要提供命令参数，例如 #run: say hello");
                 } else {
                     handleRunTool(player, args);
                 }
@@ -395,7 +396,7 @@ public class CLIManager {
                 break;
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
-                isGenerating.put(uuid, false);
+                feedbackToAI(player, "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。");
                 break;
         }
     }
@@ -450,11 +451,12 @@ public class CLIManager {
                     }
                 }
 
-                // 兼容 1.16+ 的 UUID 发送方法
+                @Override
                 public void sendMessage(java.util.UUID uuid, String message) {
                     sendMessage(message);
                 }
 
+                @Override
                 public void sendMessage(java.util.UUID uuid, String... messages) {
                     sendMessage(messages);
                 }
@@ -470,11 +472,13 @@ public class CLIManager {
                     return new org.bukkit.command.CommandSender.Spigot() {
                         @Override
                         public void sendMessage(net.md_5.bungee.api.chat.BaseComponent component) {
+                            if (component == null) return;
                             interceptorWrapper[0].sendMessage(net.md_5.bungee.api.chat.TextComponent.toLegacyText(component));
                         }
 
                         @Override
                         public void sendMessage(net.md_5.bungee.api.chat.BaseComponent... components) {
+                            if (components == null) return;
                             for (net.md_5.bungee.api.chat.BaseComponent component : components) {
                                 sendMessage(component);
                             }
@@ -530,17 +534,28 @@ public class CLIManager {
 
                 @Override
                 public void setOp(boolean value) { player.setOp(value); }
+
+                // 尝试覆盖一些可能存在的隐藏方法或新版本方法
+                public void sendMessage(Object... args) {
+                    if (args == null || args.length == 0) return;
+                    for (Object arg : args) {
+                        if (arg == null) continue;
+                        sendMessage(arg.toString());
+                    }
+                }
             };
 
             boolean success = false;
             try {
                 success = Bukkit.dispatchCommand(interceptorWrapper[0], command);
-            } catch (Exception e) {
+            } catch (Throwable t) {
                 // 如果拦截器执行失败（常见于原版命令），退回到使用玩家身份执行
-                plugin.getLogger().warning("[CLI] Interceptor failed for command '" + command + "', falling back to player execution. Error: " + e.getMessage());
+                plugin.getLogger().warning("[CLI] Interceptor failed for command '" + command + "', falling back to player execution. Error: " + t.getMessage());
+                // 打印堆栈跟踪以帮助调试
+                t.printStackTrace();
                 success = player.performCommand(command);
                 if (output.length() == 0) {
-                    output.append("(由于原版命令限制，详细输出已直接发送至您的聊天框)");
+                    output.append("(由于原版命令拦截失败，详细输出已直接发送至您的聊天框。错误信息: " + t.getMessage() + ")");
                 }
             }
             
@@ -554,8 +569,11 @@ public class CLIManager {
             String finalResult;
             if (output.length() > 0) {
                 finalResult = output.toString();
+            } else if (success) {
+                finalResult = "命令执行成功";
             } else {
-                finalResult = success ? "命令执行成功" : "命令执行失败";
+                // 如果失败且没有输出，通常是语法错误或原版命令拦截失败
+                finalResult = "命令执行失败。可能原因：\n1. 命令语法错误（请检查参数格式）\n2. 缺少执行权限\n3. 该命令不支持由 Agent 拦截输出\n请尝试检查语法或换一种方式实现。";
             }
             
             player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Agent");
