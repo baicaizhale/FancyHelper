@@ -796,15 +796,15 @@ public class CLIManager {
     }
 
     private void sendEnterMessage(Player player) {
-        player.sendMessage(ChatColor.GRAY + "===============");
-        player.sendMessage(ChatColor.WHITE + "MineAgent (CLI Mode)");
-        player.sendMessage(ChatColor.GRAY + "===============");
+        player.sendMessage(ChatColor.GRAY + "==================");
+        player.sendMessage(ChatColor.WHITE + "CLI Powering");
+        player.sendMessage(ChatColor.GRAY + "==================");
     }
 
     private void sendExitMessage(Player player) {
-        player.sendMessage(ChatColor.GRAY + "===============");
+        player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage(ChatColor.WHITE + "已退出 CLI Mode");
-        player.sendMessage(ChatColor.GRAY + "===============");
+        player.sendMessage(ChatColor.GRAY + "==================");
     }
 
     public ChatColor getActivePlayersCount() {
