@@ -550,12 +550,10 @@ public class CLIManager {
                 success = Bukkit.dispatchCommand(interceptorWrapper[0], command);
             } catch (Throwable t) {
                 // 如果拦截器执行失败（常见于原版命令），退回到使用玩家身份执行
-                plugin.getLogger().warning("[CLI] Interceptor failed for command '" + command + "', falling back to player execution. Error: " + t.getMessage());
-                // 打印堆栈跟踪以帮助调试
-                t.printStackTrace();
+                plugin.getLogger().warning("[CLI] Interceptor failed for command '" + command + "', falling back to player execution.");
                 success = player.performCommand(command);
                 if (output.length() == 0) {
-                    output.append("(由于原版命令拦截失败，详细输出已直接发送至您的聊天框。错误信息: " + t.getMessage() + ")");
+                    output.append("(命令执行结果已直接发送至您的聊天框)");
                 }
             }
             

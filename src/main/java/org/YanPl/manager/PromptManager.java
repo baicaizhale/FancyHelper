@@ -33,7 +33,7 @@ public class PromptManager {
         sb.append("   #over - 完成任务，停止对话。\n");
         sb.append("   #exit - 当用户想退出 CLI 时调用。\n");
         sb.append("   **注意：每轮回复只能包含一个工具调用。工具名和冒号之间不要有空格。执行命令时绝对不要带斜杠 /。**\n");
-        sb.append("3. 执行 #run 前，建议先用 #search 查询命令语法。\n");
+        sb.append("3. 执行 #run 前，建议先用 #search 查询命令语法。注意：当前 Minecraft 版本为 1.20+，请确保命令语法正确（例如：**attribute <玩家> <属性> get** 而不是旧版的 get 在属性名前面）。\n");
         sb.append("4. 你的思考过程（Thought）不应展示给用户，只需输出最终正文和工具调用。\n");
         
         return sb.toString();
