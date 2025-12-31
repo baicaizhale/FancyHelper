@@ -105,6 +105,15 @@ public class CLIManager {
     }
 
     /**
+     * 关闭管理器，清理资源
+     */
+    public void shutdown() {
+        ai.shutdown();
+        sessions.clear();
+        activeCLIPayers.clear();
+    }
+
+    /**
      * 进入 CLI 模式
      */
     public void enterCLI(Player player) {
@@ -544,7 +553,7 @@ public class CLIManager {
                 plugin.getLogger().warning("[CLI] Interceptor failed for command '" + command + "', falling back to player execution.");
                 success = player.performCommand(command);
                 if (output.length() == 0) {
-                    output.append("(系统未能捕获此命令的详细输出，结果已直接显示在玩家聊天框中。请询问玩家看到了什么，或者如果玩家没有看到预期结果，请检查命令语法并重试)");
+                    output.append("(系统未能捕获此命令的详细输出，很有可能是语法错误导致，请检查命令语法并重试)");
                 }
             }
             

@@ -35,6 +35,19 @@ public class CloudFlareAI {
     }
 
     /**
+     * 关闭 HTTP 客户端，释放资源
+     */
+    public void shutdown() {
+        httpClient.dispatcher().executorService().shutdown();
+        httpClient.connectionPool().evictAll();
+        if (httpClient.cache() != null) {
+            try {
+                httpClient.cache().close();
+            } catch (IOException ignored) {}
+        }
+    }
+
+    /**
      * 自动获取 CloudFlare Account ID
      */
     private String fetchAccountId() throws IOException {
