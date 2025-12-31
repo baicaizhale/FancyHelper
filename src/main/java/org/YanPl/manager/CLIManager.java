@@ -480,10 +480,17 @@ public class CLIManager {
                             if (output.length() > 0) output.append("\n");
                             output.append("[Title] ").append(org.bukkit.ChatColor.stripColor(title));
                             if (!subtitle.isEmpty()) output.append(" [Subtitle] ").append(org.bukkit.ChatColor.stripColor(subtitle));
-                            player.sendTitle(title, subtitle, 
-                                args.length > 2 ? (int)args[2] : 10, 
-                                args.length > 3 ? (int)args[3] : 70, 
-                                args.length > 4 ? (int)args[4] : 20);
+                            
+                            // 转发给玩家，使用更通用的 API 避开可能的版本不匹配
+                            try {
+                                player.sendTitle(title, subtitle, 
+                                    args.length > 2 ? (int)args[2] : 10, 
+                                    args.length > 3 ? (int)args[3] : 70, 
+                                    args.length > 4 ? (int)args[4] : 20);
+                            } catch (NoSuchMethodError e) {
+                                // 兼容极旧版本或特定的 Bukkit 环境
+                                player.sendMessage(title + " " + subtitle);
+                            }
                         }
                         return null;
                     }
