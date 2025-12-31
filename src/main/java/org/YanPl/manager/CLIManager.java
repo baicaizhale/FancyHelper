@@ -448,14 +448,19 @@ public class CLIManager {
                 (proxy, method, args) -> {
                     String methodName = method.getName();
                     
-                    // 拦截所有 sendMessage 方法
-                    if (methodName.equals("sendMessage")) {
+                    // 拦截所有 sendMessage 和相关发送消息的方法
+                    if (methodName.equals("sendMessage") || methodName.equals("sendRawMessage") || methodName.equals("sendActionBar")) {
                         if (args.length > 0 && args[0] != null) {
                             if (args[0] instanceof String) {
                                 String msg = (String) args[0];
                                 if (output.length() > 0) output.append("\n");
                                 output.append(org.bukkit.ChatColor.stripColor(msg));
-                                player.sendMessage(msg);
+                                // 转发给真实玩家
+                                if (methodName.equals("sendActionBar")) {
+                                    player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new net.md_5.bungee.api.chat.TextComponent(msg));
+                                } else {
+                                    player.sendMessage(msg);
+                                }
                             } else if (args[0] instanceof String[]) {
                                 for (String msg : (String[]) args[0]) {
                                     if (output.length() > 0) output.append("\n");
@@ -463,6 +468,22 @@ public class CLIManager {
                                     player.sendMessage(msg);
                                 }
                             }
+                        }
+                        return null;
+                    }
+
+                    // 拦截标题发送
+                    if (methodName.equals("sendTitle") && args.length >= 2) {
+                        String title = args[0] != null ? args[0].toString() : "";
+                        String subtitle = args[1] != null ? args[1].toString() : "";
+                        if (!title.isEmpty() || !subtitle.isEmpty()) {
+                            if (output.length() > 0) output.append("\n");
+                            output.append("[Title] ").append(org.bukkit.ChatColor.stripColor(title));
+                            if (!subtitle.isEmpty()) output.append(" [Subtitle] ").append(org.bukkit.ChatColor.stripColor(subtitle));
+                            player.sendTitle(title, subtitle, 
+                                args.length > 2 ? (int)args[2] : 10, 
+                                args.length > 3 ? (int)args[3] : 70, 
+                                args.length > 4 ? (int)args[4] : 20);
                         }
                         return null;
                     }
