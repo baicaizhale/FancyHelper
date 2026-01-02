@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
  * CloudFlare Workers AI API 集成
  */
 public class CloudFlareAI {
-    private static final String API_RESPONSES_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/responses";
+    private static final String API_RUN_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/run/%s";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
     private final MineAgent plugin;
     private final OkHttpClient httpClient;
@@ -24,9 +24,9 @@ public class CloudFlareAI {
     public CloudFlareAI(MineAgent plugin) {
         this.plugin = plugin;
         this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .writeTimeout(60, TimeUnit.SECONDS)
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(90, TimeUnit.SECONDS)
+                .writeTimeout(90, TimeUnit.SECONDS)
                 .build();
     }
 
@@ -88,8 +88,13 @@ public class CloudFlareAI {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
 
-        if (cfKey.isEmpty()) {
+        if (cfKey == null || cfKey.isEmpty()) {
             return "错误: 请先在配置文件中设置 CloudFlare cf_key。";
+        }
+
+        if (model == null || model.isEmpty()) {
+            model = "@cf/openai/gpt-oss-120b";
+            plugin.getLogger().warning("[AI] 模型名称为空，已回退到默认值: " + model);
         }
 
         // 自动获取 Account ID
@@ -101,11 +106,19 @@ public class CloudFlareAI {
             throw e;
         }
 
-        // 使用 /ai/v1/responses 接口，这是 gpt-oss-120b 推荐的接口
-        String url = String.format(API_RESPONSES_URL, accountId);
+        // 使用 /ai/run 接口，这是 CloudFlare Workers AI 的标准接口
+        String url = String.format(API_RUN_URL, accountId, model);
         plugin.getLogger().info("[AI Request] URL: " + url);
 
         JsonArray messagesArray = new JsonArray();
+
+        // 1. 添加系统提示词
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            JsonObject systemMsg = new JsonObject();
+            systemMsg.addProperty("role", "system");
+            systemMsg.addProperty("content", systemPrompt);
+            messagesArray.add(systemMsg);
+        }
 
         // 2. 添加历史记录 (role: user/assistant)
         for (DialogueSession.Message msg : session.getHistory()) {
@@ -130,27 +143,19 @@ public class CloudFlareAI {
             messagesArray.add(m);
         }
 
-        // 构建符合 /ai/v1/responses 接口要求的请求体
+        // 构建请求体
         JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("input", messagesArray);
+        bodyJson.add("messages", messagesArray);
         
-        // 1. 添加系统提示词 (对于 gpt-oss-120b，必须使用 instructions 字段而不是 input 数组中的 system 角色)
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            bodyJson.addProperty("instructions", systemPrompt);
-        }
-        
-        // 如果是 gpt-oss 模型，添加推理参数
-        if (model.contains("gpt-oss")) {
-            JsonObject reasoning = new JsonObject();
-            reasoning.addProperty("effort", "medium");
-            bodyJson.add("reasoning", reasoning);
-        }
+        // 如果是 gpt-oss 模型，且使用了 /ai/v1/responses (虽然这里改回了 /run，但部分参数可能仍然通用)
+        // 不过在 /run 接口中，通常不支持 reasoning 字段，除非是特定的模型
+        // 为了安全起见，先移除 reasoning，因为 gpt-oss-120b 在 /run 接口下可能不支持它
         
         String bodyString = gson.toJson(bodyJson);
 
         plugin.getLogger().info("[AI Request] Model: " + model);
-        plugin.getLogger().info("[AI Request] Payload: " + bodyString);
+        // 不记录完整 Payload 避免日志过大，或者只记录摘要
+        // plugin.getLogger().info("[AI Request] Payload: " + bodyString);
 
         RequestBody body = RequestBody.create(
                 bodyString,
@@ -166,7 +171,6 @@ public class CloudFlareAI {
         try (Response response = httpClient.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
             plugin.getLogger().info("[AI Response] Code: " + response.code());
-            plugin.getLogger().info("[AI Response] Body: " + responseBody);
 
             if (!response.isSuccessful()) {
                 throw new IOException("AI 调用失败: " + response.code() + " - " + responseBody);
@@ -174,45 +178,24 @@ public class CloudFlareAI {
 
             JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
             
-            // 1. 处理新的 /ai/v1/responses (Responses API) 格式
-            // 格式: { "output": [ { "type": "message", "content": [ { "type": "output_text", "text": "..." } ] } ] }
-            if (responseJson.has("output") && responseJson.get("output").isJsonArray()) {
-                JsonArray outputArray = responseJson.getAsJsonArray("output");
-                for (int i = 0; i < outputArray.size(); i++) {
-                    JsonObject item = outputArray.get(i).getAsJsonObject();
-                    if (item.has("type") && "message".equals(item.get("type").getAsString())) {
-                        if (item.has("content") && item.get("content").isJsonArray()) {
-                            JsonArray contents = item.getAsJsonArray("content");
-                            for (int j = 0; j < contents.size(); j++) {
-                                JsonObject contentObj = contents.get(j).getAsJsonObject();
-                                if (contentObj.has("type") && "output_text".equals(contentObj.get("type").getAsString())) {
-                                    return contentObj.get("text").getAsString();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. 处理标准 /run 接口返回格式 (备选)
+            // 处理 /ai/run 接口返回格式
+            // 格式: { "result": { "response": "..." }, "success": true, ... }
             if (responseJson.has("result")) {
                 JsonObject result = responseJson.getAsJsonObject("result");
-                
-                // 格式 1: { "result": { "response": "..." } }
                 if (result.has("response")) {
                     return result.get("response").getAsString();
                 }
-                
-                // 格式 2: { "result": { "choices": [ { "message": { "content": "..." } } ] } }
-                if (result.has("choices") && result.getAsJsonArray("choices").size() > 0) {
-                    JsonObject firstChoice = result.getAsJsonArray("choices").get(0).getAsJsonObject();
-                    if (firstChoice.has("message")) {
-                        return firstChoice.getAsJsonObject("message").get("content").getAsString();
-                    }
+            }
+
+            // 备选格式处理 (某些模型可能返回不同的 key)
+            if (responseJson.has("result")) {
+                JsonObject result = responseJson.getAsJsonObject("result");
+                if (result.has("text")) {
+                    return result.get("text").getAsString();
                 }
             }
 
-            throw new IOException("无法从 API 响应中解析出结果文本: " + responseBody);
+            throw new IOException("无法解析 AI 响应结果: " + responseBody);
         }
     }
 }

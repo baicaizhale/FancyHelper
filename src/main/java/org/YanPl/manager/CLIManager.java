@@ -715,6 +715,7 @@ public class CLIManager {
             
             okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(url)
+                .header("User-Agent", "MineAgent/1.0")
                 .post(body)
                 .build();
                 
@@ -739,11 +740,24 @@ public class CLIManager {
                         StringBuilder sb = new StringBuilder("全网搜索结果 (" + query + ")：\n");
                         for (int i = 0; i < Math.min(5, results.size()); i++) {
                             com.google.gson.JsonObject item = results.get(i).getAsJsonObject();
-                            String title = item.has("title") ? item.get("title").getAsString() : "无标题";
+                            
+                            String title = "无标题";
+                            if (item.has("title") && !item.get("title").isJsonNull()) {
+                                title = item.get("title").getAsString();
+                            }
+                            
                             String content = "";
-                            if (item.has("content")) content = item.get("content").getAsString();
-                            else if (item.has("snippet")) content = item.get("snippet").getAsString();
-                            else if (item.has("abstract")) content = item.get("abstract").getAsString();
+                            if (item.has("content") && !item.get("content").isJsonNull()) {
+                                content = item.get("content").getAsString();
+                            } else if (item.has("snippet") && !item.get("snippet").isJsonNull()) {
+                                content = item.get("snippet").getAsString();
+                            } else if (item.has("abstract") && !item.get("abstract").isJsonNull()) {
+                                content = item.get("abstract").getAsString();
+                            }
+                            
+                            if (content.length() > 500) {
+                                content = content.substring(0, 500) + "...";
+                            }
                             
                             sb.append("- ").append(title).append(": ").append(content).append("\n");
                         }
