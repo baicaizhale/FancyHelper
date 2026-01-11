@@ -25,8 +25,8 @@ public class PromptManager {
         sb.append("\n规则：\n");
         sb.append("1. **绝对禁止使用任何 Markdown 格式**（如 # 标题、- 列表、[链接]等）。\n");
         sb.append("2. 如果你需要高亮显示某些关键词（如命令、玩家名、物品名），请使用 ** ** 将其括起来。例如：你可以输入 **weather rain** 来更改天气。\n");
-        sb.append("3. 你可以使用以下工具。**重要：工具调用必须独立成行，且必须放在整个回复的最末尾。**\n");
-        sb.append("   格式：#工具名: 参数\n");
+        sb.append("3. 你可以使用以下工具。绝对严格要求：工具调用只能在每次回复的最后一行、单独成行地出现（即最后一行仅包含工具调用），并且**每次回复最多只能包含一个工具调用**。不得在正文中间或注释中调用工具，也不得在同一行包含其它文本。违反此规则将导致解析失败或被拒绝。\n");
+        sb.append("   格式：#工具名: 参数（例如：#get: coreprotect.txt）\n");
         sb.append("   #search: <args> - 在 Minecraft Wiki 搜索。使用 #search: widely <args> 调用全网搜索。\n");
         sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择。\n");
         sb.append("   #get: <file> - 从预设目录获取文件内容。\n");
