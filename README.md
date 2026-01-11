@@ -1,6 +1,6 @@
 # MineAgent 🤖
 
-![MineAgent](./image.jpg)
+<img src="./image.jpg" alt="MineAgent" width="200"/>
 
 MineAgent 是一款基于 AI 驱动的 Minecraft 服务器管理助手插件。它允许管理员通过简单的自然语言与 AI 对话，自动生成并执行复杂的服务器指令，极大地降低了插件学习成本和管理负担。
 
@@ -69,3 +69,4 @@ mvn clean package
 
 ---
 **MineAgent** - 让 Minecraft 服务器管理步入 AI 时代。
+© 2026 baicaizhale. 保留所有权利。
