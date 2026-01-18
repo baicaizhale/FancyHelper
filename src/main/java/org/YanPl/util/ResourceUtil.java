@@ -11,11 +11,16 @@ import java.util.jar.JarFile;
 
 public class ResourceUtil {
 
+    /**
+     * 资源工具类：负责将 jar 内嵌的资源释放到插件数据目录（如 preset 文件）。
+     */
+
     public static void releaseResources(MineAgent plugin, String resourceDir, boolean replace, String extension) {
         if (!resourceDir.endsWith("/")) {
             resourceDir += "/";
         }
 
+        // 遍历 jar 包中的条目并保存匹配的资源
         try {
             URL jarUrl = plugin.getClass().getProtectionDomain().getCodeSource().getLocation();
             URI jarUri = jarUrl.toURI();

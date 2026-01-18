@@ -18,6 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.scheduler.BukkitRunnable;
 
+/**
+ * CLI 管理器：处理玩家的 CLI 会话、与 AI 的交互、工具调用与命令执行确认流程。
+ */
 public class CLIManager {
     private final MineAgent plugin;
     private final CloudFlareAI ai;

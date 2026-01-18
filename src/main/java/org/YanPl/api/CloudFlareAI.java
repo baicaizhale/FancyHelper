@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class CloudFlareAI {
+    /**
+     * 简单封装 CloudFlare AI HTTP 调用的客户端
+     * 负责构建请求、解析响应，以及管理 HttpClient 的生命周期。
+     */
     private static final String API_RESPONSES_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/responses";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
     private final MineAgent plugin;
@@ -34,6 +38,7 @@ public class CloudFlareAI {
     }
 
     public void shutdown() {
+        // 关闭 OkHttp 客户端相关的线程池、连接池和缓存，防止 JVM 无法退出
         try {
             httpClient.dispatcher().executorService().shutdown();
             if (!httpClient.dispatcher().executorService().awaitTermination(5, TimeUnit.SECONDS)) {
@@ -58,6 +63,7 @@ public class CloudFlareAI {
     }
 
     private String fetchAccountId() throws IOException {
+        // 从 Cloudflare API 获取 Account ID 并缓存，依赖配置中的 cf_key
         if (cachedAccountId != null) return cachedAccountId;
 
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
@@ -89,6 +95,7 @@ public class CloudFlareAI {
     }
 
     public String chat(DialogueSession session, String systemPrompt) throws IOException {
+        // 将会话历史与 systemPrompt 打包为 CloudFlare Responses API 所需的 JSON，发起 HTTP 请求并解析返回
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
 

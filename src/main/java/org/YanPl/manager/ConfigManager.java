@@ -11,6 +11,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ConfigManager {
+    /**
+     * 配置管理器：负责检测配置版本、更新默认配置、加载配置并提供便捷的 getter。
+     */
     private final MineAgent plugin;
     private FileConfiguration config;
 
@@ -22,6 +25,7 @@ public class ConfigManager {
 
     private void checkAndUpdateConfig() {
         File configFile = new File(plugin.getDataFolder(), "config.yml");
+        // 如果尚无配置文件则直接返回（后续 saveDefaultConfig 会生成）
         if (!configFile.exists()) {
             return;
         }
@@ -76,10 +80,12 @@ public class ConfigManager {
                 }
             }
         }
+        // 删除目录自身
         directory.delete();
     }
 
     public void loadConfig() {
+        // 确保存在默认配置并读取
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
         this.config = plugin.getConfig();

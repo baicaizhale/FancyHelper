@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class WorkspaceIndexer {
+    /**
+     * 工作区索引器：用于索引服务器上可用的命令以及插件内的预设文件列表。
+     */
     private final MineAgent plugin;
     private List<String> indexedCommands = new ArrayList<>();
     private List<String> indexedPresets = new ArrayList<>();
@@ -23,6 +26,7 @@ public class WorkspaceIndexer {
     }
 
     public void indexAll() {
+        // 同步执行命令与预设索引（调用方可选择异步）
         indexCommands();
         indexPresets();
     }

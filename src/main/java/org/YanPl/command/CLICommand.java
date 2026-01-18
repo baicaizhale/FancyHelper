@@ -13,6 +13,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * /mineagent 命令的处理器。
+ * 提供切换 CLI、重载、查看状态等子命令，并支持 Tab 完成。
+ */
 public class CLICommand implements CommandExecutor, TabCompleter {
     private final MineAgent plugin;
 
@@ -22,6 +26,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        // 命令入口：只允许玩家使用
         if (!(sender instanceof Player)) {
             sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
             return true;
@@ -71,6 +76,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     private void toggleCLIMode(Player player) {
+        // 切换玩家的 CLI 模式
         plugin.getCliManager().toggleCLI(player);
     }
 

@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DialogueSession {
+    /**
+     * DialogueSession 保存简短的对话历史与最近活动时间，用于与 AI 交互时传递上下文。
+     */
     private final List<Message> history = new ArrayList<>();
     private long lastActivityTime;
 
@@ -12,10 +15,12 @@ public class DialogueSession {
     }
 
     public void addMessage(String role, String content) {
+        // 添加消息并更新活动时间；限制历史长度以节省 token
         history.add(new Message(role, content));
         this.lastActivityTime = System.currentTimeMillis();
         
         if (history.size() > 20) {
+            // 移除最早的两条，保持历史在一个较小范围
             history.remove(0);
             history.remove(0);
         }
@@ -26,6 +31,7 @@ public class DialogueSession {
     }
 
     public int getEstimatedTokens() {
+        // 粗略估算 token：每 4 个字符为 1 token（近似值）
         int chars = 0;
         for (Message msg : history) {
             chars += msg.getContent().length();
