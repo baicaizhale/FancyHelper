@@ -903,7 +903,7 @@ public class CLIManager {
         player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage("");
         player.sendMessage(ChatColor.WHITE + "已退出 CLI Mode");
-        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + (tokens + thoughtTokens) + " (对话: " + tokens + ", 思考: " + thoughtTokens + ") | 时长: " + String.format("%.1f", durationSec) + " 秒");
+        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + (tokens + thoughtTokens) + String.format("%.1f", durationSec) + " 秒");
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "==================");
     }
