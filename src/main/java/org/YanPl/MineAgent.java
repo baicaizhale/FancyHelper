@@ -42,6 +42,16 @@ public final class MineAgent extends JavaPlugin {
         // 检查 server.properties 中的安全配置并提示
         checkSecureProfile();
 
+        // 打印启动 ASCII 艺术
+        getLogger().info("___  ____               ___                   _   ");
+        getLogger().info("|  \\/  (_)             / _ \\                 | |  ");
+        getLogger().info("| .  . |_ _ __   ___  / /_\\ \\ __ _  ___ _ __ | |_ ");
+        getLogger().info("| |\\/| | | '_ \\ / _ \\ |  _  |/ _` |/ _ \\ '_ \\| __|");
+        getLogger().info("| |  | | | | | |  __/ | | | | (_| |  __/ | | | |_ ");
+        getLogger().info("\\_|  |_/_|_| |_|\\___| \\_| |_|\\__, |\\___|_| |_|\\__|");
+        getLogger().info("                              __/ |               ");
+        getLogger().info("                             |___/                ");
+
         getLogger().info("MineAgent 已启用！");
     }
 
