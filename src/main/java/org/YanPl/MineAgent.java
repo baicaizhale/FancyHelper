@@ -14,31 +14,21 @@ public final class MineAgent extends JavaPlugin {
     private WorkspaceIndexer workspaceIndexer;
     private CLIManager cliManager;
 
-    /**
-     * 插件启用时的初始化逻辑
-     */
     @Override
     public void onEnable() {
-        // 初始化配置管理器
         configManager = new ConfigManager(this);
         
-        // 初始化工作区索引器
         workspaceIndexer = new WorkspaceIndexer(this);
-        // 异步执行索引，避免阻塞主线程
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> workspaceIndexer.indexAll());
 
-        // 初始化 CLI 管理器
         cliManager = new CLIManager(this);
 
-        // 注册命令
         CLICommand cliCommand = new CLICommand(this);
         getCommand("mineagent").setExecutor(cliCommand);
         getCommand("mineagent").setTabCompleter(cliCommand);
 
-        // 注册监听器
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
 
-        // bStats 统计
         int pluginId = 28567;
         new Metrics(this, pluginId);
         
@@ -49,7 +39,6 @@ public final class MineAgent extends JavaPlugin {
 
     private void checkSecureProfile() {
         try {
-            // 使用反射检查，因为旧版本可能没有这个方法
             java.lang.reflect.Method method = getServer().getClass().getMethod("shouldEnforceSecureProfile");
             boolean enforce = (boolean) method.invoke(getServer());
             if (enforce) {
@@ -60,13 +49,9 @@ public final class MineAgent extends JavaPlugin {
                 getLogger().warning("====================================================");
             }
         } catch (Exception e) {
-            // 如果方法不存在或调用失败，忽略
         }
     }
 
-    /**
-     * 插件停用时的逻辑
-     */
     @Override
     public void onDisable() {
         getLogger().info("MineAgent 正在禁用...");
@@ -75,7 +60,6 @@ public final class MineAgent extends JavaPlugin {
             cliManager.shutdown();
         }
         
-        // 等待一小段时间，确保所有异步任务完成
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {

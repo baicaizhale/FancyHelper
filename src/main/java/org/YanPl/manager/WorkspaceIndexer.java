@@ -13,9 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * 工作区索引器，负责索引可用命令和预设文件
- */
 public class WorkspaceIndexer {
     private final MineAgent plugin;
     private List<String> indexedCommands = new ArrayList<>();
@@ -25,17 +22,11 @@ public class WorkspaceIndexer {
         this.plugin = plugin;
     }
 
-    /**
-     * 执行完整索引
-     */
     public void indexAll() {
         indexCommands();
         indexPresets();
     }
 
-    /**
-     * 索引所有可用的 Bukkit 命令
-     */
     @SuppressWarnings("unchecked")
     public void indexCommands() {
         indexedCommands.clear();
@@ -49,7 +40,7 @@ public class WorkspaceIndexer {
             Map<String, Command> knownCommands = (Map<String, Command>) knownCommandsField.get(commandMap);
             
             indexedCommands.addAll(knownCommands.keySet().stream()
-                    .filter(name -> !name.contains(":")) // 过滤掉带前缀的命令，保留基础命令
+                    .filter(name -> !name.contains(":")) 
                     .collect(Collectors.toList()));
             
             plugin.getLogger().info("已索引 " + indexedCommands.size() + " 个命令。");
@@ -58,9 +49,6 @@ public class WorkspaceIndexer {
         }
     }
 
-    /**
-     * 索引 /plugins/MineAgent/preset/ 目录下的所有文件名
-     */
     public void indexPresets() {
         indexedPresets.clear();
         File presetDir = new File(plugin.getDataFolder(), "preset");
@@ -68,7 +56,6 @@ public class WorkspaceIndexer {
             presetDir.mkdirs();
         }
         
-        // 动态释放所有预设文件
         ResourceUtil.releaseResources(plugin, "preset/", false, ".txt");
         
         File[] files = presetDir.listFiles();
