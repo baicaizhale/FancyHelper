@@ -860,15 +860,19 @@ public class CLIManager {
     }
 
     private void sendEnterMessage(Player player) {
-        player.sendMessage(ChatColor.GOLD + "==================");
-        player.sendMessage(ChatColor.GREEN + "CLI Powering");
-        player.sendMessage(ChatColor.GOLD + "==================");
+        player.sendMessage(ChatColor.GRAY + "==================");
+        player.sendMessage("");
+        player.sendMessage(ChatColor.WHITE + "CLI Powering");
+        player.sendMessage("");
+        player.sendMessage(ChatColor.GRAY + "==================");
     }
 
     private void sendExitMessage(Player player) {
-        player.sendMessage(ChatColor.RED + "==================");
-        player.sendMessage(ChatColor.YELLOW + "已退出 CLI Mode");
-        player.sendMessage(ChatColor.RED + "==================");
+        player.sendMessage(ChatColor.GRAY + "==================");
+        player.sendMessage("");
+        player.sendMessage(ChatColor.WHITE + "已退出 CLI Mode");
+        player.sendMessage("");
+        player.sendMessage(ChatColor.GRAY + "==================");
     }
 
     public ChatColor getActivePlayersCount() {
