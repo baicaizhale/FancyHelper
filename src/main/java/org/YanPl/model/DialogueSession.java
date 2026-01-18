@@ -9,9 +9,14 @@ public class DialogueSession {
      */
     private final List<Message> history = new ArrayList<>();
     private long lastActivityTime;
+    private long startTime;
+    private int toolSuccessCount = 0;
+    private int toolFailureCount = 0;
+    private int thoughtTokens = 0;
 
     public DialogueSession() {
         this.lastActivityTime = System.currentTimeMillis();
+        this.startTime = System.currentTimeMillis();
     }
 
     public void addMessage(String role, String content) {
@@ -43,12 +48,40 @@ public class DialogueSession {
         return lastActivityTime;
     }
 
+    public long getStartTime() {
+        return startTime;
+    }
+
     public void updateActivity() {
         this.lastActivityTime = System.currentTimeMillis();
     }
 
     public void clearHistory() {
         history.clear();
+    }
+
+    public int getToolSuccessCount() {
+        return toolSuccessCount;
+    }
+
+    public int getToolFailureCount() {
+        return toolFailureCount;
+    }
+
+    public int getThoughtTokens() {
+        return thoughtTokens;
+    }
+
+    public void addThoughtTokens(int tokens) {
+        thoughtTokens += tokens;
+    }
+
+    public void incrementToolSuccess() {
+        toolSuccessCount++;
+    }
+
+    public void incrementToolFailure() {
+        toolFailureCount++;
     }
 
     public void removeLastMessage() {

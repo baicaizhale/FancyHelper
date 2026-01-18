@@ -154,11 +154,11 @@ public class CLIManager {
     public void exitCLI(Player player) {
         UUID uuid = player.getUniqueId();
         plugin.getLogger().info("[CLI] Player " + player.getName() + " is exiting CLI mode.");
+        sendExitMessage(player);
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
         sessions.remove(uuid);
         isGenerating.remove(uuid);
-        sendExitMessage(player);
     }
 
     public void handleConfirm(Player player) {
@@ -305,13 +305,26 @@ public class CLIManager {
         // 先将 AI 的回复加入历史记录，确保后续工具执行产生的反馈在回复之后
         session.addMessage("assistant", response);
 
-        // 解析并移除思考内容
+        // 解析并移除思考内容，但计算其 Token
+        // 提取 <thought>...</thought> 内容
+        String thoughtContent = "";
+        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<thought>(.*?)</thought>").matcher(response);
+        if (thoughtMatcher.find()) {
+            thoughtContent = thoughtMatcher.group(1);
+        }
+        
         // 移除 <thought>...</thought>
         String cleanResponse = response.replaceAll("(?s)<thought>.*?</thought>", "");
         // 移除 Markdown 风格的 Thought: 块或类似文本
         cleanResponse = cleanResponse.replaceAll("(?i)^Thought:.*?\n", "");
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
+        
+        // 计算思考内容的 Token
+        if (!thoughtContent.isEmpty()) {
+            int thoughtTokens = thoughtContent.length() / 4; // 粗略估算
+            session.addThoughtTokens(thoughtTokens);
+        }
         
         // 增强的工具调用提取逻辑：使用正则表达式匹配末尾的工具调用
         // 匹配模式：最后一个 # 加上已知的工具名
@@ -361,15 +374,17 @@ public class CLIManager {
 
     private void executeTool(Player player, String toolCall) {
         UUID uuid = player.getUniqueId();
-        
+        DialogueSession session = sessions.get(uuid);
+        boolean toolSuccess = true;
+
         // 改进的解析逻辑：兼容冒号和空格分隔符，且只分割第一次出现的标识符
         String toolName;
         String args = "";
-        
+
         // 查找第一个冒号或空格的位置
         int colonIndex = toolCall.indexOf(":");
         int spaceIndex = toolCall.indexOf(" ");
-        
+
         int splitIndex = -1;
         if (colonIndex != -1 && spaceIndex != -1) {
             splitIndex = Math.min(colonIndex, spaceIndex);
@@ -387,10 +402,10 @@ public class CLIManager {
         }
 
         plugin.getLogger().info("[CLI] Executing tool for " + player.getName() + ": " + toolName + " (Args: " + args + ")");
-        
+
         // 统一转换为小写进行匹配
         String lowerToolName = toolName.toLowerCase();
-        
+
         // 展示给玩家时只显示工具名（如果不是 search 或 run 这种有自己显示逻辑的工具）
         if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
@@ -407,6 +422,7 @@ public class CLIManager {
                 if (args.isEmpty()) {
                     player.sendMessage(ChatColor.RED + "错误: #run 工具需要提供命令参数");
                     feedbackToAI(player, "#error: #run 工具需要提供命令参数，例如 #run: say hello");
+                    toolSuccess = false;
                 } else {
                     handleRunTool(player, args);
                 }
@@ -423,7 +439,16 @@ public class CLIManager {
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
                 feedbackToAI(player, "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。");
+                toolSuccess = false;
                 break;
+        }
+
+        if (session != null) {
+            if (toolSuccess) {
+                session.incrementToolSuccess();
+            } else {
+                session.incrementToolFailure();
+            }
         }
     }
 
@@ -868,9 +893,17 @@ public class CLIManager {
     }
 
     private void sendExitMessage(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        int tokens = session != null ? session.getEstimatedTokens() : 0;
+        int thoughtTokens = session != null ? session.getThoughtTokens() : 0;
+        long durationMs = session != null ? System.currentTimeMillis() - session.getStartTime() : 0;
+        double durationSec = durationMs / 1000.0;
+
         player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage("");
         player.sendMessage(ChatColor.WHITE + "已退出 CLI Mode");
+        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + (tokens + thoughtTokens) + "  | 时长: " + String.format("%.1f", durationSec) + " 秒");
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "==================");
     }
