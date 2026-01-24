@@ -24,7 +24,7 @@ public class PromptManager {
         // 添加当前时间信息
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        sb.append("当前现实时间：").append(now.format(formatter)).append("\n");
+        sb.append("当前时间：").append(now.format(formatter)).append("\n");
         sb.append("当前与你对话的玩家是：").append(player.getName()).append("\n");
         sb.append("当前可用命令列表（索引）：").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
         sb.append("当前可用插件预设文件：").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n");

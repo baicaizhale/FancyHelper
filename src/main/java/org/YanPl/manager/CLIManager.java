@@ -146,6 +146,41 @@ public class CLIManager {
         activeCLIPayers.add(uuid);
         sessions.put(uuid, new DialogueSession());
         sendEnterMessage(player);
+        
+        // 触发 AI 问候
+        triggerGreeting(player);
+    }
+
+    /**
+     * 触发 AI 的初始问候语
+     * 
+     * @param player 接收问候的玩家
+     */
+    private void triggerGreeting(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session == null) return;
+
+        // 构建精简的问候提示词：包含时间、玩家名及位置信息
+        String time = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        // String loc = String.format("%s (%.0f, %.0f, %.0f)", player.getWorld().getName(), player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ());
+        String greetingPrompt = String.format("User: %s | Time: %s | Language: ZH-CN | Action: 你作为Fancy，现在请结合时间向玩家打招呼，并询问有什么帮得上的", player.getName(), time);
+
+        session.addMessage("user", greetingPrompt);
+        isGenerating.put(uuid, true);
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                String response = ai.chat(session, promptManager.getBaseSystemPrompt(player));
+                Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response));
+            } catch (IOException e) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "无法获取欢迎语: " + e.getMessage());
+                    isGenerating.put(uuid, false);
+                    session.removeLastMessage();
+                });
+            }
+        });
     }
 
     /**
@@ -908,7 +943,12 @@ public class CLIManager {
         player.sendMessage(ChatColor.GRAY + "==================");
     }
 
-    public ChatColor getActivePlayersCount() {
-        throw new UnsupportedOperationException("Unimplemented method 'getActivePlayersCount'");
+    /**
+     * 获取当前处于 CLI 模式的玩家数量
+     * 
+     * @return 活跃玩家数量
+     */
+    public int getActivePlayersCount() {
+        return activeCLIPayers.size();
     }
 }
