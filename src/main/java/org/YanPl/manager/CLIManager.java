@@ -80,7 +80,7 @@ public class CLIManager {
                     if (session != null && (now - session.getLastActivityTime()) > timeoutMs) {
                         Player player = Bukkit.getPlayer(uuid);
                         if (player != null) {
-                            player.sendMessage(ChatColor.YELLOW + "由于长时间未活动，已自动退出 CLI Mode。");
+                            player.sendMessage(ChatColor.YELLOW + "由于长时间未活动，已自动退出 FancyHelper。");
                             exitCLI(player);
                         } else {
                             activeCLIPayers.remove(uuid);
@@ -133,7 +133,7 @@ public class CLIManager {
      */
     public void enterCLI(Player player) {
         UUID uuid = player.getUniqueId();
-        plugin.getLogger().info("[CLI] Player " + player.getName() + " is entering CLI mode.");
+        plugin.getLogger().info("[CLI] Player " + player.getName() + " is entering FancyHelper.");
         
         // 检查用户协议
         if (!agreedPlayers.contains(uuid)) {
@@ -142,7 +142,7 @@ public class CLIManager {
             pendingAgreementPlayers.add(uuid);
             return;
         }
-
+        
         activeCLIPayers.add(uuid);
         sessions.put(uuid, new DialogueSession());
         sendEnterMessage(player);
@@ -153,7 +153,7 @@ public class CLIManager {
      */
     public void exitCLI(Player player) {
         UUID uuid = player.getUniqueId();
-        plugin.getLogger().info("[CLI] Player " + player.getName() + " is exiting CLI mode.");
+        plugin.getLogger().info("[CLI] Player " + player.getName() + " is exiting FancyHelper.");
         sendExitMessage(player);
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
