@@ -164,7 +164,7 @@ public class CLIManager {
         // 构建精简的问候提示词：包含时间、玩家名及位置信息
         String time = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         // String loc = String.format("%s (%.0f, %.0f, %.0f)", player.getWorld().getName(), player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ());
-        String greetingPrompt = String.format("User: %s | Time: %s | Language: ZH-CN | Action: 你作为Fancy，现在请结合时间向玩家打招呼，并询问有什么帮得上的", player.getName(), time);
+        String greetingPrompt = String.format("User: %s | Time: %s | Language: ZH-CN | Action: 你作为Fancy，现在请向玩家打招呼(结合时间，使用早上好/中午好/下午好/晚上好等词)，并询问有什么帮得上的", player.getName(), time);
 
         session.addMessage("user", greetingPrompt);
         isGenerating.put(uuid, true);
