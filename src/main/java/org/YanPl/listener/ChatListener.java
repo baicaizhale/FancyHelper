@@ -1,6 +1,6 @@
 package org.YanPl.listener;
 
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -8,9 +8,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 public class ChatListener implements Listener {
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
 
-    public ChatListener(MineAgent plugin) {
+    public ChatListener(FancyHelper plugin) {
         this.plugin = plugin;
     }
 

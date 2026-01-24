@@ -12,7 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 /**
  * 插件主类：初始化各管理器并注册命令/事件。
  */
-public final class MineAgent extends JavaPlugin {
+public final class FancyHelper extends JavaPlugin {
     private ConfigManager configManager;
     private WorkspaceIndexer workspaceIndexer;
     private CLIManager cliManager;
@@ -30,9 +30,10 @@ public final class MineAgent extends JavaPlugin {
         cliManager = new CLIManager(this);
 
         CLICommand cliCommand = new CLICommand(this);
-        getCommand("mineagent").setExecutor(cliCommand);
-        getCommand("mineagent").setTabCompleter(cliCommand);
+        getCommand("fancyhelper").setExecutor(cliCommand);
+        getCommand("fancyhelper").setTabCompleter(cliCommand);
 
+        // 注册事件监听器
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
 
         // bStats 统计
@@ -43,16 +44,16 @@ public final class MineAgent extends JavaPlugin {
         checkSecureProfile();
 
         // 打印启动 ASCII 艺术
-        getLogger().info("___  ____               ___                   _   ");
-        getLogger().info("|  \\/  (_)             / _ \\                 | |  ");
-        getLogger().info("| .  . |_ _ __   ___  / /_\\ \\ __ _  ___ _ __ | |_ ");
-        getLogger().info("| |\\/| | | '_ \\ / _ \\ |  _  |/ _` |/ _ \\ '_ \\| __|");
-        getLogger().info("| |  | | | | | |  __/ | | | | (_| |  __/ | | | |_ ");
-        getLogger().info("\\_|  |_/_|_| |_|\\___| \\_| |_|\\__, |\\___|_| |_|\\__|");
-        getLogger().info("                              __/ |               ");
-        getLogger().info("                             |___/                ");
+        getLogger().info(" _____                      _   _      _                 ");
+        getLogger().info("|  ___|                    | | | |    | |                ");
+        getLogger().info("| |__ __ _ _ __   ___ _   _| |_| | ___| |_ __   ___ _ __ ");
+        getLogger().info("|  __/ _` | '_ \\ / __| | | |  _  |/ _ \\ | '_ \\ / _ \\ '__|");
+        getLogger().info("| | | (_| | | | | (__| |_| | | | |  __/ | |_) |  __/ |   ");
+        getLogger().info("\\_|  \\__,_|_| |_|\\___|\\__, \\_| |_/\\___|_| .__/ \\___|_|   ");
+        getLogger().info("                       __/ |            | |              ");
+        getLogger().info("                      |___/             |_|              ");
 
-        getLogger().info("MineAgent 已启用！");
+        getLogger().info("FancyHelper 已启用！");
     }
 
     private void checkSecureProfile() {
@@ -73,7 +74,7 @@ public final class MineAgent extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        getLogger().info("MineAgent 正在禁用...");
+        getLogger().info("FancyHelper 正在禁用...");
 
         // 关闭 CLI 管理器，释放资源
         if (cliManager != null) {
@@ -87,7 +88,7 @@ public final class MineAgent extends JavaPlugin {
             Thread.currentThread().interrupt();
         }
 
-        getLogger().info("MineAgent 已禁用！");
+        getLogger().info("FancyHelper 已禁用！");
     }
 
     public ConfigManager getConfigManager() {

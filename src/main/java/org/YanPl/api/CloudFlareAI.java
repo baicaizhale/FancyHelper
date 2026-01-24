@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import okhttp3.*;
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 import org.YanPl.model.DialogueSession;
 
 import java.io.IOException;
@@ -19,12 +19,12 @@ public class CloudFlareAI {
      */
     private static final String API_RESPONSES_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/responses";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
     private final OkHttpClient httpClient;
     private final Gson gson = new Gson();
     private String cachedAccountId = null;
 
-    public CloudFlareAI(MineAgent plugin) {
+    public CloudFlareAI(FancyHelper plugin) {
         this.plugin = plugin;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(60, TimeUnit.SECONDS)

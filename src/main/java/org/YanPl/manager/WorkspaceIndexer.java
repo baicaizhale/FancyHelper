@@ -1,6 +1,6 @@
 package org.YanPl.manager;
 
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 import org.YanPl.util.ResourceUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -17,11 +17,11 @@ public class WorkspaceIndexer {
     /**
      * 工作区索引器：用于索引服务器上可用的命令以及插件内的预设文件列表。
      */
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
     private List<String> indexedCommands = new ArrayList<>();
     private List<String> indexedPresets = new ArrayList<>();
 
-    public WorkspaceIndexer(MineAgent plugin) {
+    public WorkspaceIndexer(FancyHelper plugin) {
         this.plugin = plugin;
     }
 

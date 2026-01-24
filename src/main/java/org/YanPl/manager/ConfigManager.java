@@ -1,6 +1,6 @@
 package org.YanPl.manager;
 
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 import org.YanPl.util.ResourceUtil;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -14,10 +14,10 @@ public class ConfigManager {
     /**
      * 配置管理器：负责检测配置版本、更新默认配置、加载配置并提供便捷的 getter。
      */
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
     private FileConfiguration config;
 
-    public ConfigManager(MineAgent plugin) {
+    public ConfigManager(FancyHelper plugin) {
         this.plugin = plugin;
         checkAndUpdateConfig();
         loadConfig();

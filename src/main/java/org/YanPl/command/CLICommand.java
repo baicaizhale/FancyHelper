@@ -1,6 +1,6 @@
 package org.YanPl.command;
 
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -14,13 +14,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * /mineagent 命令的处理器。
+ * /fancyhelper 命令的处理器。
  * 提供切换 CLI、重载、查看状态等子命令，并支持 Tab 完成。
  */
 public class CLICommand implements CommandExecutor, TabCompleter {
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
 
-    public CLICommand(MineAgent plugin) {
+    public CLICommand(FancyHelper plugin) {
         this.plugin = plugin;
     }
 
@@ -35,7 +35,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         Player player = (Player) sender;
 
         if (args.length == 0) {
-            if (!player.hasPermission("mineagent.cli")) {
+            if (!player.hasPermission("fancyhelper.cli")) {
                 player.sendMessage(ChatColor.RED + "你没有权限使用此命令。");
                 return true;
             }
@@ -46,7 +46,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         String subCommand = args[0].toLowerCase();
         switch (subCommand) {
             case "reload":
-                if (!player.hasPermission("mineagent.reload")) {
+                if (!player.hasPermission("fancyhelper.reload")) {
                     player.sendMessage(ChatColor.RED + "你没有权限执行重载。");
                     return true;
                 }
@@ -68,7 +68,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             default:
-                player.sendMessage(ChatColor.RED + "未知子命令。用法: /cli [reload|status]");
+                player.sendMessage(ChatColor.RED + "未知子命令。用法: /fancy [reload|status]");
                 break;
         }
 
@@ -94,13 +94,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getConfigManager().loadConfig();
                 player.sendMessage(ChatColor.GREEN + "配置文件已重新加载。");
             } else {
-                player.sendMessage(ChatColor.RED + "用法: /cli reload [workspace|config]");
+                player.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config]");
             }
         }
     }
 
     private void handleStatus(Player player) {
-        player.sendMessage(ChatColor.AQUA + "=== MineAgent 状态 ===");
+        player.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
         player.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
         player.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
         player.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());

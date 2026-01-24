@@ -1,21 +1,21 @@
 package org.YanPl.manager;
 
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 
 public class PromptManager {
     /**
      * Prompt 管理器：构建发给 AI 的基础系统提示，包含玩家与索引信息。
      */
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
 
-    public PromptManager(MineAgent plugin) {
+    public PromptManager(FancyHelper plugin) {
         this.plugin = plugin;
     }
 
     public String getBaseSystemPrompt(org.bukkit.entity.Player player) {
         // 构建包含上下文（Minecraft 版本、玩家、命令索引与预设文件）的系统提示
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一个名为 MineAgent 的 Minecraft 助手。你的目标是通过简单的对话生成并执行 Minecraft 命令。\n");
+        sb.append("你是一个名为 Fancy 的 Minecraft 助手。你的目标是通过简单的对话生成并执行 Minecraft 命令。\n");
         sb.append("当前 Minecraft 版本：").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
         sb.append("当前与你对话的玩家是：").append(player.getName()).append("\n");
         sb.append("当前可用命令列表（索引）：").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");

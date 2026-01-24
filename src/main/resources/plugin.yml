@@ -1,16 +1,16 @@
-name: MineAgent
+name: FancyHelper
 version: 1.1.8
-main: org.YanPl.MineAgent
+main: org.YanPl.FancyHelper
 api-version: '1.18'
 authors: [ baicaizhale ]
 commands:
-  mineagent:
-    description: Main command for MineAgent
-    aliases: [cli]
+  fancyhelper:
+    description: Main command for FancyHelper
+    aliases: [cli, fancy]
 permissions:
-  mineagent.cli:
+  fancyhelper.cli:
     description: Allow player to enter/exit CLI Mode
     default: op
-  mineagent.reload:
+  fancyhelper.reload:
     description: Allow player to reload plugin
     default: op

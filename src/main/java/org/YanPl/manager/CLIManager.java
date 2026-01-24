@@ -4,7 +4,7 @@ import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 import org.YanPl.api.CloudFlareAI;
 import org.YanPl.model.DialogueSession;
 import org.bukkit.Bukkit;
@@ -22,7 +22,7 @@ import org.bukkit.scheduler.BukkitRunnable;
  * CLI 模式管理器，负责管理玩家的 CLI 状态和对话流
  */
 public class CLIManager {
-    private final MineAgent plugin;
+    private final FancyHelper plugin;
     private final CloudFlareAI ai;
     private final PromptManager promptManager;
     private final Set<UUID> activeCLIPayers = new HashSet<>();
@@ -33,7 +33,7 @@ public class CLIManager {
     private final Map<UUID, Boolean> isGenerating = new ConcurrentHashMap<>();
     private final Map<UUID, String> pendingCommands = new ConcurrentHashMap<>();
 
-    public CLIManager(MineAgent plugin) {
+    public CLIManager(FancyHelper plugin) {
         this.plugin = plugin;
         this.ai = new CloudFlareAI(plugin);
         this.promptManager = new PromptManager(plugin);
@@ -211,7 +211,7 @@ public class CLIManager {
                 boolean interrupted = false;
                 if (isGenerating.getOrDefault(uuid, false)) {
                     isGenerating.put(uuid, false);
-                    player.sendMessage(ChatColor.YELLOW + "⇒ 已打断 Agent 生成");
+                    player.sendMessage(ChatColor.YELLOW + "⇒ 已打断 Fancy 生成");
                     interrupted = true;
                 }
                 if (pendingCommands.containsKey(uuid)) {
@@ -235,10 +235,10 @@ public class CLIManager {
                     return true;
                 }
                 
-                if (message.equalsIgnoreCase("y") || message.equalsIgnoreCase("/mineagent confirm")) {
+                if (message.equalsIgnoreCase("y") || message.equalsIgnoreCase("/fancyhelper confirm")) {
                     String cmd = pendingCommands.remove(uuid);
                     executeCommand(player, cmd);
-                } else if (message.equalsIgnoreCase("n") || message.equalsIgnoreCase("/mineagent cancel")) {
+                } else if (message.equalsIgnoreCase("n") || message.equalsIgnoreCase("/fancyhelper cancel")) {
                     pendingCommands.remove(uuid);
                     player.sendMessage(ChatColor.GRAY + "⇒ 命令已取消");
                     isGenerating.put(uuid, false);
@@ -249,7 +249,7 @@ public class CLIManager {
             }
             
             if (isGenerating.getOrDefault(uuid, false)) {
-                player.sendMessage(ChatColor.RED + "⨀ 请不要在 Agent 生成内容时发送消息，如需打断请输入 stop");
+                player.sendMessage(ChatColor.RED + "⨀ 请不要在 Fancy 生成内容时发送消息，如需打断请输入 stop");
                 return true;
             }
 
@@ -347,9 +347,9 @@ public class CLIManager {
             }
         }
 
-        // 展示 Agent 内容
+        // 展示 Fancy 内容
         if (!content.isEmpty()) {
-            displayAgentContent(player, content);
+            displayFancyContent(player, content);
         }
 
         // 处理工具调用
@@ -368,7 +368,7 @@ public class CLIManager {
         int remaining = maxTokens - estimatedTokens;
         
         if (remaining < plugin.getConfigManager().getTokenWarningThreshold()) {
-            player.sendMessage(ChatColor.YELLOW + "⨀ 剩余 Token 不足 (" + remaining + ")，Agent 可能会遗忘较早的对话内容。");
+            player.sendMessage(ChatColor.YELLOW + "⨀ 剩余 Token 不足 (" + remaining + ")，Fancy 可能会遗忘较早的对话内容。");
         }
     }
 
@@ -633,7 +633,7 @@ public class CLIManager {
                     finalResult = "命令执行失败。可能原因：\n1. 命令语法错误\n2. 权限不足\n3. 该指令不支持拦截输出\n请检查语法或换一种实现方式。";
                 }
                 
-                player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Agent");
+                player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
                 
                 // 将详细结果反馈给 AI
                 feedbackToAI(player, "#run_result: " + finalResult);
@@ -756,7 +756,7 @@ public class CLIManager {
             
             okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(url)
-                .header("User-Agent", "MineAgent/1.0")
+                .header("User-Agent", "FancyHelper/1.0")
                 .post(body)
                 .build();
                 
@@ -846,7 +846,7 @@ public class CLIManager {
         });
     }
 
-    private void displayAgentContent(Player player, String content) {
+    private void displayFancyContent(Player player, String content) {
         // 先处理代码块 ```...```
         String[] codeParts = content.split("```");
         TextComponent finalMessage = new TextComponent(ChatColor.WHITE + "◆ ");
@@ -876,7 +876,7 @@ public class CLIManager {
 
     private void sendAgreement(Player player) {
         player.sendMessage(ChatColor.GRAY + "===============");
-        player.sendMessage(ChatColor.WHITE + "MineAgent 用户协议");
+        player.sendMessage(ChatColor.WHITE + "FancyHelper 用户协议");
         player.sendMessage(ChatColor.GRAY + "1. 本插件使用 AI 提供服务，可能产生错误信息。");
         player.sendMessage(ChatColor.GRAY + "2. 您的对话内容将被发送至 CloudFlare 进行处理。");
         player.sendMessage(ChatColor.GRAY + "3. 请勿输入敏感信息。");

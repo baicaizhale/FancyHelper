@@ -1,6 +1,6 @@
 package org.YanPl.util;
 
-import org.YanPl.MineAgent;
+import org.YanPl.FancyHelper;
 
 import java.io.File;
 import java.net.URI;
@@ -15,7 +15,7 @@ public class ResourceUtil {
      * 资源工具类：负责将 jar 内嵌的资源释放到插件数据目录（如 preset 文件）。
      */
 
-    public static void releaseResources(MineAgent plugin, String resourceDir, boolean replace, String extension) {
+    public static void releaseResources(FancyHelper plugin, String resourceDir, boolean replace, String extension) {
         if (!resourceDir.endsWith("/")) {
             resourceDir += "/";
         }
@@ -44,7 +44,7 @@ public class ResourceUtil {
         }
     }
 
-    public static void saveResource(MineAgent plugin, String resourcePath, boolean replace) {
+    public static void saveResource(FancyHelper plugin, String resourcePath, boolean replace) {
         File file = new File(plugin.getDataFolder(), resourcePath);
         if (replace || !file.exists()) {
             try {
