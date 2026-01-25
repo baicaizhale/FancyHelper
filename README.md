@@ -68,6 +68,5 @@ mvn clean package
 ```
 
 ---
-**FancyHelper** - 让 Minecraft 服务器管理步入 AI 时代。
 
  # **© 2026 baicaizhale. 保留所有权利。**
