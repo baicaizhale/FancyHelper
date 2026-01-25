@@ -147,14 +147,9 @@ jobs:
 
       # 提前创建 Tag 以防止 Action 自动创建失败 (500 Error 规避)
       - name: Create Git Tag
-        if: steps.check_release.outputs.IS_RELEASE == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        if: steps.check_release.outputs.IS_RELEASE == 'true'
         run: |
-          TAG_NAME=""
-          if [[ "${{ steps.check_release.outputs.IS_RELEASE }}" == "true" ]]; then
-            TAG_NAME="v${{ steps.check_release.outputs.RELEASE_VERSION }}"
-          else
-            TAG_NAME="master-${{ steps.sha.outputs.SHORT_SHA }}"
-          fi
+          TAG_NAME="v${{ steps.check_release.outputs.RELEASE_VERSION }}"
           
           # 检查标签是否已存在
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
@@ -195,18 +190,3 @@ jobs:
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           make_latest: true
-
-      # 原有逻辑-发布预览Release
-      - name: 发布预览 Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.check_release.outputs.IS_RELEASE != 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: target/FancyHelper-*.jar
-          tag_name: master-${{ steps.sha.outputs.SHORT_SHA }}
-          name: Pre-Release ${{ steps.sha.outputs.SHORT_SHA }}
-          target_commitish: ${{ github.sha }}
-          draft: false
-          prerelease: true
-          generate_release_notes: true
-          make_latest: false
