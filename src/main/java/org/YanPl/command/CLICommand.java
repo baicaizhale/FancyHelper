@@ -1,6 +1,7 @@
 package org.YanPl.command;
 
 import org.YanPl.FancyHelper;
+import org.YanPl.model.DialogueSession;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -55,11 +56,27 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "status":
                 handleStatus(player);
                 break;
+            case "yolo":
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.YOLO);
+                return true;
+            case "normal":
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
+                return true;
             case "confirm":
                 plugin.getCliManager().handleConfirm(player);
                 return true;
             case "cancel":
                 plugin.getCliManager().handleCancel(player);
+                return true;
+            case "agree":
+                plugin.getCliManager().handleChat(player, "agree");
+                return true;
+            case "error":
+                if (!player.isOp()) {
+                    player.sendMessage(ChatColor.RED + "该测试命令仅限管理员使用。");
+                    return true;
+                }
+                handleTestError(player);
                 return true;
             case "select":
                 if (args.length > 1) {
@@ -105,6 +122,17 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
         player.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
         player.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
+        player.sendMessage(ChatColor.AQUA + "=======================");
+    }
+
+    private void handleTestError(Player player) {
+        try {
+            player.sendMessage(ChatColor.YELLOW + "正在触发测试异常...");
+            throw new RuntimeException("这是一个手动触发的测试异常，用于验证云端上报功能。");
+        } catch (Exception e) {
+            plugin.getCloudErrorReport().report(e);
+            player.sendMessage(ChatColor.GREEN + "测试异常已捕获并尝试上报，请查看后台日志。");
+        }
     }
 
     @Override

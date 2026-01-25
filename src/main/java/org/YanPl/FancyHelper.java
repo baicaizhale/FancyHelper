@@ -45,7 +45,7 @@ public final class FancyHelper extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
 
         // bStats 统计
-        int pluginId = 28567;
+        int pluginId = 29036;
         new Metrics(this, pluginId);
 
         // 检查 server.properties 中的安全配置并提示

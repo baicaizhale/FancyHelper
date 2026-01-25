@@ -5,6 +5,13 @@ import java.util.List;
 
 public class DialogueSession {
     /**
+     * 对话模式
+     */
+    public enum Mode {
+        NORMAL, YOLO
+    }
+
+    /**
      * DialogueSession 保存简短的对话历史与最近活动时间，用于与 AI 交互时传递上下文。
      */
     private final List<Message> history = new ArrayList<>();
@@ -13,6 +20,7 @@ public class DialogueSession {
     private int toolSuccessCount = 0;
     private int toolFailureCount = 0;
     private int thoughtTokens = 0;
+    private Mode mode = Mode.NORMAL;
 
     public DialogueSession() {
         this.lastActivityTime = System.currentTimeMillis();
@@ -88,6 +96,14 @@ public class DialogueSession {
         if (!history.isEmpty()) {
             history.remove(history.size() - 1);
         }
+    }
+
+    public Mode getMode() {
+        return mode;
+    }
+
+    public void setMode(Mode mode) {
+        this.mode = mode;
     }
 
     public static class Message {

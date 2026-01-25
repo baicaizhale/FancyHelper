@@ -28,7 +28,12 @@ public class CLIManager {
     private final Set<UUID> activeCLIPayers = new HashSet<>();
     private final Set<UUID> pendingAgreementPlayers = new HashSet<>();
     private final Set<UUID> agreedPlayers = new HashSet<>();
+    private final Set<UUID> yoloAgreedPlayers = new HashSet<>();
+    private final Set<UUID> yoloModePlayers = new HashSet<>();
+    private final Set<UUID> pendingYoloAgreementPlayers = new HashSet<>();
     private final File agreedPlayersFile;
+    private final File yoloAgreedPlayersFile;
+    private final File yoloModePlayersFile;
     private final Map<UUID, DialogueSession> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> isGenerating = new ConcurrentHashMap<>();
     private final Map<UUID, String> pendingCommands = new ConcurrentHashMap<>();
@@ -38,7 +43,11 @@ public class CLIManager {
         this.ai = new CloudFlareAI(plugin);
         this.promptManager = new PromptManager(plugin);
         this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
+        this.yoloAgreedPlayersFile = new File(plugin.getDataFolder(), "yolo_agreed_players.txt");
+        this.yoloModePlayersFile = new File(plugin.getDataFolder(), "yolo_mode_players.txt");
         loadAgreedPlayers();
+        loadYoloAgreedPlayers();
+        loadYoloModePlayers();
         startTimeoutTask();
     }
 
@@ -57,6 +66,21 @@ public class CLIManager {
         }
     }
 
+    private void loadYoloAgreedPlayers() {
+        if (!yoloAgreedPlayersFile.exists()) return;
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(yoloAgreedPlayersFile.toPath());
+            for (String line : lines) {
+                try {
+                    yoloAgreedPlayers.add(UUID.fromString(line.trim()));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法加载已同意 YOLO 协议的玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
     private void saveAgreedPlayer(UUID uuid) {
         agreedPlayers.add(uuid);
         try {
@@ -66,6 +90,59 @@ public class CLIManager {
                 java.nio.file.StandardOpenOption.APPEND);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存已同意协议的玩家: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    private void saveYoloAgreedPlayer(UUID uuid) {
+        yoloAgreedPlayers.add(uuid);
+        try {
+            java.nio.file.Files.write(yoloAgreedPlayersFile.toPath(), 
+                (uuid.toString() + "\n").getBytes(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法保存已同意 YOLO 协议的玩家: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    private void loadYoloModePlayers() {
+        if (!yoloModePlayersFile.exists()) return;
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(yoloModePlayersFile.toPath());
+            for (String line : lines) {
+                try {
+                    yoloModePlayers.add(UUID.fromString(line.trim()));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法加载处于 YOLO 模式的玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    private void saveYoloModeState(UUID uuid, boolean isYolo) {
+        if (isYolo) {
+            if (yoloModePlayers.add(uuid)) {
+                writeYoloModePlayers();
+            }
+        } else {
+            if (yoloModePlayers.remove(uuid)) {
+                writeYoloModePlayers();
+            }
+        }
+    }
+
+    private void writeYoloModePlayers() {
+        try {
+            List<String> lines = new ArrayList<>();
+            for (UUID uuid : yoloModePlayers) {
+                lines.add(uuid.toString());
+            }
+            java.nio.file.Files.write(yoloModePlayersFile.toPath(), lines);
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法保存 YOLO 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
         }
     }
@@ -146,7 +223,12 @@ public class CLIManager {
         }
         
         activeCLIPayers.add(uuid);
-        sessions.put(uuid, new DialogueSession());
+        DialogueSession session = new DialogueSession();
+        // 恢复上次的模式
+        if (yoloModePlayers.contains(uuid)) {
+            session.setMode(DialogueSession.Mode.YOLO);
+        }
+        sessions.put(uuid, session);
         sendEnterMessage(player);
         
         // 触发 AI 问候
@@ -195,8 +277,52 @@ public class CLIManager {
         sendExitMessage(player);
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
+        pendingYoloAgreementPlayers.remove(uuid);
         sessions.remove(uuid);
         isGenerating.remove(uuid);
+    }
+
+    public void switchMode(Player player, DialogueSession.Mode targetMode) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session == null) return;
+
+        if (targetMode == DialogueSession.Mode.YOLO) {
+            if (!yoloAgreedPlayers.contains(uuid)) {
+                sendYoloWarning(player);
+                pendingYoloAgreementPlayers.add(uuid);
+                return;
+            }
+            session.setMode(DialogueSession.Mode.YOLO);
+            saveYoloModeState(uuid, true); // 保存 YOLO 状态
+            player.sendMessage(ChatColor.GRAY + "------------------");
+            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 YOLO 模式。在该模式下，Fancy 执行命令将不再请求您的确认。");
+        } else {
+            session.setMode(DialogueSession.Mode.NORMAL);
+            saveYoloModeState(uuid, false); // 移除 YOLO 状态
+            player.sendMessage(ChatColor.GRAY + "------------------");
+            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Normal 模式。");
+        }
+        sendEnterMessage(player); // 重新发送页眉以显示新状态
+    }
+
+    private void sendYoloWarning(Player player) {
+        player.sendMessage(ChatColor.RED + "===============");
+        player.sendMessage(ChatColor.DARK_RED + "WARNING: You only live once");
+        player.sendMessage(ChatColor.GRAY + "在此模式下，Fancy 将拥有自动执行服务器命令的权限。");
+        player.sendMessage(ChatColor.GRAY + "这意味着它可能会在未经您确认的情况下执行任何操作。");
+        player.sendMessage(ChatColor.GRAY + "请确保您信任 AI 的决定，并承担由此产生的风险。");
+
+        TextComponent message = new TextComponent(ChatColor.WHITE + "发送 ");
+        TextComponent agreeBtn = new TextComponent(ChatColor.RED + "agree");
+        agreeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli agree"));
+        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击确认并进入 YOLO 模式")));
+
+        message.addExtra(agreeBtn);
+        message.addExtra(new TextComponent(ChatColor.WHITE + " 表示确认并进入 YOLO 模式。"));
+
+        player.spigot().sendMessage(message);
+        player.sendMessage(ChatColor.RED + "===============");
     }
 
     public void handleConfirm(Player player) {
@@ -234,6 +360,21 @@ public class CLIManager {
                 enterCLI(player);
             } else {
                 player.sendMessage(ChatColor.RED + "请发送 agree 以同意协议，或发送 /cli 退出。");
+            }
+            return true;
+        }
+
+        // 如果玩家在等待 YOLO 协议同意
+        if (pendingYoloAgreementPlayers.contains(uuid)) {
+            if (message.equalsIgnoreCase("agree")) {
+                pendingYoloAgreementPlayers.remove(uuid);
+                saveYoloAgreedPlayer(uuid);
+                switchMode(player, DialogueSession.Mode.YOLO);
+            } else if (message.equalsIgnoreCase("stop")) {
+                pendingYoloAgreementPlayers.remove(uuid);
+                player.sendMessage(ChatColor.GRAY + "⇒ 已取消进入 YOLO 模式。");
+            } else {
+                player.sendMessage(ChatColor.RED + "请发送 agree 以进入 YOLO 模式，或发送 stop 取消。");
             }
             return true;
         }
@@ -492,9 +633,18 @@ public class CLIManager {
 
     private void handleRunTool(Player player, String command) {
         UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
         
         // 自动过滤掉领先的斜杠 /
         String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
+
+        // 如果是 YOLO 模式，直接执行
+        if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
+            player.sendMessage(ChatColor.GOLD + "⇒ YOLO run - " + ChatColor.WHITE + cleanCommand);
+            executeCommand(player, cleanCommand);
+            return;
+        }
+        
         pendingCommands.put(uuid, cleanCommand);
 
         TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + cleanCommand + " ");
@@ -918,14 +1068,42 @@ public class CLIManager {
         player.sendMessage(ChatColor.GRAY + "1. 本插件使用 AI 提供服务，可能产生错误信息。");
         player.sendMessage(ChatColor.GRAY + "2. 您的对话内容将被发送至 CloudFlare 进行处理。");
         player.sendMessage(ChatColor.GRAY + "3. 请勿输入敏感信息。");
-        player.sendMessage(ChatColor.WHITE + "发送 " + ChatColor.GREEN + "agree" + ChatColor.WHITE + " 表示同意并继续。");
+        
+        TextComponent message = new TextComponent(ChatColor.WHITE + "发送 ");
+        TextComponent agreeBtn = new TextComponent(ChatColor.GREEN + "agree");
+        agreeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli agree"));
+        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击同意协议")));
+        
+        message.addExtra(agreeBtn);
+        message.addExtra(new TextComponent(ChatColor.WHITE + " 表示同意并继续。"));
+        
+        player.spigot().sendMessage(message);
         player.sendMessage(ChatColor.GRAY + "===============");
     }
 
     private void sendEnterMessage(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        DialogueSession.Mode mode = session != null ? session.getMode() : DialogueSession.Mode.NORMAL;
+
         player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage("");
-        player.sendMessage(ChatColor.WHITE + "Chatting with Fancy");
+        
+        TextComponent message = new TextComponent(ChatColor.WHITE + "Chatting with Fancy ");
+        
+        if (mode == DialogueSession.Mode.NORMAL) {
+            TextComponent modeTag = new TextComponent(ChatColor.GREEN + " (Normal) ");
+            modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GOLD + "点击进入 YOLO 模式")));
+            modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli yolo"));
+            message.addExtra(modeTag);
+        } else {
+            TextComponent modeTag = new TextComponent(ChatColor.RED + " (YOLO) ");
+            modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击回到 Normal 模式")));
+            modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli normal"));
+            message.addExtra(modeTag);
+        }
+        
+        player.spigot().sendMessage(message);
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "==================");
     }
