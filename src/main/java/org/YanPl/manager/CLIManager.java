@@ -177,7 +177,7 @@ public class CLIManager {
      */
     public void toggleCLI(Player player) {
         UUID uuid = player.getUniqueId();
-        if (activeCLIPayers.contains(uuid)) {
+        if (activeCLIPayers.contains(uuid) || pendingAgreementPlayers.contains(uuid)) {
             exitCLI(player);
         } else {
             enterCLI(player);
@@ -213,6 +213,14 @@ public class CLIManager {
      */
     public void enterCLI(Player player) {
         UUID uuid = player.getUniqueId();
+
+        // 检查 EULA 文件状态
+        if (!plugin.getEulaManager().isEulaValid()) {
+            player.sendMessage(ChatColor.RED + "系统错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。");
+            plugin.getLogger().warning("[CLI] Denied access for " + player.getName() + " due to invalid EULA file.");
+            return;
+        }
+
         plugin.getLogger().info("[CLI] Player " + player.getName() + " is entering FancyHelper.");
         
         // 检查用户协议
@@ -385,6 +393,11 @@ public class CLIManager {
         if (pendingAgreementPlayers.contains(uuid)) {
             plugin.getLogger().info("[CLI] Player " + player.getName() + " sent agreement message: " + message);
             if (message.equalsIgnoreCase("agree")) {
+                // 再次检查 EULA 状态
+                if (!plugin.getEulaManager().isEulaValid()) {
+                    player.sendMessage(ChatColor.RED + "系统错误：EULA 文件状态异常，无法完成同意。");
+                    return true;
+                }
                 pendingAgreementPlayers.remove(uuid);
                 saveAgreedPlayer(uuid);
                 enterCLI(player);
@@ -1190,22 +1203,34 @@ public class CLIManager {
     }
 
     private void sendAgreement(Player player) {
-        player.sendMessage(ChatColor.GRAY + "===============");
+        player.sendMessage(ChatColor.GRAY + "=================");
         player.sendMessage(ChatColor.WHITE + "FancyHelper 用户协议");
-        player.sendMessage(ChatColor.GRAY + "1. 本插件使用 AI 提供服务，可能产生错误信息。");
-        player.sendMessage(ChatColor.GRAY + "2. 您的对话内容将被发送至 CloudFlare 进行处理。");
-        player.sendMessage(ChatColor.GRAY + "3. 请勿输入敏感信息。");
+        player.sendMessage(ChatColor.WHITE + "在进入 FancyHelper 之前，您需要阅读并同意用户协议。");
+        // player.sendMessage("");
+        TextComponent message = new TextComponent(ChatColor.WHITE + "请点击 ");
+        TextComponent bookBtn = new TextComponent(ChatColor.AQUA + "[阅读协议]");
+        bookBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli read"));
+        bookBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.AQUA + "点击阅读 FancyHelper 用户协议")));
         
-        TextComponent message = new TextComponent(ChatColor.WHITE + "发送 ");
+        message.addExtra(bookBtn);
+        message.addExtra(new TextComponent(ChatColor.WHITE + " 并在阅读完成后发送 "));
+        
         TextComponent agreeBtn = new TextComponent(ChatColor.GREEN + "agree");
         agreeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli agree"));
-        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击同意协议")));
+        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击直接同意协议")));
         
         message.addExtra(agreeBtn);
         message.addExtra(new TextComponent(ChatColor.WHITE + " 表示同意并继续。"));
         
         player.spigot().sendMessage(message);
-        player.sendMessage(ChatColor.GRAY + "===============");
+        player.sendMessage(ChatColor.GRAY + "=================");
+    }
+
+    /**
+     * 为玩家打开 EULA 虚拟书本。
+     */
+    public void openEulaBook(Player player) {
+        player.openBook(plugin.getEulaManager().getEulaBook());
     }
 
     private void sendEnterMessage(Player player) {

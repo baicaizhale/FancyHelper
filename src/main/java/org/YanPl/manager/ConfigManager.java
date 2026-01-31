@@ -37,6 +37,11 @@ public class ConfigManager {
         if (!configVersion.equals(pluginVersion)) {
             plugin.getLogger().info("检测到版本更新 (" + configVersion + " -> " + pluginVersion + ")，正在更新配置...");
 
+            // 版本更新时强制更新 EULA 和 License
+            if (plugin.getEulaManager() != null) {
+                plugin.getEulaManager().forceReplaceFiles();
+            }
+
             Map<String, Object> oldValues = new HashMap<>();
             for (String key : currentConfig.getKeys(true)) {
                 if (!key.equals("version")) {
