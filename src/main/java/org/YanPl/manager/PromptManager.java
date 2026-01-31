@@ -40,7 +40,7 @@ public class PromptManager {
         sb.append("   #search: <args> - 在互联网上搜索，你将会优先看到wiki内容，如果没有找到，将会搜索全网。你完全被允许使用此工具。\n");
         sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，如果用户的表述让你不知道该做什么，使用此工具让用户进行选择。\n");
         sb.append("   #get: <file> - 从预设目录获取文件内容。\n");
-        sb.append("   #run: <command> - 以玩家身份执行命令。注意：命令参数不要带斜杠 /。例如 #run: give @p apple \n");
+        sb.append("   #run: <command> - 以玩家身份执行命令。注意：只能有一个命令，并且命令参数不要带斜杠 /。例如 #run: give @p apple \n");
         sb.append("   #over - 完成任务，停止本轮输出。\n");
         sb.append("   #exit - 当用户想退出FancyHelper，比如向你道别时调用。\n");
         sb.append("   **注意：每轮回复只能包含一个工具调用。工具名和冒号之间不要有空格。执行命令时绝对不要带斜杠 /。**\n");

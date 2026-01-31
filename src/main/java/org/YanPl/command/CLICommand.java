@@ -56,6 +56,23 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "status":
                 handleStatus(player);
                 break;
+            case "update":
+            case "checkupdate":
+                if (!player.hasPermission("fancyhelper.reload")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限检查更新。");
+                    return true;
+                }
+                player.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "正在检查更新...");
+                plugin.getUpdateManager().checkForUpdates(player);
+                break;
+            case "upgrade":
+            case "download":
+                if (!player.hasPermission("fancyhelper.reload")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限执行更新。");
+                    return true;
+                }
+                plugin.getUpdateManager().downloadAndInstall(player);
+                break;
             case "yolo":
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.YOLO);
                 return true;
@@ -149,7 +166,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("reload", "status", "thought").stream()
+            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade"));
+            return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("reload")) {

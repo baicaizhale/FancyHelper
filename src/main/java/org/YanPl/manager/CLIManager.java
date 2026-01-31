@@ -686,7 +686,7 @@ public class CLIManager {
 
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            player.sendMessage(ChatColor.GOLD + "⇒ YOLO run - " + ChatColor.WHITE + cleanCommand);
+            player.sendMessage(ChatColor.GOLD + "⇒ YOLO run " + ChatColor.WHITE + cleanCommand);
             executeCommand(player, cleanCommand);
             return;
         }
@@ -856,11 +856,11 @@ public class CLIManager {
                 } else if (finalSuccess) {
                     // 如果成功但没有捕获到输出，尝试给 AI 提供更具体的上下文
                     if (command.toLowerCase().startsWith("tp")) {
-                        finalResult = "命令执行成功 (传送指令通常没有文本反馈)";
+                        finalResult = "命令执行结果未知 (你可以用choose工具问一下用户)";
                     } else if (command.toLowerCase().startsWith("op") || command.toLowerCase().startsWith("deop")) {
-                        finalResult = "命令执行成功 (权限变更指令通常仅显示在控制台或被静默处理)";
+                        finalResult = "命令执行结果未知 (权限变更指令通常仅显示在控制台或被静默处理)";
                     } else {
-                        finalResult = "命令执行成功 (但系统未能捕获到该命令的文本输出，可能是静默执行或直接发送到了玩家屏幕)";
+                        finalResult = "命令执行结果未知 (你可以用choose工具问一下用户)";
                     }
                 } else {
                     // 如果失败且没有输出，通常是语法错误或原版命令拦截失败

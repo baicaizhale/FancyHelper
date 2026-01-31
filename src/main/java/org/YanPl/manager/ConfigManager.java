@@ -115,4 +115,12 @@ public class ConfigManager {
     public boolean isAutoReportEnabled() {
         return config.getBoolean("settings.auto_report", true);
     }
+
+    public boolean isCheckUpdate() {
+        return config.getBoolean("settings.check_update", true);
+    }
+
+    public String getUpdateMirror() {
+        return config.getString("settings.update_mirror", "https://ghproxy.net/");
+    }
 }

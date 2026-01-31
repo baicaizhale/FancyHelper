@@ -4,6 +4,7 @@ import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
+import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
 import org.YanPl.util.CloudErrorReport;
 import org.bstats.bukkit.Metrics;
@@ -17,6 +18,7 @@ public final class FancyHelper extends JavaPlugin {
     private ConfigManager configManager;
     private WorkspaceIndexer workspaceIndexer;
     private CLIManager cliManager;
+    private UpdateManager updateManager;
     private CloudErrorReport cloudErrorReport;
 
     @Override
@@ -36,6 +38,10 @@ public final class FancyHelper extends JavaPlugin {
 
         // 初始化 CLI 管理器（管理玩家的 AI 会话）
         cliManager = new CLIManager(this);
+
+        // 初始化更新管理器并检查更新
+        updateManager = new UpdateManager(this);
+        updateManager.checkForUpdates();
 
         CLICommand cliCommand = new CLICommand(this);
         getCommand("fancyhelper").setExecutor(cliCommand);
@@ -68,7 +74,7 @@ public final class FancyHelper extends JavaPlugin {
             return;
         }
 
-        java.io.File oldDir = new java.io.File(pluginsDir, "old");
+        java.io.File oldDir = new java.io.File(getDataFolder(), "old");
         java.io.File[] targets = pluginsDir.listFiles((dir, name) -> {
             // 正则匹配包含 mineagent (不区分大小写)，且排除 "old" 文件夹本身
             return name.toLowerCase().contains("mineagent") && !name.equalsIgnoreCase("old");
@@ -95,7 +101,7 @@ public final class FancyHelper extends JavaPlugin {
             }
 
             if (target.renameTo(dest)) {
-                getLogger().info("已将旧插件文件/文件夹 [" + target.getName() + "] 移动至 plugins/old/");
+                getLogger().info("已将旧插件文件/文件夹 [" + target.getName() + "] 移动至 plugins/FancyHelper/old/");
             } else {
                 getLogger().warning("无法移动旧插件文件 [" + target.getName() + "]，请检查权限。");
             }
@@ -164,6 +170,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public CLIManager getCliManager() {
         return cliManager;
+    }
+
+    public UpdateManager getUpdateManager() {
+        return updateManager;
     }
 
     public CloudErrorReport getCloudErrorReport() {
