@@ -453,6 +453,7 @@ public class CLIManager {
                 String pending = pendingCommands.get(uuid);
                 if (pending.equals("CHOOSING")) {
                     pendingCommands.remove(uuid);
+                    player.sendMessage(ChatColor.GRAY + "◇ " + message);
                     feedbackToAI(player, "#choose_result: " + message);
                     return true;
                 }
