@@ -88,6 +88,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "agree":
                 plugin.getCliManager().handleChat(player, "agree");
                 return true;
+            case "read":
+                plugin.getCliManager().openEulaBook(player);
+                return true;
             case "thought":
                 plugin.getCliManager().handleThought(player, Arrays.copyOfRange(args, 1, args.length));
                 return true;
@@ -121,7 +124,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             plugin.getConfigManager().loadConfig();
             plugin.getWorkspaceIndexer().indexAll();
-            player.sendMessage(ChatColor.GREEN + "配置与工作区已重新加载。");
+            plugin.getEulaManager().reload();
+            player.sendMessage(ChatColor.GREEN + "配置、工作区与 EULA 已重新加载。");
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {
@@ -130,6 +134,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             } else if (target.equals("config")) {
                 plugin.getConfigManager().loadConfig();
                 player.sendMessage(ChatColor.GREEN + "配置文件已重新加载。");
+            } else if (target.equals("eula")) {
+                plugin.getEulaManager().reload();
+                player.sendMessage(ChatColor.GREEN + "EULA 文件已重新加载。");
             } else if (target.equals("deeply")) {
                 player.sendMessage(ChatColor.YELLOW + "正在深度重载插件...");
                 org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
@@ -166,12 +173,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade"));
+            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read"));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("reload")) {
-            return Arrays.asList("workspace", "config", "deeply").stream()
+            return Arrays.asList("workspace", "config", "eula", "deeply").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         }

@@ -4,6 +4,7 @@ import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
+import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
 import org.YanPl.util.CloudErrorReport;
@@ -19,6 +20,7 @@ public final class FancyHelper extends JavaPlugin {
     private WorkspaceIndexer workspaceIndexer;
     private CLIManager cliManager;
     private UpdateManager updateManager;
+    private EulaManager eulaManager;
     private CloudErrorReport cloudErrorReport;
 
     @Override
@@ -28,6 +30,9 @@ public final class FancyHelper extends JavaPlugin {
 
         // 执行旧插件清理（清理带有 mineagent 关键词的文件）
         cleanOldPluginFiles();
+
+        // 初始化 EULA 管理器（优先于配置，以便更新时强制替换 EULA）
+        eulaManager = new EulaManager(this);
 
         // 初始化配置管理器
         configManager = new ConfigManager(this);
@@ -73,7 +78,6 @@ public final class FancyHelper extends JavaPlugin {
         if (pluginsDir == null || !pluginsDir.exists() || !pluginsDir.isDirectory()) {
             return;
         }
-
         java.io.File oldDir = new java.io.File(getDataFolder(), "old");
         java.io.File[] targets = pluginsDir.listFiles((dir, name) -> {
             // 正则匹配包含 mineagent (不区分大小写)，且排除 "old" 文件夹本身
@@ -150,6 +154,11 @@ public final class FancyHelper extends JavaPlugin {
             cliManager.shutdown();
         }
 
+        // 关闭 EULA 管理器，释放监听资源
+        if (eulaManager != null) {
+            eulaManager.shutdown();
+        }
+
         // 等待短暂时间以确保后台任务结束
         try {
             Thread.sleep(500);
@@ -174,6 +183,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public UpdateManager getUpdateManager() {
         return updateManager;
+    }
+
+    public EulaManager getEulaManager() {
+        return eulaManager;
     }
 
     public CloudErrorReport getCloudErrorReport() {
