@@ -382,6 +382,13 @@ public class CLIManager {
     }
 
     private void checkVerificationAndExecute(Player player, String type, String args) {
+        // 检查是否被冻结
+        long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
+        if (freezeRemaining > 0) {
+            player.sendMessage(ChatColor.RED + "验证已冻结，请在 " + freezeRemaining + " 秒后重试。");
+            return;
+        }
+        
         if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {
             executeFileOperation(player, type, args);
         } else {
@@ -759,6 +766,13 @@ public class CLIManager {
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "WRITE");
             player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
+            
+            // 检查是否被冻结
+            long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
+            if (freezeRemaining > 0) {
+                player.sendMessage(ChatColor.RED + "验证已冻结，请在 " + freezeRemaining + " 秒后重试。");
+                return;
+            }
             
             // YOLO 模式下也需要检查权限开启，但不需要手动确认
             if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {

@@ -164,4 +164,23 @@ public class VerificationManager {
     public boolean isVerifying(Player player) {
         return activeSessions.containsKey(player.getUniqueId());
     }
+    
+    /**
+     * 获取玩家验证冻结剩余时间（秒），如果未冻结则返回 0
+     * 
+     * @param player 玩家
+     * @return 剩余冻结时间（秒），0 表示未冻结
+     */
+    public long getPlayerFreezeRemaining(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (frozenPlayers.containsKey(uuid)) {
+            long unfreezeTime = frozenPlayers.get(uuid);
+            if (System.currentTimeMillis() < unfreezeTime) {
+                return (unfreezeTime - System.currentTimeMillis()) / 1000;
+            } else {
+                frozenPlayers.remove(uuid);
+            }
+        }
+        return 0;
+    }
 }
