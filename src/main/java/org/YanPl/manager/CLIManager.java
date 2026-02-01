@@ -675,6 +675,12 @@ public class CLIManager {
         // 展示给玩家时只显示工具名（如果不是 search, run 或 over 这种有自己显示逻辑或不需要显示的工具）
         if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#write")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
+        } else if (lowerToolName.equals("#ls")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在列出目录: " + ChatColor.WHITE + args);
+        } else if (lowerToolName.equals("#read")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在读取文件: " + ChatColor.WHITE + args);
+        } else if (lowerToolName.equals("#write")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在写入文件: " + ChatColor.WHITE + args.split(" ")[0]);
         }
 
         switch (lowerToolName) {
@@ -752,7 +758,8 @@ public class CLIManager {
         
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + type + " " + ChatColor.WHITE + args);
+            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "WRITE");
+            player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
             
             // YOLO 模式下也需要检查权限开启，但不需要手动确认
             if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {
@@ -770,7 +777,8 @@ public class CLIManager {
         String pendingStr = type.toUpperCase() + ":" + args;
         pendingCommands.put(uuid, pendingStr);
 
-        sendConfirmButtons(player, type + " " + args);
+        String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "写入文件");
+        sendConfirmButtons(player, actionDesc + " " + args);
     }
 
     private void sendConfirmButtons(Player player, String displayAction) {
@@ -864,6 +872,17 @@ public class CLIManager {
 
                 final String finalResult = result;
                 Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
+                    
+                    // 提示执行结果摘要
+                    if (type.equals("ls") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已获取目录列表。");
+                    } else if (type.equals("read") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已读取文件内容 (" + (finalResult.length() / 1024.0) + "KB)。");
+                    } else if (type.equals("write") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已成功写入文件。");
+                    }
+                    
                     feedbackToAI(player, "#" + type + "_result: " + finalResult);
                 });
             } catch (Exception e) {
