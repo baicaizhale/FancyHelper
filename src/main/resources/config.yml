@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 2.3.0
+version: 2.3.1
 
 # CloudFlare Workers AI 配置
 cloudflare:

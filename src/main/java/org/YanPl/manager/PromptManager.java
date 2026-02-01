@@ -30,7 +30,8 @@ public class PromptManager {
         sb.append("当前可用插件预设文件：").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n");
         
         if (plugin.getConfigManager().getAiModel().contains("gpt-oss")) {
-            sb.append("你当前处于思考模型模式。在正式回复前，你要详细思考用户的意图和最佳操作路径。你的思考过程应包含在回复最前端的 <thought> 标签内。\n");
+            // sb.append("你当前处于思考模型模式。在正式回复前，你要详细思考用户的意图和最佳操作路径。你的思考过程应包含在回复最前端的 <thought> 标签内。\n");
+            sb.append("在正式回复前，你要详细思考用户的意图和最佳操作路径。\n");
         }
         sb.append("\n规则：\n");
         sb.append("1. **绝对禁止使用任何 Markdown 格式**（如 # 标题、- 列表、[链接]等）。\n");
@@ -38,9 +39,18 @@ public class PromptManager {
         sb.append("3. 你可以使用以下工具。绝对严格要求：工具调用只能在每次回复的最后一行、单独成行地出现（即最后一行仅包含工具调用），当且仅当你需要调用工具的时候才能用#，并且**每次回复最多只能包含一个工具调用**。不得在正文中间或注释中调用工具，也不得在同一行包含其它文本。违反此规则将导致解析失败或被拒绝。\n");
         sb.append("   格式：#工具名: 参数（例如：#get: coreprotect.txt）\n");
         sb.append("   #search: <args> - 在互联网上搜索，你将会优先看到wiki内容，如果没有找到，将会搜索全网。你完全被允许使用此工具。\n");
-        sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，如果用户的表述让你不知道该做什么，使用此工具让用户进行选择。\n");
+        sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，A、B、C等可以被替换成任意内容。如果用户的表述有多种实现途径，使用此工具让用户进行选择而不是直接询问。\n");
         sb.append("   #get: <file> - 从预设目录获取文件内容。\n");
         sb.append("   #run: <command> - 以玩家身份执行命令。注意：只能有一个命令，并且命令参数不要带斜杠 /。例如 #run: give @p apple \n");
+        
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
+            sb.append("   #ls: <path> - 列出指定目录下的文件和文件夹，注意此工具调用结果玩家看不见。路径在服务器目录内。如#ls: plugins/FancyHelper\n");
+        }
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+            sb.append("   #read: <path> - 读取指定文件的内容。路径在服务器目录内，此工具调用结果玩家看不见。如#read: plugins/FancyHelper/config.yml\n");
+        }
+
+
         sb.append("   #over - 完成任务，停止本轮输出。\n");
         sb.append("   #exit - 当用户想退出FancyHelper，比如向你道别时调用。\n");
         sb.append("   **注意：每轮回复只能包含一个工具调用。工具名和冒号之间不要有空格。执行命令时绝对不要带斜杠 /。**\n");

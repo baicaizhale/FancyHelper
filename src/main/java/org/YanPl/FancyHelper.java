@@ -4,6 +4,7 @@ import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
+import org.YanPl.manager.VerificationManager;
 import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
@@ -22,6 +23,7 @@ public final class FancyHelper extends JavaPlugin {
     private UpdateManager updateManager;
     private EulaManager eulaManager;
     private CloudErrorReport cloudErrorReport;
+    private VerificationManager verificationManager;
 
     @Override
     public void onEnable() {
@@ -36,6 +38,9 @@ public final class FancyHelper extends JavaPlugin {
 
         // 初始化配置管理器
         configManager = new ConfigManager(this);
+        
+        // 初始化验证管理器
+        verificationManager = new VerificationManager(this);
         
         // 异步索引服务器命令与预设文件
         workspaceIndexer = new WorkspaceIndexer(this);
@@ -191,5 +196,9 @@ public final class FancyHelper extends JavaPlugin {
 
     public CloudErrorReport getCloudErrorReport() {
         return cloudErrorReport;
+    }
+
+    public VerificationManager getVerificationManager() {
+        return verificationManager;
     }
 }

@@ -16,11 +16,40 @@ public class ConfigManager {
      */
     private final FancyHelper plugin;
     private FileConfiguration config;
+    private FileConfiguration playerData;
+    private File playerDataFile;
 
     public ConfigManager(FancyHelper plugin) {
         this.plugin = plugin;
         checkAndUpdateConfig();
         loadConfig();
+        loadPlayerData();
+    }
+
+    /**
+     * 加载玩家数据配置文件
+     */
+    public void loadPlayerData() {
+        playerDataFile = new File(plugin.getDataFolder(), "playerdata.yml");
+        if (!playerDataFile.exists()) {
+            try {
+                playerDataFile.createNewFile();
+            } catch (IOException e) {
+                plugin.getLogger().severe("无法创建 playerdata.yml: " + e.getMessage());
+            }
+        }
+        playerData = YamlConfiguration.loadConfiguration(playerDataFile);
+    }
+
+    /**
+     * 保存玩家数据配置文件
+     */
+    public void savePlayerData() {
+        try {
+            playerData.save(playerDataFile);
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法保存玩家数据: " + e.getMessage());
+        }
     }
 
     private void checkAndUpdateConfig() {
@@ -95,6 +124,13 @@ public class ConfigManager {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
         this.config = plugin.getConfig();
+
+        // 清理 config.yml 中可能存在的旧玩家数据（迁移到 playerdata.yml 后）
+        if (config.contains("player_tools")) {
+            config.set("player_tools", null);
+            save();
+            plugin.getLogger().info("已从 config.yml 中移除旧的玩家工具权限数据。");
+        }
     }
 
     public String getCloudflareCfKey() {
@@ -127,5 +163,33 @@ public class ConfigManager {
 
     public String getUpdateMirror() {
         return config.getString("settings.update_mirror", "https://ghproxy.net/");
+    }
+
+    public boolean isToolEnabled(String tool) {
+        return config.getBoolean("tools." + tool, false);
+    }
+
+    public void setToolEnabled(String tool, boolean enabled) {
+        config.set("tools." + tool, enabled);
+        save();
+    }
+
+    public boolean isPlayerToolEnabled(org.bukkit.entity.Player player, String tool) {
+        String path = player.getUniqueId() + "." + tool;
+        return playerData.getBoolean(path, false);
+    }
+
+    public void setPlayerToolEnabled(org.bukkit.entity.Player player, String tool, boolean enabled) {
+        String path = player.getUniqueId() + "." + tool;
+        playerData.set(path, enabled);
+        savePlayerData();
+    }
+
+    private void save() {
+        try {
+            config.save(new File(plugin.getDataFolder(), "config.yml"));
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法保存配置文件: " + e.getMessage());
+        }
     }
 }

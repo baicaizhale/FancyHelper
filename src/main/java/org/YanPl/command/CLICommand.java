@@ -1,5 +1,9 @@
 package org.YanPl.command;
 
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.DialogueSession;
 import org.bukkit.ChatColor;
@@ -94,6 +98,32 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "thought":
                 plugin.getCliManager().handleThought(player, Arrays.copyOfRange(args, 1, args.length));
                 return true;
+            case "settings":
+            case "set":
+                handleSettings(player);
+                return true;
+            case "toggle":
+                if (args.length > 1) {
+                    String tool = args[1].toLowerCase();
+                    if (tool.equals("ls") || tool.equals("read") || tool.equals("write")) {
+                        boolean currentState = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
+                        if (currentState) {
+                            // 禁用工具无需验证
+                            plugin.getConfigManager().setPlayerToolEnabled(player, tool, false);
+                            player.sendMessage(ChatColor.YELLOW + "工具 " + tool + " 已禁用。下次开启需要重新验证。");
+                            handleSettings(player);
+                        } else {
+                            // 启用工具需要验证
+                            player.sendMessage(ChatColor.AQUA + "正在为工具 " + tool + " 发起安全验证...");
+                            plugin.getVerificationManager().startVerification(player, tool, () -> {
+                                plugin.getConfigManager().setPlayerToolEnabled(player, tool, true);
+                                player.sendMessage(ChatColor.GREEN + "验证成功！工具 " + tool + " 已启用。");
+                                handleSettings(player);
+                            });
+                        }
+                    }
+                }
+                return true;
             case "error":
                 if (!player.isOp()) {
                     player.sendMessage(ChatColor.RED + "该测试命令仅限管理员使用。");
@@ -160,6 +190,26 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.AQUA + "=======================");
     }
 
+    private void handleSettings(Player player) {
+        player.sendMessage(ChatColor.GOLD + "--- FancyHelper 设置 ---");
+        sendToggleMessage(player, "ls", "列出文件列表");
+        sendToggleMessage(player, "read", "读取文件内容");
+        sendToggleMessage(player, "write", "写入文件内容");
+        player.sendMessage(ChatColor.GRAY + "注意：关闭后再开启需要重新进行安全验证。");
+    }
+
+    private void sendToggleMessage(Player player, String tool, String description) {
+        boolean enabled = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
+        TextComponent message = new TextComponent(ChatColor.WHITE + "- " + description + " (" + tool + "): ");
+        
+        TextComponent status = new TextComponent(enabled ? ChatColor.GREEN + "[已启用]" : ChatColor.RED + "[已禁用]");
+        status.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli toggle " + tool));
+        status.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态")));
+        
+        message.addExtra(status);
+        player.spigot().sendMessage(message);
+    }
+
     private void handleTestError(Player player) {
         try {
             player.sendMessage(ChatColor.YELLOW + "正在触发测试异常...");
@@ -173,7 +223,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read"));
+            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read", "set", "settings"));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());

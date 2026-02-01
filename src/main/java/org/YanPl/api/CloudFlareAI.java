@@ -173,7 +173,8 @@ public class CloudFlareAI {
             m.addProperty("role", role);
             m.addProperty("content", content);
             messagesArray.add(m);
-            plugin.getLogger().info("[AI Request] Added message - Role: '" + role + "', Content length: " + content.length());
+            // 只有在调试时才打印每条消息的详情
+            // plugin.getLogger().info("[AI Request] Added message - Role: '" + role + "', Content length: " + content.length());
         }
 
         for (int i = 0; i < messagesArray.size(); i++) {
@@ -213,7 +214,8 @@ public class CloudFlareAI {
         plugin.getLogger().info("[AI Request] Model: " + model);
         plugin.getLogger().info("[AI Request] Total messages in array: " + messagesArray.size());
         
-        plugin.getLogger().info("[AI Request] Full Payload: " + bodyString);
+        // 简化日志：不再打印完整的 Payload，避免刷屏
+        // plugin.getLogger().info("[AI Request] Full Payload: " + bodyString);
         
         if (bodyString.contains("\"content\":null") || bodyString.contains("\"role\":null")) {
             plugin.getLogger().severe("[AI Error] CRITICAL: Payload contains null content or role!");

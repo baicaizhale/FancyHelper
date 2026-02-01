@@ -5,6 +5,7 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
+import org.YanPl.manager.VerificationManager;
 import org.YanPl.api.CloudFlareAI;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
@@ -369,8 +370,27 @@ public class CLIManager {
             String cmd = pendingCommands.get(uuid);
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
-                executeCommand(player, cmd);
+                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("WRITE:")) {
+                    String[] parts = cmd.split(":", 2);
+                    String type = parts[0].toLowerCase();
+                    String args = parts[1];
+                    checkVerificationAndExecute(player, type, args);
+                } else {
+                    executeCommand(player, cmd);
+                }
             }
+        }
+    }
+
+    private void checkVerificationAndExecute(Player player, String type, String args) {
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {
+            executeFileOperation(player, type, args);
+        } else {
+            player.sendMessage(ChatColor.YELLOW + "首次使用 " + type + " 工具需要完成安全验证。");
+            plugin.getVerificationManager().startVerification(player, type, () -> {
+                plugin.getConfigManager().setPlayerToolEnabled(player, type, true);
+                executeFileOperation(player, type, args);
+            });
         }
     }
 
@@ -388,6 +408,13 @@ public class CLIManager {
      */
     public boolean handleChat(Player player, String message) {
         UUID uuid = player.getUniqueId();
+
+        // 优先处理验证逻辑
+        if (plugin.getVerificationManager().isVerifying(player)) {
+            if (plugin.getVerificationManager().handleVerification(player, message)) {
+                return true;
+            }
+        }
 
         // 如果玩家在等待协议同意
         if (pendingAgreementPlayers.contains(uuid)) {
@@ -453,6 +480,7 @@ public class CLIManager {
                 String pending = pendingCommands.get(uuid);
                 if (pending.equals("CHOOSING")) {
                     pendingCommands.remove(uuid);
+                    player.sendMessage(ChatColor.GRAY + "◇ " + message);
                     feedbackToAI(player, "#choose_result: " + message);
                     return true;
                 }
@@ -571,7 +599,7 @@ public class CLIManager {
         String toolCall = "";
         
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#get", "#choose", "#search");
+        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#get", "#choose", "#search", "#ls", "#read", "#write");
         
         // 从后往前寻找最后一个工具调用
         int lastHashIndex = cleanResponse.lastIndexOf("#");
@@ -645,8 +673,14 @@ public class CLIManager {
         String lowerToolName = toolName.toLowerCase();
 
         // 展示给玩家时只显示工具名（如果不是 search, run 或 over 这种有自己显示逻辑或不需要显示的工具）
-        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over")) {
+        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#write")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
+        } else if (lowerToolName.equals("#ls")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在列出目录: " + ChatColor.WHITE + args);
+        } else if (lowerToolName.equals("#read")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在读取文件: " + ChatColor.WHITE + args);
+        } else if (lowerToolName.equals("#write")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在写入文件: " + ChatColor.WHITE + args.split(" ")[0]);
         }
 
         switch (lowerToolName) {
@@ -664,6 +698,15 @@ public class CLIManager {
                 } else {
                     handleRunTool(player, args);
                 }
+                break;
+            case "#ls":
+                handleFileTool(player, "ls", args);
+                break;
+            case "#read":
+                handleFileTool(player, "read", args);
+                break;
+            case "#write":
+                handleFileTool(player, "write", args);
                 break;
             case "#get":
                 handleGetTool(player, args);
@@ -706,11 +749,44 @@ public class CLIManager {
         
         pendingCommands.put(uuid, cleanCommand);
 
-        TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + cleanCommand + " ");
+        sendConfirmButtons(player, cleanCommand);
+    }
+
+    private void handleFileTool(Player player, String type, String args) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        
+        // 如果是 YOLO 模式，直接执行
+        if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
+            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "WRITE");
+            player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
+            
+            // YOLO 模式下也需要检查权限开启，但不需要手动确认
+            if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {
+                executeFileOperation(player, type, args);
+            } else {
+                player.sendMessage(ChatColor.YELLOW + "检测到 YOLO 模式调用 " + type + "，但该工具尚未完成首次验证。");
+                plugin.getVerificationManager().startVerification(player, type, () -> {
+                    plugin.getConfigManager().setPlayerToolEnabled(player, type, true);
+                    executeFileOperation(player, type, args);
+                });
+            }
+            return;
+        }
+        
+        String pendingStr = type.toUpperCase() + ":" + args;
+        pendingCommands.put(uuid, pendingStr);
+
+        String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "写入文件");
+        sendConfirmButtons(player, actionDesc + " " + args);
+    }
+
+    private void sendConfirmButtons(Player player, String displayAction) {
+        TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + displayAction + " ");
         
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
-        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("确认执行命令")));
+        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("确认执行操作")));
 
         TextComponent spacer = new TextComponent(" / ");
 
@@ -723,6 +799,106 @@ public class CLIManager {
         message.addExtra(nBtn);
 
         player.spigot().sendMessage(message);
+    }
+
+    private void executeFileOperation(Player player, String type, String args) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                File root = Bukkit.getWorldContainer(); // 安全地获取服务器根目录
+                String result = "";
+                
+                // 处理路径参数：去除首尾空格，并去除开头的斜杠以确保相对于根目录
+                String pathArg = args.trim();
+                if (pathArg.startsWith("/") || pathArg.startsWith("\\")) {
+                    pathArg = pathArg.substring(1);
+                }
+
+                if (type.equals("ls")) {
+                    File dir = new File(root, pathArg.isEmpty() ? "." : pathArg);
+                    if (!isWithinRoot(root, dir)) {
+                        result = "错误: 路径超出服务器目录限制";
+                    } else if (!dir.exists()) {
+                        result = "错误: 目录不存在";
+                    } else if (!dir.isDirectory()) {
+                        result = "错误: 不是一个目录";
+                    } else {
+                        File[] files = dir.listFiles();
+                        if (files == null) {
+                            result = "错误: 无法列出目录内容";
+                        } else {
+                            StringBuilder sb = new StringBuilder("目录 " + (args.isEmpty() ? "." : args) + " 的内容:\n");
+                            // 排序：目录在前，文件在后，按字母顺序
+                            Arrays.sort(files, (f1, f2) -> {
+                                if (f1.isDirectory() && !f2.isDirectory()) return -1;
+                                if (!f1.isDirectory() && f2.isDirectory()) return 1;
+                                return f1.getName().compareToIgnoreCase(f2.getName());
+                            });
+                            for (File f : files) {
+                                String size = f.isDirectory() ? "" : " (" + (f.length() / 1024) + "KB)";
+                                sb.append(f.isDirectory() ? "[DIR] " : "[FILE] ").append(f.getName()).append(size).append("\n");
+                            }
+                            result = sb.toString();
+                        }
+                    }
+                } else if (type.equals("read")) {
+                    File file = new File(root, pathArg);
+                    if (!isWithinRoot(root, file)) {
+                        result = "错误: 路径超出服务器目录限制";
+                    } else if (!file.exists()) {
+                        result = "错误: 文件不存在";
+                    } else if (file.isDirectory()) {
+                        result = "错误: 这是一个目录，请使用 #ls";
+                    } else if (file.length() > 1024 * 100) { // 100KB 限制
+                        result = "错误: 文件太大 (" + (file.length() / 1024) + "KB)，无法直接读取，请分段读取或选择其他方式";
+                    } else {
+                        result = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                } else if (type.equals("write")) {
+                    int spaceIdx = pathArg.indexOf(" ");
+                    if (spaceIdx == -1) {
+                        result = "错误: #write 需要提供路径和内容，例如 #write: test.txt hello world";
+                    } else {
+                        String path = pathArg.substring(0, spaceIdx);
+                        String content = pathArg.substring(spaceIdx + 1);
+                        File file = new File(root, path);
+                        if (!isWithinRoot(root, file)) {
+                            result = "错误: 路径超出服务器目录限制";
+                        } else {
+                            java.nio.file.Files.write(file.toPath(), content.getBytes());
+                            result = "成功写入文件: " + path;
+                        }
+                    }
+                }
+
+                final String finalResult = result;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
+                    
+                    // 提示执行结果摘要
+                    if (type.equals("ls") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已获取目录列表。");
+                    } else if (type.equals("read") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已读取文件内容 (" + (finalResult.length() / 1024.0) + "KB)。");
+                    } else if (type.equals("write") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已成功写入文件。");
+                    }
+                    
+                    feedbackToAI(player, "#" + type + "_result: " + finalResult);
+                });
+            } catch (Exception e) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    feedbackToAI(player, "#" + type + "_result: 错误 - " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    private boolean isWithinRoot(File root, File file) {
+        try {
+            return file.getCanonicalPath().startsWith(root.getCanonicalPath());
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private void executeCommand(Player player, String command) {
@@ -1254,6 +1430,11 @@ public class CLIManager {
             modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli normal"));
             message.addExtra(modeTag);
         }
+
+        TextComponent settingsBtn = new TextComponent(ChatColor.GRAY + "[Settings]");
+        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击打开工具设置")));
+        settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
+        message.addExtra(settingsBtn);
         
         player.spigot().sendMessage(message);
         player.sendMessage("");
