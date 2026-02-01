@@ -38,10 +38,10 @@ public class PromptManager {
         sb.append("2. 如果你需要高亮显示某些关键词（如命令、玩家名、物品名），请使用 ** ** 将其括起来。例如：你好 **name** ，有什么可以帮你的吗。\n");
         sb.append("3. 你可以使用以下工具。绝对严格要求：工具调用只能在每次回复的最后一行、单独成行地出现（即最后一行仅包含工具调用），当且仅当你需要调用工具的时候才能用#，并且**每次回复最多只能包含一个工具调用**。不得在正文中间或注释中调用工具，也不得在同一行包含其它文本。违反此规则将导致解析失败或被拒绝。\n");
         sb.append("   格式：#工具名: 参数（例如：#get: coreprotect.txt）\n");
-        sb.append("   #search: <args> - 在互联网上搜索，你将会优先看到wiki内容，如果没有找到，将会搜索全网。你完全被允许使用此工具。\n");
+        sb.append("   #search: <args> - 在互联网上搜索，你将会优先看到wiki内容，如果没有找到，将会搜索全网。你完全被允许使用此工具。注意不要使用自然语言。\n");
         sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，A、B、C等可以被替换成任意内容。如果用户的表述有多种实现途径，使用此工具让用户进行选择而不是直接询问。\n");
         sb.append("   #get: <file> - 从预设目录获取文件内容。\n");
-        sb.append("   #run: <command> - 以玩家身份执行命令。注意：只能有一个命令，并且命令参数不要带斜杠 /。例如 #run: give @p apple \n");
+        sb.append("   #run: <command> - 以玩家身份执行命令。注意：禁止多个命令在一个run里，如果你需要的话就等这个命令执行完了下一次再run，并且命令参数不要带斜杠 /。例如 #run: give @p apple \n");
         
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
             sb.append("   #ls: <path> - 列出指定目录下的文件和文件夹，注意此工具调用结果玩家看不见。路径在服务器目录内。如#ls: plugins/FancyHelper\n");
