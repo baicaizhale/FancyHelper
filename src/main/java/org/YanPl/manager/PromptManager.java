@@ -50,7 +50,8 @@ public class PromptManager {
             sb.append("   #read: <path> - 读取指定文件的内容。路径在服务器目录内，此工具调用结果玩家看不见。如#read: plugins/FancyHelper/config.yml\n");
         }
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "diff")) {
-            sb.append("   #diff: <path> | <search> | <replace> - 修改指定文件的内容。使用查找和替换逻辑，search 为要查找的原始内容，replace 为替换后的内容。注意：search 必须与文件内容完全匹配（包括缩进和换行）。如#diff: plugins/FancyHelper/config.yml | language: en | language: zh\n");
+            sb.append("   #diff: <path> | <search> | <replace> - 修改指定文件的内容。使用查找和替换逻辑，search 为要查找的原始内容，replace 为替换后的内容。\n");
+            sb.append("   重要：不要在 #diff 后面添加任何解释文字或多余的 #。确保 #diff 调用是回复的最后一部分。如果修改内容包含 #，请确保它在 | 分隔符内部。如#diff: plugins/FancyHelper/config.yml | language: en | language: zh\n");
         }
 
 

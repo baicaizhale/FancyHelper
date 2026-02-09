@@ -600,24 +600,32 @@ public class CLIManager {
         }
         
         // 增强的工具调用提取逻辑：使用正则表达式匹配末尾的工具调用
-        // 匹配模式：最后一个 # 加上已知的工具名
+        // 匹配模式：最后一个 # 加上已知的工具名。注意：#diff 参数可能包含多行
         String content = cleanResponse;
         String toolCall = "";
         
         // 定义已知工具列表
         List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#get", "#choose", "#search", "#ls", "#read", "#diff");
         
-        // 从后往前寻找最后一个工具调用
-        int lastHashIndex = cleanResponse.lastIndexOf("#");
-        if (lastHashIndex != -1) {
-            String potentialToolPart = cleanResponse.substring(lastHashIndex).trim();
+        // 从后往前寻找最后一个工具调用标识符 #
+        // 逻辑：AI 有时会在工具参数中间使用 #（如 diff 的注释），所以我们需要确保匹配的是真正的工具起始符
+        int searchPos = cleanResponse.length();
+        while (searchPos > 0) {
+            int hashIndex = cleanResponse.lastIndexOf("#", searchPos - 1);
+            if (hashIndex == -1) break;
+
+            String potentialToolPart = cleanResponse.substring(hashIndex).trim();
+            boolean found = false;
             for (String tool : knownTools) {
                 if (potentialToolPart.toLowerCase().startsWith(tool)) {
                     toolCall = potentialToolPart;
-                    content = cleanResponse.substring(0, lastHashIndex).trim();
+                    content = cleanResponse.substring(0, hashIndex).trim();
+                    found = true;
                     break;
                 }
             }
+            if (found) break;
+            searchPos = hashIndex; // 继续往前找
         }
 
         // 展示 Fancy 内容
