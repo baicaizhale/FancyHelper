@@ -92,8 +92,8 @@ public class UpdateManager implements Listener {
                     String currentVersion = plugin.getDescription().getVersion();
                     if (isNewerVersion(currentVersion, latestVersion)) {
                         hasUpdate = true;
-                        plugin.getLogger().info(ChatColor.YELLOW + "检测到新版本: v" + latestVersion);
-                        plugin.getLogger().info(ChatColor.YELLOW + "下载地址: " + downloadUrl);
+                        Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: v" + latestVersion);
+                        Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "下载地址: " + downloadUrl);
                         
                         if (sender != null) {
                             sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: " + ChatColor.WHITE + "v" + latestVersion);
