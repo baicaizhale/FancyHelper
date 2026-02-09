@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 2.4.1
+version: 2.5.0
 
 # CloudFlare Workers AI 配置
 cloudflare:
@@ -8,8 +8,9 @@ cloudflare:
 
 # 插件设置
 settings:
-  timeout_minutes: 10  #设置 CLI 模式会话的自动过期时间 （以分钟为单位）
-  token_warning_threshold: 100  #设置 Token（字符数）剩余警告阈值
+  timeout_minutes: 10  # 设置 CLI 模式会话的自动过期时间 （以分钟为单位）
+  token_warning_threshold: 100  # 设置 Token（字符数）剩余警告阈值
   auto_report: true  # 是否启用匿名错误上报，帮助开发者改进插件
   check_update: true  # 是否启用自动更新检查
+  op_update_notify: true # 是否在管理员进入服务器时提示更新
   update_mirror: "https://ghproxy.net/"  # GitHub 镜像源，用于加速下载

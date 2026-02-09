@@ -124,6 +124,15 @@ public class UpdateManager implements Listener {
      * @param sender 发起更新的玩家（可为 null）
      */
     public void downloadAndInstall(Player sender) {
+        downloadAndInstall(sender, false);
+    }
+
+    /**
+     * 下载并安装更新。
+     * @param sender 发起更新的玩家（可为 null）
+     * @param autoReload 是否在下载完成后自动重载
+     */
+    public void downloadAndInstall(Player sender, boolean autoReload) {
         if (!hasUpdate || downloadUrl == null) {
             if (sender != null) sender.sendMessage(ChatColor.RED + "当前没有可用的更新。");
             return;
@@ -197,10 +206,17 @@ public class UpdateManager implements Listener {
                         sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "请在下次重启前手动处理。");
                     }
                     sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "新版本已就绪: " + ChatColor.WHITE + newJarName);
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "请重启服务器或使用 PlugMan 重载以完成更新。");
+                    if (!autoReload) {
+                        sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "请重启服务器或使用 PlugMan 重载以完成更新。");
+                    }
                 }
 
-            } catch (Exception e) {
+                if (autoReload && sender != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        sender.performCommand("fancy reload deeply");
+                    });
+                }
+            } catch (IOException e) {
                 plugin.getLogger().severe("更新下载失败: " + e.getMessage());
                 if (sender != null) {
                     sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "更新下载失败: " + e.getMessage());
@@ -242,6 +258,9 @@ public class UpdateManager implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        if (!plugin.getConfigManager().isOpUpdateNotify()) {
+            return;
+        }
         Player player = event.getPlayer();
         if (hasUpdate && player.isOp()) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {

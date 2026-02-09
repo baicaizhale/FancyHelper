@@ -14,7 +14,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 验证管理器：处理 ls, read, write 工具的首次使用验证逻辑。
+ * 验证管理器：处理 ls, read, diff 工具的首次使用验证逻辑。
  */
 public class VerificationManager {
     private final FancyHelper plugin;
@@ -31,7 +31,7 @@ public class VerificationManager {
     }
 
     private static class VerificationSession {
-        String type; // "ls", "read" or "write"
+        String type; // "ls", "read" or "diff"
         String password;
         long expiry;
         int attempts;
@@ -49,7 +49,7 @@ public class VerificationManager {
     /**
      * 开始验证过程
      * @param player 玩家
-     * @param type "read" (ls/read) 或 "write"
+     * @param type "read" (ls/read) 或 "diff"
      * @param onVerify 验证成功后的回调
      */
     public void startVerification(Player player, String type, Runnable onVerify) {
@@ -74,6 +74,7 @@ public class VerificationManager {
             }
         } catch (IOException e) {
             player.sendMessage(ChatColor.RED + "生成验证文件失败: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
         }
 
         // 10分钟后清理
@@ -121,7 +122,7 @@ public class VerificationManager {
                 success = true;
             }
         } else {
-            // write 模式：检查文件内容
+            // diff 模式：检查文件内容
             File verifyFile = new File(verifyDir, player.getName() + "-" + session.type + ".txt");
             try {
                 if (verifyFile.exists()) {
@@ -130,7 +131,9 @@ public class VerificationManager {
                         success = true;
                     }
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                plugin.getCloudErrorReport().report(e);
+            }
         }
 
         if (success) {

@@ -369,7 +369,7 @@ public class CLIManager {
             String cmd = pendingCommands.get(uuid);
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
-                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("WRITE:")) {
+                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:")) {
                     String[] parts = cmd.split(":", 2);
                     String type = parts[0].toLowerCase();
                     String args = parts[1];
@@ -542,6 +542,12 @@ public class CLIManager {
                     // 移除导致失败的消息，防止污染后续对话
                     session.removeLastMessage();
                 });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "系统内部错误: " + t.getMessage());
+                    isGenerating.put(uuid, false);
+                });
             }
         });
     }
@@ -600,24 +606,32 @@ public class CLIManager {
         }
         
         // 增强的工具调用提取逻辑：使用正则表达式匹配末尾的工具调用
-        // 匹配模式：最后一个 # 加上已知的工具名
+        // 匹配模式：最后一个 # 加上已知的工具名。注意：#diff 参数可能包含多行
         String content = cleanResponse;
         String toolCall = "";
         
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#get", "#choose", "#search", "#ls", "#read", "#write");
+        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#get", "#choose", "#search", "#ls", "#read", "#diff");
         
-        // 从后往前寻找最后一个工具调用
-        int lastHashIndex = cleanResponse.lastIndexOf("#");
-        if (lastHashIndex != -1) {
-            String potentialToolPart = cleanResponse.substring(lastHashIndex).trim();
+        // 从后往前寻找最后一个工具调用标识符 #
+        // 逻辑：AI 有时会在工具参数中间使用 #（如 diff 的注释），所以我们需要确保匹配的是真正的工具起始符
+        int searchPos = cleanResponse.length();
+        while (searchPos > 0) {
+            int hashIndex = cleanResponse.lastIndexOf("#", searchPos - 1);
+            if (hashIndex == -1) break;
+
+            String potentialToolPart = cleanResponse.substring(hashIndex).trim();
+            boolean found = false;
             for (String tool : knownTools) {
                 if (potentialToolPart.toLowerCase().startsWith(tool)) {
                     toolCall = potentialToolPart;
-                    content = cleanResponse.substring(0, lastHashIndex).trim();
+                    content = cleanResponse.substring(0, hashIndex).trim();
+                    found = true;
                     break;
                 }
             }
+            if (found) break;
+            searchPos = hashIndex; // 继续往前找
         }
 
         // 展示 Fancy 内容
@@ -679,14 +693,14 @@ public class CLIManager {
         String lowerToolName = toolName.toLowerCase();
 
         // 展示给玩家时只显示工具名（如果不是 search, run 或 over 这种有自己显示逻辑或不需要显示的工具）
-        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#write")) {
+        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#diff")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         } else if (lowerToolName.equals("#ls")) {
             player.sendMessage(ChatColor.GRAY + "〇 正在列出目录: " + ChatColor.WHITE + args);
         } else if (lowerToolName.equals("#read")) {
             player.sendMessage(ChatColor.GRAY + "〇 正在读取文件: " + ChatColor.WHITE + args);
-        } else if (lowerToolName.equals("#write")) {
-            player.sendMessage(ChatColor.GRAY + "〇 正在写入文件: " + ChatColor.WHITE + args.split(" ")[0]);
+        } else if (lowerToolName.equals("#diff")) {
+            player.sendMessage(ChatColor.GRAY + "〇 正在修改文件: " + ChatColor.WHITE + args.split("\\|")[0].trim());
         }
 
         switch (lowerToolName) {
@@ -711,8 +725,8 @@ public class CLIManager {
             case "#read":
                 handleFileTool(player, "read", args);
                 break;
-            case "#write":
-                handleFileTool(player, "write", args);
+            case "#diff":
+                handleFileTool(player, "diff", args);
                 break;
             case "#get":
                 handleGetTool(player, args);
@@ -764,7 +778,7 @@ public class CLIManager {
         
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "WRITE");
+            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "DIFF");
             player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
             
             // 检查是否被冻结
@@ -790,7 +804,7 @@ public class CLIManager {
         String pendingStr = type.toUpperCase() + ":" + args;
         pendingCommands.put(uuid, pendingStr);
 
-        String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "写入文件");
+        String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "修改文件内容");
         sendConfirmButtons(player, actionDesc + " " + args);
     }
 
@@ -866,19 +880,29 @@ public class CLIManager {
                     } else {
                         result = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
                     }
-                } else if (type.equals("write")) {
-                    int spaceIdx = pathArg.indexOf(" ");
-                    if (spaceIdx == -1) {
-                        result = "错误: #write 需要提供路径和内容，例如 #write: test.txt hello world";
+                } else if (type.equals("diff")) {
+                    String[] diffParts = pathArg.split("\\|", 3);
+                    if (diffParts.length < 3) {
+                        result = "错误: #diff 需要提供路径、查找内容和替换内容，格式：#diff: path | search | replace";
                     } else {
-                        String path = pathArg.substring(0, spaceIdx);
-                        String content = pathArg.substring(spaceIdx + 1);
+                        String path = diffParts[0].trim();
+                        String search = diffParts[1]; // 不 trim，可能包含空格/缩进
+                        String replace = diffParts[2]; // 不 trim
+                        
                         File file = new File(root, path);
                         if (!isWithinRoot(root, file)) {
                             result = "错误: 路径超出服务器目录限制";
+                        } else if (!file.exists()) {
+                            result = "错误: 文件不存在";
                         } else {
-                            java.nio.file.Files.write(file.toPath(), content.getBytes());
-                            result = "成功写入文件: " + path;
+                            String content = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                            if (!content.contains(search)) {
+                                result = "错误: 未在文件中找到指定的查找内容，请确保查找内容完全匹配（包括缩进）";
+                            } else {
+                                String newContent = content.replace(search, replace);
+                                java.nio.file.Files.write(file.toPath(), newContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                                result = "成功修改文件: " + path + "\n修改内容摘要：\n- 查找: " + (search.length() > 50 ? search.substring(0, 50) + "..." : search) + "\n- 替换为: " + (replace.length() > 50 ? replace.substring(0, 50) + "..." : replace);
+                            }
                         }
                     }
                 }
@@ -892,15 +916,21 @@ public class CLIManager {
                         player.sendMessage(ChatColor.GRAY + "〇 已获取目录列表。");
                     } else if (type.equals("read") && !finalResult.startsWith("错误:")) {
                         player.sendMessage(ChatColor.GRAY + "〇 已读取文件内容 (" + (finalResult.length() / 1024.0) + "KB)。");
-                    } else if (type.equals("write") && !finalResult.startsWith("错误:")) {
-                        player.sendMessage(ChatColor.GRAY + "〇 已成功写入文件。");
+                    } else if (type.equals("diff") && !finalResult.startsWith("错误:")) {
+                        player.sendMessage(ChatColor.GRAY + "〇 已成功修改文件。");
                     }
                     
                     feedbackToAI(player, "#" + type + "_result: " + finalResult);
                 });
             } catch (Exception e) {
+                plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     feedbackToAI(player, "#" + type + "_result: 错误 - " + e.getMessage());
+                });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    feedbackToAI(player, "#" + type + "_result: 严重错误 - " + t.getMessage());
                 });
             }
         });
@@ -1014,8 +1044,10 @@ public class CLIManager {
                     } catch (java.lang.reflect.InvocationTargetException e) {
                         // 记录异常但不崩溃，尽量让命令继续执行
                         plugin.getLogger().warning("[CLI] Method " + methodName + " threw exception: " + e.getCause().getMessage());
+                        plugin.getCloudErrorReport().report(e.getCause());
                         throw e.getCause();
                     } catch (Exception e) {
+                        plugin.getCloudErrorReport().report(e);
                         return null;
                     }
                 }
@@ -1026,6 +1058,7 @@ public class CLIManager {
                 // 优先尝试使用拦截器执行，以捕获输出
                 success = Bukkit.dispatchCommand(interceptor, command);
             } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
                 // 如果拦截器执行过程中抛出异常（通常是因为类型转换失败，如 VanillaCommandWrapper）
                 // 针对原版命令，我们尝试使用 execute 包装器来绕过类型检查
                 try {
@@ -1276,6 +1309,12 @@ public class CLIManager {
             } catch (IOException e) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.RED + "AI 调用出错: " + e.getMessage());
+                    isGenerating.put(uuid, false);
+                });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "系统内部错误: " + t.getMessage());
                     isGenerating.put(uuid, false);
                 });
             }

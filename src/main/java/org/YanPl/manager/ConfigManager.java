@@ -161,6 +161,10 @@ public class ConfigManager {
         return config.getBoolean("settings.check_update", true);
     }
 
+    public boolean isOpUpdateNotify() {
+        return config.getBoolean("settings.op_update_notify", true);
+    }
+
     public String getUpdateMirror() {
         return config.getString("settings.update_mirror", "https://ghproxy.net/");
     }
