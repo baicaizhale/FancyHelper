@@ -269,79 +269,129 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     /**
      * 尝试从插件管理器中彻底移除插件实例及相关引用。
-     * 这是一个危险操作，主要用于实现深度重载。
+     * 针对 Paper 1.21.4+ 的现代插件加载策略进行了增强。
      */
     @SuppressWarnings("unchecked")
     private void unloadPluginFromManager(org.bukkit.plugin.PluginManager pm, org.bukkit.plugin.Plugin plugin) {
+        String pluginName = plugin.getName();
         try {
-            // 1. 从 SimplePluginManager 的 plugins 和 lookupNames 中移除
+            // 1. 从基础 SimplePluginManager 中移除
             removePluginFromFields(pm, plugin);
 
-            // 2. 如果是 Paper，尝试处理其内部的 Provider 存储
+            // 2. 深入处理 Paper 的现代插件系统
             try {
+                // PaperPluginManagerImpl -> instance (PaperPluginInstanceManager)
                 if (pm.getClass().getName().contains("PaperPluginManagerImpl")) {
-                    // Paper 1.21.4+ 的处理逻辑比较复杂，通常涉及 PaperPluginManagerImpl -> instance -> storage
-                    // 我们尝试寻找并清理可能存在的缓存
                     java.lang.reflect.Field instanceField = pm.getClass().getDeclaredField("instance");
                     instanceField.setAccessible(true);
                     Object instance = instanceField.get(null);
                     if (instance != null) {
-                        // 尝试在 instance 中寻找 storage 并清理
+                        // 清理 instance 里的基础列表
                         removePluginFromFields(instance, plugin);
+                        
+                        // PaperPluginInstanceManager -> storage (SimpleProviderStorage/ServerPluginProviderStorage)
+                        java.lang.reflect.Field storageField = findField(instance.getClass(), "storage");
+                        if (storageField != null) {
+                            storageField.setAccessible(true);
+                            Object storage = storageField.get(instance);
+                            if (storage != null) {
+                                // 清理 storage 里的基础列表
+                                removePluginFromFields(storage, plugin);
+                                
+                                // 核心：清理 ProviderStorage 内部的 Map
+                                // 这些 Map 通常存储的是 PluginProvider，键是插件名（大小写敏感或不敏感）
+                                cleanupPaperStorageMaps(storage, pluginName);
+                            }
+                        }
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                plugin.getLogger().warning("Paper 特有清理失败: " + e.getMessage());
+            }
 
-            // 3. 从 CommandMap 中注销属于该插件的命令
-            try {
-                java.lang.reflect.Field commandMapField = findField(pm.getClass(), "commandMap");
-                if (commandMapField != null) {
-                    commandMapField.setAccessible(true);
-                    org.bukkit.command.SimpleCommandMap commandMap = (org.bukkit.command.SimpleCommandMap) commandMapField.get(pm);
-                    java.lang.reflect.Field knownCommandsField = org.bukkit.command.SimpleCommandMap.class.getDeclaredField("knownCommands");
-                    knownCommandsField.setAccessible(true);
-                    java.util.Map<String, org.bukkit.command.Command> knownCommands = (java.util.Map<String, org.bukkit.command.Command>) knownCommandsField.get(commandMap);
-                    
-                    knownCommands.entrySet().removeIf(entry -> {
-                        org.bukkit.command.Command cmd = entry.getValue();
-                        if (cmd instanceof org.bukkit.command.PluginCommand) {
-                            return ((org.bukkit.command.PluginCommand) cmd).getPlugin().equals(plugin);
-                        }
-                        // 处理 Paper 的包装命令
-                        return cmd.getName().equalsIgnoreCase(plugin.getName()) || cmd.getName().startsWith(plugin.getName().toLowerCase() + ":");
-                    });
-                }
-            } catch (Exception ignored) {}
+            // 3. 从 CommandMap 中注销命令
+            unregisterCommands(pm, plugin);
             
         } catch (Exception e) {
             plugin.getLogger().warning("清理插件引用时出错: " + e.getMessage());
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void removePluginFromFields(Object manager, org.bukkit.plugin.Plugin plugin) {
-        if (manager == null) return;
-        try {
-            java.lang.reflect.Field pluginsField = findField(manager.getClass(), "plugins");
-            if (pluginsField != null) {
-                pluginsField.setAccessible(true);
-                Object pluginsObj = pluginsField.get(manager);
-                if (pluginsObj instanceof java.util.List) {
-                    ((java.util.List<org.bukkit.plugin.Plugin>) pluginsObj).remove(plugin);
-                }
+    /**
+     * 专门清理 Paper ProviderStorage 内部的各种 Map 缓存
+     */
+    private void cleanupPaperStorageMaps(Object storage, String pluginName) {
+        // 递归查找所有 Map 类型的字段，并移除键包含插件名的条目
+        Class<?> clazz = storage.getClass();
+        while (clazz != null && !clazz.getName().equals("java.lang.Object")) {
+            for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+                try {
+                    field.setAccessible(true);
+                    Object val = field.get(storage);
+                    if (val instanceof java.util.Map) {
+                        java.util.Map<?, ?> map = (java.util.Map<?, ?>) val;
+                        // 移除键为插件名（不区分大小写）的条目
+                        map.keySet().removeIf(key -> {
+                            if (key instanceof String) {
+                                return ((String) key).equalsIgnoreCase(pluginName);
+                            }
+                            return false;
+                        });
+                        // 移除值为插件 Provider 的条目（如果能识别出来）
+                        map.values().removeIf(value -> {
+                            if (value == null) return false;
+                            String valStr = value.toString().toLowerCase();
+                            return valStr.contains(pluginName.toLowerCase());
+                        });
+                    }
+                } catch (Exception ignored) {}
             }
+            clazz = clazz.getSuperclass();
+        }
+    }
 
-            java.lang.reflect.Field lookupNamesField = findField(manager.getClass(), "lookupNames");
-            if (lookupNamesField != null) {
-                lookupNamesField.setAccessible(true);
-                Object lookupNamesObj = lookupNamesField.get(manager);
-                if (lookupNamesObj instanceof java.util.Map) {
-                    java.util.Map<String, org.bukkit.plugin.Plugin> lookupNames = (java.util.Map<String, org.bukkit.plugin.Plugin>) lookupNamesObj;
-                    lookupNames.remove(plugin.getName().toLowerCase());
-                    lookupNames.remove(plugin.getName());
-                }
+    private void unregisterCommands(org.bukkit.plugin.PluginManager pm, org.bukkit.plugin.Plugin plugin) {
+        try {
+            java.lang.reflect.Field commandMapField = findField(pm.getClass(), "commandMap");
+            if (commandMapField != null) {
+                commandMapField.setAccessible(true);
+                org.bukkit.command.SimpleCommandMap commandMap = (org.bukkit.command.SimpleCommandMap) commandMapField.get(pm);
+                java.lang.reflect.Field knownCommandsField = org.bukkit.command.SimpleCommandMap.class.getDeclaredField("knownCommands");
+                knownCommandsField.setAccessible(true);
+                java.util.Map<String, org.bukkit.command.Command> knownCommands = (java.util.Map<String, org.bukkit.command.Command>) knownCommandsField.get(commandMap);
+                
+                knownCommands.entrySet().removeIf(entry -> {
+                    org.bukkit.command.Command cmd = entry.getValue();
+                    if (cmd instanceof org.bukkit.command.PluginCommand) {
+                        return ((org.bukkit.command.PluginCommand) cmd).getPlugin().equals(plugin);
+                    }
+                    return cmd.getName().equalsIgnoreCase(plugin.getName()) || cmd.getName().startsWith(plugin.getName().toLowerCase() + ":");
+                });
             }
         } catch (Exception ignored) {}
+    }
+
+    @SuppressWarnings("unchecked")
+    private void removePluginFromFields(Object obj, org.bukkit.plugin.Plugin plugin) {
+        if (obj == null) return;
+        Class<?> clazz = obj.getClass();
+        while (clazz != null && !clazz.getName().equals("java.lang.Object")) {
+            for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+                try {
+                    field.setAccessible(true);
+                    Object val = field.get(obj);
+                    if (val instanceof java.util.List) {
+                        ((java.util.List<Object>) val).remove(plugin);
+                    } else if (val instanceof java.util.Map) {
+                        java.util.Map<Object, Object> map = (java.util.Map<Object, Object>) val;
+                        map.remove(plugin.getName());
+                        map.remove(plugin.getName().toLowerCase());
+                        map.values().remove(plugin);
+                    }
+                } catch (Exception ignored) {}
+            }
+            clazz = clazz.getSuperclass();
+        }
     }
 
     private java.lang.reflect.Field findField(Class<?> clazz, String name) {
