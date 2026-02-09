@@ -49,6 +49,9 @@ public class PromptManager {
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
             sb.append("   #read: <path> - 读取指定文件的内容。路径在服务器目录内，此工具调用结果玩家看不见。如#read: plugins/FancyHelper/config.yml\n");
         }
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "diff")) {
+            sb.append("   #diff: <path> | <search> | <replace> - 修改指定文件的内容。使用查找和替换逻辑，search 为要查找的原始内容，replace 为替换后的内容。注意：search 必须与文件内容完全匹配（包括缩进和换行）。如#diff: plugins/FancyHelper/config.yml | language: en | language: zh\n");
+        }
 
 
         sb.append("   #over - 完成任务，停止本轮输出。\n");

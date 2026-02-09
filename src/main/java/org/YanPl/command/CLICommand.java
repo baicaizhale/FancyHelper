@@ -105,7 +105,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "toggle":
                 if (args.length > 1) {
                     String tool = args[1].toLowerCase();
-                    if (tool.equals("ls") || tool.equals("read") || tool.equals("write")) {
+                    if (tool.equals("ls") || tool.equals("read") || tool.equals("diff")) {
                         boolean currentState = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
                         if (currentState) {
                             // 禁用工具无需验证
@@ -194,7 +194,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.GOLD + "--- FancyHelper 设置 ---");
         sendToggleMessage(player, "ls", "列出文件列表");
         sendToggleMessage(player, "read", "读取文件内容");
-        sendToggleMessage(player, "write", "写入文件内容");
+        sendToggleMessage(player, "diff", "修改文件内容");
         player.sendMessage(ChatColor.GRAY + "注意：关闭后再开启需要重新进行安全验证。");
     }
 
@@ -229,6 +229,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("reload")) {
             return Arrays.asList("workspace", "config", "eula", "deeply").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
+            return Arrays.asList("ls", "read", "diff").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         }
