@@ -74,6 +74,7 @@ public class VerificationManager {
             }
         } catch (IOException e) {
             player.sendMessage(ChatColor.RED + "生成验证文件失败: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
         }
 
         // 10分钟后清理
@@ -130,7 +131,9 @@ public class VerificationManager {
                         success = true;
                     }
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                plugin.getCloudErrorReport().report(e);
+            }
         }
 
         if (success) {

@@ -542,6 +542,12 @@ public class CLIManager {
                     // 移除导致失败的消息，防止污染后续对话
                     session.removeLastMessage();
                 });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "系统内部错误: " + t.getMessage());
+                    isGenerating.put(uuid, false);
+                });
             }
         });
     }
@@ -917,8 +923,14 @@ public class CLIManager {
                     feedbackToAI(player, "#" + type + "_result: " + finalResult);
                 });
             } catch (Exception e) {
+                plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     feedbackToAI(player, "#" + type + "_result: 错误 - " + e.getMessage());
+                });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    feedbackToAI(player, "#" + type + "_result: 严重错误 - " + t.getMessage());
                 });
             }
         });
@@ -1032,8 +1044,10 @@ public class CLIManager {
                     } catch (java.lang.reflect.InvocationTargetException e) {
                         // 记录异常但不崩溃，尽量让命令继续执行
                         plugin.getLogger().warning("[CLI] Method " + methodName + " threw exception: " + e.getCause().getMessage());
+                        plugin.getCloudErrorReport().report(e.getCause());
                         throw e.getCause();
                     } catch (Exception e) {
+                        plugin.getCloudErrorReport().report(e);
                         return null;
                     }
                 }
@@ -1044,6 +1058,7 @@ public class CLIManager {
                 // 优先尝试使用拦截器执行，以捕获输出
                 success = Bukkit.dispatchCommand(interceptor, command);
             } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
                 // 如果拦截器执行过程中抛出异常（通常是因为类型转换失败，如 VanillaCommandWrapper）
                 // 针对原版命令，我们尝试使用 execute 包装器来绕过类型检查
                 try {
@@ -1294,6 +1309,12 @@ public class CLIManager {
             } catch (IOException e) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.RED + "AI 调用出错: " + e.getMessage());
+                    isGenerating.put(uuid, false);
+                });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "系统内部错误: " + t.getMessage());
                     isGenerating.put(uuid, false);
                 });
             }
