@@ -46,6 +46,11 @@ public class CloudErrorReport {
             }
         }
 
+        // 插件已禁用时，Bukkit 调度器将拒绝注册任务；此时跳过上报以避免二次异常
+        if (!plugin.isEnabled()) {
+            return;
+        }
+
         // 1. 获取堆栈第一行计算哈希，防止重复上报
         int errorHash = throwable.getStackTrace().length > 0
                 ? throwable.getStackTrace()[0].hashCode() + throwable.toString().hashCode()
