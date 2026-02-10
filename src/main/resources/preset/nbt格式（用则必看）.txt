@@ -1,0 +1,27 @@
+【NBT 与数据组件格式指南】
+Minecraft 在 1.20.5 版本对物品数据进行了重大重构，从旧的 {NBT} 格式迁移到了新的 [数据组件] 格式。
+
+1. 版本区分
+- 1.20.5 及以后版本：使用 [数据组件] 格式。例如：stone[custom_name='{"text":"石头"}']
+- 1.20.4 及以前版本：使用 {NBT} 格式。例如：stone{display:{Name:'{"text":"石头"}'}}
+
+2. 常用属性对比
+
+| 功能 | 1.20.4 以前 (NBT) | 1.20.5+ (组件) |
+| :--- | :--- | :--- |
+| 自定义名称 | {display:{Name:'"文本"'}} | [custom_name='"文本"'] |
+| 叙述 (Lore) | {display:{Lore:['"行1"','"行2"']}} | [lore=['"行1"','"行2"']] |
+| 附魔 | {Enchantments:[{id:"sharpness",lvl:5s}]} | [enchantments={levels:{sharpness:5}}] |
+| 无法破坏 | {Unbreakable:1b} | [unbreakable={}] |
+| 隐藏标签 | {HideFlags:127} | [hide_additional_tooltip={},...] |
+| 药水效果 | {CustomPotionEffects:[{Id:1,Duration:200}]} | [potion_contents={custom_effects:[{id:"speed",duration:200}]}] |
+| 物品属性 | {AttributeModifiers:[{...}]} | [attribute_modifiers={modifiers:[{...}]}] |
+
+3. 注意事项
+- 1.20.5+ 的组件名通常是小写（如 custom_name），而旧版 NBT 通常是大写（如 Name）。
+- 1.20.5+ 的布尔值通常通过存在与否表示，或者使用 true/false，而旧版使用 1b/0b。
+- 如果你在执行命令时遇到 "Unexpected token" 或 "Expected '{'" 错误，通常是版本格式写错了。
+
+4. 示例
+- 1.20.5+: /give @p diamond_sword[unbreakable={},enchantments={levels:{sharpness:10}},custom_name='{"text":"神剑","color":"gold"}'] 1
+- 1.20.4-: /give @p diamond_sword{Unbreakable:1b,Enchantments:[{id:"sharpness",lvl:10s}],display:{Name:'{"text":"神剑","color":"gold"}'}} 1

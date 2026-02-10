@@ -779,7 +779,10 @@ public class CLIManager {
 
         // 展示 Fancy 内容
         if (!content.isEmpty()) {
-            displayFancyContent(player, content);
+            displayFancyContent(player, content, finalThought);
+        } else if (finalThought != null) {
+            // 如果只有思考过程而没有正文内容（例如纯工具调用前的思考），也显示思考按钮
+            displayFancyContent(player, "", finalThought);
         }
 
         // 处理工具调用
@@ -1284,7 +1287,6 @@ public class CLIManager {
                             String msg = (String) args[0];
                             if (output.length() > 0) output.append("\n");
                             output.append(org.bukkit.ChatColor.stripColor(msg));
-                            // 转发给真实玩家
                             if (methodName.equals("sendActionBar")) {
                                 player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new net.md_5.bungee.api.chat.TextComponent(msg));
                             } else {
@@ -1295,6 +1297,54 @@ public class CLIManager {
                                 if (output.length() > 0) output.append("\n");
                                 output.append(org.bukkit.ChatColor.stripColor(msg));
                                 player.sendMessage(msg);
+                            }
+                        } else if (args.length > 1 && args[0] instanceof java.util.UUID && args[1] instanceof String) {
+                            String msg = (String) args[1];
+                            if (output.length() > 0) output.append("\n");
+                            output.append(org.bukkit.ChatColor.stripColor(msg));
+                            player.sendMessage(msg);
+                        } else {
+                            String extracted = null;
+                            try {
+                                Class<?> componentClass = Class.forName("net.kyori.adventure.text.Component");
+                                Object componentObj = args[0];
+                                Object component = componentClass.isInstance(componentObj) ? componentObj : null;
+                                if (component == null) {
+                                    try {
+                                        java.lang.reflect.Method asComponent = componentObj.getClass().getMethod("asComponent");
+                                        Object maybeComponent = asComponent.invoke(componentObj);
+                                        if (componentClass.isInstance(maybeComponent)) {
+                                            component = maybeComponent;
+                                        }
+                                    } catch (Exception ignored) {
+                                    }
+                                }
+                                if (component != null) {
+                                    java.lang.reflect.Method plainTextMethod = Class.forName("net.kyori.adventure.text.serializer.plain.PlainComponentSerializer").getMethod("plain");
+                                    Object serializer = plainTextMethod.invoke(null);
+                                    java.lang.reflect.Method serializeMethod = serializer.getClass().getMethod("serialize", componentClass);
+                                    extracted = (String) serializeMethod.invoke(serializer, component);
+                                    if (extracted != null && !extracted.isEmpty()) {
+                                        if (output.length() > 0) output.append("\n");
+                                        output.append(org.bukkit.ChatColor.stripColor(extracted));
+                                        if (methodName.equals("sendActionBar")) {
+                                            try {
+                                                java.lang.reflect.Method sendActionBar = player.getClass().getMethod("sendActionBar", componentClass);
+                                                sendActionBar.invoke(player, component);
+                                            } catch (Exception ignored) {
+                                                player.sendMessage(extracted);
+                                            }
+                                        } else {
+                                            try {
+                                                java.lang.reflect.Method sendMessage = player.getClass().getMethod("sendMessage", componentClass);
+                                                sendMessage.invoke(player, component);
+                                            } catch (Exception ignored) {
+                                                player.sendMessage(extracted);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception ignored) {
                             }
                         }
                     }
@@ -1636,30 +1686,39 @@ public class CLIManager {
         return 1.0 - ((double) distance / Math.max(len1, len2));
     }
 
-    private void displayFancyContent(Player player, String content) {
-        // 获取当前 session 以获取思考内容
+    private void displayFancyContent(Player player, String content, String currentThought) {
+        // 获取当前 session
         DialogueSession session = sessions.get(player.getUniqueId());
         
-        // 如果有思考过程，显示按钮
+        // 如果本次回复包含思考过程，或者历史最后一条消息有思考过程，显示按钮
         if (session != null) {
+            String thoughtToShow = currentThought;
+            int thoughtIndex = -1;
+
             List<DialogueSession.Message> history = session.getHistory();
-            if (!history.isEmpty()) {
-                // 查找最后一条 assistant 消息的索引（即当前回复）
-                int lastAssistantIdx = -1;
+            if (thoughtToShow == null && !history.isEmpty()) {
+                // 如果当前没有提取到思考过程，尝试查找历史最后一条 assistant 消息
                 for (int i = history.size() - 1; i >= 0; i--) {
                     if ("assistant".equalsIgnoreCase(history.get(i).getRole())) {
-                        lastAssistantIdx = i;
+                        if (history.get(i).hasThought()) {
+                            thoughtToShow = history.get(i).getThought();
+                            thoughtIndex = i;
+                        }
                         break;
                     }
                 }
-                
-                if (lastAssistantIdx != -1 && history.get(lastAssistantIdx).hasThought()) {
-                    TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
-                    // 传递索引以便查看特定思考
-                    thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought " + lastAssistantIdx));
-                    thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
-                    player.spigot().sendMessage(thoughtBtn);
-                }
+            } else if (thoughtToShow != null) {
+                // 如果当前提取到了思考过程，它已经被 addMessage 加入了历史，索引是 history.size() - 1
+                thoughtIndex = history.size() - 1;
+            }
+            
+            if (thoughtToShow != null) {
+                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
+                // 传递索引以便查看特定思考，如果索引无效则由 handleThought 处理回退
+                String cmd = "/cli thought" + (thoughtIndex != -1 ? " " + thoughtIndex : "");
+                thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
+                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                player.spigot().sendMessage(thoughtBtn);
             }
         }
 

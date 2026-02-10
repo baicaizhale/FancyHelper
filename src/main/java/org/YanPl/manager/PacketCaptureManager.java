@@ -5,8 +5,10 @@ import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.wrappers.WrappedChatComponent;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.chat.ComponentSerializer;
 import org.YanPl.FancyHelper;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -44,7 +46,12 @@ public class PacketCaptureManager {
      */
     private void registerListener() {
         ProtocolLibrary.getProtocolManager().addPacketListener(
-            new PacketAdapter(plugin, PacketType.Play.Server.SYSTEM_CHAT, PacketType.Play.Server.CHAT) {
+            new PacketAdapter(plugin,
+                    PacketType.Play.Server.SYSTEM_CHAT,
+                    PacketType.Play.Server.CHAT,
+                    PacketType.Play.Server.SET_ACTION_BAR_TEXT,
+                    PacketType.Play.Server.SET_TITLE_TEXT,
+                    PacketType.Play.Server.SET_SUBTITLE_TEXT) {
                 @Override
                 public void onPacketSending(PacketEvent event) {
                     Player player = event.getPlayer();
@@ -94,6 +101,14 @@ public class PacketCaptureManager {
                     return TextComponent.toPlainText((BaseComponent) content);
                 } else if (content instanceof BaseComponent[]) {
                     return TextComponent.toPlainText((BaseComponent[]) content);
+                } else if (content instanceof WrappedChatComponent) {
+                    String json = ((WrappedChatComponent) content).getJson();
+                    return TextComponent.toPlainText(ComponentSerializer.parse(json));
+                }
+                Object fallback = packet.getChatComponents().read(0);
+                if (fallback instanceof WrappedChatComponent) {
+                    String json = ((WrappedChatComponent) fallback).getJson();
+                    return TextComponent.toPlainText(ComponentSerializer.parse(json));
                 }
             } else if (packet.getType() == PacketType.Play.Server.CHAT) {
                 // 旧版本或 1.18 聊天消息
@@ -103,7 +118,22 @@ public class PacketCaptureManager {
                         return TextComponent.toPlainText((BaseComponent[]) content);
                     } else if (content instanceof BaseComponent) {
                         return TextComponent.toPlainText((BaseComponent) content);
+                    } else if (content instanceof WrappedChatComponent) {
+                        String json = ((WrappedChatComponent) content).getJson();
+                        return TextComponent.toPlainText(ComponentSerializer.parse(json));
                     }
+                }
+            } else if (packet.getType() == PacketType.Play.Server.SET_ACTION_BAR_TEXT
+                    || packet.getType() == PacketType.Play.Server.SET_TITLE_TEXT
+                    || packet.getType() == PacketType.Play.Server.SET_SUBTITLE_TEXT) {
+                Object content = packet.getChatComponents().read(0);
+                if (content instanceof WrappedChatComponent) {
+                    String json = ((WrappedChatComponent) content).getJson();
+                    return TextComponent.toPlainText(ComponentSerializer.parse(json));
+                } else if (content instanceof BaseComponent[]) {
+                    return TextComponent.toPlainText((BaseComponent[]) content);
+                } else if (content instanceof BaseComponent) {
+                    return TextComponent.toPlainText((BaseComponent) content);
                 }
             }
         } catch (Exception e) {

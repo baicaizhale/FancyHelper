@@ -100,6 +100,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "set":
             case "toggle":
             case "select":
+            case "exempt_anti_loop":
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
                     return true;
@@ -177,6 +178,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     String selection = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
                     plugin.getCliManager().handleChat(player, selection);
                 }
+                return true;
+            case "exempt_anti_loop":
+                plugin.getCliManager().handleChat(player, "/cli exempt_anti_loop");
                 return true;
         }
         return true;
