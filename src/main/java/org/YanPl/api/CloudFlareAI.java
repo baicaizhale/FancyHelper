@@ -23,6 +23,7 @@ public class CloudFlareAI {
      * 负责构建请求、解析响应，以及管理 HttpClient 的生命周期。
      */
     private static final String API_COMPLETIONS_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/chat/completions";
+    private static final String API_RESPONSES_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/responses";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
     private final FancyHelper plugin;
     private final HttpClient httpClient;
@@ -106,7 +107,8 @@ public class CloudFlareAI {
             throw e;
         }
 
-        String url = String.format(API_COMPLETIONS_URL, accountId);
+        boolean useResponsesApi = model.contains("gpt-oss");
+        String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
         plugin.getLogger().info("[AI Request] URL: " + url);
 
         JsonArray messagesArray = new JsonArray();
@@ -183,16 +185,13 @@ public class CloudFlareAI {
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
-        // 根据用户要求，gpt 系列必须使用 completions 接口并使用 messages 字段
-        bodyJson.add("messages", messagesArray);
-
-        if (model.contains("gpt-oss")) {
-            // 根据 OpenAI 规范，对于推理模型（如 o1/gpt-oss），在 chat/completions 接口中
-            // 应当使用 reasoning_effort 字段（字符串），而不是 Cloudflare 原生的 reasoning 对象
-            bodyJson.addProperty("reasoning_effort", "medium");
-
-            // 确保有足够的 token 输出思考过程
-            bodyJson.addProperty("max_tokens", 4096);
+        if (useResponsesApi) {
+            bodyJson.add("input", messagesArray);
+            JsonObject reasoning = new JsonObject();
+            reasoning.addProperty("effort", "medium");
+            bodyJson.add("reasoning", reasoning);
+        } else {
+            bodyJson.add("messages", messagesArray);
         }
 
         String bodyString = gson.toJson(bodyJson);
@@ -254,7 +253,14 @@ public class CloudFlareAI {
 
                     JsonObject simpleBody = new JsonObject();
                     simpleBody.addProperty("model", model);
-                    simpleBody.add("messages", simpleInput);
+                    if (useResponsesApi) {
+                        simpleBody.add("input", simpleInput);
+                        JsonObject reasoning = new JsonObject();
+                        reasoning.addProperty("effort", "medium");
+                        simpleBody.add("reasoning", reasoning);
+                    } else {
+                        simpleBody.add("messages", simpleInput);
+                    }
 
                     String simpleBodyString = gson.toJson(simpleBody);
                     plugin.getLogger().info("[AI Request] Retrying with simplified payload: " + simpleBodyString);
