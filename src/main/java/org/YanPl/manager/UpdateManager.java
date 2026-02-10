@@ -90,8 +90,6 @@ public class UpdateManager implements Listener {
                     }
                     
                     String currentVersion = plugin.getDescription().getVersion();
-                    plugin.getLogger().info("当前版本: " + currentVersion + ", 最新版本: " + latestVersion);
-                    plugin.getLogger().info("auto_upgrade 配置: " + plugin.getConfigManager().isAutoUpgrade());
                     
                     if (isNewerVersion(currentVersion, latestVersion)) {
                         hasUpdate = true;
@@ -286,14 +284,10 @@ public class UpdateManager implements Listener {
         String[] currentParts = current.split("\\.");
         String[] latestParts = latest.split("\\.");
         
-        plugin.getLogger().info("版本比较 - 当前: " + current + ", 最新: " + latest);
-        
         int length = Math.max(currentParts.length, latestParts.length);
         for (int i = 0; i < length; i++) {
             int curr = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
             int late = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
-            
-            plugin.getLogger().info("版本部分 " + i + " - 当前: " + curr + ", 最新: " + late);
             
             if (late > curr) return true;
             if (late < curr) return false;
