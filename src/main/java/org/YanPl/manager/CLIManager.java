@@ -821,6 +821,9 @@ public class CLIManager {
                 player.sendMessage(ChatColor.RED + "⨀ 检测到 Fancy 可能陷入了重复操作的死循环。");
                 player.sendMessage(ChatColor.YELLOW + "⇒ 已自动打断 Fancy 的后续执行。您可以尝试更换提问方式或手动干预。");
                 
+                // 触发打断后，不将本次相似调用计入历史，也不增加链式计数
+                // 这样如果 AI 在没有用户干预的情况下再次尝试相同操作，会立即再次触发打断
+                
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.CANCELLED);
                 generationStartTimes.remove(uuid);
