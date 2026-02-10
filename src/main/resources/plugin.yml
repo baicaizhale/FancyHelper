@@ -2,15 +2,15 @@ name: FancyHelper
 version: 2.5.2
 main: org.YanPl.FancyHelper
 api-version: '1.18'
-authors: [ baicaizhale ]
+authors: [ baicaizhale , zip8919 ]
 commands:
   fancyhelper:
-    description: Main command for FancyHelper
+    description: FancyHelper 主命令
     aliases: [cli, fancy]
 permissions:
   fancyhelper.cli:
-    description: Allow player to enter/exit CLI Mode
+    description: 允许使用 FancyHelper CLI 模式
     default: op
   fancyhelper.reload:
-    description: Allow player to reload plugin
+    description: 允许重新加载 FancyHelper 配置
     default: op
