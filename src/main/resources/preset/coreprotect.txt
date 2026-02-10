@@ -1,3 +1,8 @@
+【插件检查】
+在使用以下命令前，请先检查服务器是否已安装 CoreProtect 插件。
+检查方法：尝试执行 /co version 命令，如果返回版本信息则说明插件已安装。
+如果插件未安装，请告知玩家无法使用日志查询和回档功能。
+
 CoreProtect (CP) 常用命令：
 /co inspect (或 /co i) - 开启/关闭查询模式
 /co rollback u:<user> t:<time> r:<radius> - 回档（撤销行为）

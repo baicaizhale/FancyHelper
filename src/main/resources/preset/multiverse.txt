@@ -1,3 +1,8 @@
+【插件检查】
+在使用以下命令前，请先检查服务器是否已安装 Multiverse-Core 插件。
+检查方法：尝试执行 /mv version 命令，如果返回版本信息则说明插件已安装。
+如果插件未安装，请告知玩家无法使用多世界管理功能。
+
 Multiverse-Core (多世界) 常用命令：
 /mv list - 列出当前服务器的所有世界
 /mv create <world_name> <env> [-t type] [-g generator] - 创建新世界 (env: normal, nether, end)

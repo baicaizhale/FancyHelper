@@ -1,3 +1,8 @@
+【插件检查】
+在使用以下命令前，请先检查服务器是否已安装 EssentialsX 插件。
+检查方法：尝试执行 /essentials 命令，如果返回版本信息则说明插件已安装。
+如果插件未安装，请告知玩家使用 Minecraft 原版命令来替代（如 /gamemode、/tp、/give 等）。
+
 EssentialsX 插件常用命令：
 /essentials - 查看插件版本及基本信息
 /ess reload - 重新加载 Essentials 配置文件

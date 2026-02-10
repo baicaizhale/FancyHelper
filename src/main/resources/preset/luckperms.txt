@@ -1,3 +1,8 @@
+【插件检查】
+在使用以下命令前，请先检查服务器是否已安装 LuckPerms 插件。
+检查方法：尝试执行 /lp version 命令，如果返回版本信息则说明插件已安装。
+如果插件未安装，请告知玩家使用 Minecraft 原版命令（如 /op、/deop）来管理权限。
+
 LuckPerms (LP) 权限管理插件常用命令：
 /lp user <player> permission set <permission> [true|false] - 为玩家设置权限
 /lp user <player> parent add <group> - 将玩家加入某个权限组
