@@ -32,6 +32,9 @@ FancyHelper 是一款基于 AI 驱动的 Minecraft 服务器管理助手插件�
 **原因**：这是 Minecraft 服务器的安全聊天功能（`enforce-secure-profile`）产生的警告，不是 FancyHelper 插件的问题。当服务器启用了安全配置文件验证，但玩家的配置文件缺少公钥时就会出现此警告。
 
 **解决方案**：
+FancyHelper 会自动检测此问题并尝试将 `server.properties` 中的 `enforce-secure-profile` 设置为 `false`。如果自动修改成功，只需重启服务器即可。
+
+如果自动修改失败，请手动执行以下步骤：
 1. 打开服务器的 `server.properties` 文件
 2. 将 `enforce-secure-profile` 设置为 `false`
 3. 重启服务器
