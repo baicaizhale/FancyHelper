@@ -165,6 +165,14 @@ public class ConfigManager {
         return config.getBoolean("settings.op_update_notify", true);
     }
 
+    /**
+     * 获取是否开启自动升级
+     * @return 是否开启自动升级
+     */
+    public boolean isAutoUpgrade() {
+        return config.getBoolean("settings.auto_upgrade", false);
+    }
+
     public String getUpdateMirror() {
         return config.getString("settings.update_mirror", "https://ghproxy.net/");
     }

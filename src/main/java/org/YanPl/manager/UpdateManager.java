@@ -95,6 +95,12 @@ public class UpdateManager implements Listener {
                         Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: v" + latestVersion);
                         Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "下载地址: " + downloadUrl);
                         
+                        // 自动升级逻辑
+                        if (plugin.getConfigManager().isAutoUpgrade()) {
+                            Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到自动升级已开启，正在后台下载更新...");
+                            downloadAndInstall(null, true);
+                        }
+
                         if (sender != null) {
                             sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: " + ChatColor.WHITE + "v" + latestVersion);
                             sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.YELLOW + " 自动下载并更新。");
@@ -209,11 +215,21 @@ public class UpdateManager implements Listener {
                     if (!autoReload) {
                         sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "请重启服务器或使用 PlugMan 重载以完成更新。");
                     }
+                } else {
+                    Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.GREEN + "更新下载完成！");
+                    if (moved) {
+                        Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "旧版本已成功移动至 plugins/FancyHelper/old/");
+                    }
+                    Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "新版本已就绪: " + ChatColor.WHITE + newJarName);
                 }
 
-                if (autoReload && sender != null) {
+                if (autoReload) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.performCommand("fancy reload deeply");
+                        if (sender != null) {
+                            sender.performCommand("fancy reload deeply");
+                        } else {
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "fancy reload deeply");
+                        }
                     });
                 }
             } catch (IOException e) {

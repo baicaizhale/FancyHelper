@@ -46,15 +46,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        // 命令入口：只允许玩家使用
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
-            return true;
-        }
-
-        Player player = (Player) sender;
-
         if (args.length == 0) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+                return true;
+            }
+            Player player = (Player) sender;
             if (!player.hasPermission("fancyhelper.cli")) {
                 player.sendMessage(ChatColor.RED + "你没有权限使用此命令。");
                 return true;
@@ -66,32 +63,70 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         String subCommand = args[0].toLowerCase();
         switch (subCommand) {
             case "reload":
-                if (!player.hasPermission("fancyhelper.reload")) {
-                    player.sendMessage(ChatColor.RED + "你没有权限执行重载。");
+                if (!sender.hasPermission("fancyhelper.reload")) {
+                    sender.sendMessage(ChatColor.RED + "你没有权限执行重载。");
                     return true;
                 }
-                handleReload(player, args);
+                handleReload(sender, args);
                 break;
             case "status":
-                handleStatus(player);
+                handleStatus(sender);
                 break;
             case "update":
             case "checkupdate":
-                if (!player.hasPermission("fancyhelper.reload")) {
-                    player.sendMessage(ChatColor.RED + "你没有权限检查更新。");
+                if (!sender.hasPermission("fancyhelper.reload")) {
+                    sender.sendMessage(ChatColor.RED + "你没有权限检查更新。");
                     return true;
                 }
-                player.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "正在检查更新...");
-                plugin.getUpdateManager().checkForUpdates(player);
+                sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "正在检查更新...");
+                plugin.getUpdateManager().checkForUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
             case "upgrade":
             case "download":
-                if (!player.hasPermission("fancyhelper.reload")) {
-                    player.sendMessage(ChatColor.RED + "你没有权限执行更新。");
+                if (!sender.hasPermission("fancyhelper.reload")) {
+                    sender.sendMessage(ChatColor.RED + "你没有权限执行更新。");
                     return true;
                 }
-                plugin.getUpdateManager().downloadAndInstall(player, true);
+                plugin.getUpdateManager().downloadAndInstall(sender instanceof Player ? (Player) sender : null, true);
                 break;
+            case "yolo":
+            case "normal":
+            case "confirm":
+            case "cancel":
+            case "agree":
+            case "read":
+            case "thought":
+            case "settings":
+            case "set":
+            case "toggle":
+            case "select":
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    return true;
+                }
+                Player player = (Player) sender;
+                return handlePlayerSubCommand(player, subCommand, args);
+            case "error":
+                if (!sender.isOp()) {
+                    sender.sendMessage(ChatColor.RED + "该测试命令仅限管理员使用。");
+                    return true;
+                }
+                if (sender instanceof Player) {
+                    handleTestError((Player) sender);
+                } else {
+                    sender.sendMessage(ChatColor.RED + "该测试命令仅限玩家使用。");
+                }
+                return true;
+            default:
+                sender.sendMessage(ChatColor.RED + "未知子命令。用法: /fancy [reload|status]");
+                break;
+        }
+
+        return true;
+    }
+
+    private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
+        switch (subCommand) {
             case "yolo":
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.YOLO);
                 return true;
@@ -123,12 +158,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     if (tool.equals("ls") || tool.equals("read") || tool.equals("diff")) {
                         boolean currentState = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
                         if (currentState) {
-                            // 禁用工具无需验证
                             plugin.getConfigManager().setPlayerToolEnabled(player, tool, false);
                             player.sendMessage(ChatColor.YELLOW + "工具 " + tool + " 已禁用。下次开启需要重新验证。");
                             handleSettings(player);
                         } else {
-                            // 启用工具需要验证
                             player.sendMessage(ChatColor.AQUA + "正在为工具 " + tool + " 发起安全验证...");
                             plugin.getVerificationManager().startVerification(player, tool, () -> {
                                 plugin.getConfigManager().setPlayerToolEnabled(player, tool, true);
@@ -139,24 +172,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     }
                 }
                 return true;
-            case "error":
-                if (!player.isOp()) {
-                    player.sendMessage(ChatColor.RED + "该测试命令仅限管理员使用。");
-                    return true;
-                }
-                handleTestError(player);
-                return true;
             case "select":
                 if (args.length > 1) {
                     String selection = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
                     plugin.getCliManager().handleChat(player, selection);
                 }
                 return true;
-            default:
-                player.sendMessage(ChatColor.RED + "未知子命令。用法: /fancy [reload|status]");
-                break;
         }
-
         return true;
     }
 
@@ -165,27 +187,27 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         plugin.getCliManager().toggleCLI(player);
     }
 
-    private void handleReload(Player player, String[] args) {
+    private void handleReload(CommandSender sender, String[] args) {
         if (args.length == 1) {
             plugin.getConfigManager().loadConfig();
             plugin.getWorkspaceIndexer().indexAll();
             plugin.getEulaManager().reload();
-            player.sendMessage(ChatColor.GREEN + "配置、工作区与 EULA 已重新加载。");
+            sender.sendMessage(ChatColor.GREEN + "配置、工作区与 EULA 已重新加载。");
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {
                 plugin.getWorkspaceIndexer().indexAll();
-                player.sendMessage(ChatColor.GREEN + "工作区索引已重新加载。");
+                sender.sendMessage(ChatColor.GREEN + "工作区索引已重新加载。");
             } else if (target.equals("config")) {
                 plugin.getConfigManager().loadConfig();
-                player.sendMessage(ChatColor.GREEN + "配置文件已重新加载。");
+                sender.sendMessage(ChatColor.GREEN + "配置文件已重新加载。");
             } else if (target.equals("eula")) {
                 plugin.getEulaManager().reload();
-                player.sendMessage(ChatColor.GREEN + "EULA 文件已重新加载。");
+                sender.sendMessage(ChatColor.GREEN + "EULA 文件已重新加载。");
             } else if (target.equals("deeply") || target.equals("deep")) {
-                handleDeepReload(player);
+                handleDeepReload(sender);
             } else {
-                player.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config|eula|deeply]");
+                sender.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config|eula|deeply]");
             }
         }
     }
@@ -194,7 +216,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      * 深度重载：尽可能“卸载”当前插件实例，然后从 plugins 目录重新加载 jar 并启用。
      * 说明：Bukkit 并不官方支持真正的卸载/重载，这里做的是常见的 best-effort 热重载流程。
      */
-    private void handleDeepReload(Player player) {
+    private void handleDeepReload(CommandSender sender) {
         PluginManager pluginManager = Bukkit.getPluginManager();
 
         // 优先检查是否有 PlugMan 插件，利用成熟插件进行重载更安全
@@ -204,7 +226,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         if (plugMan != null && plugMan.isEnabled()) {
-            player.sendMessage(ChatColor.GREEN + "检测到 " + plugMan.getName() + "，正在调用其重载指令...");
+            sender.sendMessage(ChatColor.GREEN + "检测到 " + plugMan.getName() + "，正在调用其重载指令...");
             // 尝试执行 /plm reload FancyHelper 或 /plugman reload FancyHelper
             String reloadCmd = (plugMan.getName().equalsIgnoreCase("PlugManX") ? "plm" : "plugman")
                     + " reload " + plugin.getName();
@@ -213,25 +235,25 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         if (isModernPaperPluginSystem()) {
-            player.sendMessage(ChatColor.RED + "检测到 Paper 现代插件系统：运行时卸载/重载 Bukkit 插件会被阻止。");
-            player.sendMessage(ChatColor.YELLOW + "请改用重启服务器来重新加载插件文件（例如使用 /restart）。");
+            sender.sendMessage(ChatColor.RED + "检测到 Paper 现代插件系统：运行时卸载/重载 Bukkit 插件会被阻止。");
+            sender.sendMessage(ChatColor.YELLOW + "请改用重启服务器来重新加载插件文件（例如使用 /restart）。");
             return;
         }
 
         File pluginsDir = plugin.getDataFolder().getParentFile();
         if (pluginsDir == null || !pluginsDir.exists() || !pluginsDir.isDirectory()) {
-            player.sendMessage(ChatColor.RED + "无法定位 plugins 目录，深度重载已取消。");
+            sender.sendMessage(ChatColor.RED + "无法定位 plugins 目录，深度重载已取消。");
             return;
         }
 
         File jarFile = findReloadJarFile(pluginsDir);
         if (jarFile == null || !jarFile.isFile()) {
-            player.sendMessage(ChatColor.RED + "未找到可用于重新加载的插件 jar 文件（需位于 plugins 目录）。");
+            sender.sendMessage(ChatColor.RED + "未找到可用于重新加载的插件 jar 文件（需位于 plugins 目录）。");
             return;
         }
 
-        player.sendMessage(ChatColor.YELLOW + "正在深度重载 FancyHelper...");
-        player.sendMessage(ChatColor.GRAY + "目标文件: " + jarFile.getName());
+        sender.sendMessage(ChatColor.YELLOW + "正在深度重载 FancyHelper...");
+        sender.sendMessage(ChatColor.GRAY + "目标文件: " + jarFile.getName());
 
         try {
             unregisterPluginCommands(plugin);
@@ -245,10 +267,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             Plugin reloaded = pluginManager.loadPlugin(jarFile);
             pluginManager.enablePlugin(reloaded);
 
-            player.sendMessage(ChatColor.GREEN + "深度重载完成: " + reloaded.getDescription().getFullName());
+            sender.sendMessage(ChatColor.GREEN + "深度重载完成: " + reloaded.getDescription().getFullName());
         } catch (Throwable t) {
             plugin.getCloudErrorReport().report(t);
-            player.sendMessage(ChatColor.RED + "深度重载失败: " + t.getClass().getSimpleName() + " - " + (t.getMessage() == null ? "无错误信息" : t.getMessage()));
+            sender.sendMessage(ChatColor.RED + "深度重载失败: " + t.getClass().getSimpleName() + " - " + (t.getMessage() == null ? "无错误信息" : t.getMessage()));
         }
     }
 
@@ -391,13 +413,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleStatus(Player player) {
-        player.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
-        player.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
-        player.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
-        player.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
-        player.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
-        player.sendMessage(ChatColor.AQUA + "=======================");
+    private void handleStatus(CommandSender sender) {
+        sender.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
+        sender.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
+        sender.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
+        sender.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
+        sender.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
+        sender.sendMessage(ChatColor.AQUA + "=======================");
     }
 
     private void handleSettings(Player player) {

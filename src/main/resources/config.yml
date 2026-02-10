@@ -13,4 +13,5 @@ settings:
   auto_report: true  # 是否启用匿名错误上报，帮助开发者改进插件
   check_update: true  # 是否启用自动更新检查
   op_update_notify: true # 是否在管理员进入服务器时提示更新
+  auto_upgrade: false  # 是否在检测到新版本时自动下载并安装更新
   update_mirror: "https://ghproxy.net/"  # GitHub 镜像源，用于加速下载
