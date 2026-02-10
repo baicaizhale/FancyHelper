@@ -3,64 +3,47 @@ package org.YanPl.api;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import okhttp3.*;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class CloudFlareAI {
     /**
-     * 简单封装 CloudFlare AI HTTP 调用的客户端
+     * 使用 Java 标准库 HttpClient 封装 CloudFlare AI HTTP 调用
      * 负责构建请求、解析响应，以及管理 HttpClient 的生命周期。
      */
     private static final String API_COMPLETIONS_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/chat/completions";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
     private final FancyHelper plugin;
-    private final OkHttpClient httpClient;
+    private final HttpClient httpClient;
     private final Gson gson = new Gson();
     private String cachedAccountId = null;
 
     public CloudFlareAI(FancyHelper plugin) {
         this.plugin = plugin;
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(60, TimeUnit.SECONDS)
-                .readTimeout(90, TimeUnit.SECONDS)
-                .writeTimeout(90, TimeUnit.SECONDS)
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(60))
                 .build();
     }
 
-    public OkHttpClient getHttpClient() {
+    public HttpClient getHttpClient() {
         return httpClient;
     }
 
     public void shutdown() {
-        // 关闭 OkHttp 客户端相关的线程池、连接池和缓存，防止 JVM 无法退出
-        try {
-            httpClient.dispatcher().executorService().shutdown();
-            if (!httpClient.dispatcher().executorService().awaitTermination(5, TimeUnit.SECONDS)) {
-                httpClient.dispatcher().executorService().shutdownNow();
-                plugin.getLogger().warning("[CloudFlareAI] Executor service did not terminate in time, forcing shutdown.");
-            }
-            
-            httpClient.connectionPool().evictAll();
-            
-            if (httpClient.cache() != null) {
-                try {
-                    httpClient.cache().close();
-                } catch (IOException ignored) {}
-            }
-            
-            plugin.getLogger().info("[CloudFlareAI] HTTP client shutdown completed.");
-        } catch (InterruptedException e) {
-            httpClient.dispatcher().executorService().shutdownNow();
-            plugin.getLogger().warning("[CloudFlareAI] Shutdown interrupted: " + e.getMessage());
-            Thread.currentThread().interrupt();
-        }
+        // Java 标准库的 HttpClient 不需要显式关闭
+        // 它使用系统默认的 executor，会随 JVM 退出而终止
+        plugin.getLogger().info("[CloudFlareAI] HTTP client shutdown completed (no-op for java.net.http.HttpClient).");
     }
 
     private String fetchAccountId() throws IOException {
@@ -72,26 +55,31 @@ public class CloudFlareAI {
             throw new IOException("错误: 请先在配置文件中设置 cloudflare.cf_key。");
         }
 
-        Request request = new Request.Builder()
-                .url(ACCOUNTS_URL)
-                .addHeader("Authorization", "Bearer " + cfKey)
-                .get()
-                .build();
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(ACCOUNTS_URL))
+                    .header("Authorization", "Bearer " + cfKey)
+                    .timeout(Duration.ofSeconds(60))
+                    .GET()
+                    .build();
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("获取 Account ID 失败: " + response.code() + " " + response.message());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                throw new IOException("获取 Account ID 失败: " + response.statusCode() + " " + response.body());
             }
 
-            String responseBody = response.body().string();
-            JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
-            
+            JsonObject resultJson = gson.fromJson(response.body(), JsonObject.class);
+
             if (resultJson.has("result") && resultJson.getAsJsonArray("result").size() > 0) {
                 cachedAccountId = resultJson.getAsJsonArray("result").get(0).getAsJsonObject().get("id").getAsString();
                 return cachedAccountId;
             } else {
                 throw new IOException("未找到关联的 CloudFlare 账户，请检查 cf_key 权限。");
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("获取 Account ID 被中断: " + e.getMessage(), e);
         }
     }
 
@@ -125,11 +113,11 @@ public class CloudFlareAI {
 
         String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "You are a helpful assistant.";
         safeSystemPrompt = safeSystemPrompt.trim();
-        
+
         if (safeSystemPrompt.isEmpty()) {
             safeSystemPrompt = "You are a helpful assistant.";
         }
-        
+
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
         systemMsg.addProperty("content", safeSystemPrompt);
@@ -138,11 +126,11 @@ public class CloudFlareAI {
 
         List<DialogueSession.Message> historyCopy = new ArrayList<>(session.getHistory());
         plugin.getLogger().info("[AI Request] Processing " + historyCopy.size() + " history messages");
-        
+
         for (DialogueSession.Message msg : historyCopy) {
             String content = msg.getContent();
             String role = msg.getRole();
-            
+
             if (content == null) {
                 plugin.getLogger().warning("[AI Request] Skipping message with null content");
                 continue;
@@ -151,10 +139,10 @@ public class CloudFlareAI {
                 plugin.getLogger().warning("[AI Request] Skipping message with null role");
                 continue;
             }
-            
+
             content = content.trim();
             role = role.trim();
-            
+
             if (content.isEmpty()) {
                 plugin.getLogger().warning("[AI Request] Skipping message with empty content after trim");
                 continue;
@@ -163,18 +151,16 @@ public class CloudFlareAI {
                 plugin.getLogger().warning("[AI Request] Skipping message with empty role after trim");
                 continue;
             }
-            
+
             if ("system".equalsIgnoreCase(role)) {
                 plugin.getLogger().info("[AI Request] Skipping duplicate system message");
                 continue;
             }
-            
+
             JsonObject m = new JsonObject();
             m.addProperty("role", role);
             m.addProperty("content", content);
             messagesArray.add(m);
-            // 只有在调试时才打印每条消息的详情
-            // plugin.getLogger().info("[AI Request] Added message - Role: '" + role + "', Content length: " + content.length());
         }
 
         for (int i = 0; i < messagesArray.size(); i++) {
@@ -199,55 +185,50 @@ public class CloudFlareAI {
         bodyJson.addProperty("model", model);
         // 根据用户要求，gpt 系列必须使用 completions 接口并使用 messages 字段
         bodyJson.add("messages", messagesArray);
-        
+
         if (model.contains("gpt-oss")) {
             // 根据 OpenAI 规范，对于推理模型（如 o1/gpt-oss），在 chat/completions 接口中
             // 应当使用 reasoning_effort 字段（字符串），而不是 Cloudflare 原生的 reasoning 对象
             bodyJson.addProperty("reasoning_effort", "medium");
-            
+
             // 确保有足够的 token 输出思考过程
             bodyJson.addProperty("max_tokens", 4096);
         }
-        
+
         String bodyString = gson.toJson(bodyJson);
 
         plugin.getLogger().info("[AI Request] Model: " + model);
         plugin.getLogger().info("[AI Request] Total messages in array: " + messagesArray.size());
-        
-        // 简化日志：不再打印完整的 Payload，避免刷屏
-        // plugin.getLogger().info("[AI Request] Full Payload: " + bodyString);
-        
+
         if (bodyString.contains("\"content\":null") || bodyString.contains("\"role\":null")) {
             plugin.getLogger().severe("[AI Error] CRITICAL: Payload contains null content or role!");
             plugin.getLogger().severe("[AI Error] Full payload: " + bodyString);
             throw new IOException("Payload validation failed: null content or role detected in JSON");
         }
-        
+
         if (bodyString.matches(".*\"content\":\\s*\"\"\\s*[,}].*")) {
             plugin.getLogger().warning("[AI Request] Warning: Empty content string detected");
         }
 
-        RequestBody body = RequestBody.create(
-                bodyString,
-                MediaType.get("application/json; charset=utf-8")
-        );
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + cfKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(90))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
 
-        Request request = new Request.Builder()
-                .url(url)
-                .addHeader("Authorization", "Bearer " + cfKey)
-                .post(body)
-                .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            String responseBody = response.body();
+            plugin.getLogger().info("[AI Response] Code: " + response.statusCode());
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            String responseBody = response.body() != null ? response.body().string() : "";
-            plugin.getLogger().info("[AI Response] Code: " + response.code());
-
-            if (!response.isSuccessful()) {
+            if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI Error] Response Body: " + responseBody);
 
                 // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
-                if ((response.code() == 400 || response.code() == 500) && responseBody != null) {
-                    plugin.getLogger().warning("[AI] Detected error " + response.code() + " from CF API, retrying with simplified payload...");
+                if ((response.statusCode() == 400 || response.statusCode() == 500) && responseBody != null) {
+                    plugin.getLogger().warning("[AI] Detected error " + response.statusCode() + " from CF API, retrying with simplified payload...");
 
                     JsonArray simpleInput = new JsonArray();
                     JsonObject simpleSystem = new JsonObject();
@@ -278,84 +259,85 @@ public class CloudFlareAI {
                     String simpleBodyString = gson.toJson(simpleBody);
                     plugin.getLogger().info("[AI Request] Retrying with simplified payload: " + simpleBodyString);
 
-                    RequestBody simpleReqBody = RequestBody.create(simpleBodyString, MediaType.get("application/json; charset=utf-8"));
-                    Request simpleRequest = new Request.Builder()
-                            .url(url)
-                            .addHeader("Authorization", "Bearer " + cfKey)
-                            .post(simpleReqBody)
+                    HttpRequest simpleRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(url))
+                            .header("Authorization", "Bearer " + cfKey)
+                            .header("Content-Type", "application/json; charset=utf-8")
+                            .timeout(Duration.ofSeconds(90))
+                            .POST(HttpRequest.BodyPublishers.ofString(simpleBodyString, StandardCharsets.UTF_8))
                             .build();
 
-                    try (Response simpleResp = httpClient.newCall(simpleRequest).execute()) {
-                        String simpleRespBody = simpleResp.body() != null ? simpleResp.body().string() : "";
-                        plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.code());
-                        if (!simpleResp.isSuccessful()) {
-                            plugin.getLogger().warning("[AI Error - Retry] Response Body: " + simpleRespBody);
-                            throw new IOException("AI 调用失败(重试): " + simpleResp.code() + " - " + simpleRespBody);
-                        }
+                    HttpResponse<String> simpleResp = httpClient.send(simpleRequest, HttpResponse.BodyHandlers.ofString());
+                    String simpleRespBody = simpleResp.body();
+                    plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.statusCode());
 
-                        JsonObject responseJson = gson.fromJson(simpleRespBody, JsonObject.class);
-                        String textC = null;
-                        String thoughtC = null;
+                    if (simpleResp.statusCode() != 200) {
+                        plugin.getLogger().warning("[AI Error - Retry] Response Body: " + simpleRespBody);
+                        throw new IOException("AI 调用失败(重试): " + simpleResp.statusCode() + " - " + simpleRespBody);
+                    }
 
-                        // 1. 尝试解析 OpenAI 兼容格式
-                        if (responseJson.has("choices") && responseJson.get("choices").isJsonArray()) {
-                            JsonArray choices = responseJson.getAsJsonArray("choices");
-                            if (choices.size() > 0) {
-                                JsonObject choice = choices.get(0).getAsJsonObject();
-                                if (choice.has("message")) {
-                                    JsonObject message = choice.getAsJsonObject("message");
-                                    if (message.has("content") && !message.get("content").isJsonNull()) {
-                                        textC = message.get("content").getAsString();
-                                    }
-                                    if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
-                                        thoughtC = message.get("reasoning_content").getAsString();
-                                    }
+                    JsonObject responseJson = gson.fromJson(simpleRespBody, JsonObject.class);
+                    String textC = null;
+                    String thoughtC = null;
+
+                    // 1. 尝试解析 OpenAI 兼容格式
+                    if (responseJson.has("choices") && responseJson.get("choices").isJsonArray()) {
+                        JsonArray choices = responseJson.getAsJsonArray("choices");
+                        if (choices.size() > 0) {
+                            JsonObject choice = choices.get(0).getAsJsonObject();
+                            if (choice.has("message")) {
+                                JsonObject message = choice.getAsJsonObject("message");
+                                if (message.has("content") && !message.get("content").isJsonNull()) {
+                                    textC = message.get("content").getAsString();
+                                }
+                                if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
+                                    thoughtC = message.get("reasoning_content").getAsString();
                                 }
                             }
                         }
+                    }
 
-                        // 2. 尝试解析 Cloudflare 原生 output 格式
-                        if (textC == null && responseJson.has("output") && responseJson.get("output").isJsonArray()) {
-                            JsonArray outputArray = responseJson.getAsJsonArray("output");
-                            for (int i = 0; i < outputArray.size(); i++) {
-                                JsonObject item = outputArray.get(i).getAsJsonObject();
-                                if (item.has("type") && "message".equals(item.get("type").getAsString())) {
-                                    if (item.has("content") && item.get("content").isJsonArray()) {
-                                        JsonArray contents = item.getAsJsonArray("content");
-                                        for (int j = 0; j < contents.size(); j++) {
-                                            JsonObject contentObj = contents.get(j).getAsJsonObject();
-                                            String type = contentObj.has("type") ? contentObj.get("type").getAsString() : "";
-                                            if ("output_text".equals(type)) {
-                                                textC = contentObj.get("text").isJsonNull() ? null : contentObj.get("text").getAsString();
-                                            } else if ("thought".equals(type) || "reasoning".equals(type)) {
-                                                thoughtC = contentObj.get("text").isJsonNull() ? null : contentObj.get("text").getAsString();
-                                            }
+                    // 2. 尝试解析 Cloudflare 原生 output 格式
+                    if (textC == null && responseJson.has("output") && responseJson.get("output").isJsonArray()) {
+                        JsonArray outputArray = responseJson.getAsJsonArray("output");
+                        for (int i = 0; i < outputArray.size(); i++) {
+                            JsonObject item = outputArray.get(i).getAsJsonObject();
+                            if (item.has("type") && "message".equals(item.get("type").getAsString())) {
+                                if (item.has("content") && item.get("content").isJsonArray()) {
+                                    JsonArray contents = item.getAsJsonArray("content");
+                                    for (int j = 0; j < contents.size(); j++) {
+                                        JsonObject contentObj = contents.get(j).getAsJsonObject();
+                                        String type = contentObj.has("type") ? contentObj.get("type").getAsString() : "";
+                                        if ("output_text".equals(type)) {
+                                            textC = contentObj.get("text").isJsonNull() ? null : contentObj.get("text").getAsString();
+                                        } else if ("thought".equals(type) || "reasoning".equals(type)) {
+                                            thoughtC = contentObj.get("text").isJsonNull() ? null : contentObj.get("text").getAsString();
                                         }
                                     }
                                 }
                             }
                         }
-
-                        // 3. 尝试解析 Cloudflare 原生 result 格式
-                        if (textC == null && responseJson.has("result")) {
-                            JsonObject result = responseJson.getAsJsonObject("result");
-                            if (result.has("response")) textC = result.get("response").isJsonNull() ? null : result.get("response").getAsString();
-                            else if (result.has("text")) textC = result.get("text").isJsonNull() ? null : result.get("text").getAsString();
-                            
-                            if (thoughtC == null) {
-                                if (result.has("reasoning")) thoughtC = result.get("reasoning").isJsonNull() ? null : result.get("reasoning").getAsString();
-                                else if (result.has("thought")) thoughtC = result.get("thought").isJsonNull() ? null : result.get("thought").getAsString();
-                            }
-                        }
-
-                        if (textC != null) {
-                            return new AIResponse(textC, thoughtC);
-                        }
-                        throw new IOException("无法解析 AI 响应结果(重试): " + simpleRespBody);
                     }
+
+                    // 3. 尝试解析 Cloudflare 原生 result 格式
+                    if (textC == null && responseJson.has("result")) {
+                        JsonObject result = responseJson.getAsJsonObject("result");
+                        if (result.has("response")) textC = result.get("response").isJsonNull() ? null : result.get("response").getAsString();
+                        else if (result.has("text")) textC = result.get("text").isJsonNull() ? null : result.get("text").getAsString();
+
+                        if (thoughtC == null) {
+                            if (result.has("reasoning")) thoughtC = result.get("reasoning").isJsonNull() ? null : result.get("reasoning").getAsString();
+                            else if (result.has("thought")) thoughtC = result.get("thought").isJsonNull() ? null : result.get("thought").getAsString();
+                        }
+                    }
+
+                    if (textC != null) {
+                        return new AIResponse(textC, thoughtC);
+                    }
+                    throw new IOException("无法解析 AI 响应结果(重试): " + simpleRespBody);
                 }
 
-                throw new IOException("AI 调用失败: " + response.code() + " - " + responseBody);
+                throw new IOException("AI 调用失败: " + response.statusCode() + " - " + responseBody);
             }
 
             JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
@@ -407,7 +389,7 @@ public class CloudFlareAI {
                 JsonObject result = responseJson.getAsJsonObject("result");
                 if (result.has("response")) textContent = result.get("response").getAsString();
                 else if (result.has("text")) textContent = result.get("text").getAsString();
-                
+
                 if (thoughtContent == null) {
                     if (result.has("reasoning")) thoughtContent = result.get("reasoning").getAsString();
                     else if (result.has("thought")) thoughtContent = result.get("thought").getAsString();
@@ -426,6 +408,9 @@ public class CloudFlareAI {
             }
 
             throw new IOException("无法解析 AI 响应结果: " + responseBody);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("AI 调用被中断: " + e.getMessage(), e);
         }
     }
 }

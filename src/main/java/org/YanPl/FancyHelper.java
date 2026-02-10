@@ -4,6 +4,7 @@ import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
+import org.YanPl.manager.PacketCaptureManager;
 import org.YanPl.manager.VerificationManager;
 import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
@@ -24,6 +25,7 @@ public final class FancyHelper extends JavaPlugin {
     private EulaManager eulaManager;
     private CloudErrorReport cloudErrorReport;
     private VerificationManager verificationManager;
+    private PacketCaptureManager packetCaptureManager;
 
     @Override
     public void onEnable() {
@@ -41,6 +43,21 @@ public final class FancyHelper extends JavaPlugin {
         
         // 初始化验证管理器
         verificationManager = new VerificationManager(this);
+        
+        // 强制检查 ProtocolLib 依赖
+        if (!getServer().getPluginManager().isPluginEnabled("ProtocolLib")) {
+            getLogger().severe("==================");
+            getLogger().severe("未检测到 ProtocolLib！");
+            getLogger().severe("FancyHelper 需要 ProtocolLib 才能正常工作。");
+            getLogger().severe("请前往 https://www.spigotmc.org/resources/protocollib.1997/ 下载并安装。");
+            getLogger().severe("FancyHelper将自动卸载。");
+            getLogger().severe("==================");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        
+        // 初始化数据包捕获管理器
+        packetCaptureManager = new PacketCaptureManager(this);
         
         // 异步索引服务器命令与预设文件
         workspaceIndexer = new WorkspaceIndexer(this);
@@ -238,5 +255,9 @@ public final class FancyHelper extends JavaPlugin {
 
     public VerificationManager getVerificationManager() {
         return verificationManager;
+    }
+
+    public PacketCaptureManager getPacketCaptureManager() {
+        return packetCaptureManager;
     }
 }

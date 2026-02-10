@@ -63,9 +63,19 @@
             <id>spigotmc-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
+        <repository>
+            <id>dmulloy2-repo</id>
+            <url>https://repo.dmulloy2.net/repository/public/</url>
+        </repository>
     </repositories>
 
     <dependencies>
+        <dependency>
+            <groupId>net.dmulloy2</groupId>
+            <artifactId>ProtocolLib</artifactId>
+            <version>5.4.0</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
@@ -77,11 +87,6 @@
             <artifactId>bstats-bukkit</artifactId>
             <version>3.1.0</version>
             <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>4.12.0</version>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
