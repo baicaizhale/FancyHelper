@@ -584,6 +584,15 @@ public class CLIManager {
                 return true;
             }
 
+            if (message.equalsIgnoreCase("/cli exempt_anti_loop")) {
+                DialogueSession session = sessions.get(uuid);
+                if (session != null) {
+                    session.setAntiLoopExempted(true);
+                    player.sendMessage(ChatColor.GREEN + "✔ 已为本次对话开启豁免模式，Fancy 将不再被自动打断。");
+                }
+                return true;
+            }
+
             // 处理待确认的命令或选择
             if (pendingCommands.containsKey(uuid)) {
                 String pending = pendingCommands.get(uuid);
@@ -799,51 +808,82 @@ public class CLIManager {
         if (session == null) return;
 
         // --- 防死循环检测逻辑 ---
-        List<String> toolHistory = session.getToolCallHistory();
-        int thresholdCount = plugin.getConfigManager().getAntiLoopThresholdCount();
-        double similarityThreshold = plugin.getConfigManager().getAntiLoopSimilarityThreshold();
-        int maxChainCount = plugin.getConfigManager().getAntiLoopMaxChainCount();
+        if (session.isAntiLoopExempted()) {
+            // 已豁免，仅记录
+            session.addToolCall(toolCall);
+        } else {
+            List<String> toolHistory = session.getToolCallHistory();
+            int thresholdCount = plugin.getConfigManager().getAntiLoopThresholdCount();
+            double similarityThreshold = plugin.getConfigManager().getAntiLoopSimilarityThreshold();
+            int maxChainCount = plugin.getConfigManager().getAntiLoopMaxChainCount();
 
-        // 1. 连续相似调用检测
-        if (toolHistory.size() >= thresholdCount - 1) {
-            int similarCount = 1; // 当前这次调用算作第 1 个
-            for (int i = toolHistory.size() - 1; i >= 0 && similarCount < thresholdCount; i--) {
-                double similarity = calculateSimilarity(toolCall, toolHistory.get(i));
-                if (similarity >= similarityThreshold) {
-                    similarCount++;
-                } else {
-                    break; // 必须是连续的
+            // 1. 连续相似调用检测
+            if (toolHistory.size() >= thresholdCount - 1) {
+                int similarCount = 1; // 当前这次调用算作第 1 个
+                for (int i = toolHistory.size() - 1; i >= 0 && similarCount < thresholdCount; i--) {
+                    double similarity = calculateSimilarity(toolCall, toolHistory.get(i));
+                    if (similarity >= similarityThreshold) {
+                        similarCount++;
+                    } else {
+                        break; // 必须是连续的
+                    }
+                }
+
+                if (similarCount >= thresholdCount) {
+                    plugin.getLogger().warning("[CLI] Detected potential loop for " + player.getName() + ": " + thresholdCount + " consecutive similar tool calls.");
+                    
+                    // 仍然显示本次工具调用
+                    String toolName = toolCall.split(":", 2)[0];
+                    String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
+                    player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+
+                    player.sendMessage(ChatColor.RED + "⨀ 检测到 Fancy 可能陷入了重复操作的死循环。");
+                    
+                    // 显示“不再打断”按钮
+                    TextComponent exemptMsg = new TextComponent(ChatColor.YELLOW + "⇒ 已自动打断。如果您确认这是正常操作，点击 ");
+                    TextComponent btn = new TextComponent(ChatColor.GREEN + "[ 本次对话不再打断 ]");
+                    btn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exempt_anti_loop"));
+                    btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击后本次会话将不再触发自动打断")));
+                    exemptMsg.addExtra(btn);
+                    player.spigot().sendMessage(exemptMsg);
+                    
+                    isGenerating.put(uuid, false);
+                    generationStates.put(uuid, GenerationStatus.CANCELLED);
+                    generationStartTimes.remove(uuid);
+                    player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                    return;
                 }
             }
 
-            if (similarCount >= thresholdCount) {
-                plugin.getLogger().warning("[CLI] Detected potential loop for " + player.getName() + ": " + thresholdCount + " consecutive similar tool calls.");
-                player.sendMessage(ChatColor.RED + "⨀ 检测到 Fancy 可能陷入了重复操作的死循环。");
-                player.sendMessage(ChatColor.YELLOW + "⇒ 已自动打断 Fancy 的后续执行。您可以尝试更换提问方式或手动干预。");
+            // 2. 连续调用次数上限检测
+            if (session.getCurrentChainToolCount() >= maxChainCount) {
+                plugin.getLogger().warning("[CLI] Detected tool chain too long for " + player.getName() + ": " + session.getCurrentChainToolCount() + " consecutive tool calls.");
+                
+                // 仍然显示本次工具调用
+                String toolName = toolCall.split(":", 2)[0];
+                String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
+                player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+
+                player.sendMessage(ChatColor.RED + "⨀ Fancy 已经连续执行了 " + maxChainCount + " 次操作，为了防止过度消耗，已自动暂停。");
+                
+                // 显示“不再打断”按钮
+                TextComponent exemptMsg = new TextComponent(ChatColor.YELLOW + "⇒ 如果您需要它继续，请发送任意消息。或点击 ");
+                TextComponent btn = new TextComponent(ChatColor.GREEN + "[ 本次对话不再打断 ]");
+                btn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exempt_anti_loop"));
+                btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击后本次会话将不再触发自动打断")));
+                exemptMsg.addExtra(btn);
+                player.spigot().sendMessage(exemptMsg);
                 
                 isGenerating.put(uuid, false);
-                generationStates.put(uuid, GenerationStatus.CANCELLED);
+                generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
                 player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                 return;
             }
-        }
-
-        // 2. 连续调用次数上限检测
-        if (session.getCurrentChainToolCount() >= maxChainCount) {
-            plugin.getLogger().warning("[CLI] Detected tool chain too long for " + player.getName() + ": " + session.getCurrentChainToolCount() + " consecutive tool calls.");
-            player.sendMessage(ChatColor.RED + "⨀ Fancy 已经连续执行了 " + maxChainCount + " 次操作，为了防止过度消耗，已自动暂停。");
-            player.sendMessage(ChatColor.YELLOW + "⇒ 如果您需要它继续，请发送任意消息。");
             
-            isGenerating.put(uuid, false);
-            generationStates.put(uuid, GenerationStatus.COMPLETED);
-            generationStartTimes.remove(uuid);
-            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
-            return;
+            // 记录本次工具调用
+            session.addToolCall(toolCall);
         }
-        
-        // 记录本次工具调用
-        session.addToolCall(toolCall);
         // --- 检测逻辑结束 ---
 
         boolean toolSuccess = true;

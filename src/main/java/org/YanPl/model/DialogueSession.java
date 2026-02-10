@@ -29,6 +29,7 @@ public class DialogueSession {
     private int toolFailureCount = 0;
     private int currentChainToolCount = 0;
     private int thoughtTokens = 0;
+    private boolean antiLoopExempted = false;
     private Mode mode = Mode.NORMAL;
     private String lastThought = null;
 
@@ -175,6 +176,22 @@ public class DialogueSession {
 
     public int getCurrentChainToolCount() {
         return currentChainToolCount;
+    }
+
+    /**
+     * 设置本会话是否豁免防循环检测
+     * @param exempted 是否豁免
+     */
+    public void setAntiLoopExempted(boolean exempted) {
+        this.antiLoopExempted = exempted;
+    }
+
+    /**
+     * 获取本会话是否豁免防循环检测
+     * @return 是否豁免
+     */
+    public boolean isAntiLoopExempted() {
+        return antiLoopExempted;
     }
 
     /**
