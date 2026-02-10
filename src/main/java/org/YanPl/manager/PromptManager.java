@@ -50,8 +50,8 @@ public class PromptManager {
             sb.append("   #read: <path> - 读取指定文件的内容。路径在服务器目录内，此工具调用结果玩家看不见。如#read: plugins/FancyHelper/config.yml\n");
         }
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "diff")) {
-            sb.append("   #diff: <path> | <search> | <replace> - 修改指定文件的内容。使用查找和替换逻辑，search 为要查找的原始内容，replace 为替换后的内容。\n");
-            sb.append("   重要：不要在 #diff 后面添加任何解释文字或多余的 #。确保 #diff 调用是回复的最后一部分。如果修改内容包含 #，请确保它在 | 分隔符内部。务必保证缩进正确，格式正确。\n");
+            sb.append("   #diff: <path>|<search>|<replace> - 修改指定文件的内容。使用查找和替换逻辑。注意：为了保证匹配精确，请不要在 | 分隔符前后添加多余的空格，除非这些空格本身就是你要查找或替换的内容的一部分。\n");
+            sb.append("   重要：不要在 #diff 后面添加任何解释文字或多余的 #。确保 #diff 调用是回复的最后一部分，且单独成行。如果你使用了 #diff，请不要再添加 #over。\n");
         }
         
         sb.append("   #over - 完成任务，停止本轮输出。\n");
