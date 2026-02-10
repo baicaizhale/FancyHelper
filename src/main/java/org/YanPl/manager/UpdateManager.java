@@ -4,11 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okio.BufferedSink;
-import okio.Okio;
 import org.YanPl.FancyHelper;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -16,11 +11,17 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 /**
  * 更新管理器：负责从 GitHub 获取最新版本并提醒管理员。
@@ -55,23 +56,26 @@ public class UpdateManager implements Listener {
         }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
-                    .readTimeout(10, TimeUnit.SECONDS)
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
                     .build();
 
-            Request request = new Request.Builder()
-                    .url(repoUrl)
-                    .header("User-Agent", "FancyHelper-Updater")
-                    .build();
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(repoUrl))
+                        .header("User-Agent", "FancyHelper-Updater")
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
 
-            try (Response response = client.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String jsonResponse = response.body().string();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200) {
+                    String jsonResponse = response.body();
                     JsonObject jsonObject = JsonParser.parseString(jsonResponse).getAsJsonObject();
-                    
+
                     latestVersion = jsonObject.get("tag_name").getAsString().replace("v", "");
-                    
+
                     // 获取第一个 .jar 文件的下载地址和文件名
                     JsonArray assets = jsonObject.getAsJsonArray("assets");
                     for (JsonElement assetElement : assets) {
@@ -88,14 +92,14 @@ public class UpdateManager implements Listener {
                         downloadUrl = jsonObject.get("html_url").getAsString();
                         latestFileName = "FancyHelper-v" + latestVersion + ".jar";
                     }
-                    
+
                     String currentVersion = plugin.getDescription().getVersion();
-                    
+
                     if (isNewerVersion(currentVersion, latestVersion)) {
                         hasUpdate = true;
                         Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: v" + latestVersion);
                         Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "下载地址: " + downloadUrl);
-                        
+
                         // 自动升级逻辑
                         if (plugin.getConfigManager().isAutoUpgrade()) {
                             Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到自动升级已开启，正在后台下载更新...");
@@ -123,6 +127,12 @@ public class UpdateManager implements Listener {
                 plugin.getLogger().warning("检查更新失败: " + e.getMessage());
                 if (sender != null) {
                     sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "检查更新失败: " + e.getMessage());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                plugin.getLogger().warning("检查更新被中断: " + e.getMessage());
+                if (sender != null) {
+                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "检查更新被中断: " + e.getMessage());
                 }
             }
         });
@@ -153,7 +163,7 @@ public class UpdateManager implements Listener {
      */
     public void downloadAndInstall(Player sender, boolean autoReload, boolean alreadyAsync) {
         plugin.getLogger().info("downloadAndInstall 被调用 - hasUpdate: " + hasUpdate + ", downloadUrl: " + downloadUrl);
-        
+
         if (!hasUpdate || downloadUrl == null) {
             if (sender != null) sender.sendMessage(ChatColor.RED + "当前没有可用的更新。");
             plugin.getLogger().warning("无法下载更新：hasUpdate=" + hasUpdate + ", downloadUrl=" + downloadUrl);
@@ -165,36 +175,39 @@ public class UpdateManager implements Listener {
         Runnable downloadTask = () -> {
             String mirror = plugin.getConfigManager().getUpdateMirror();
             String finalUrl = mirror + downloadUrl;
-            
+
             plugin.getLogger().info("开始下载更新，镜像源: " + mirror);
             plugin.getLogger().info("下载URL: " + finalUrl);
 
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(30, TimeUnit.SECONDS)
-                    .readTimeout(60, TimeUnit.SECONDS)
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(30))
                     .build();
 
-            Request request = new Request.Builder()
-                    .url(finalUrl)
-                    .header("User-Agent", "FancyHelper-Updater")
-                    .build();
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(finalUrl))
+                        .header("User-Agent", "FancyHelper-Updater")
+                        .timeout(Duration.ofSeconds(60))
+                        .GET()
+                        .build();
 
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("下载失败: " + response.code());
+                HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+                if (response.statusCode() != 200) {
+                    throw new IOException("下载失败: " + response.statusCode());
                 }
 
                 // 准备保存新版本
                 File pluginsDir = plugin.getDataFolder().getParentFile();
                 String newJarName = latestFileName;
                 File newJarFile = new File(pluginsDir, newJarName);
-                
+
                 plugin.getLogger().info("准备保存新版本到: " + newJarFile.getAbsolutePath());
 
-                try (BufferedSink sink = Okio.buffer(Okio.sink(newJarFile))) {
-                    sink.writeAll(response.body().source());
+                try (InputStream inputStream = response.body()) {
+                    Files.copy(inputStream, newJarFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
-                
+
                 plugin.getLogger().info("文件下载完成，大小: " + newJarFile.length() + " 字节");
 
                 // 尝试移动旧版本到 plugins/FancyHelper/old 目录
@@ -203,7 +216,7 @@ public class UpdateManager implements Listener {
 
                 boolean moved = false;
                 String moveError = "";
-                
+
                 // 直接遍历 plugins 目录寻找旧版文件
                 File[] files = pluginsDir.listFiles();
                 if (files != null) {
@@ -261,6 +274,12 @@ public class UpdateManager implements Listener {
                 if (sender != null) {
                     sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "更新下载失败: " + e.getMessage());
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                plugin.getLogger().severe("更新下载被中断: " + e.getMessage());
+                if (sender != null) {
+                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "更新下载被中断: " + e.getMessage());
+                }
             }
         };
 
@@ -280,15 +299,15 @@ public class UpdateManager implements Listener {
      */
     private boolean isNewerVersion(String current, String latest) {
         if (current == null || latest == null) return false;
-        
+
         String[] currentParts = current.split("\\.");
         String[] latestParts = latest.split("\\.");
-        
+
         int length = Math.max(currentParts.length, latestParts.length);
         for (int i = 0; i < length; i++) {
             int curr = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
             int late = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
-            
+
             if (late > curr) return true;
             if (late < curr) return false;
         }

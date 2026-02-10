@@ -1181,25 +1181,34 @@ public class CLIManager {
     private String fetchWikiResult(String query) {
         try {
             // 使用 Minecraft Wiki 的 MediaWiki API
-            String url = "https://zh.minecraft.wiki/api.php?action=query&list=search&srsearch=" + 
+            String url = "https://zh.minecraft.wiki/api.php?action=query&list=search&srsearch=" +
                          java.net.URLEncoder.encode(query, "UTF-8") + "&format=json&utf8=1";
-            
-            okhttp3.Request request = new okhttp3.Request.Builder().url(url).build();
-             try (okhttp3.Response response = ai.getHttpClient().newCall(request).execute()) {
-                 if (response.isSuccessful() && response.body() != null) {
-                    com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(response.body().string()).getAsJsonObject();
-                    com.google.gson.JsonArray searchResults = json.getAsJsonObject("query").getAsJsonArray("search");
-                    
-                    if (searchResults.size() > 0) {
-                        StringBuilder sb = new StringBuilder("Minecraft Wiki 搜索结果：\n");
-                        for (int i = 0; i < Math.min(3, searchResults.size()); i++) {
-                            com.google.gson.JsonObject item = searchResults.get(i).getAsJsonObject();
-                            String title = item.get("title").getAsString();
-                            String snippet = item.get("snippet").getAsString().replaceAll("<[^>]*>", ""); // 移除 HTML 标签
-                            sb.append("- ").append(title).append(": ").append(snippet).append("\n");
-                        }
-                        return sb.toString();
+
+            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .build();
+
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+
+            java.net.http.HttpResponse<String> response = httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(response.body()).getAsJsonObject();
+                com.google.gson.JsonArray searchResults = json.getAsJsonObject("query").getAsJsonArray("search");
+
+                if (searchResults.size() > 0) {
+                    StringBuilder sb = new StringBuilder("Minecraft Wiki 搜索结果：\n");
+                    for (int i = 0; i < Math.min(3, searchResults.size()); i++) {
+                        com.google.gson.JsonObject item = searchResults.get(i).getAsJsonObject();
+                        String title = item.get("title").getAsString();
+                        String snippet = item.get("snippet").getAsString().replaceAll("<[^>]*>", ""); // 移除 HTML 标签
+                        sb.append("- ").append(title).append(": ").append(snippet).append("\n");
                     }
+                    return sb.toString();
                 }
             }
         } catch (Exception e) {
@@ -1215,72 +1224,71 @@ public class CLIManager {
         try {
             // 使用 UAPI 的聚合搜索接口
             String url = "https://uapis.cn/api/v1/search/aggregate";
-            
+
             com.google.gson.JsonObject bodyJson = new com.google.gson.JsonObject();
             // 参数名确认为 query
             bodyJson.addProperty("query", query);
-            
-            okhttp3.RequestBody body = okhttp3.RequestBody.create(
-                bodyJson.toString(),
-                okhttp3.MediaType.get("application/json; charset=utf-8")
-            );
-            
-            okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(url)
-                .header("User-Agent", "FancyHelper/1.0")
-                .post(body)
-                .build();
-                
-             try (okhttp3.Response response = ai.getHttpClient().newCall(request).execute()) {
-                 if (response.isSuccessful() && response.body() != null) {
-                    String responseBody = response.body().string();
-                    com.google.gson.JsonElement jsonElement = com.google.gson.JsonParser.parseString(responseBody);
-                    
-                    com.google.gson.JsonArray results = null;
-                    if (jsonElement.isJsonArray()) {
-                        results = jsonElement.getAsJsonArray();
-                    } else if (jsonElement.isJsonObject()) {
-                        com.google.gson.JsonObject jsonObj = jsonElement.getAsJsonObject();
-                        if (jsonObj.has("data") && jsonObj.get("data").isJsonArray()) {
-                            results = jsonObj.getAsJsonArray("data");
-                        } else if (jsonObj.has("results") && jsonObj.get("results").isJsonArray()) {
-                            results = jsonObj.getAsJsonArray("results");
-                        }
-                    }
 
-                    if (results != null && results.size() > 0) {
-                        StringBuilder sb = new StringBuilder("全网搜索结果 (" + query + ")：\n");
-                        for (int i = 0; i < Math.min(5, results.size()); i++) {
-                            com.google.gson.JsonObject item = results.get(i).getAsJsonObject();
-                            
-                            String title = "无标题";
-                            if (item.has("title") && !item.get("title").isJsonNull()) {
-                                title = item.get("title").getAsString();
-                            }
-                            
-                            String content = "";
-                            if (item.has("content") && !item.get("content").isJsonNull()) {
-                                content = item.get("content").getAsString();
-                            } else if (item.has("snippet") && !item.get("snippet").isJsonNull()) {
-                                content = item.get("snippet").getAsString();
-                            } else if (item.has("abstract") && !item.get("abstract").isJsonNull()) {
-                                content = item.get("abstract").getAsString();
-                            }
-                            
-                            if (content.length() > 500) {
-                                content = content.substring(0, 500) + "...";
-                            }
-                            
-                            sb.append("- ").append(title).append(": ").append(content).append("\n");
+            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .build();
+
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .header("User-Agent", "FancyHelper/1.0")
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(bodyJson.toString()))
+                    .build();
+
+            java.net.http.HttpResponse<String> response = httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                String responseBody = response.body();
+                com.google.gson.JsonElement jsonElement = com.google.gson.JsonParser.parseString(responseBody);
+
+                com.google.gson.JsonArray results = null;
+                if (jsonElement.isJsonArray()) {
+                    results = jsonElement.getAsJsonArray();
+                } else if (jsonElement.isJsonObject()) {
+                    com.google.gson.JsonObject jsonObj = jsonElement.getAsJsonObject();
+                    if (jsonObj.has("data") && jsonObj.get("data").isJsonArray()) {
+                        results = jsonObj.getAsJsonArray("data");
+                    } else if (jsonObj.has("results") && jsonObj.get("results").isJsonArray()) {
+                        results = jsonObj.getAsJsonArray("results");
+                    }
+                }
+
+                if (results != null && results.size() > 0) {
+                    StringBuilder sb = new StringBuilder("全网搜索结果 (" + query + ")：\n");
+                    for (int i = 0; i < Math.min(5, results.size()); i++) {
+                        com.google.gson.JsonObject item = results.get(i).getAsJsonObject();
+
+                        String title = "无标题";
+                        if (item.has("title") && !item.get("title").isJsonNull()) {
+                            title = item.get("title").getAsString();
                         }
-                        return sb.toString();
+
+                        String content = "";
+                        if (item.has("content") && !item.get("content").isJsonNull()) {
+                            content = item.get("content").getAsString();
+                        } else if (item.has("snippet") && !item.get("snippet").isJsonNull()) {
+                            content = item.get("snippet").getAsString();
+                        } else if (item.has("abstract") && !item.get("abstract").isJsonNull()) {
+                            content = item.get("abstract").getAsString();
+                        }
+
+                        if (content.length() > 500) {
+                            content = content.substring(0, 500) + "...";
+                        }
+
+                        sb.append("- ").append(title).append(": ").append(content).append("\n");
                     }
-                } else {
-                        plugin.getLogger().warning("UAPI 搜索失败: " + response.code() + " " + response.message());
-                        try {
-                             plugin.getLogger().warning("UAPI 错误详情: " + response.body().string());
-                        } catch (Exception ignored) {}
-                    }
+                    return sb.toString();
+                }
+            } else {
+                plugin.getLogger().warning("UAPI 搜索失败: " + response.statusCode());
+                plugin.getLogger().warning("UAPI 错误详情: " + response.body());
             }
         } catch (Exception e) {
             return "全网搜索出错: " + e.getMessage();
