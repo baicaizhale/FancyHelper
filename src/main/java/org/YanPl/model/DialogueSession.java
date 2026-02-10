@@ -1,7 +1,14 @@
 package org.YanPl.model;
 
+import com.knuddels.jtokkit.Encodings;
+import com.knuddels.jtokkit.api.Encoding;
+import com.knuddels.jtokkit.api.EncodingRegistry;
+import com.knuddels.jtokkit.api.EncodingType;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DialogueSession {
     /**
@@ -23,9 +30,49 @@ public class DialogueSession {
     private Mode mode = Mode.NORMAL;
     private String lastThought = null;
 
+    /**
+     * 编码注册表（单例）
+     */
+    private static final EncodingRegistry REGISTRY = Encodings.newDefaultEncodingRegistry();
+
+    /**
+     * 编码缓存，避免重复创建
+     */
+    private static final Map<String, Encoding> ENCODING_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * 默认编码 (cl100k_base，用于 GPT-4 和 GPT-3.5-turbo)
+     */
+    private static final Encoding DEFAULT_ENCODING = REGISTRY.getEncoding(EncodingType.CL100K_BASE);
+
     public DialogueSession() {
         this.lastActivityTime = System.currentTimeMillis();
         this.startTime = System.currentTimeMillis();
+    }
+
+    /**
+     * 根据模型名称获取对应的编码
+     */
+    private static Encoding getEncodingForModel(String modelName) {
+        if (modelName == null || modelName.isEmpty()) {
+            return DEFAULT_ENCODING;
+        }
+
+        // 使用缓存
+        return ENCODING_CACHE.computeIfAbsent(modelName, name -> {
+            // CloudFlare AI 模型映射到对应的编码
+            String lowerName = name.toLowerCase();
+
+            // OpenAI GPT 系列使用 cl100k_base
+            if (lowerName.contains("gpt") || lowerName.contains("openai")) {
+                return REGISTRY.getEncoding(EncodingType.CL100K_BASE);
+            }
+
+            // 其他模型使用默认编码（回退方案）
+            // jtokkit 主要支持 OpenAI 的编码，对于其他模型（如 LLaMA）可能不完全匹配
+            // 这里使用 cl100k_base 作为通用近似
+            return DEFAULT_ENCODING;
+        });
     }
 
     public void addMessage(String role, String content) {
@@ -49,12 +96,17 @@ public class DialogueSession {
     }
 
     public int getEstimatedTokens() {
-        // 粗略估算 token：每 4 个字符为 1 token（近似值）
-        int chars = 0;
+        return getEstimatedTokens(null);
+    }
+
+    public int getEstimatedTokens(String modelName) {
+        // 使用 jtokkit 进行精确的 token 计算
+        Encoding encoding = getEncodingForModel(modelName);
+        int totalTokens = 0;
         for (Message msg : history) {
-            chars += msg.getContent().length();
+            totalTokens += encoding.countTokens(msg.getContent());
         }
-        return chars / 4;
+        return totalTokens;
     }
 
     public long getLastActivityTime() {
@@ -87,6 +139,21 @@ public class DialogueSession {
 
     public void addThoughtTokens(int tokens) {
         thoughtTokens += tokens;
+    }
+
+    /**
+     * 计算字符串的 token 数量（使用默认编码）
+     */
+    public static int calculateTokens(String text) {
+        return calculateTokens(text, null);
+    }
+
+    /**
+     * 计算字符串的 token 数量（根据模型名称选择编码）
+     */
+    public static int calculateTokens(String text, String modelName) {
+        Encoding encoding = getEncodingForModel(modelName);
+        return encoding.countTokens(text);
     }
 
     public void incrementToolSuccess() {

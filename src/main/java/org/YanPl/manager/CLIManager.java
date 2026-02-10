@@ -528,7 +528,8 @@ public class CLIManager {
         // 不再主动发送 Thought...，避免干扰用户
         // player.sendMessage(ChatColor.GRAY + "◆ Thought...");
 
-        plugin.getLogger().info("[CLI] Session " + player.getName() + " - History Size: " + session.getHistory().size() + ", Est. Tokens: " + session.getEstimatedTokens());
+        String modelName = plugin.getConfigManager().getCloudflareModel();
+        plugin.getLogger().info("[CLI] Session " + player.getName() + " - History Size: " + session.getHistory().size() + ", Est. Tokens: " + session.getEstimatedTokens(modelName));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -601,7 +602,8 @@ public class CLIManager {
         
         // 计算思考内容的 Token
         if (!thoughtContent.isEmpty()) {
-            int thoughtTokens = thoughtContent.length() / 4; // 粗略估算
+            String modelName = plugin.getConfigManager().getCloudflareModel();
+            int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
             session.addThoughtTokens(thoughtTokens);
         }
         
@@ -649,10 +651,11 @@ public class CLIManager {
     }
 
     private void checkTokenWarning(Player player, DialogueSession session) {
-        int estimatedTokens = session.getEstimatedTokens();
-        int maxTokens = 12800; 
+        String modelName = plugin.getConfigManager().getCloudflareModel();
+        int estimatedTokens = session.getEstimatedTokens(modelName);
+        int maxTokens = 12800;
         int remaining = maxTokens - estimatedTokens;
-        
+
         if (remaining < plugin.getConfigManager().getTokenWarningThreshold()) {
             player.sendMessage(ChatColor.YELLOW + "⨀ 剩余上下文长度不足 ，Fancy 可能会遗忘较早的对话内容来保证对话继续。");
         }
@@ -1516,7 +1519,8 @@ public class CLIManager {
     private void sendExitMessage(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
-        int tokens = session != null ? session.getEstimatedTokens() : 0;
+        String modelName = plugin.getConfigManager().getCloudflareModel();
+        int tokens = session != null ? session.getEstimatedTokens(modelName) : 0;
         int thoughtTokens = session != null ? session.getThoughtTokens() : 0;
         long durationMs = session != null ? System.currentTimeMillis() - session.getStartTime() : 0;
         double durationSec = durationMs / 1000.0;
