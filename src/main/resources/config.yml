@@ -35,3 +35,12 @@ settings:
 
   # GitHub 镜像源，用于加速下载
   update_mirror: "https://ghproxy.net/"  
+
+  # 自动检测重复工具调用 (防止 AI 陷入死循环)
+  anti_loop:
+    # 连续多少次相似调用触发中断
+    threshold_count: 3
+    # 相似度阈值 (0.0 - 1.0)，建议 0.8 
+    similarity_threshold: 0.8
+    # 单次对话中连续调用工具的最大次数 (防止 AI 陷入逻辑循环或过度消耗)
+    max_chain_count: 30

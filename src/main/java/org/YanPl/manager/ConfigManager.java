@@ -209,6 +209,30 @@ public class ConfigManager {
         return config.getString("settings.update_mirror", "https://ghproxy.net/");
     }
 
+    /**
+     * 获取防循环检测的连续相似调用阈值
+     * @return 连续相似调用阈值
+     */
+    public int getAntiLoopThresholdCount() {
+        return config.getInt("settings.anti_loop.threshold_count", 3);
+    }
+
+    /**
+     * 获取防循环检测的相似度阈值
+     * @return 相似度阈值 (0.0 - 1.0)
+     */
+    public double getAntiLoopSimilarityThreshold() {
+        return config.getDouble("settings.anti_loop.similarity_threshold", 0.8);
+    }
+
+    /**
+     * 获取单次对话中连续调用工具的最大次数
+     * @return 最大连续调用次数
+     */
+    public int getAntiLoopMaxChainCount() {
+        return config.getInt("settings.anti_loop.max_chain_count", 10);
+    }
+
     public boolean isToolEnabled(String tool) {
         return config.getBoolean("tools." + tool, false);
     }

@@ -609,6 +609,12 @@ public class CLIManager {
                 return true;
             }
 
+            DialogueSession session = sessions.get(uuid);
+            // 用户发送了消息，重置工具链计数
+            if (session != null) {
+                session.resetToolChain();
+            }
+
             processAIMessage(player, message);
             return true;
         }
@@ -790,6 +796,56 @@ public class CLIManager {
     private void executeTool(Player player, String toolCall) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
+        if (session == null) return;
+
+        // --- 防死循环检测逻辑 ---
+        List<String> toolHistory = session.getToolCallHistory();
+        int thresholdCount = plugin.getConfigManager().getAntiLoopThresholdCount();
+        double similarityThreshold = plugin.getConfigManager().getAntiLoopSimilarityThreshold();
+        int maxChainCount = plugin.getConfigManager().getAntiLoopMaxChainCount();
+
+        // 1. 连续相似调用检测
+        if (toolHistory.size() >= thresholdCount - 1) {
+            int similarCount = 1; // 当前这次调用算作第 1 个
+            for (int i = toolHistory.size() - 1; i >= 0 && similarCount < thresholdCount; i--) {
+                double similarity = calculateSimilarity(toolCall, toolHistory.get(i));
+                if (similarity >= similarityThreshold) {
+                    similarCount++;
+                } else {
+                    break; // 必须是连续的
+                }
+            }
+
+            if (similarCount >= thresholdCount) {
+                plugin.getLogger().warning("[CLI] Detected potential loop for " + player.getName() + ": " + thresholdCount + " consecutive similar tool calls.");
+                player.sendMessage(ChatColor.RED + "⨀ 检测到 Fancy 可能陷入了重复操作的死循环。");
+                player.sendMessage(ChatColor.YELLOW + "⇒ 已自动打断 Fancy 的后续执行。您可以尝试更换提问方式或手动干预。");
+                
+                isGenerating.put(uuid, false);
+                generationStates.put(uuid, GenerationStatus.CANCELLED);
+                generationStartTimes.remove(uuid);
+                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                return;
+            }
+        }
+
+        // 2. 连续调用次数上限检测
+        if (session.getCurrentChainToolCount() >= maxChainCount) {
+            plugin.getLogger().warning("[CLI] Detected tool chain too long for " + player.getName() + ": " + session.getCurrentChainToolCount() + " consecutive tool calls.");
+            player.sendMessage(ChatColor.RED + "⨀ Fancy 已经连续执行了 " + maxChainCount + " 次操作，为了防止过度消耗，已自动暂停。");
+            player.sendMessage(ChatColor.YELLOW + "⇒ 如果您需要它继续，请发送任意消息。");
+            
+            isGenerating.put(uuid, false);
+            generationStates.put(uuid, GenerationStatus.COMPLETED);
+            generationStartTimes.remove(uuid);
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+            return;
+        }
+        
+        // 记录本次工具调用
+        session.addToolCall(toolCall);
+        // --- 检测逻辑结束 ---
+
         boolean toolSuccess = true;
 
         // 改进的解析逻辑：兼容冒号和空格分隔符，且只分割第一次出现的标识符
@@ -1500,6 +1556,35 @@ public class CLIManager {
                 });
             }
         });
+    }
+
+    /**
+     * 计算两个字符串的相似度 (基于 Levenshtein 距离)
+     * @param s1 字符串1
+     * @param s2 字符串2
+     * @return 相似度 (0.0 - 1.0)
+     */
+    private double calculateSimilarity(String s1, String s2) {
+        if (s1 == null || s2 == null) return 0.0;
+        if (s1.equals(s2)) return 1.0;
+        if (s1.isEmpty() || s2.isEmpty()) return 0.0;
+
+        int len1 = s1.length();
+        int len2 = s2.length();
+        int[][] dp = new int[len1 + 1][len2 + 1];
+
+        for (int i = 0; i <= len1; i++) dp[i][0] = i;
+        for (int j = 0; j <= len2; j++) dp[0][j] = j;
+
+        for (int i = 1; i <= len1; i++) {
+            for (int j = 1; j <= len2; j++) {
+                int cost = (s1.charAt(i - 1) == s2.charAt(j - 1)) ? 0 : 1;
+                dp[i][j] = Math.min(Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1), dp[i - 1][j - 1] + cost);
+            }
+        }
+
+        int distance = dp[len1][len2];
+        return 1.0 - ((double) distance / Math.max(len1, len2));
     }
 
     private void displayFancyContent(Player player, String content) {

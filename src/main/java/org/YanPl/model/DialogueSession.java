@@ -22,10 +22,12 @@ public class DialogueSession {
      * DialogueSession 保存简短的对话历史与最近活动时间，用于与 AI 交互时传递上下文。
      */
     private final List<Message> history = new ArrayList<>();
+    private final List<String> toolCallHistory = new ArrayList<>();
     private long lastActivityTime;
     private long startTime;
     private int toolSuccessCount = 0;
     private int toolFailureCount = 0;
+    private int currentChainToolCount = 0;
     private int thoughtTokens = 0;
     private Mode mode = Mode.NORMAL;
     private String lastThought = null;
@@ -123,6 +125,7 @@ public class DialogueSession {
 
     public void clearHistory() {
         history.clear();
+        toolCallHistory.clear();
     }
 
     public int getToolSuccessCount() {
@@ -156,12 +159,42 @@ public class DialogueSession {
         return encoding.countTokens(text);
     }
 
-    public void incrementToolSuccess() {
-        toolSuccessCount++;
-    }
-
     public void incrementToolFailure() {
         toolFailureCount++;
+        currentChainToolCount++;
+    }
+
+    public void incrementToolSuccess() {
+        toolSuccessCount++;
+        currentChainToolCount++;
+    }
+
+    public void resetToolChain() {
+        currentChainToolCount = 0;
+    }
+
+    public int getCurrentChainToolCount() {
+        return currentChainToolCount;
+    }
+
+    /**
+     * 添加工具调用到历史记录
+     * @param toolCall 工具调用内容
+     */
+    public void addToolCall(String toolCall) {
+        toolCallHistory.add(toolCall);
+        // 仅保留最近的 10 次工具调用
+        if (toolCallHistory.size() > 10) {
+            toolCallHistory.remove(0);
+        }
+    }
+
+    /**
+     * 获取工具调用历史记录
+     * @return 工具调用历史
+     */
+    public List<String> getToolCallHistory() {
+        return new ArrayList<>(toolCallHistory);
     }
 
     public void removeLastMessage() {
