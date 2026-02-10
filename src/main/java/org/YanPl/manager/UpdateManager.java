@@ -101,7 +101,7 @@ public class UpdateManager implements Listener {
                         // 自动升级逻辑
                         if (plugin.getConfigManager().isAutoUpgrade()) {
                             Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到自动升级已开启，正在后台下载更新...");
-                            downloadAndInstall(null, true);
+                            downloadAndInstall(null, true, true);
                         } else {
                             Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "如需自动下载更新，请将 config.yml 中的 auto_upgrade 设置为 true");
                         }
@@ -144,6 +144,16 @@ public class UpdateManager implements Listener {
      * @param autoReload 是否在下载完成后自动重载
      */
     public void downloadAndInstall(Player sender, boolean autoReload) {
+        downloadAndInstall(sender, autoReload, false);
+    }
+
+    /**
+     * 下载并安装更新。
+     * @param sender 发起更新的玩家（可为 null）
+     * @param autoReload 是否在下载完成后自动重载
+     * @param alreadyAsync 是否已经在异步任务中执行
+     */
+    public void downloadAndInstall(Player sender, boolean autoReload, boolean alreadyAsync) {
         plugin.getLogger().info("downloadAndInstall 被调用 - hasUpdate: " + hasUpdate + ", downloadUrl: " + downloadUrl);
         
         if (!hasUpdate || downloadUrl == null) {
@@ -154,7 +164,7 @@ public class UpdateManager implements Listener {
 
         if (sender != null) sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "开始下载更新...");
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Runnable downloadTask = () -> {
             String mirror = plugin.getConfigManager().getUpdateMirror();
             String finalUrl = mirror + downloadUrl;
             
@@ -254,7 +264,14 @@ public class UpdateManager implements Listener {
                     sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "更新下载失败: " + e.getMessage());
                 }
             }
-        });
+        };
+
+        // 根据是否已经在异步任务中来决定如何执行
+        if (alreadyAsync) {
+            downloadTask.run();
+        } else {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, downloadTask);
+        }
     }
 
     /**
