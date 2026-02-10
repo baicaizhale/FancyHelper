@@ -721,33 +721,44 @@ public class CLIManager {
             session.addThoughtTokens(thoughtTokens);
         }
         
-        // 增强的工具调用提取逻辑：使用正则表达式匹配末尾的工具调用
-        // 匹配模式：最后一个 # 加上已知的工具名。注意：#diff 参数可能包含多行
+        // 增强的工具调用提取逻辑：寻找第一个处于行首的工具调用
+        // 这样可以避免 AI 在回复末尾多加一个 #over 导致前面的主要工具（如 #diff）被忽略
         String content = cleanResponse;
         String toolCall = "";
         
         // 定义已知工具列表
         List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#get", "#choose", "#search", "#ls", "#read", "#diff");
         
-        // 从后往前寻找最后一个工具调用标识符 #
-        // 逻辑：AI 有时会在工具参数中间使用 #（如 diff 的注释），所以我们需要确保匹配的是真正的工具起始符
-        int searchPos = cleanResponse.length();
-        while (searchPos > 0) {
-            int hashIndex = cleanResponse.lastIndexOf("#", searchPos - 1);
+        int currentPos = 0;
+        boolean foundTool = false;
+        while (currentPos < cleanResponse.length()) {
+            int hashIndex = cleanResponse.indexOf("#", currentPos);
             if (hashIndex == -1) break;
 
-            String potentialToolPart = cleanResponse.substring(hashIndex).trim();
-            boolean found = false;
-            for (String tool : knownTools) {
-                if (potentialToolPart.toLowerCase().startsWith(tool)) {
-                    toolCall = potentialToolPart;
-                    content = cleanResponse.substring(0, hashIndex).trim();
-                    found = true;
+            // 检查是否为行首调用（前面只有空白字符或处于开头）
+            boolean isAtLineStart = true;
+            for (int i = hashIndex - 1; i >= 0; i--) {
+                char c = cleanResponse.charAt(i);
+                if (c == '\n' || c == '\r') break;
+                if (!Character.isWhitespace(c)) {
+                    isAtLineStart = false;
                     break;
                 }
             }
-            if (found) break;
-            searchPos = hashIndex; // 继续往前找
+
+            if (isAtLineStart) {
+                String potentialToolPart = cleanResponse.substring(hashIndex).trim();
+                for (String tool : knownTools) {
+                    if (potentialToolPart.toLowerCase().startsWith(tool)) {
+                        toolCall = potentialToolPart;
+                        content = cleanResponse.substring(0, hashIndex).trim();
+                        foundTool = true;
+                        break;
+                    }
+                }
+            }
+            if (foundTool) break;
+            currentPos = hashIndex + 1;
         }
 
         // 展示 Fancy 内容
@@ -1012,8 +1023,8 @@ public class CLIManager {
                         result = "错误: #diff 需要提供路径、查找内容和替换内容，格式：#diff: path | search | replace";
                     } else {
                         String path = diffParts[0].trim();
-                        String search = diffParts[1]; // 不 trim，可能包含空格/缩进
-                        String replace = diffParts[2]; // 不 trim
+                        String search = diffParts[1];
+                        String replace = diffParts[2];
                         
                         File file = new File(root, path);
                         if (!isWithinRoot(root, file)) {
@@ -1022,6 +1033,22 @@ public class CLIManager {
                             result = "错误: 文件不存在";
                         } else {
                             String content = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                            
+                            // 智能处理：AI 经常习惯在 | 符号前后各加一个空格。
+                            // 如果带空格的 search 找不到，但去掉前后各一个空格后能找到，则自动修正。
+                            if (!content.contains(search)) {
+                                String trimmedSearch = search;
+                                if (trimmedSearch.startsWith(" ")) trimmedSearch = trimmedSearch.substring(1);
+                                if (trimmedSearch.endsWith(" ")) trimmedSearch = trimmedSearch.substring(0, trimmedSearch.length() - 1);
+                                
+                                if (content.contains(trimmedSearch)) {
+                                    search = trimmedSearch;
+                                    // 同时也对 replace 做对称处理
+                                    if (replace.startsWith(" ")) replace = replace.substring(1);
+                                    // 注意：replace 的末尾空格不需要处理，因为 args.trim() 已经去掉了整个 tool call 的末尾空格
+                                }
+                            }
+
                             if (!content.contains(search)) {
                                 result = "错误: 未在文件中找到指定的查找内容，请确保查找内容完全匹配（包括缩进）";
                             } else {
