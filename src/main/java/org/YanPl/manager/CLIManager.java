@@ -1770,31 +1770,34 @@ public class CLIManager {
             }
         }
 
-        // 处理代码块 ```...```
-        String[] codeParts = content.split("```");
-        TextComponent finalMessage = new TextComponent(ChatColor.WHITE + "◆ ");
-        
-        for (int i = 0; i < codeParts.length; i++) {
-            if (i % 2 == 1) {
-                // 代码块部分，亮蓝色显示
-                finalMessage.addExtra(ChatColor.AQUA + codeParts[i]);
-            } else {
-                // 普通文本部分，进一步处理 **...** 高亮
-                String text = codeParts[i];
-                String[] highlightParts = text.split("\\*\\*");
-                
-                for (int j = 0; j < highlightParts.length; j++) {
-                    if (j % 2 == 1) {
-                        // 高亮部分，亮蓝色显示
-                        finalMessage.addExtra(ChatColor.AQUA + highlightParts[j]);
-                    } else {
-                        // 普通部分，白色显示
-                        finalMessage.addExtra(ChatColor.WHITE + highlightParts[j]);
+        // 处理正文内容
+        if (content != null && !content.trim().isEmpty()) {
+            // 处理代码块 ```...```
+            String[] codeParts = content.split("```");
+            TextComponent finalMessage = new TextComponent(ChatColor.WHITE + "◆ ");
+            
+            for (int i = 0; i < codeParts.length; i++) {
+                if (i % 2 == 1) {
+                    // 代码块部分，亮蓝色显示
+                    finalMessage.addExtra(ChatColor.AQUA + codeParts[i]);
+                } else {
+                    // 普通文本部分，进一步处理 **...** 高亮
+                    String text = codeParts[i];
+                    String[] highlightParts = text.split("\\*\\*");
+                    
+                    for (int j = 0; j < highlightParts.length; j++) {
+                        if (j % 2 == 1) {
+                            // 高亮部分，亮蓝色显示
+                            finalMessage.addExtra(ChatColor.AQUA + highlightParts[j]);
+                        } else {
+                            // 普通部分，白色显示
+                            finalMessage.addExtra(ChatColor.WHITE + highlightParts[j]);
+                        }
                     }
                 }
             }
+            player.spigot().sendMessage(finalMessage);
         }
-        player.spigot().sendMessage(finalMessage);
     }
 
     /**
