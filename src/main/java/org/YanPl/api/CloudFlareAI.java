@@ -32,8 +32,9 @@ public class CloudFlareAI {
 
     public CloudFlareAI(FancyHelper plugin) {
         this.plugin = plugin;
+        int timeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(60))
+                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
     }
 
@@ -45,6 +46,79 @@ public class CloudFlareAI {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
         plugin.getLogger().info("[CloudFlareAI] HTTP 客户端已完成关闭（java.net.http.HttpClient 无需特殊操作）。");
+    }
+
+    /**
+     * 构建消息数组（OpenAI 和 CloudFlare API 通用）
+     */
+    private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
+        JsonArray messagesArray = new JsonArray();
+
+        String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
+        safeSystemPrompt = safeSystemPrompt.trim();
+
+        if (safeSystemPrompt.isEmpty()) {
+            safeSystemPrompt = "你是一个得力的助手。";
+        }
+
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", safeSystemPrompt);
+        messagesArray.add(systemMsg);
+        plugin.getLogger().info("[AI 请求] 已添加 System Prompt (长度: " + safeSystemPrompt.length() + ")");
+
+        List<DialogueSession.Message> historyCopy = new ArrayList<>(session.getHistory());
+        plugin.getLogger().info("[AI 请求] 正在处理 " + historyCopy.size() + " 条历史消息");
+
+        for (DialogueSession.Message msg : historyCopy) {
+            String content = msg.getContent();
+            String role = msg.getRole();
+
+            if (content == null || role == null) {
+                plugin.getLogger().warning("[AI 请求] 跳过内容或角色为空的消息");
+                continue;
+            }
+
+            content = content.trim();
+            role = role.trim();
+
+            if (content.isEmpty() || role.isEmpty()) {
+                plugin.getLogger().warning("[AI 请求] 跳过修整后内容或角色为空的消息");
+                continue;
+            }
+
+            if ("system".equalsIgnoreCase(role)) {
+                plugin.getLogger().info("[AI 请求] 跳过重复的 system 消息");
+                continue;
+            }
+
+            JsonObject m = new JsonObject();
+            m.addProperty("role", role);
+            m.addProperty("content", content);
+            messagesArray.add(m);
+        }
+
+        // 验证消息数组
+        for (int i = 0; i < messagesArray.size(); i++) {
+            JsonObject msg = messagesArray.get(i).getAsJsonObject();
+            String role = msg.get("role").getAsString();
+            String content = msg.get("content").getAsString();
+            if (role == null || content == null) {
+                plugin.getLogger().severe("[AI 请求] 在消息数组索引 " + i + " 处检测到空值");
+                throw new IllegalArgumentException("消息验证失败: 数组中存在空值");
+            }
+        }
+
+        // 如果消息数量过少，添加备用用户消息
+        if (messagesArray.size() <= 1) {
+            JsonObject m = new JsonObject();
+            m.addProperty("role", "user");
+            m.addProperty("content", "hello");
+            messagesArray.add(m);
+            plugin.getLogger().info("[AI 请求] 已添加备用用户消息");
+        }
+
+        return messagesArray;
     }
 
     private String fetchAccountId() throws IOException {
@@ -60,7 +134,7 @@ public class CloudFlareAI {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(ACCOUNTS_URL))
                     .header("Authorization", "Bearer " + cfKey)
-                    .timeout(Duration.ofSeconds(60))
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
                     .GET()
                     .build();
 
@@ -85,6 +159,109 @@ public class CloudFlareAI {
     }
 
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
+        // 检测是否启用 OpenAI 模式
+        if (plugin.getConfigManager().isOpenAiEnabled()) {
+            return chatWithOpenAI(session, systemPrompt);
+        }
+        // 否则使用 CloudFlare Workers AI
+        return chatWithCloudFlare(session, systemPrompt);
+    }
+
+    /**
+     * 使用 OpenAI 兼容 API 进行对话
+     */
+    private AIResponse chatWithOpenAI(DialogueSession session, String systemPrompt) throws IOException {
+        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
+        String model = plugin.getConfigManager().getOpenAiModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            return new AIResponse("错误: 请先在配置文件中设置 openai.api_key。", null);
+        }
+
+        if (model == null || model.isEmpty()) {
+            model = "gpt-4o";
+            plugin.getLogger().warning("[AI] OpenAI 模型名称为空，已回退到默认值: " + model);
+        }
+
+        plugin.getLogger().info("[AI 请求] 使用 OpenAI 兼容 API: " + apiUrl);
+        plugin.getLogger().info("[AI 请求] 模型: " + model);
+
+        // 构建消息数组
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        // 构建请求体
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 4096);
+
+        // 对于支持推理参数的模型（如 deepseek-reasoner、o1 等），添加推理参数
+        if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek-reasoner")) {
+            bodyJson.addProperty("reasoning_effort", "medium");
+        }
+
+        String bodyString = gson.toJson(bodyJson);
+        plugin.getLogger().info("[AI 请求] 消息数: " + messagesArray.size());
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            String responseBody = response.body();
+            plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
+                throw new IOException("OpenAI API 调用失败: " + response.statusCode() + " - " + responseBody);
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            String textContent = null;
+            String thoughtContent = null;
+
+            // 解析 OpenAI 标准格式 (choices 数组)
+            if (responseJson.has("choices") && responseJson.get("choices").isJsonArray()) {
+                JsonArray choices = responseJson.getAsJsonArray("choices");
+                if (choices.size() > 0) {
+                    JsonObject choice = choices.get(0).getAsJsonObject();
+                    if (choice.has("message")) {
+                        JsonObject message = choice.getAsJsonObject("message");
+                        if (message.has("content") && !message.get("content").isJsonNull()) {
+                            textContent = message.get("content").getAsString();
+                        }
+                        // 某些模型在 reasoning_content 中返回思考过程
+                        if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
+                            thoughtContent = message.get("reasoning_content").getAsString();
+                        }
+                    }
+                }
+            }
+
+            if (textContent != null) {
+                if (thoughtContent != null) {
+                    plugin.getLogger().info("[AI] 检测到思考内容 (长度: " + thoughtContent.length() + ")");
+                }
+                return new AIResponse(textContent, thoughtContent);
+            }
+
+            throw new IOException("无法解析 OpenAI API 响应结果: " + responseBody);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("OpenAI API 调用被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 CloudFlare Workers AI 进行对话
+     */
+    private AIResponse chatWithCloudFlare(DialogueSession session, String systemPrompt) throws IOException {
         // 将会话历史与 systemPrompt 打包为 CloudFlare Responses API 所需的 JSON，发起 HTTP 请求并解析返回
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
@@ -111,77 +288,8 @@ public class CloudFlareAI {
         String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
         plugin.getLogger().info("[AI 请求] URL: " + url);
 
-        JsonArray messagesArray = new JsonArray();
-
-        String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
-        safeSystemPrompt = safeSystemPrompt.trim();
-
-        if (safeSystemPrompt.isEmpty()) {
-            safeSystemPrompt = "你是一个得力的助手。";
-        }
-
-        JsonObject systemMsg = new JsonObject();
-        systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", safeSystemPrompt);
-        messagesArray.add(systemMsg);
-        plugin.getLogger().info("[AI 请求] 已添加 System Prompt (长度: " + safeSystemPrompt.length() + ", 非空: " + !safeSystemPrompt.isEmpty() + ")");
-
-        List<DialogueSession.Message> historyCopy = new ArrayList<>(session.getHistory());
-        plugin.getLogger().info("[AI 请求] 正在处理 " + historyCopy.size() + " 条历史消息");
-
-        for (DialogueSession.Message msg : historyCopy) {
-            String content = msg.getContent();
-            String role = msg.getRole();
-
-            if (content == null) {
-                plugin.getLogger().warning("[AI 请求] 跳过内容为空的消息");
-                continue;
-            }
-            if (role == null) {
-                plugin.getLogger().warning("[AI 请求] 跳过角色为空的消息");
-                continue;
-            }
-
-            content = content.trim();
-            role = role.trim();
-
-            if (content.isEmpty()) {
-                plugin.getLogger().warning("[AI 请求] 跳过修整后内容为空的消息");
-                continue;
-            }
-            if (role.isEmpty()) {
-                plugin.getLogger().warning("[AI 请求] 跳过修整后角色为空的消息");
-                continue;
-            }
-
-            if ("system".equalsIgnoreCase(role)) {
-                plugin.getLogger().info("[AI 请求] 跳过重复的 system 消息");
-                continue;
-            }
-
-            JsonObject m = new JsonObject();
-            m.addProperty("role", role);
-            m.addProperty("content", content);
-            messagesArray.add(m);
-        }
-
-        for (int i = 0; i < messagesArray.size(); i++) {
-            JsonObject msg = messagesArray.get(i).getAsJsonObject();
-            String role = msg.get("role").getAsString();
-            String content = msg.get("content").getAsString();
-            if (role == null || content == null) {
-                plugin.getLogger().severe("[AI 请求] 在消息数组索引 " + i + " 处检测到空值");
-                throw new IOException("消息验证失败: 数组中存在空值");
-            }
-        }
-
-        if (messagesArray.size() <= 1) {
-            JsonObject m = new JsonObject();
-            m.addProperty("role", "user");
-            m.addProperty("content", "hello");
-            messagesArray.add(m);
-            plugin.getLogger().info("[AI 请求] 已添加备用用户消息");
-        }
+        // 使用公共方法构建消息数组
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
@@ -220,7 +328,7 @@ public class CloudFlareAI {
                     .uri(URI.create(url))
                     .header("Authorization", "Bearer " + cfKey)
                     .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(90))
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
@@ -281,7 +389,7 @@ public class CloudFlareAI {
                             .uri(URI.create(url))
                             .header("Authorization", "Bearer " + cfKey)
                             .header("Content-Type", "application/json; charset=utf-8")
-                            .timeout(Duration.ofSeconds(90))
+                            .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
                             .POST(HttpRequest.BodyPublishers.ofString(simpleBodyString, StandardCharsets.UTF_8))
                             .build();
 

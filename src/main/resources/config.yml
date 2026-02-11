@@ -12,11 +12,43 @@ cloudflare:
   model: "@cf/openai/gpt-oss-120b"
 
 
+# OpenAI 兼容 API 配置（支持自定义 OpenAI 接口）
+openai:
+
+  # 是否启用 OpenAI 模式（启用后将优先使用此配置）
+  enabled: false
+
+  # OpenAI API 地址（支持自定义地址，如 OpenAI 官方、Azure OpenAI、本地模型等）
+  # 示例：
+  #   - OpenAI 官方: "https://api.openai.com/v1/chat/completions"
+  #   - Azure OpenAI: "https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2024-02-01"
+  #   - DeepSeek: "https://api.deepseek.com/chat/completions"
+  #   - Ollama (本地): "http://localhost:11434/v1/chat/completions"
+  #   - 其他兼容 OpenAI 格式的 API
+  api_url: "https://api.openai.com/v1/chat/completions"
+
+  # OpenAI API 密钥
+  api_key: "your-openai-api-key"
+
+  # 使用的模型名称
+  # 示例：
+  #   - OpenAI: "gpt-4o", "gpt-4o-mini", "o1-preview", "o1-mini"
+  #   - DeepSeek: "deepseek-chat", "deepseek-reasoner"
+  #   - Ollama: "llama3", "mistral"
+  #   - Azure OpenAI: 你的部署名称
+  model: "gpt-4o"
+
+
 # 插件设置
 settings:
 
   # CLI 模式会话的自动过期时间 （以分钟为单位）
   timeout_minutes: 10
+
+  # AI API 请求超时时间（以秒为单位）
+  # 对于推理模型（如 gpt-oss-120b、deepseek-reasoner、o1 等），建议设置为 120-300 秒
+  # 对于普通模型（如 gpt-4o、gpt-4o-mini），建议设置为 60-120 秒
+  api_timeout_seconds: 120
 
   # Token（字符数）剩余警告阈值
   token_warning_threshold: 100

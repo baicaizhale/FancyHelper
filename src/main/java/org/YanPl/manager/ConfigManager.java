@@ -178,8 +178,48 @@ public class ConfigManager {
         return getCloudflareModel();
     }
 
+    /**
+     * 获取是否启用 OpenAI 模式
+     * @return 是否启用 OpenAI 模式
+     */
+    public boolean isOpenAiEnabled() {
+        return config.getBoolean("openai.enabled", false);
+    }
+
+    /**
+     * 获取 OpenAI API URL
+     * @return OpenAI API URL
+     */
+    public String getOpenAiApiUrl() {
+        return config.getString("openai.api_url", "https://api.openai.com/v1/chat/completions");
+    }
+
+    /**
+     * 获取 OpenAI API 密钥
+     * @return OpenAI API 密钥
+     */
+    public String getOpenAiApiKey() {
+        return config.getString("openai.api_key", "");
+    }
+
+    /**
+     * 获取 OpenAI 模型名称
+     * @return OpenAI 模型名称
+     */
+    public String getOpenAiModel() {
+        return config.getString("openai.model", "gpt-4o");
+    }
+
     public int getTimeoutMinutes() {
         return config.getInt("settings.timeout_minutes", 10);
+    }
+
+    /**
+     * 获取 AI API 请求超时时间（秒）
+     * @return 超时时间（秒）
+     */
+    public int getApiTimeoutSeconds() {
+        return config.getInt("settings.api_timeout_seconds", 120);
     }
 
     public int getTokenWarningThreshold() {
