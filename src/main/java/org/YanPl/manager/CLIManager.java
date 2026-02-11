@@ -994,7 +994,7 @@ public class CLIManager {
 
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            player.sendMessage(ChatColor.GOLD + "⇒ YOLO 执行 " + ChatColor.WHITE + cleanCommand);
+            player.sendMessage(ChatColor.GOLD + "⇒ YOLO RUN " + ChatColor.WHITE + cleanCommand);
             generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
             executeCommand(player, cleanCommand);
             return;
@@ -1012,9 +1012,8 @@ public class CLIManager {
         
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "修改文件");
-            player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
-            
+            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "DIFF");
+                player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
             // 检查是否被冻结
             long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
             if (freezeRemaining > 0) {
