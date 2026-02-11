@@ -1091,11 +1091,15 @@ public class CLIManager {
         generationStates.put(uuid, GenerationStatus.WAITING_CONFIRM);
 
         String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "修改文件内容");
-        sendConfirmButtons(player, actionDesc + " " + args);
+        if ("diff".equals(type)) {
+            sendConfirmButtons(player, "");
+        } else {
+            sendConfirmButtons(player, actionDesc + " " + args);
+        }
     }
 
     private void sendConfirmButtons(Player player, String displayAction) {
-        TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + displayAction + " ");
+        TextComponent message = new TextComponent(displayAction != null && !displayAction.trim().isEmpty() ? (ChatColor.GRAY + "⇒ " + displayAction + " ") : "");
         
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
