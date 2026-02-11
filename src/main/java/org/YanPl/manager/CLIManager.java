@@ -212,7 +212,7 @@ public class CLIManager {
                                 continue;
                             }
                             long elapsed = (now - startTime) / 1000;
-                            message = ChatColor.GRAY + "- Thinking " + elapsed + "s -";
+                            message = ChatColor.GRAY + "- 思考中 " + elapsed + "s -";
                             player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
                             break;
                         case EXECUTING_TOOL:
@@ -281,7 +281,7 @@ public class CLIManager {
      * 关闭管理器，清理资源
      */
     public void shutdown() {
-        plugin.getLogger().info("[CLI] Shutting down CLIManager...");
+        plugin.getLogger().info("[CLI] 正在关闭 CLIManager...");
         
         // 移除所有活跃的CLI玩家
         for (UUID uuid : new ArrayList<>(activeCLIPayers)) {
@@ -300,7 +300,7 @@ public class CLIManager {
             ai.shutdown();
         }
         
-        plugin.getLogger().info("[CLI] CLIManager shutdown completed.");
+        plugin.getLogger().info("[CLI] CLIManager 已完成关闭。");
     }
 
     /**
@@ -312,15 +312,15 @@ public class CLIManager {
         // 检查 EULA 文件状态
         if (!plugin.getEulaManager().isEulaValid()) {
             player.sendMessage(ChatColor.RED + "系统错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。");
-            plugin.getLogger().warning("[CLI] Denied access for " + player.getName() + " due to invalid EULA file.");
+            plugin.getLogger().warning("[CLI] 由于 EULA 文件无效，拒绝了 " + player.getName() + " 的访问。");
             return;
         }
 
-        plugin.getLogger().info("[CLI] Player " + player.getName() + " is entering FancyHelper.");
+        plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在进入 FancyHelper。");
         
         // 检查用户协议
         if (!agreedPlayers.contains(uuid)) {
-            plugin.getLogger().info("[CLI] Player " + player.getName() + " needs to agree to terms.");
+            plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 需要同意协议。");
             sendAgreement(player);
             pendingAgreementPlayers.add(uuid);
             return;
@@ -406,7 +406,7 @@ public class CLIManager {
      */
     public void exitCLI(Player player) {
         UUID uuid = player.getUniqueId();
-        plugin.getLogger().info("[CLI] Player " + player.getName() + " is exiting FancyHelper.");
+        plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在退出 FancyHelper。");
         sendExitMessage(player);
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
@@ -524,7 +524,7 @@ public class CLIManager {
 
         // 如果玩家在等待协议同意
         if (pendingAgreementPlayers.contains(uuid)) {
-            plugin.getLogger().info("[CLI] Player " + player.getName() + " sent agreement message: " + message);
+            plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 发送了协议同意消息: " + message);
             if (message.equalsIgnoreCase("agree")) {
                 // 再次检查 EULA 状态
                 if (!plugin.getEulaManager().isEulaValid()) {
@@ -557,7 +557,7 @@ public class CLIManager {
 
         // 如果玩家处于 CLI 模式
         if (activeCLIPayers.contains(uuid)) {
-            plugin.getLogger().info("[CLI] Intercepted message from " + player.getName() + ": " + message);
+            plugin.getLogger().info("[CLI] 拦截到来自 " + player.getName() + " 的消息: " + message);
             if (message.equalsIgnoreCase("exit")) {
                 exitCLI(player);
                 return true;
@@ -647,7 +647,7 @@ public class CLIManager {
         // player.sendMessage(ChatColor.GRAY + "◆ Thought...");
 
         String modelName = plugin.getConfigManager().getCloudflareModel();
-        plugin.getLogger().info("[CLI] Session " + player.getName() + " - History Size: " + session.getHistory().size() + ", Est. Tokens: " + session.getEstimatedTokens(modelName));
+        plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + session.getEstimatedTokens(modelName));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -690,14 +690,14 @@ public class CLIManager {
 
         // 如果生成已被打断，则丢弃响应
         if (!isGenerating.getOrDefault(uuid, false)) {
-            plugin.getLogger().info("[CLI] Discarding AI response for " + player.getName() + " due to interruption.");
+            plugin.getLogger().info("[CLI] 由于被中断，丢弃了 " + player.getName() + " 的 AI 响应。");
             return;
         }
 
         String response = aiResponse.getContent();
         String thoughtContent = aiResponse.getThought() != null ? aiResponse.getThought() : "";
 
-        plugin.getLogger().info("[CLI] AI Response received for " + player.getName() + " (Length: " + response.length() + ")");
+        plugin.getLogger().info("[CLI] 已收到 " + player.getName() + " 的 AI 响应 (长度: " + response.length() + ")");
 
         // 如果 response 里面还有 <thought> 标签（API 可能没拆分出来），则继续尝试提取
         java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<thought>(.*?)</thought>").matcher(response);
@@ -834,7 +834,7 @@ public class CLIManager {
                 }
 
                 if (similarCount >= thresholdCount) {
-                    plugin.getLogger().warning("[CLI] Detected potential loop for " + player.getName() + ": " + thresholdCount + " consecutive similar tool calls.");
+                    plugin.getLogger().warning("[CLI] 检测到 " + player.getName() + " 的潜在死循环: 连续 " + thresholdCount + " 次相似的工具调用。");
                     
                     // 仍然显示本次工具调用
                     String toolName = toolCall.split(":", 2)[0];
@@ -861,7 +861,7 @@ public class CLIManager {
 
             // 2. 连续调用次数上限检测
             if (session.getCurrentChainToolCount() >= maxChainCount) {
-                plugin.getLogger().warning("[CLI] Detected tool chain too long for " + player.getName() + ": " + session.getCurrentChainToolCount() + " consecutive tool calls.");
+                plugin.getLogger().warning("[CLI] 检测到 " + player.getName() + " 的工具链过长: 连续 " + session.getCurrentChainToolCount() + " 次工具调用。");
                 
                 // 仍然显示本次工具调用
                 String toolName = toolCall.split(":", 2)[0];
@@ -916,7 +916,7 @@ public class CLIManager {
             toolName = toolCall.trim();
         }
 
-        plugin.getLogger().info("[CLI] Executing tool for " + player.getName() + ": " + toolName + " (Args: " + args + ")");
+        plugin.getLogger().info("[CLI] 正在为 " + player.getName() + " 执行工具: " + toolName + " (参数: " + args + ")");
 
         // 统一转换为小写进行匹配
         String lowerToolName = toolName.toLowerCase();
@@ -994,7 +994,7 @@ public class CLIManager {
 
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            player.sendMessage(ChatColor.GOLD + "⇒ YOLO run " + ChatColor.WHITE + cleanCommand);
+            player.sendMessage(ChatColor.GOLD + "⇒ YOLO 执行 " + ChatColor.WHITE + cleanCommand);
             generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
             executeCommand(player, cleanCommand);
             return;
@@ -1012,7 +1012,7 @@ public class CLIManager {
         
         // 如果是 YOLO 模式，直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "DIFF");
+            String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "修改文件");
             player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
             
             // 检查是否被冻结

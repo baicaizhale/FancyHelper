@@ -44,7 +44,7 @@ public class CloudFlareAI {
     public void shutdown() {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
-        plugin.getLogger().info("[CloudFlareAI] HTTP client shutdown completed (no-op for java.net.http.HttpClient).");
+        plugin.getLogger().info("[CloudFlareAI] HTTP 客户端已完成关闭（java.net.http.HttpClient 无需特殊操作）。");
     }
 
     private String fetchAccountId() throws IOException {
@@ -102,43 +102,43 @@ public class CloudFlareAI {
         try {
             accountId = fetchAccountId();
         } catch (IOException e) {
-            plugin.getLogger().severe("[AI Error] Failed to fetch Account ID: " + e.getMessage());
+            plugin.getLogger().severe("[AI 错误] 获取 Account ID 失败: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
             throw e;
         }
 
         boolean useResponsesApi = model.contains("gpt-oss");
         String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
-        plugin.getLogger().info("[AI Request] URL: " + url);
+        plugin.getLogger().info("[AI 请求] URL: " + url);
 
         JsonArray messagesArray = new JsonArray();
 
-        String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "You are a helpful assistant.";
+        String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
         safeSystemPrompt = safeSystemPrompt.trim();
 
         if (safeSystemPrompt.isEmpty()) {
-            safeSystemPrompt = "You are a helpful assistant.";
+            safeSystemPrompt = "你是一个得力的助手。";
         }
 
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
         systemMsg.addProperty("content", safeSystemPrompt);
         messagesArray.add(systemMsg);
-        plugin.getLogger().info("[AI Request] System prompt added (length: " + safeSystemPrompt.length() + ", non-empty: " + !safeSystemPrompt.isEmpty() + ")");
+        plugin.getLogger().info("[AI 请求] 已添加 System Prompt (长度: " + safeSystemPrompt.length() + ", 非空: " + !safeSystemPrompt.isEmpty() + ")");
 
         List<DialogueSession.Message> historyCopy = new ArrayList<>(session.getHistory());
-        plugin.getLogger().info("[AI Request] Processing " + historyCopy.size() + " history messages");
+        plugin.getLogger().info("[AI 请求] 正在处理 " + historyCopy.size() + " 条历史消息");
 
         for (DialogueSession.Message msg : historyCopy) {
             String content = msg.getContent();
             String role = msg.getRole();
 
             if (content == null) {
-                plugin.getLogger().warning("[AI Request] Skipping message with null content");
+                plugin.getLogger().warning("[AI 请求] 跳过内容为空的消息");
                 continue;
             }
             if (role == null) {
-                plugin.getLogger().warning("[AI Request] Skipping message with null role");
+                plugin.getLogger().warning("[AI 请求] 跳过角色为空的消息");
                 continue;
             }
 
@@ -146,16 +146,16 @@ public class CloudFlareAI {
             role = role.trim();
 
             if (content.isEmpty()) {
-                plugin.getLogger().warning("[AI Request] Skipping message with empty content after trim");
+                plugin.getLogger().warning("[AI 请求] 跳过修整后内容为空的消息");
                 continue;
             }
             if (role.isEmpty()) {
-                plugin.getLogger().warning("[AI Request] Skipping message with empty role after trim");
+                plugin.getLogger().warning("[AI 请求] 跳过修整后角色为空的消息");
                 continue;
             }
 
             if ("system".equalsIgnoreCase(role)) {
-                plugin.getLogger().info("[AI Request] Skipping duplicate system message");
+                plugin.getLogger().info("[AI 请求] 跳过重复的 system 消息");
                 continue;
             }
 
@@ -170,8 +170,8 @@ public class CloudFlareAI {
             String role = msg.get("role").getAsString();
             String content = msg.get("content").getAsString();
             if (role == null || content == null) {
-                plugin.getLogger().severe("[AI Request] Detected null in message array at index " + i);
-                throw new IOException("Message validation failed: null in array");
+                plugin.getLogger().severe("[AI 请求] 在消息数组索引 " + i + " 处检测到空值");
+                throw new IOException("消息验证失败: 数组中存在空值");
             }
         }
 
@@ -180,7 +180,7 @@ public class CloudFlareAI {
             m.addProperty("role", "user");
             m.addProperty("content", "hello");
             messagesArray.add(m);
-            plugin.getLogger().info("[AI Request] Added fallback user message");
+            plugin.getLogger().info("[AI 请求] 已添加备用用户消息");
         }
 
         JsonObject bodyJson = new JsonObject();
@@ -196,17 +196,17 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
-        plugin.getLogger().info("[AI Request] Model: " + model);
-        plugin.getLogger().info("[AI Request] Total messages in array: " + messagesArray.size());
+        plugin.getLogger().info("[AI 请求] 模型: " + model);
+        plugin.getLogger().info("[AI 请求] 数组中的总消息数: " + messagesArray.size());
 
         if (bodyString.contains("\"content\":null") || bodyString.contains("\"role\":null")) {
-            plugin.getLogger().severe("[AI Error] CRITICAL: Payload contains null content or role!");
-            plugin.getLogger().severe("[AI Error] Full payload: " + bodyString);
-            throw new IOException("Payload validation failed: null content or role detected in JSON");
+            plugin.getLogger().severe("[AI 错误] 严重：载荷中包含空的 content 或 role！");
+            plugin.getLogger().severe("[AI 错误] 完整载荷: " + bodyString);
+            throw new IOException("载荷验证失败: JSON 中检测到空的 content 或 role");
         }
 
         if (bodyString.matches(".*\"content\":\\s*\"\"\\s*[,}].*")) {
-            plugin.getLogger().warning("[AI Request] Warning: Empty content string detected");
+            plugin.getLogger().warning("[AI 请求] 警告：检测到空的内容字符串");
         }
 
         try {
@@ -220,19 +220,19 @@ public class CloudFlareAI {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             String responseBody = response.body();
-            plugin.getLogger().info("[AI Response] Code: " + response.statusCode());
+            plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
 
             if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[AI Error] Response Body: " + responseBody);
+                plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
 
                 // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
                 if ((response.statusCode() == 400 || response.statusCode() == 500) && responseBody != null) {
-                    plugin.getLogger().warning("[AI] Detected error " + response.statusCode() + " from CF API, retrying with simplified payload...");
+                    plugin.getLogger().warning("[AI] 检测到 CF API 错误 " + response.statusCode() + "，正在尝试使用简化载荷重试...");
 
                     JsonArray simpleInput = new JsonArray();
                     JsonObject simpleSystem = new JsonObject();
                     simpleSystem.addProperty("role", "system");
-                    simpleSystem.addProperty("content", "You are a helpful assistant.");
+                    simpleSystem.addProperty("content", "你是一个得力的助手。");
                     simpleInput.add(simpleSystem);
 
                     String lastUser = null;

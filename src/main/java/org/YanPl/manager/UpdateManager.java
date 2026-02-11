@@ -162,11 +162,11 @@ public class UpdateManager implements Listener {
      * @param alreadyAsync 是否已经在异步任务中执行
      */
     public void downloadAndInstall(Player sender, boolean autoReload, boolean alreadyAsync) {
-        plugin.getLogger().info("downloadAndInstall 被调用 - hasUpdate: " + hasUpdate + ", downloadUrl: " + downloadUrl);
+        plugin.getLogger().info("下载并安装更新被调用 - 有可用更新: " + hasUpdate + ", 下载地址: " + downloadUrl);
 
         if (!hasUpdate || downloadUrl == null) {
             if (sender != null) sender.sendMessage(ChatColor.RED + "当前没有可用的更新。");
-            plugin.getLogger().warning("无法下载更新：hasUpdate=" + hasUpdate + ", downloadUrl=" + downloadUrl);
+            plugin.getLogger().warning("无法下载更新：有可用更新=" + hasUpdate + ", 下载地址=" + downloadUrl);
             return;
         }
 
