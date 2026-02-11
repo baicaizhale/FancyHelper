@@ -882,11 +882,11 @@ public class CLIManager {
                 String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
                 player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
 
-                player.sendMessage(ChatColor.RED + "⨀ Fancy 已经连续执行了 " + maxChainCount + " 次操作，为了防止过度消耗，已自动暂停。");
+                player.sendMessage(ChatColor.YELLOW + "⨀ 识别到Fancy重复调用" + maxChainCount + "次相似操作，请优化提示词。");
                 
                 // 显示“不再打断”按钮
-                TextComponent exemptMsg = new TextComponent(ChatColor.YELLOW + "⇒ 如果您需要它继续，请发送任意消息。或点击 ");
-                TextComponent btn = new TextComponent(ChatColor.GREEN + "[ 本次对话不再打断 ]");
+                TextComponent exemptMsg = new TextComponent(ChatColor.YELLOW + "⇒ 发送任意消息继续对话。如果你认为这是正常操作，点击 ");
+                TextComponent btn = new TextComponent(ChatColor.GREEN + "[本次对话不再打断]");
                 btn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exempt_anti_loop"));
                 btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击后本次会话将不再触发自动打断")));
                 exemptMsg.addExtra(btn);
@@ -942,12 +942,16 @@ public class CLIManager {
         // 展示给玩家时只显示工具名（如果不是 search, run 或 over 这种有自己显示逻辑或不需要显示的工具）
         if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#diff") && !lowerToolName.equals("#exit")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
-        } else if (lowerToolName.equals("#ls")) {
-            player.sendMessage(ChatColor.GRAY + "〇 正在列出目录: " + ChatColor.WHITE + args);
-        } else if (lowerToolName.equals("#read")) {
-            player.sendMessage(ChatColor.GRAY + "〇 正在读取文件: " + ChatColor.WHITE + args);
         } else if (lowerToolName.equals("#diff")) {
-            player.sendMessage(ChatColor.GRAY + "〇 正在修改文件: " + ChatColor.WHITE + args.split("\\|")[0].trim());
+            String[] parts = args.split("\\|", 3);
+            String path = parts.length > 0 ? parts[0].trim() : "";
+            player.sendMessage(ChatColor.GRAY + "〇 正在修改文件: " + ChatColor.WHITE + path);
+            if (parts.length >= 3) {
+                String from = parts[1];
+                String to = parts[2];
+                player.sendMessage(ChatColor.GRAY + "From " + ChatColor.WHITE + from);
+                player.sendMessage(ChatColor.GRAY + "To " + ChatColor.WHITE + to);
+            }
         } else if (lowerToolName.equals("#exit")) {
             player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
         }
@@ -1082,12 +1086,16 @@ public class CLIManager {
         pendingCommands.put(uuid, pendingStr);
         generationStates.put(uuid, GenerationStatus.WAITING_CONFIRM);
 
-        String actionDesc = type.equals("ls") ? "列出目录" : (type.equals("read") ? "读取文件" : "修改文件内容");
-        sendConfirmButtons(player, actionDesc + " " + args);
+        if ("diff".equals(type)) {
+            sendConfirmButtons(player, "");
+        } else {
+            String actionDesc = type.equals("ls") ? "请求列出目录" : "请求读取文件";
+            sendConfirmButtons(player, actionDesc + " " + ChatColor.WHITE + args);
+        }
     }
 
     private void sendConfirmButtons(Player player, String displayAction) {
-        TextComponent message = new TextComponent(ChatColor.GRAY + "⇒ " + displayAction + " ");
+        TextComponent message = new TextComponent(displayAction != null && !displayAction.trim().isEmpty() ? (ChatColor.GRAY + "⇒ " + displayAction + " ") : "");
         
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
