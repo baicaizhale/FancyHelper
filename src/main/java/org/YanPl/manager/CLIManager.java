@@ -764,18 +764,17 @@ public class CLIManager {
             int hashIndex = cleanResponse.indexOf("#", currentPos);
             if (hashIndex == -1) break;
 
-            // 检查是否为行首调用（前面只有空白字符或处于开头）
-            boolean isAtLineStart = true;
-            for (int i = hashIndex - 1; i >= 0; i--) {
-                char c = cleanResponse.charAt(i);
-                if (c == '\n' || c == '\r') break;
-                if (!Character.isWhitespace(c)) {
-                    isAtLineStart = false;
-                    break;
+            // 检查是否为有效的工具调用起始位置
+            // 为了增加鲁棒性，不再强制要求必须在行首，但要求前面不能是字母或数字（防止误触发，如 CSS#id）
+            boolean isValidStart = true;
+            if (hashIndex > 0) {
+                char prev = cleanResponse.charAt(hashIndex - 1);
+                if (Character.isLetterOrDigit(prev)) {
+                    isValidStart = false;
                 }
             }
 
-            if (isAtLineStart) {
+            if (isValidStart) {
                 String potentialToolPart = cleanResponse.substring(hashIndex).trim();
                 for (String tool : knownTools) {
                     if (potentialToolPart.toLowerCase().startsWith(tool)) {
