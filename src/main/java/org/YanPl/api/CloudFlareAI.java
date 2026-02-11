@@ -35,6 +35,7 @@ public class CloudFlareAI {
         int timeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+                .version(HttpClient.Version.HTTP_1_1) // 强制使用 HTTP/1.1 以避免某些 API (如阿里云) 的 HTTP/2 EOF 错误
                 .build();
     }
 
@@ -186,6 +187,16 @@ public class CloudFlareAI {
 
         plugin.getLogger().info("[AI 请求] 使用 OpenAI 兼容 API: " + apiUrl);
         plugin.getLogger().info("[AI 请求] 模型: " + model);
+
+        // 如果 API 地址包含 aliyuncs.com 但不包含 /chat/completions，尝试自动补全（针对阿里云通义千问）
+        if (apiUrl.contains("aliyuncs.com") && !apiUrl.contains("/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "compatible-mode/v1/chat/completions";
+            } else {
+                apiUrl += "/compatible-mode/v1/chat/completions";
+            }
+            plugin.getLogger().info("[AI 请求] 检测到阿里云 API，已自动补全路径: " + apiUrl);
+        }
 
         // 构建消息数组
         JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
