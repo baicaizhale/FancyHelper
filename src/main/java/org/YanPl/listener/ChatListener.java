@@ -42,11 +42,22 @@ public class ChatListener implements Listener {
         }
 
         Player player = event.getPlayer();
-        plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
-            if (noticeData != null) {
-                plugin.getNoticeManager().showNoticeToPlayer(player, noticeData);
-            }
-        });
+        
+        // 检查玩家是否已读当前公告
+        if (plugin.getNoticeManager().hasRead(player)) {
+            return;
+        }
+
+        org.YanPl.manager.NoticeManager.NoticeData cachedNotice = plugin.getNoticeManager().getCurrentNotice();
+        if (cachedNotice != null) {
+            plugin.getNoticeManager().showNoticeToPlayer(player, cachedNotice);
+        } else {
+            plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
+                if (noticeData != null) {
+                    plugin.getNoticeManager().showNoticeToPlayer(player, noticeData);
+                }
+            });
+        }
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

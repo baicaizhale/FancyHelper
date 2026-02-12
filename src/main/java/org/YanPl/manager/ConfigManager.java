@@ -282,8 +282,28 @@ public class ConfigManager {
      * 获取是否在玩家加入时显示公告
      * @return 是否在玩家加入时显示公告
      */
+    /**
+     * 获取公告刷新间隔（分钟）
+     * @return 刷新间隔
+     */
+    public int getNoticeRefreshInterval() {
+        return config.getInt("notice.refresh_interval", 5);
+    }
+
+    /**
+     * 获取公告是否在加入时显示
+     * @return 是否显示
+     */
     public boolean isNoticeShowOnJoin() {
         return config.getBoolean("notice.show_on_join", true);
+    }
+
+    /**
+     * 获取玩家数据配置对象
+     * @return FileConfiguration
+     */
+    public FileConfiguration getPlayerData() {
+        return playerData;
     }
 
     public boolean isToolEnabled(String tool) {
@@ -317,11 +337,11 @@ public class ConfigManager {
         savePlayerData();
     }
 
-    private void save() {
+    public void save() {
         try {
             config.save(new File(plugin.getDataFolder(), "config.yml"));
         } catch (IOException e) {
-            plugin.getLogger().warning("无法保存配置文件: " + e.getMessage());
+            plugin.getLogger().warning("无法保存配置: " + e.getMessage());
         }
     }
 }
