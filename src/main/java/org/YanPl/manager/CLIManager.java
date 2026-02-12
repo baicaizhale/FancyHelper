@@ -54,12 +54,10 @@ public class CLIManager {
     private static class RetryInfo {
         final DialogueSession session;
         final String systemPrompt;
-        final String errorMessage;
 
-        RetryInfo(DialogueSession session, String systemPrompt, String errorMessage) {
+        RetryInfo(DialogueSession session, String systemPrompt) {
             this.session = session;
             this.systemPrompt = systemPrompt;
-            this.errorMessage = errorMessage;
         }
     }
 
@@ -770,7 +768,7 @@ public class CLIManager {
                 plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt, e.getMessage()));
+                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt));
 
                     player.sendMessage(ChatColor.RED + "⨀ AI 调用失败（重试）: " + e.getMessage());
 
@@ -830,7 +828,7 @@ public class CLIManager {
                 plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), e.getMessage()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player)));
 
                     player.sendMessage("§l§bFancyHelper§b§r §7> §cAI 调用出错: " + e.getMessage());
 
@@ -1947,7 +1945,7 @@ public class CLIManager {
             } catch (IOException e) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, e.getMessage()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt));
 
                     player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + e.getMessage());
 

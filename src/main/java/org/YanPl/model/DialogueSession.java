@@ -5,8 +5,6 @@ import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +36,7 @@ public class DialogueSession {
     private String lastThought = null;
     private long lastThinkingTimeMs = 0;
     private long nextMessageId = 0;
+    private String logFilePath = null;
     private final Map<Long, ThoughtSnapshot> thoughtSnapshots = new LinkedHashMap<Long, ThoughtSnapshot>(64, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, ThoughtSnapshot> eldest) {
@@ -94,6 +93,13 @@ public class DialogueSession {
         addMessage(role, content, null);
     }
 
+    /**
+     * 添加消息并记录思维链
+     *
+     * @param role    角色
+     * @param content 内容
+     * @param thought 思维链
+     */
     public void addMessage(String role, String content, String thought) {
         // 添加消息并更新活动时间；限制历史长度以节省 token
         long messageId = nextMessageId++;
@@ -106,12 +112,30 @@ public class DialogueSession {
                 thoughtSnapshots.put(messageId, new ThoughtSnapshot(thought, thinkingTimeMs));
             }
         }
-        
+
         if (history.size() > 20) {
             // 移除最早的两条，保持历史在一个较小范围
             history.remove(0);
             history.remove(0);
         }
+    }
+
+    /**
+     * 获取日志文件路径
+     *
+     * @return 日志文件路径
+     */
+    public String getLogFilePath() {
+        return logFilePath;
+    }
+
+    /**
+     * 设置日志文件路径
+     *
+     * @param logFilePath 日志文件路径
+     */
+    public void setLogFilePath(String logFilePath) {
+        this.logFilePath = logFilePath;
     }
 
     public List<Message> getHistory() {
