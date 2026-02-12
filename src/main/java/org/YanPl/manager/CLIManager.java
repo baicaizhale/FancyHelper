@@ -744,13 +744,13 @@ public class CLIManager {
 
         plugin.getLogger().info("[CLI] 已收到 " + player.getName() + " 的 AI 响应 (长度: " + response.length() + ")");
 
-        // 如果 response 里面还有 <thought> 标签（API 可能没拆分出来），则继续尝试提取
-        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<thought>(.*?)</thought>").matcher(response);
+        // 如果 response 里面还有 <thought> 或 <thinking> 标签（API 可能没拆分出来），则继续尝试提取
+        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(response);
         if (thoughtMatcher.find()) {
             if (thoughtContent.isEmpty()) {
-                thoughtContent = thoughtMatcher.group(1);
+                thoughtContent = thoughtMatcher.group(2);
             }
-            response = response.replaceAll("(?s)<thought>.*?</thought>", "");
+            response = response.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
         } else {
             // 针对某些模型可能直接在正文中用 Markdown 块或特定标记显示思考过程
             // 尝试匹配 ```thought ... ``` 块
