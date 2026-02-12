@@ -106,6 +106,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "settings":
             case "set":
             case "toggle":
+            case "display":
             case "select":
             case "exempt_anti_loop":
                 if (!(sender instanceof Player)) {
@@ -126,7 +127,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             default:
-                sender.sendMessage(ChatColor.RED + "未知子命令。用法: /fancy [reload|status|settings|notice]");
+                sender.sendMessage(ChatColor.RED + "未知子命令。用法: /cli [reload|status|settings]");
                 break;
         }
 
@@ -179,6 +180,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                         }
                     }
                 }
+                return true;
+            case "display":
+                String currentPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
+                String newPos = currentPos.equalsIgnoreCase("actionbar") ? "subtitle" : "actionbar";
+                plugin.getConfigManager().setPlayerDisplayPosition(player, newPos);
+                player.sendMessage(ChatColor.GREEN + "状态显示位置已切换为: " + ChatColor.YELLOW + newPos);
+                handleSettings(player);
                 return true;
             case "select":
                 if (args.length > 1) {
@@ -438,7 +446,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sendToggleMessage(player, "ls", "列出文件列表");
         sendToggleMessage(player, "read", "读取文件内容");
         sendToggleMessage(player, "diff", "修改文件内容");
-        player.sendMessage(ChatColor.GRAY + "注意：关闭后再开启需要重新进行安全验证。");
+        
+        String displayPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
+        TextComponent displayMsg = new TextComponent(ChatColor.WHITE + "- 状态显示位置: ");
+        TextComponent posStatus = new TextComponent(ChatColor.AQUA + "[" + displayPos + "]");
+        posStatus.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
+        posStatus.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换 (actionbar/subtitle)")));
+        displayMsg.addExtra(posStatus);
+        player.spigot().sendMessage(displayMsg);
+
+        player.sendMessage(ChatColor.GRAY + "注意：工具关闭后再开启需要重新进行安全验证。");
     }
 
     private void sendToggleMessage(Player player, String tool, String description) {

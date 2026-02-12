@@ -1,5 +1,5 @@
 name: FancyHelper
-version: 3.1.0
+version: 3.2.1
 main: org.YanPl.FancyHelper
 api-version: '1.18'
 softdepend: [ProtocolLib]
@@ -14,4 +14,7 @@ permissions:
     default: op
   fancyhelper.reload:
     description: 允许重新加载 FancyHelper 配置
+    default: op
+  fancyhelper.notice:
+    description: 允许查看 FancyHelper 公告
     default: op

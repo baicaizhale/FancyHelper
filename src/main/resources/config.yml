@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 3.1.0
+version: 3.2.1
 
 # CloudFlare Workers AI 配置
 cloudflare:
@@ -10,9 +10,9 @@ cloudflare:
 
 # OpenAI 兼容 API 配置（支持自定义 OpenAI 接口）
 openai:
-  # 是否启用 OpenAI 模式（启用后将优先使用此配置）
+  # 是否启用 OpenAI 兼容模式（启用后将优先使用此配置）
   enabled: false
-  # OpenAI API 地址（支持自定义地址，如 OpenAI 官方、Azure OpenAI、本地模型等）
+  # Based API 地址（支持自定义地址，如 OpenAI 官方、Azure OpenAI、本地模型等）
   # 示例：
   #   - OpenAI 官方: https://api.openai.com/v1/chat/completions
   #   - DeepSeek: https://api.deepseek.com/chat/completions
@@ -20,7 +20,7 @@ openai:
   #   - 阿里云通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
   #   - 其他兼容 OpenAI 格式的 API
   api_url: https://api.openai.com/v1/chat/completions
-  # OpenAI API 密钥
+  # API 密钥
   api_key: your-openai-api-key
   # 使用的模型名称
   # 示例：
@@ -70,3 +70,10 @@ settings:
     - kill
     - nbt
     - ban
+    - unban
+    - plugman
+
+# 公告配置
+notice:
+  # 玩家加入时是否显示插件公告（需要 FancyHelper.notice 权限）
+  show_on_join: true

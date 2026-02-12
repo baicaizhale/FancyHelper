@@ -29,9 +29,11 @@ public class DialogueSession {
     private int toolFailureCount = 0;
     private int currentChainToolCount = 0;
     private int thoughtTokens = 0;
+    private long totalThinkingTimeMs = 0;
     private boolean antiLoopExempted = false;
     private Mode mode = Mode.NORMAL;
     private String lastThought = null;
+    private long lastThinkingTimeMs = 0;
 
     /**
      * 编码注册表（单例）
@@ -143,6 +145,28 @@ public class DialogueSession {
 
     public void addThoughtTokens(int tokens) {
         thoughtTokens += tokens;
+    }
+
+    /**
+     * 获取总思考时长 (ms)
+     */
+    public long getTotalThinkingTimeMs() {
+        return totalThinkingTimeMs;
+    }
+
+    /**
+     * 增加思考时长
+     */
+    public void addThinkingTime(long ms) {
+        totalThinkingTimeMs += ms;
+        lastThinkingTimeMs = ms;
+    }
+
+    /**
+     * 获取最近一次思考时长 (ms)
+     */
+    public long getLastThinkingTimeMs() {
+        return lastThinkingTimeMs;
     }
 
     /**

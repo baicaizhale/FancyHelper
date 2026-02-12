@@ -214,47 +214,47 @@ public class CLIManager {
                             }
                             long elapsed = (now - startTime) / 1000;
                             message = ChatColor.GRAY + "- 思考中 " + elapsed + "s -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case EXECUTING_TOOL:
                             message = ChatColor.GRAY + "....";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case WAITING_CONFIRM:
                             message = ChatColor.YELLOW + "正在征求您的许可...";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case WAITING_CHOICE:
                             message = ChatColor.AQUA + "正在征求您的意见...";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case COMPLETED:
                             message = ChatColor.GREEN + "- ✓ -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
-                            // 清除动作栏
+                            sendStatusMessage(player, message);
+                            // 清除显示，2秒后清除 (40 ticks)
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
-                            }, 20L);
+                                clearStatusMessage(player);
+                            }, 40L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
                         case CANCELLED:
                             message = ChatColor.RED + "- ✕ -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
-                            // 清除动作栏
+                            sendStatusMessage(player, message);
+                            // 清除显示，2秒后清除 (40 ticks)
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
-                            }, 20L);
+                                clearStatusMessage(player);
+                            }, 40L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
                         case ERROR:
                             message = ChatColor.RED + "- ERROR -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
-                            // 清除动作栏
+                            sendStatusMessage(player, message);
+                            // 清除显示，2秒后清除 (40 ticks)
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
-                            }, 20L);
+                                clearStatusMessage(player);
+                            }, 40L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
@@ -264,6 +264,46 @@ public class CLIManager {
                 }
             }
         }.runTaskTimer(plugin, 5L, 5L); // 提高更新频率到 0.25s，让计时更平滑
+    }
+
+    /**
+     * 停止当前的思考计时并记录时长
+     */
+    private void recordThinkingTime(UUID uuid) {
+        DialogueSession session = sessions.get(uuid);
+        if (session == null) return;
+
+        Long startTime = generationStartTimes.get(uuid);
+        GenerationStatus status = generationStates.get(uuid);
+
+        if (startTime != null && status == GenerationStatus.THINKING) {
+            session.addThinkingTime(System.currentTimeMillis() - startTime);
+        }
+    }
+
+    /**
+     * 向玩家发送状态消息（根据玩家配置选择 Actionbar 或 Subtitle）
+     */
+    private void sendStatusMessage(Player player, String message) {
+        String position = plugin.getConfigManager().getPlayerDisplayPosition(player);
+        if ("subtitle".equalsIgnoreCase(position)) {
+            // 为了保证 subtitle 显示，发送空内容的 title
+            player.sendTitle("", message, 0, 20, 0);
+        } else {
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+        }
+    }
+
+    /**
+     * 清除玩家的状态消息显示
+     */
+    private void clearStatusMessage(Player player) {
+        String position = plugin.getConfigManager().getPlayerDisplayPosition(player);
+        if ("subtitle".equalsIgnoreCase(position)) {
+            player.sendTitle("", "", 0, 0, 0);
+        } else {
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+        }
     }
 
     /**
@@ -415,6 +455,7 @@ public class CLIManager {
             player.sendMessage(ChatColor.GRAY + "⇒ 已取消待处理的操作");
         }
 
+        recordThinkingTime(uuid);
         sendExitMessage(player);
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
@@ -575,6 +616,7 @@ public class CLIManager {
                 interruptedToolCalls.remove(uuid);
                 if (isGenerating.getOrDefault(uuid, false)) {
                     isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.CANCELLED);
                     generationStartTimes.put(uuid, System.currentTimeMillis());
                     player.sendMessage(ChatColor.YELLOW + "⇒ 已打断 Fancy 生成");
@@ -678,6 +720,7 @@ public class CLIManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.RED + "AI 调用出错: " + e.getMessage());
                     isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
                     // 立即清除动作栏
@@ -690,6 +733,7 @@ public class CLIManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.RED + "系统内部错误: " + t.getMessage());
                     isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
                     // 立即清除动作栏
@@ -705,6 +749,7 @@ public class CLIManager {
         if (session == null) return;
 
         // 收到 AI 回复，立即停止计时
+        recordThinkingTime(uuid);
         generationStates.put(uuid, GenerationStatus.COMPLETED);
         generationStartTimes.remove(uuid);
 
@@ -719,13 +764,13 @@ public class CLIManager {
 
         plugin.getLogger().info("[CLI] 已收到 " + player.getName() + " 的 AI 响应 (长度: " + response.length() + ")");
 
-        // 如果 response 里面还有 <thought> 标签（API 可能没拆分出来），则继续尝试提取
-        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<thought>(.*?)</thought>").matcher(response);
+        // 如果 response 里面还有 <thought> 或 <thinking> 标签（API 可能没拆分出来），则继续尝试提取
+        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(response);
         if (thoughtMatcher.find()) {
             if (thoughtContent.isEmpty()) {
-                thoughtContent = thoughtMatcher.group(1);
+                thoughtContent = thoughtMatcher.group(2);
             }
-            response = response.replaceAll("(?s)<thought>.*?</thought>", "");
+            response = response.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
         } else {
             // 针对某些模型可能直接在正文中用 Markdown 块或特定标记显示思考过程
             // 尝试匹配 ```thought ... ``` 块
@@ -1693,6 +1738,7 @@ public class CLIManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.RED + "AI 调用出错: " + e.getMessage());
                     isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
                     // 立即清除动作栏
@@ -1703,6 +1749,7 @@ public class CLIManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.RED + "系统内部错误: " + t.getMessage());
                     isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
                     // 立即清除动作栏
@@ -1773,6 +1820,12 @@ public class CLIManager {
                 String cmd = "/cli thought" + (thoughtIndex != -1 ? " " + thoughtIndex : "");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
                 thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                
+                // 在 Thought 按钮右侧显示本次思考的时间
+                double lastSec = session.getLastThinkingTimeMs() / 1000.0;
+                TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
+                thoughtBtn.addExtra(timeTag);
+                
                 player.spigot().sendMessage(thoughtBtn);
             }
         }
@@ -1845,12 +1898,17 @@ public class CLIManager {
         if (meta != null) {
             meta.setTitle("Fancy Thought");
             meta.setAuthor("Fancy");
+
+            // 获取本次思考的时长
+            double lastThinkingSec = session.getLastThinkingTimeMs() / 1000.0;
+            String timePrefix = ChatColor.DARK_GRAY + "Thought (" + String.format("%.1f", lastThinkingSec) + "s)\n\n" + ChatColor.RESET;
+            String fullThought = timePrefix + thought;
             
             // 分页处理（书本每页约 256 字符，但实际受行数限制，使用 128 作为安全边距）
             List<String> pages = new ArrayList<>();
             int pageSize = 128;
-            for (int i = 0; i < thought.length(); i += pageSize) {
-                pages.add(thought.substring(i, Math.min(i + pageSize, thought.length())));
+            for (int i = 0; i < fullThought.length(); i += pageSize) {
+                pages.add(fullThought.substring(i, Math.min(i + pageSize, fullThought.length())));
             }
             
             if (pages.isEmpty()) pages.add("");
@@ -1933,11 +1991,14 @@ public class CLIManager {
         int thoughtTokens = session != null ? session.getThoughtTokens() : 0;
         long durationMs = session != null ? System.currentTimeMillis() - session.getStartTime() : 0;
         double durationSec = durationMs / 1000.0;
+        
+        // 获取思考总时长
+        double thinkingSec = session != null ? session.getTotalThinkingTimeMs() / 1000.0 : 0.0;
 
         player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage("");
         player.sendMessage(ChatColor.WHITE + "已退出 FancyHelper");
-        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + (tokens + thoughtTokens) + "  | 时长: " + String.format("%.1f", durationSec) + " 秒");
+        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + (tokens + thoughtTokens) + "  | 时长: " + String.format("%.1f", durationSec) + " 秒 (思考: " + String.format("%.1f", thinkingSec) + " 秒)");
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "==================");
     }

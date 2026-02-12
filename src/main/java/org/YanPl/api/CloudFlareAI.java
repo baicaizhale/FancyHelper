@@ -43,6 +43,35 @@ public class CloudFlareAI {
         return httpClient;
     }
 
+    /**
+     * 发送 HTTP 请求并带有重试机制
+     * 解决 java.io.IOException: HTTP/1.1 header parser received no bytes 等偶发性网络问题
+     */
+    private HttpResponse<String> sendWithRetry(HttpRequest request) throws IOException, InterruptedException {
+        int maxRetries = 3;
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            } catch (IOException e) {
+                String errorMsg = e.getMessage();
+                // 常见的偶发性网络错误，值得重试
+                if (errorMsg != null && (errorMsg.contains("header parser received no bytes") || 
+                    errorMsg.contains("Connection reset") || 
+                    errorMsg.contains("EOF reached"))) {
+                    
+                    plugin.getLogger().warning("[AI 请求] 网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
+                    if (i < maxRetries - 1) {
+                        Thread.sleep(500 * (i + 1)); // 指数退避
+                        continue;
+                    }
+                }
+                throw e; // 达到最大重试次数或非偶发性错误，抛出异常
+            }
+        }
+        // 理论上不会到达这里，除非 maxRetries <= 0
+        throw new IOException("请求失败：超过最大重试次数");
+    }
+
     public void shutdown() {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
@@ -139,7 +168,7 @@ public class CloudFlareAI {
                     .GET()
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendWithRetry(request);
 
             if (response.statusCode() != 200) {
                 throw new IOException("获取 Account ID 失败: " + response.statusCode() + " " + response.body());
@@ -207,8 +236,8 @@ public class CloudFlareAI {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 4096);
 
-        // 对于支持推理参数的模型（如 deepseek-reasoner、o1 等），添加推理参数
-        if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek-reasoner")) {
+        // 对于支持推理参数的模型（如 deepseek-reasoner、o1、qwen-max 等），添加推理参数
+        if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
             bodyJson.addProperty("reasoning_effort", "medium");
         }
 
@@ -224,9 +253,15 @@ public class CloudFlareAI {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+            
+            // 调试日志：输出响应体前 500 个字符
+            if (responseBody != null) {
+                String debugBody = responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody;
+                plugin.getLogger().info("[AI 调试] 响应体内容: " + debugBody);
+            }
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
@@ -247,16 +282,38 @@ public class CloudFlareAI {
                         if (message.has("content") && !message.get("content").isJsonNull()) {
                             textContent = message.get("content").getAsString();
                         }
-                        // 某些模型在 reasoning_content 中返回思考过程
+                        
+                        // 兼容多种思考内容字段名 (OpenAI/DeepSeek/Qwen 等)
                         if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
                             thoughtContent = message.get("reasoning_content").getAsString();
+                        } else if (message.has("reasoning") && !message.get("reasoning").isJsonNull()) {
+                            thoughtContent = message.get("reasoning").getAsString();
+                        } else if (message.has("thought") && !message.get("thought").isJsonNull()) {
+                            thoughtContent = message.get("thought").getAsString();
+                        }
+                    }
+                    
+                    // 某些 API 可能将 reasoning 放在 choice 级别而非 message 级别
+                    if (thoughtContent == null) {
+                        if (choice.has("reasoning_content") && !choice.get("reasoning_content").isJsonNull()) {
+                            thoughtContent = choice.get("reasoning_content").getAsString();
+                        } else if (choice.has("reasoning") && !choice.get("reasoning").isJsonNull()) {
+                            thoughtContent = choice.get("reasoning").getAsString();
                         }
                     }
                 }
             }
 
+            // 如果 content 为空但存在思考内容或工具调用（此处主要针对正文缺失的情况）
+            if (textContent == null || textContent.trim().isEmpty()) {
+                // 如果有思考内容，尝试将其作为响应的一部分返回，或者至少返回一个空字符串避免报错
+                if (thoughtContent != null && !thoughtContent.isEmpty()) {
+                    textContent = ""; // 允许空正文，只要有思考过程
+                }
+            }
+
             if (textContent != null) {
-                if (thoughtContent != null) {
+                if (thoughtContent != null && !thoughtContent.isEmpty()) {
                     plugin.getLogger().info("[AI] 检测到思考内容 (长度: " + thoughtContent.length() + ")");
                 }
                 return new AIResponse(textContent, thoughtContent);
@@ -343,7 +400,7 @@ public class CloudFlareAI {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
 
@@ -404,7 +461,7 @@ public class CloudFlareAI {
                             .POST(HttpRequest.BodyPublishers.ofString(simpleBodyString, StandardCharsets.UTF_8))
                             .build();
 
-                    HttpResponse<String> simpleResp = httpClient.send(simpleRequest, HttpResponse.BodyHandlers.ofString());
+                    HttpResponse<String> simpleResp = sendWithRetry(simpleRequest);
                     String simpleRespBody = simpleResp.body();
                     plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.statusCode());
 

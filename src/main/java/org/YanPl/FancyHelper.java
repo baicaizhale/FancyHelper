@@ -9,6 +9,7 @@ import org.YanPl.manager.VerificationManager;
 import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
+import org.YanPl.manager.NoticeManager;
 import org.YanPl.util.CloudErrorReport;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
@@ -26,6 +27,7 @@ public final class FancyHelper extends JavaPlugin {
     private CloudErrorReport cloudErrorReport;
     private VerificationManager verificationManager;
     private PacketCaptureManager packetCaptureManager;
+    private NoticeManager noticeManager;
 
     @Override
     public void onEnable() {
@@ -68,6 +70,14 @@ public final class FancyHelper extends JavaPlugin {
         // 初始化更新管理器并检查更新
         updateManager = new UpdateManager(this);
         updateManager.checkForUpdates();
+
+        // 初始化公告管理器并获取公告
+        noticeManager = new NoticeManager(this);
+        noticeManager.fetchNoticeAsync().thenAccept(noticeData -> {
+            if (noticeData != null) {
+                noticeManager.showNoticeToConsole(noticeData);
+            }
+        });
 
         CLICommand cliCommand = new CLICommand(this);
         getCommand("fancyhelper").setExecutor(cliCommand);
@@ -218,6 +228,11 @@ public final class FancyHelper extends JavaPlugin {
             eulaManager.shutdown();
         }
 
+        // 关闭公告管理器
+        if (noticeManager != null) {
+            noticeManager.shutdown();
+        }
+
         // 等待短暂时间以确保后台任务结束
         try {
             Thread.sleep(500);
@@ -258,5 +273,9 @@ public final class FancyHelper extends JavaPlugin {
 
     public PacketCaptureManager getPacketCaptureManager() {
         return packetCaptureManager;
+    }
+
+    public NoticeManager getNoticeManager() {
+        return noticeManager;
     }
 }
