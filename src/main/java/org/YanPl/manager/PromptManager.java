@@ -40,7 +40,7 @@ public class PromptManager {
         sb.append("   格式：#工具名: 参数（例如：#getpreset: coreprotect.txt）\n");
         sb.append("   #search: <args> - 在互联网上搜索，你将会优先看到wiki内容，如果没有找到，将会搜索全网。你完全被允许使用此工具。注意不要使用自然语言。\n");
         sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，A、B、C等可以被替换成任意内容。如果用户的表述有多种实现途径，使用此工具让用户进行选择而不是直接询问。\n");
-        sb.append("   #getpreset: <file> - 从预设目录获取指定的预设内容，涉及到的均推荐查阅预设。\n");
+        sb.append("   #getpreset: <file> - 从预设目录获取指定的预设内容，涉及到的均推荐查阅预设。当玩家要求你做事时，你应该优先查看相关的preset(如有)\n");
         sb.append("   #run: <command> - 以玩家身份执行命令。注意：禁止多个命令在一个run里，如果你需要的话就等这个命令执行完了下一次再run，并且命令参数不要带斜杠 /。例如 #run: give @p apple \n");
         
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
