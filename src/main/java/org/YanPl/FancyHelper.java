@@ -71,13 +71,8 @@ public final class FancyHelper extends JavaPlugin {
         updateManager = new UpdateManager(this);
         updateManager.checkForUpdates();
 
-        // 初始化公告管理器并获取公告
+        // 初始化公告管理器（构造函数中会自动开始定期获取公告）
         noticeManager = new NoticeManager(this);
-        noticeManager.fetchNoticeAsync().thenAccept(noticeData -> {
-            if (noticeData != null) {
-                noticeManager.showNoticeToConsole(noticeData);
-            }
-        });
 
         CLICommand cliCommand = new CLICommand(this);
         getCommand("fancyhelper").setExecutor(cliCommand);

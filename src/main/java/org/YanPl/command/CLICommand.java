@@ -86,7 +86,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(ChatColor.RED + "你没有权限查看公告。");
                     return true;
                 }
-                handleNotice(sender);
+                if (args.length > 1 && args[1].equalsIgnoreCase("read")) {
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                        return true;
+                    }
+                    plugin.getNoticeManager().markAsRead((Player) sender);
+                } else {
+                    handleNotice(sender);
+                }
                 break;
             case "upgrade":
             case "download":
@@ -510,6 +518,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
             return Arrays.asList("ls", "read", "diff").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("notice")) {
+            return Arrays.asList("read").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         }

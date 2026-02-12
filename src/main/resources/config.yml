@@ -77,3 +77,5 @@ settings:
 notice:
   # 玩家加入时是否显示插件公告（需要 FancyHelper.notice 权限）
   show_on_join: true
+  # 每隔多久从服务器拉取公告（单位：分钟），默认 5 分钟
+  refresh_interval: 5
