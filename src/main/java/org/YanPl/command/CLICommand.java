@@ -136,7 +136,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             default:
-                sender.sendMessage("§l§bFancyHelper§b§r §7> §c未知子命令。用法: /cli [reload|status|settings]");
+                sender.sendMessage("§l§bFancyHelper§b§r §7> §c未知子命令。用法: /cli [reload|status|settings|notice]");
                 break;
         }
 
