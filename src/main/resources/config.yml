@@ -70,6 +70,8 @@ settings:
     - kill
     - nbt
     - ban
+    - unban
+    - plugman
 
 # 公告配置
 notice:

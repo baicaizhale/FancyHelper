@@ -258,6 +258,12 @@ public class CloudFlareAI {
             HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+            
+            // 调试日志：输出响应体前 500 个字符
+            if (responseBody != null) {
+                String debugBody = responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody;
+                plugin.getLogger().info("[AI 调试] 响应体内容: " + debugBody);
+            }
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
@@ -286,6 +292,15 @@ public class CloudFlareAI {
                             thoughtContent = message.get("reasoning").getAsString();
                         } else if (message.has("thought") && !message.get("thought").isJsonNull()) {
                             thoughtContent = message.get("thought").getAsString();
+                        }
+                    }
+                    
+                    // 某些 API 可能将 reasoning 放在 choice 级别而非 message 级别
+                    if (thoughtContent == null) {
+                        if (choice.has("reasoning_content") && !choice.get("reasoning_content").isJsonNull()) {
+                            thoughtContent = choice.get("reasoning_content").getAsString();
+                        } else if (choice.has("reasoning") && !choice.get("reasoning").isJsonNull()) {
+                            thoughtContent = choice.get("reasoning").getAsString();
                         }
                     }
                 }
