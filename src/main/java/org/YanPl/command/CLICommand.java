@@ -99,6 +99,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "settings":
             case "set":
             case "toggle":
+            case "display":
             case "select":
             case "exempt_anti_loop":
                 if (!(sender instanceof Player)) {
@@ -119,7 +120,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             default:
-                sender.sendMessage(ChatColor.RED + "未知子命令。用法: /fancy [reload|status]");
+                sender.sendMessage(ChatColor.RED + "未知子命令。用法: /cli [reload|status|settings]");
                 break;
         }
 
