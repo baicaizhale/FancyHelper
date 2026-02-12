@@ -43,6 +43,37 @@ public class CloudFlareAI {
         return httpClient;
     }
 
+    /**
+     * 发送 HTTP 请求并带有重试机制
+     * 解决 java.io.IOException: HTTP/1.1 header parser received no bytes 等偶发性网络问题
+     */
+    private HttpResponse<String> sendWithRetry(HttpRequest request) throws IOException, InterruptedException {
+        int maxRetries = 3;
+        IOException lastException = null;
+
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            } catch (IOException e) {
+                lastException = e;
+                String errorMsg = e.getMessage();
+                // 常见的偶发性网络错误，值得重试
+                if (errorMsg != null && (errorMsg.contains("header parser received no bytes") || 
+                    errorMsg.contains("Connection reset") || 
+                    errorMsg.contains("EOF reached"))) {
+                    
+                    plugin.getLogger().warning("[AI 请求] 网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
+                    if (i < maxRetries - 1) {
+                        Thread.sleep(500 * (i + 1)); // 指数退避
+                        continue;
+                    }
+                }
+                throw e;
+            }
+        }
+        throw lastException;
+    }
+
     public void shutdown() {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
@@ -139,7 +170,7 @@ public class CloudFlareAI {
                     .GET()
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendWithRetry(request);
 
             if (response.statusCode() != 200) {
                 throw new IOException("获取 Account ID 失败: " + response.statusCode() + " " + response.body());
@@ -224,7 +255,7 @@ public class CloudFlareAI {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
 
@@ -343,7 +374,7 @@ public class CloudFlareAI {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
 
@@ -404,7 +435,7 @@ public class CloudFlareAI {
                             .POST(HttpRequest.BodyPublishers.ofString(simpleBodyString, StandardCharsets.UTF_8))
                             .build();
 
-                    HttpResponse<String> simpleResp = httpClient.send(simpleRequest, HttpResponse.BodyHandlers.ofString());
+                    HttpResponse<String> simpleResp = sendWithRetry(simpleRequest);
                     String simpleRespBody = simpleResp.body();
                     plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.statusCode());
 
