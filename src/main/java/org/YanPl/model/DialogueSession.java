@@ -33,6 +33,7 @@ public class DialogueSession {
     private boolean antiLoopExempted = false;
     private Mode mode = Mode.NORMAL;
     private String lastThought = null;
+    private long lastThinkingTimeMs = 0;
 
     /**
      * 编码注册表（单例）
@@ -158,6 +159,14 @@ public class DialogueSession {
      */
     public void addThinkingTime(long ms) {
         totalThinkingTimeMs += ms;
+        lastThinkingTimeMs = ms;
+    }
+
+    /**
+     * 获取最近一次思考时长 (ms)
+     */
+    public long getLastThinkingTimeMs() {
+        return lastThinkingTimeMs;
     }
 
     /**

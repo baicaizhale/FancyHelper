@@ -231,30 +231,30 @@ public class CLIManager {
                         case COMPLETED:
                             message = ChatColor.GREEN + "- ✓ -";
                             sendStatusMessage(player, message);
-                            // 清除显示
+                            // 清除显示，2秒后清除 (40 ticks)
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                                 clearStatusMessage(player);
-                            }, 20L);
+                            }, 40L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
                         case CANCELLED:
                             message = ChatColor.RED + "- ✕ -";
                             sendStatusMessage(player, message);
-                            // 清除显示
+                            // 清除显示，2秒后清除 (40 ticks)
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                                 clearStatusMessage(player);
-                            }, 20L);
+                            }, 40L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
                         case ERROR:
                             message = ChatColor.RED + "- ERROR -";
                             sendStatusMessage(player, message);
-                            // 清除显示
+                            // 清除显示，2秒后清除 (40 ticks)
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                                 clearStatusMessage(player);
-                            }, 20L);
+                            }, 40L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
@@ -1820,6 +1820,12 @@ public class CLIManager {
                 String cmd = "/cli thought" + (thoughtIndex != -1 ? " " + thoughtIndex : "");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
                 thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                
+                // 在 Thought 按钮右侧显示本次思考的时间
+                double lastSec = session.getLastThinkingTimeMs() / 1000.0;
+                TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
+                thoughtBtn.addExtra(timeTag);
+                
                 player.spigot().sendMessage(thoughtBtn);
             }
         }
@@ -1892,12 +1898,17 @@ public class CLIManager {
         if (meta != null) {
             meta.setTitle("Fancy Thought");
             meta.setAuthor("Fancy");
+
+            // 获取本次思考的时长
+            double lastThinkingSec = session.getLastThinkingTimeMs() / 1000.0;
+            String timePrefix = ChatColor.DARK_GRAY + "Thought (" + String.format("%.1f", lastThinkingSec) + "s)\n\n" + ChatColor.RESET;
+            String fullThought = timePrefix + thought;
             
             // 分页处理（书本每页约 256 字符，但实际受行数限制，使用 128 作为安全边距）
             List<String> pages = new ArrayList<>();
             int pageSize = 128;
-            for (int i = 0; i < thought.length(); i += pageSize) {
-                pages.add(thought.substring(i, Math.min(i + pageSize, thought.length())));
+            for (int i = 0; i < fullThought.length(); i += pageSize) {
+                pages.add(fullThought.substring(i, Math.min(i + pageSize, fullThought.length())));
             }
             
             if (pages.isEmpty()) pages.add("");
