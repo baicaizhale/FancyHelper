@@ -811,7 +811,7 @@ public class CLIManager {
         String toolCall = "";
         
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff");
+        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff", "#todo");
         
         int currentPos = 0;
         boolean foundTool = false;
@@ -994,7 +994,7 @@ public class CLIManager {
         String lowerToolName = toolName.toLowerCase();
 
         // 展示给玩家时只显示工具名（如果不是 search, run 或 over 这种有自己显示逻辑或不需要显示的工具）
-        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#diff") && !lowerToolName.equals("#exit")) {
+        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#diff") && !lowerToolName.equals("#exit") && !lowerToolName.equals("#todo")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         } else if (lowerToolName.equals("#diff")) {
             String[] parts = args.split("\\|", 3);
@@ -1044,6 +1044,9 @@ public class CLIManager {
                 break;
             case "#search":
                 handleSearchTool(player, args);
+                break;
+            case "#todo":
+                handleTodoTool(player, args);
                 break;
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
@@ -1715,6 +1718,31 @@ public class CLIManager {
         return "未找到相关全网搜索结果。";
     }
 
+    /**
+     * 处理 TODO 工具调用
+     * @param player 玩家
+     * @param todoJson TODO JSON 字符串
+     */
+    private void handleTodoTool(Player player, String todoJson) {
+        UUID uuid = player.getUniqueId();
+        generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
+
+        String result = plugin.getTodoManager().updateTodos(uuid, todoJson);
+
+        if (result.startsWith("错误")) {
+            player.sendMessage(ChatColor.RED + "⨀ " + result);
+            feedbackToAI(player, "#todo_result: " + result);
+        } else {
+            // 显示 TODO 摘要
+            net.md_5.bungee.api.chat.TextComponent todoDisplay = plugin.getTodoManager().getTodoDisplayComponent(player);
+            player.spigot().sendMessage(todoDisplay);
+            
+            // 反馈给 AI
+            String summary = plugin.getTodoManager().getTodoSummary(uuid);
+            feedbackToAI(player, "#todo_result: " + summary);
+        }
+    }
+
     private void feedbackToAI(Player player, String feedback) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -1952,6 +1980,14 @@ public class CLIManager {
      */
     public void openEulaBook(Player player) {
         player.openBook(plugin.getEulaManager().getEulaBook());
+    }
+
+    /**
+     * 打开 TODO 列表书本
+     * @param player 玩家
+     */
+    public void openTodoBook(Player player) {
+        player.openBook(plugin.getTodoManager().getTodoBook(player));
     }
 
     private void sendEnterMessage(Player player) {

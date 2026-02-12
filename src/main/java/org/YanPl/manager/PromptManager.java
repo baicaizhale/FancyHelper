@@ -54,6 +54,13 @@ public class PromptManager {
             sb.append("   重要：不要在 #diff 后面添加任何解释文字或多余的 #。确保 #diff 调用是回复的最后一部分。如果你使用了 #diff，请不要再添加 #over。\n");
         }
         
+        sb.append("   #todo: <json> - 创建或更新 TODO 任务列表。参数为 JSON 数组格式，包含任务对象。\n");
+        sb.append("      每个任务对象必须包含：id（唯一标识）、task（任务描述）\n");
+        sb.append("      可选字段：status（状态：pending/in_progress/completed/cancelled）、description（详细描述）、priority（优先级：high/medium/low）\n");
+        sb.append("      状态图标：☐ 待办 | » 进行中 | ✓ 已完成 | ✗ 已取消\n");
+        sb.append("      重要：同时只能有一个任务处于 in_progress 状态。每次调用会完全替换现有列表。\n");
+        sb.append("      示例：#todo: [{\"id\":\"1\",\"task\":\"创建配置文件\",\"status\":\"in_progress\",\"description\":\"在plugins目录下创建config.yml\"}]\n");
+        
         sb.append("   #over - 完成任务，停止本轮输出。\n");
         sb.append("   #exit - 当用户想退出FancyHelper，比如向你道别时调用。\n");
         sb.append("   **注意：每轮回复只能包含一个工具调用。工具名和冒号之间不要有空格。执行命令时绝对不要带斜杠 /。**\n");
