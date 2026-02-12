@@ -5,6 +5,8 @@ import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,7 @@ public class DialogueSession {
     private Mode mode = Mode.NORMAL;
     private String lastThought = null;
     private long lastThinkingTimeMs = 0;
+    private String logFilePath = null;
 
     /**
      * 编码注册表（单例）
@@ -258,6 +261,14 @@ public class DialogueSession {
 
     public void setLastThought(String lastThought) {
         this.lastThought = lastThought;
+    }
+
+    public String getLogFilePath() {
+        return logFilePath;
+    }
+
+    public void setLogFilePath(String logFilePath) {
+        this.logFilePath = logFilePath;
     }
 
     public static class Message {

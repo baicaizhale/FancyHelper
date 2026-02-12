@@ -206,6 +206,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "exempt_anti_loop":
                 plugin.getCliManager().handleChat(player, "/cli exempt_anti_loop");
                 return true;
+            case "retry":
+                plugin.getCliManager().handleRetry(player);
+                return true;
             case "todo":
                 plugin.getCliManager().openTodoBook(player);
                 return true;
@@ -516,7 +519,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read", "set", "settings", "display", "toggle", "notice", "todo"));
+            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read", "set", "settings", "display", "toggle", "notice", "retry", "todo"));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());

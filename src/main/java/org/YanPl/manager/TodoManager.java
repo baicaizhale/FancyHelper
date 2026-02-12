@@ -25,10 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TodoManager {
     private final FancyHelper plugin;
     private final Map<UUID, List<TodoItem>> playerTodos = new ConcurrentHashMap<>();
-    private final Gson gson = new Gson();
+    private final Gson gson;
 
     public TodoManager(FancyHelper plugin) {
         this.plugin = plugin;
+        // 使用 lenient 模式解析 JSON，以兼容 AI 可能生成的非标准格式
+        this.gson = new com.google.gson.GsonBuilder().setLenient().create();
     }
 
     /**
@@ -40,26 +42,29 @@ public class TodoManager {
      */
     public String updateTodos(UUID uuid, String todoJson) {
         try {
+            plugin.getLogger().info("[TODO] 接收到 TODO JSON: " + todoJson);
             JsonElement jsonElement = gson.fromJson(todoJson, JsonElement.class);
-            
+
             if (jsonElement == null || !jsonElement.isJsonArray()) {
-                return "错误: TODO 数据必须是数组格式";
+                plugin.getLogger().warning("[TODO] JSON 解析结果不是数组: " + jsonElement);
+                return "错误: TODO 数据必须是数组格式，格式如 [{\"id\":\"1\",\"task\":\"描述\"}]";
             }
 
             JsonArray jsonArray = jsonElement.getAsJsonArray();
             List<TodoItem> newTodos = new ArrayList<>();
-            
+
             // 验证并解析每个 TODO 项
             for (int i = 0; i < jsonArray.size(); i++) {
                 JsonElement itemElement = jsonArray.get(i);
                 if (!itemElement.isJsonObject()) {
-                    return "错误: 第 " + (i + 1) + " 项必须是对象";
+                    plugin.getLogger().warning("[TODO] 第 " + (i + 1) + " 项不是对象: " + itemElement);
+                    return "错误: 第 " + (i + 1) + " 项必须是对象格式";
                 }
 
                 JsonObject itemObj = itemElement.getAsJsonObject();
                 TodoItem todo = parseTodoItem(itemObj, i + 1);
                 if (todo == null) {
-                    return null; // 错误信息已在 parseTodoItem 中记录
+                    return "错误: 第 " + (i + 1) + " 项缺少必需字段（id 或 task）";
                 }
                 newTodos.add(todo);
             }
@@ -68,19 +73,22 @@ public class TodoManager {
             long inProgressCount = newTodos.stream()
                     .filter(t -> t.getStatus() == TodoItem.Status.IN_PROGRESS)
                     .count();
-            
+
             if (inProgressCount > 1) {
+                plugin.getLogger().warning("[TODO] 多个任务处于 in_progress 状态: " + inProgressCount);
                 return "错误: 同时只能有一个任务处于 in_progress 状态，当前有 " + inProgressCount + " 个";
             }
 
             // 更新玩家的 TODO 列表
             playerTodos.put(uuid, newTodos);
+            plugin.getLogger().info("[TODO] 成功更新 " + newTodos.size() + " 个任务");
             return "TODO 列表已更新";
 
         } catch (JsonSyntaxException e) {
-            return "错误: JSON 格式无效 - " + e.getMessage();
+            plugin.getLogger().warning("[TODO] JSON 语法错误: " + e.getMessage() + ", 原始数据: " + todoJson);
+            return "错误: JSON 格式无效 - " + e.getMessage() + "。请确保格式为 [{\"id\":\"1\",\"task\":\"任务描述\",\"status\":\"pending\"}]";
         } catch (Exception e) {
-            plugin.getLogger().warning("解析 TODO 时出错: " + e.getMessage());
+            plugin.getLogger().warning("[TODO] 解析 TODO 时出错: " + e.getMessage() + ", 原始数据: " + todoJson);
             return "错误: 解析 TODO 失败 - " + e.getMessage();
         }
     }

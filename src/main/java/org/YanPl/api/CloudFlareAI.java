@@ -8,12 +8,19 @@ import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -76,6 +83,41 @@ public class CloudFlareAI {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
         plugin.getLogger().info("[CloudFlareAI] HTTP 客户端已完成关闭（java.net.http.HttpClient 无需特殊操作）。");
+    }
+
+    /**
+     * 记录调试日志到文件（服务器控制台风格）
+     * 每次进入 CLI 模式创建一个文件，该会话的所有 AI 调用都追加到该文件
+     * @param session 对话会话
+     * @param input 向 AI 发送的原始输入
+     * @param output AI 返回的原始输出
+     */
+    private void logDebug(DialogueSession session, String input, String output) {
+        try {
+            String logFilePath = session.getLogFilePath();
+            if (logFilePath == null) {
+                return; // 如果没有设置日志文件路径，不记录
+            }
+
+            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            String pluginName = plugin.getName();
+
+            StringBuilder logContent = new StringBuilder();
+            logContent.append("[").append(time).append(" INFO]: [").append(pluginName).append("]\n");
+            logContent.append("--------------------------------------------------\n");
+            logContent.append("[REQUEST]\n");
+            logContent.append(input != null ? input : "(null)").append("\n");
+            logContent.append("\n[RESPONSE]\n");
+            logContent.append(output != null ? output : "(null)").append("\n");
+            logContent.append("==================================================\n\n");
+
+            // 追加到日志文件
+            Files.write(Paths.get(logFilePath), logContent.toString().getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+
+        } catch (IOException e) {
+            plugin.getLogger().warning("[AI 调试] 写入调试日志失败: " + e.getMessage());
+        }
     }
 
     /**
@@ -256,12 +298,15 @@ public class CloudFlareAI {
             HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
-            
+
             // 调试日志：输出响应体前 500 个字符
             if (responseBody != null) {
                 String debugBody = responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody;
                 plugin.getLogger().info("[AI 调试] 响应体内容: " + debugBody);
             }
+
+            // 记录原始输入和输出到调试日志文件
+            logDebug(session, bodyString, responseBody);
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
@@ -404,6 +449,9 @@ public class CloudFlareAI {
             String responseBody = response.body();
             plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
 
+            // 记录原始输入和输出到调试日志文件
+            logDebug(session, bodyString, responseBody);
+
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
 
@@ -464,6 +512,9 @@ public class CloudFlareAI {
                     HttpResponse<String> simpleResp = sendWithRetry(simpleRequest);
                     String simpleRespBody = simpleResp.body();
                     plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.statusCode());
+
+                    // 记录重试的原始输入和输出到调试日志文件
+                    logDebug(session, simpleBodyString + " (RETRY)", simpleRespBody);
 
                     if (simpleResp.statusCode() != 200) {
                         plugin.getLogger().warning("[AI Error - Retry] Response Body: " + simpleRespBody);
