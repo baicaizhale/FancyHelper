@@ -408,6 +408,13 @@ public class CLIManager {
     public void exitCLI(Player player) {
         UUID uuid = player.getUniqueId();
         plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在退出 FancyHelper。");
+        
+        // 退出前自动取消待确认的工具调用
+        if (pendingCommands.containsKey(uuid)) {
+            pendingCommands.remove(uuid);
+            player.sendMessage(ChatColor.GRAY + "⇒ 已取消待处理的操作");
+        }
+
         sendExitMessage(player);
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
