@@ -29,9 +29,9 @@ public class PromptManager {
         sb.append("当前可用命令列表（索引）：").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
         sb.append("当前可用插件预设文件：").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n");
         
-        if (plugin.getConfigManager().getAiModel().contains("gpt-oss")) {
-            // sb.append("你当前处于思考模型模式。在正式回复前，你要详细思考用户的意图和最佳操作路径。你的思考过程应包含在回复最前端的 <thought> 标签内。\n");
-            sb.append("在正式回复前，你要详细思考用户的意图和最佳操作路径。\n");
+        String model = plugin.getConfigManager().getAiModel().toLowerCase();
+        if (model.contains("gpt-oss") || model.contains("qwen") || model.contains("deepseek") || model.contains("o1")) {
+            sb.append("在正式回复前，你必须详细思考用户的意图和最佳操作路径。你的思考过程应包含在回复最前端的 <thought> 标签内，这非常重要。\n");
         }
         sb.append("\n规则：\n");
         sb.append("1. **绝对禁止使用任何 Markdown 格式**（如 # 标题、- 列表、[链接]等）。\n");
