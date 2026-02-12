@@ -1,6 +1,7 @@
 package org.YanPl.listener;
 
 import org.YanPl.FancyHelper;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -42,11 +43,27 @@ public class ChatListener implements Listener {
         }
 
         Player player = event.getPlayer();
-        plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
-            if (noticeData != null) {
-                plugin.getNoticeManager().showNoticeToPlayer(player, noticeData);
+        
+        // 进服 8s 后发送公告
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+
+            // 检查玩家是否已读当前公告
+            if (plugin.getNoticeManager().hasRead(player)) {
+                return;
             }
-        });
+
+            org.YanPl.manager.NoticeManager.NoticeData cachedNotice = plugin.getNoticeManager().getCurrentNotice();
+            if (cachedNotice != null) {
+                plugin.getNoticeManager().showNoticeToPlayer(player, cachedNotice);
+            } else {
+                plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
+                    if (noticeData != null && player.isOnline()) {
+                        plugin.getNoticeManager().showNoticeToPlayer(player, noticeData);
+                    }
+                });
+            }
+        }, 8 * 20L); // 8s = 8 * 20 ticks
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

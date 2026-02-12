@@ -10,6 +10,7 @@ import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
 import org.YanPl.manager.NoticeManager;
+import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.util.CloudErrorReport;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
@@ -28,6 +29,7 @@ public final class FancyHelper extends JavaPlugin {
     private VerificationManager verificationManager;
     private PacketCaptureManager packetCaptureManager;
     private NoticeManager noticeManager;
+    private FileWatcherManager fileWatcherManager;
 
     @Override
     public void onEnable() {
@@ -71,13 +73,11 @@ public final class FancyHelper extends JavaPlugin {
         updateManager = new UpdateManager(this);
         updateManager.checkForUpdates();
 
-        // 初始化公告管理器并获取公告
+        // 初始化公告管理器（构造函数中会自动开始定期获取公告）
         noticeManager = new NoticeManager(this);
-        noticeManager.fetchNoticeAsync().thenAccept(noticeData -> {
-            if (noticeData != null) {
-                noticeManager.showNoticeToConsole(noticeData);
-            }
-        });
+
+        // 初始化文件监听管理器
+        fileWatcherManager = new FileWatcherManager(this);
 
         CLICommand cliCommand = new CLICommand(this);
         getCommand("fancyhelper").setExecutor(cliCommand);
@@ -231,6 +231,11 @@ public final class FancyHelper extends JavaPlugin {
         // 关闭公告管理器
         if (noticeManager != null) {
             noticeManager.shutdown();
+        }
+
+        // 关闭文件监听管理器
+        if (fileWatcherManager != null) {
+            fileWatcherManager.shutdown();
         }
 
         // 等待短暂时间以确保后台任务结束

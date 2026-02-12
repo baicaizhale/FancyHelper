@@ -86,7 +86,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(ChatColor.RED + "你没有权限查看公告。");
                     return true;
                 }
-                handleNotice(sender);
+                if (args.length > 1 && args[1].equalsIgnoreCase("read")) {
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                        return true;
+                    }
+                    plugin.getNoticeManager().markAsRead((Player) sender);
+                } else {
+                    handleNotice(sender);
+                }
                 break;
             case "upgrade":
             case "download":
@@ -209,9 +217,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleReload(CommandSender sender, String[] args) {
         if (args.length == 1) {
             plugin.getConfigManager().loadConfig();
+            plugin.getConfigManager().loadPlayerData();
             plugin.getWorkspaceIndexer().indexAll();
             plugin.getEulaManager().reload();
-            sender.sendMessage(ChatColor.GREEN + "配置、工作区与 EULA 已重新加载。");
+            sender.sendMessage(ChatColor.GREEN + "配置、玩家数据、工作区与 EULA 已重新加载。");
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {
@@ -220,13 +229,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             } else if (target.equals("config")) {
                 plugin.getConfigManager().loadConfig();
                 sender.sendMessage(ChatColor.GREEN + "配置文件已重新加载。");
+            } else if (target.equals("playerdata")) {
+                plugin.getConfigManager().loadPlayerData();
+                sender.sendMessage(ChatColor.GREEN + "玩家数据已重新加载。");
             } else if (target.equals("eula")) {
                 plugin.getEulaManager().reload();
                 sender.sendMessage(ChatColor.GREEN + "EULA 文件已重新加载。");
             } else if (target.equals("deeply") || target.equals("deep")) {
                 handleDeepReload(sender);
             } else {
-                sender.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config|eula|deeply]");
+                sender.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config|playerdata|eula|deeply]");
             }
         }
     }
@@ -510,6 +522,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
             return Arrays.asList("ls", "read", "diff").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("notice")) {
+            return Arrays.asList("read").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         }

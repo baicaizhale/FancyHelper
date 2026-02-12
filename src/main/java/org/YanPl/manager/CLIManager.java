@@ -67,7 +67,8 @@ public class CLIManager {
         startThinkingTask();
     }
 
-    private void loadAgreedPlayers() {
+    public void loadAgreedPlayers() {
+        agreedPlayers.clear();
         if (!agreedPlayersFile.exists()) return;
         try {
             List<String> lines = java.nio.file.Files.readAllLines(agreedPlayersFile.toPath());
@@ -82,7 +83,8 @@ public class CLIManager {
         }
     }
 
-    private void loadYoloAgreedPlayers() {
+    public void loadYoloAgreedPlayers() {
+        yoloAgreedPlayers.clear();
         if (!yoloAgreedPlayersFile.exists()) return;
         try {
             List<String> lines = java.nio.file.Files.readAllLines(yoloAgreedPlayersFile.toPath());
@@ -123,7 +125,8 @@ public class CLIManager {
         }
     }
 
-    private void loadYoloModePlayers() {
+    public void loadYoloModePlayers() {
+        yoloModePlayers.clear();
         if (!yoloModePlayersFile.exists()) return;
         try {
             List<String> lines = java.nio.file.Files.readAllLines(yoloModePlayersFile.toPath());
