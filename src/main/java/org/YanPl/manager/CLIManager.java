@@ -14,6 +14,11 @@ import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,6 +46,22 @@ public class CLIManager {
     private final Map<UUID, Long> generationStartTimes = new ConcurrentHashMap<>();
     private final Map<UUID, String> pendingCommands = new ConcurrentHashMap<>();
     private final Map<UUID, String> interruptedToolCalls = new ConcurrentHashMap<>();
+    private final Map<UUID, RetryInfo> retryInfoMap = new ConcurrentHashMap<>();
+
+    /**
+     * 重试信息类
+     */
+    private static class RetryInfo {
+        final DialogueSession session;
+        final String systemPrompt;
+        final String errorMessage;
+
+        RetryInfo(DialogueSession session, String systemPrompt, String errorMessage) {
+            this.session = session;
+            this.systemPrompt = systemPrompt;
+            this.errorMessage = errorMessage;
+        }
+    }
 
     public enum GenerationStatus {
         THINKING,
@@ -376,9 +397,23 @@ public class CLIManager {
         if (yoloModePlayers.contains(uuid)) {
             session.setMode(DialogueSession.Mode.YOLO);
         }
+
+        // 创建日志文件
+        try {
+            Path logDir = Paths.get("log", "FancyHelper");
+            Files.createDirectories(logDir);
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+            String logFileName = timestamp + ".log";
+            Path logFilePath = logDir.resolve(logFileName);
+            session.setLogFilePath(logFilePath.toString());
+            plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+        } catch (IOException e) {
+            plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
+        }
+
         sessions.put(uuid, session);
         sendEnterMessage(player);
-        
+
         // 触发 AI 问候
         triggerGreeting(player);
     }
@@ -457,6 +492,12 @@ public class CLIManager {
             pendingCommands.remove(uuid);
             player.sendMessage(ChatColor.GRAY + "⇒ 已取消待处理的操作");
         }
+
+        // 清空玩家的 TODO 列表
+        plugin.getTodoManager().clearTodos(uuid);
+
+        // 清空重试信息
+        retryInfoMap.remove(uuid);
 
         recordThinkingTime(uuid);
         sendExitMessage(player);
@@ -644,7 +685,7 @@ public class CLIManager {
                 if (session != null) {
                     session.setAntiLoopExempted(true);
                     player.sendMessage(ChatColor.WHITE + "✔ 已为本次对话开启豁免模式，Fancy 将不再被自动打断。");
-                    
+
                     // 恢复执行之前被打断的工具
                     String interruptedCall = interruptedToolCalls.get(uuid);
                     if (interruptedCall != null) {
@@ -655,6 +696,11 @@ public class CLIManager {
                         executeTool(player, interruptedCall);
                     }
                 }
+                return true;
+            }
+
+            if (message.equalsIgnoreCase("/cli retry")) {
+                handleRetry(player);
                 return true;
             }
 
@@ -696,6 +742,68 @@ public class CLIManager {
         return false;
     }
 
+    /**
+     * 处理重试操作
+     */
+    public void handleRetry(Player player) {
+        UUID uuid = player.getUniqueId();
+        RetryInfo retryInfo = retryInfoMap.get(uuid);
+        if (retryInfo == null) {
+            player.sendMessage(ChatColor.GRAY + "没有可重试的操作。");
+            return;
+        }
+
+        player.sendMessage(ChatColor.GRAY + "⇒ 正在重试 AI 调用...");
+        isGenerating.put(uuid, true);
+        generationStates.put(uuid, GenerationStatus.THINKING);
+        generationStartTimes.put(uuid, System.currentTimeMillis());
+        retryInfoMap.remove(uuid);
+
+        // 使用异步任务重试
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                AIResponse response = ai.chat(retryInfo.session, retryInfo.systemPrompt);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    handleAIResponse(player, response);
+                });
+            } catch (IOException e) {
+                plugin.getCloudErrorReport().report(e);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    // 保存重试信息
+                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt, e.getMessage()));
+
+                    player.sendMessage(ChatColor.RED + "⨀ AI 调用失败（重试）: " + e.getMessage());
+
+                    // 显示重试按钮
+                    TextComponent retryMsg = new TextComponent(ChatColor.YELLOW + "点击 ");
+                    TextComponent retryBtn = new TextComponent(ChatColor.GREEN + "[ 重试 ]");
+                    retryBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli retry"));
+                    retryBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击再次重试")));
+                    retryMsg.addExtra(retryBtn);
+                    retryMsg.addExtra(new TextComponent(ChatColor.YELLOW + " 来重新尝试"));
+
+                    player.spigot().sendMessage(retryMsg);
+
+                    isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
+                    generationStates.put(uuid, GenerationStatus.ERROR);
+                    generationStartTimes.remove(uuid);
+                    player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                });
+            } catch (Throwable t) {
+                plugin.getCloudErrorReport().report(t);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "⨀ 系统内部错误（重试）: " + t.getMessage());
+                    isGenerating.put(uuid, false);
+                    recordThinkingTime(uuid);
+                    generationStates.put(uuid, GenerationStatus.ERROR);
+                    generationStartTimes.remove(uuid);
+                    player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                });
+            }
+        });
+    }
+
     private void processAIMessage(Player player, String message) {
         UUID uuid = player.getUniqueId();
         interruptedToolCalls.remove(uuid);
@@ -721,7 +829,21 @@ public class CLIManager {
             } catch (IOException e) {
                 plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
+                    // 保存重试信息
+                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), e.getMessage()));
+
                     player.sendMessage("§l§bFancyHelper§b§r §7> §cAI 调用出错: " + e.getMessage());
+
+                    // 显示重试按钮
+                    TextComponent retryMsg = new TextComponent(ChatColor.YELLOW + "点击 ");
+                    TextComponent retryBtn = new TextComponent(ChatColor.GREEN + "[ 重试 ]");
+                    retryBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli retry"));
+                    retryBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击重试 AI 调用")));
+                    retryMsg.addExtra(retryBtn);
+                    retryMsg.addExtra(new TextComponent(ChatColor.YELLOW + " 来重新尝试"));
+
+                    player.spigot().sendMessage(retryMsg);
+
                     isGenerating.put(uuid, false);
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
@@ -809,10 +931,10 @@ public class CLIManager {
         // 这样可以避免 AI 在回复末尾多加一个 #over 导致前面的主要工具（如 #diff）被忽略
         String content = cleanResponse;
         String toolCall = "";
-        
+
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff");
-        
+        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff", "#todo");
+
         int currentPos = 0;
         boolean foundTool = false;
         while (currentPos < cleanResponse.length()) {
@@ -833,7 +955,64 @@ public class CLIManager {
                 String potentialToolPart = cleanResponse.substring(hashIndex).trim();
                 for (String tool : knownTools) {
                     if (potentialToolPart.toLowerCase().startsWith(tool)) {
-                        toolCall = potentialToolPart;
+                        // 提取完整的工具调用，直到遇到换行符或下一个工具
+                        String remainingAfterTool = potentialToolPart.substring(tool.length()).trim();
+
+                        // 如果有冒号或空格，提取参数部分
+                        if (remainingAfterTool.startsWith(":") || remainingAfterTool.startsWith(" ")) {
+                            int splitIndex = remainingAfterTool.startsWith(":") ? 1 : 0;
+                            remainingAfterTool = remainingAfterTool.substring(splitIndex).trim();
+
+                            // 对于 JSON 参数（如 #todo: [...]），需要找到匹配的闭合括号
+                            if (remainingAfterTool.startsWith("[")) {
+                                int bracketDepth = 0;
+                                int endIndex = -1;
+                                for (int i = 0; i < remainingAfterTool.length(); i++) {
+                                    char c = remainingAfterTool.charAt(i);
+                                    if (c == '[') bracketDepth++;
+                                    else if (c == ']') bracketDepth--;
+
+                                    if (bracketDepth == 0) {
+                                        endIndex = i + 1;
+                                        break;
+                                    }
+                                }
+                                if (endIndex != -1) {
+                                    toolCall = tool + ":" + remainingAfterTool.substring(0, endIndex);
+                                } else {
+                                    // 没有找到闭合括号，提取到行尾
+                                    int lineEnd = remainingAfterTool.indexOf('\n');
+                                    if (lineEnd != -1) {
+                                        toolCall = tool + ":" + remainingAfterTool.substring(0, lineEnd);
+                                    } else {
+                                        toolCall = potentialToolPart;
+                                    }
+                                }
+                            } else {
+                                // 对于普通参数，提取到行尾或遇到下一个工具
+                                int lineEnd = remainingAfterTool.indexOf('\n');
+                                int nextToolPos = -1;
+                                for (String nextTool : knownTools) {
+                                    int pos = remainingAfterTool.toLowerCase().indexOf(nextTool);
+                                    if (pos != -1 && (nextToolPos == -1 || pos < nextToolPos)) {
+                                        nextToolPos = pos;
+                                    }
+                                }
+
+                                int paramEnd = lineEnd;
+                                if (nextToolPos != -1 && (paramEnd == -1 || nextToolPos < paramEnd)) {
+                                    paramEnd = nextToolPos;
+                                }
+
+                                if (paramEnd != -1) {
+                                    toolCall = tool + ":" + remainingAfterTool.substring(0, paramEnd).trim();
+                                } else {
+                                    toolCall = potentialToolPart;
+                                }
+                            }
+                        } else {
+                            toolCall = tool;
+                        }
                         content = cleanResponse.substring(0, hashIndex).trim();
                         foundTool = true;
                         break;
@@ -994,7 +1173,7 @@ public class CLIManager {
         String lowerToolName = toolName.toLowerCase();
 
         // 展示给玩家时只显示工具名（如果不是 search, run 或 over 这种有自己显示逻辑或不需要显示的工具）
-        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#diff") && !lowerToolName.equals("#exit")) {
+        if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && !lowerToolName.equals("#read") && !lowerToolName.equals("#diff") && !lowerToolName.equals("#exit") && !lowerToolName.equals("#todo")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         } else if (lowerToolName.equals("#diff")) {
             String[] parts = args.split("\\|", 3);
@@ -1044,6 +1223,9 @@ public class CLIManager {
                 break;
             case "#search":
                 handleSearchTool(player, args);
+                break;
+            case "#todo":
+                handleTodoTool(player, args);
                 break;
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
@@ -1715,6 +1897,31 @@ public class CLIManager {
         return "未找到相关全网搜索结果。";
     }
 
+    /**
+     * 处理 TODO 工具调用
+     * @param player 玩家
+     * @param todoJson TODO JSON 字符串
+     */
+    private void handleTodoTool(Player player, String todoJson) {
+        UUID uuid = player.getUniqueId();
+        generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
+
+        String result = plugin.getTodoManager().updateTodos(uuid, todoJson);
+
+        if (result.startsWith("错误")) {
+            player.sendMessage(ChatColor.RED + "⨀ " + result);
+            feedbackToAI(player, "#todo_result: " + result);
+        } else {
+            // 显示 TODO 摘要
+            net.md_5.bungee.api.chat.TextComponent todoDisplay = plugin.getTodoManager().getTodoDisplayComponent(player);
+            player.spigot().sendMessage(todoDisplay);
+            
+            // 反馈给 AI - 发送完整的 TODO 列表信息，让 AI 了解所有任务详情
+            String todoDetails = plugin.getTodoManager().getTodoDetails(uuid);
+            feedbackToAI(player, "#todo_result: " + todoDetails);
+        }
+    }
+
     private void feedbackToAI(Player player, String feedback) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -1727,11 +1934,11 @@ public class CLIManager {
 
         // 工具返回信息不显示给玩家，仅在日志记录并触发 AI 思考
         plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + feedback);
-        
+
         // 异步调用 AI，不显示 "Thought..." 提示，因为这是后台自动反馈
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            final String systemPrompt = promptManager.getBaseSystemPrompt(player); // 在 try 块外部定义
             try {
-                    String systemPrompt = promptManager.getBaseSystemPrompt(player);
                     AIResponse response = ai.chat(session, systemPrompt);
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -1739,7 +1946,21 @@ public class CLIManager {
                 });
             } catch (IOException e) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.sendMessage(ChatColor.RED + "AI 调用出错: " + e.getMessage());
+                    // 保存重试信息
+                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, e.getMessage()));
+
+                    player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + e.getMessage());
+
+                    // 显示重试按钮
+                    TextComponent retryMsg = new TextComponent(ChatColor.YELLOW + "点击 ");
+                    TextComponent retryBtn = new TextComponent(ChatColor.GREEN + "[ 重试 ]");
+                    retryBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli retry"));
+                    retryBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击重试 AI 调用")));
+                    retryMsg.addExtra(retryBtn);
+                    retryMsg.addExtra(new TextComponent(ChatColor.YELLOW + " 来重新尝试"));
+
+                    player.spigot().sendMessage(retryMsg);
+
                     isGenerating.put(uuid, false);
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
@@ -1983,6 +2204,14 @@ public class CLIManager {
      */
     public void openEulaBook(Player player) {
         player.openBook(plugin.getEulaManager().getEulaBook());
+    }
+
+    /**
+     * 打开 TODO 列表书本
+     * @param player 玩家
+     */
+    public void openTodoBook(Player player) {
+        player.openBook(plugin.getTodoManager().getTodoBook(player));
     }
 
     private void sendEnterMessage(Player player) {

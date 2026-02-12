@@ -117,6 +117,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "display":
             case "select":
             case "exempt_anti_loop":
+            case "todo":
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
                     return true;
@@ -135,7 +136,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             default:
-                sender.sendMessage("§l§bFancyHelper§b§r §7> §c未知子命令。用法: /cli [reload|status|settings]");
+                sender.sendMessage("§l§bFancyHelper§b§r §7> §c未知子命令。用法: /cli [reload|status|settings|notice]");
                 break;
         }
 
@@ -204,6 +205,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "exempt_anti_loop":
                 plugin.getCliManager().handleChat(player, "/cli exempt_anti_loop");
+                return true;
+            case "retry":
+                plugin.getCliManager().handleRetry(player);
+                return true;
+            case "todo":
+                plugin.getCliManager().openTodoBook(player);
                 return true;
         }
         return true;
@@ -512,7 +519,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read", "set", "settings", "display", "toggle", "notice"));
+            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read", "set", "settings", "display", "toggle", "notice", "retry", "todo"));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());
