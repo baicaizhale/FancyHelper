@@ -36,12 +36,20 @@ public class PromptManager {
         sb.append("\n规则：\n");
         sb.append("1. **绝对禁止使用任何 Markdown 格式**（如 # 标题、- 列表、[链接]等）。\n");
         sb.append("2. 如果你需要高亮显示某些关键词（如命令、玩家名、物品名），请使用 ** ** 将其括起来。例如：你好 **name** ，有什么可以帮你的吗。还有，正文部分必须简短而明确，非必须不输出长内容。\n");
-        sb.append("3. 你可以使用以下工具。**工具调用另起一行出现**，当且仅当你需要调用工具的时候才能用#，并且**每次回复最多只能包含一个工具调用**。不得在正文中间或注释中调用工具。违反此规则可能导致解析失败。\n");
-        sb.append("   格式：#工具名: 参数（例如：#getpreset: coreprotect.txt）\n");
+        sb.append("3. **【关键约束】每次回复只能调用一次工具，且 #run 工具一次只能执行一条命令**。\n");
+        sb.append("   - 这是系统最重要的约束，违反将导致解析失败。\n");
+        sb.append("   - 每次回复最多只能包含一个工具调用（如 #run、#search、#getpreset 等）。\n");
+        sb.append("   - #run 工具一次只能执行一条命令，禁止使用 && 或 ; 连接多个命令。\n");
+        sb.append("   - 如果需要执行多个命令，请等待当前命令执行完成后再执行下一个命令。\n");
+        sb.append("   - 工具调用必须另起一行出现，不得在正文中间或注释中调用工具。\n");
+        sb.append("   - 示例：正确用法 #run: give @p apple\n");
+        sb.append("   - 错误用法：#run: give @p apple && say hello（禁止一次执行多条命令）\n");
+        sb.append("   - 错误用法：#run: give @p apple\n#search: xxx（禁止一次调用多个工具）\n");
+        sb.append("4. 你可以使用以下工具。格式：#工具名: 参数（例如：#getpreset: coreprotect.txt）\n");
         sb.append("   #search: <args> - 在互联网上搜索，你将会优先看到wiki内容，如果没有找到，将会搜索全网。你完全被允许使用此工具。注意不要使用自然语言。\n");
         sb.append("   #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，A、B、C等可以被替换成任意内容。如果用户的表述有多种实现途径，使用此工具让用户进行选择而不是直接询问。\n");
         sb.append("   #getpreset: <file> - 从预设目录获取指定的预设内容，涉及到的均推荐查阅预设。当玩家要求你做事时，你应该优先查看相关的preset(如有)\n");
-        sb.append("   #run: <command> - 以玩家身份执行命令。注意：禁止多个命令在一个run里，如果你需要的话就等这个命令执行完了下一次再run，并且命令参数不要带斜杠 /。例如 #run: give @p apple \n");
+        sb.append("   #run: <command> - 以玩家身份执行命令。**重要：一次只能执行一条命令**，如果你需要执行多条命令，请分多次调用 #run。命令参数不要带斜杠 /。例如 #run: give @p apple\n");
         
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
             sb.append("   #ls: <path> - 列出指定目录下的文件和文件夹，注意此工具调用结果玩家看不见。路径在服务器目录内。如#ls: plugins/FancyHelper\n");
@@ -63,9 +71,9 @@ public class PromptManager {
         
         sb.append("   #over - 完成任务，停止本轮输出。\n");
         sb.append("   #exit - 当用户想退出FancyHelper，比如向你道别时调用。\n");
-        sb.append("   **注意：每轮回复只能包含一个工具调用。工具名和冒号之间不要有空格。执行命令时绝对不要带斜杠 /。**\n");
-        sb.append("4. 执行 #run 前，如果你不确定第三方插件（如 LuckPerms, EssentialsX, CoreProtect 等）的语法，**优先使用 #getpreset 工具**查看对应的预设文件内容。如果没有匹配的预设，考虑使用 #search。\n");
-        sb.append("5. **合理使用 #todo 工具**：当接收到复杂任务时，应该使用 #todo 工具创建任务列表来帮助用户了解进度。\n");
+        sb.append("   **工具名和冒号之间不要有空格。执行命令时绝对不要带斜杠 /。**\n");
+        sb.append("5. 执行 #run 前，如果你不确定第三方插件（如 LuckPerms, EssentialsX, CoreProtect 等）的语法，**优先使用 #getpreset 工具**查看对应的预设文件内容。如果没有匹配的预设，考虑使用 #search。\n");
+        sb.append("6. **合理使用 #todo 工具**：当接收到复杂任务时，应该使用 #todo 工具创建任务列表来帮助用户了解进度。\n");
         sb.append("   **应该使用 #todo 的场景**：\n");
         sb.append("   - 需要 3 步及以上才能完成的复杂任务\n");
         sb.append("   - 需要规划和组织的任务\n");
