@@ -65,7 +65,7 @@ public class VerificationManager {
 
             if (type.equals("read") || type.equals("ls")) {
                 Files.write(verifyFile.toPath(), password.getBytes());
-                player.sendMessage(ChatColor.YELLOW + "验证文件已生成：" + ChatColor.WHITE + "plugins/FancyHelper/verify/" + verifyFile.getName());
+                player.sendMessage("§l§bFancyHelper§b§r §7> §f验证文件已生成：§eplugins/FancyHelper/verify/" + verifyFile.getName());
                 player.sendMessage(ChatColor.YELLOW + "请读取该文件并将其中的数字密码发送到聊天框进行验证。");
             } else {
                 player.sendMessage(ChatColor.YELLOW + "验证文件已生成：" + ChatColor.WHITE + "plugins/FancyHelper/verify/" + verifyFile.getName());

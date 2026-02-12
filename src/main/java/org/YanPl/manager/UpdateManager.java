@@ -330,8 +330,8 @@ public class UpdateManager implements Listener {
         Player player = event.getPlayer();
         if (hasUpdate && player.isOp()) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                player.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: " + ChatColor.WHITE + "v" + latestVersion);
-                player.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.YELLOW + " 自动下载并更新。");
+                player.sendMessage("§l§bFancyHelper§b§r §7> §f检测到新版本: §a" + latestVersion);
+                player.sendMessage("§l§bFancyHelper§b§r §7> §f使用 §e/fancy upgrade §f自动下载并更新。");
             }, 40L); // 延迟 2 秒提示
         }
     }
