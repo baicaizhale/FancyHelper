@@ -217,9 +217,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleReload(CommandSender sender, String[] args) {
         if (args.length == 1) {
             plugin.getConfigManager().loadConfig();
+            plugin.getConfigManager().loadPlayerData();
             plugin.getWorkspaceIndexer().indexAll();
             plugin.getEulaManager().reload();
-            sender.sendMessage(ChatColor.GREEN + "配置、工作区与 EULA 已重新加载。");
+            sender.sendMessage(ChatColor.GREEN + "配置、玩家数据、工作区与 EULA 已重新加载。");
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {
@@ -228,13 +229,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             } else if (target.equals("config")) {
                 plugin.getConfigManager().loadConfig();
                 sender.sendMessage(ChatColor.GREEN + "配置文件已重新加载。");
+            } else if (target.equals("playerdata")) {
+                plugin.getConfigManager().loadPlayerData();
+                sender.sendMessage(ChatColor.GREEN + "玩家数据已重新加载。");
             } else if (target.equals("eula")) {
                 plugin.getEulaManager().reload();
                 sender.sendMessage(ChatColor.GREEN + "EULA 文件已重新加载。");
             } else if (target.equals("deeply") || target.equals("deep")) {
                 handleDeepReload(sender);
             } else {
-                sender.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config|eula|deeply]");
+                sender.sendMessage(ChatColor.RED + "用法: /fancy reload [workspace|config|playerdata|eula|deeply]");
             }
         }
     }
