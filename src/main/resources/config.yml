@@ -34,6 +34,8 @@ openai:
 settings:
   # 是否启用调试模式，启用后会在控制台输出详细调试信息
   debug: false
+  # 补充系统提示词（会自动追加到基础系统提示词后面）
+  supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
   timeout_minutes: 10
   # AI API 请求超时时间（以秒为单位）

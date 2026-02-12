@@ -299,6 +299,14 @@ public class ConfigManager {
     }
 
     /**
+     * 获取补充系统提示词
+     * @return 补充系统提示词
+     */
+    public String getSupplementaryPrompt() {
+        return config.getString("settings.supplementary_prompt", "");
+    }
+
+    /**
      * 获取玩家数据配置对象
      * @return FileConfiguration
      */

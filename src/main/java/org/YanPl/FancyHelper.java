@@ -9,6 +9,7 @@ import org.YanPl.manager.VerificationManager;
 import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
+import org.YanPl.manager.TodoManager;
 import org.YanPl.manager.NoticeManager;
 import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.util.CloudErrorReport;
@@ -28,6 +29,7 @@ public final class FancyHelper extends JavaPlugin {
     private CloudErrorReport cloudErrorReport;
     private VerificationManager verificationManager;
     private PacketCaptureManager packetCaptureManager;
+    private TodoManager todoManager;
     private NoticeManager noticeManager;
     private FileWatcherManager fileWatcherManager;
 
@@ -65,6 +67,9 @@ public final class FancyHelper extends JavaPlugin {
         // 异步索引服务器命令与预设文件
         workspaceIndexer = new WorkspaceIndexer(this);
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> workspaceIndexer.indexAll());
+
+        // 初始化 TODO 管理器
+        todoManager = new TodoManager(this);
 
         // 初始化 CLI 管理器（管理玩家的 AI 会话）
         cliManager = new CLIManager(this);
@@ -278,6 +283,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public PacketCaptureManager getPacketCaptureManager() {
         return packetCaptureManager;
+    }
+
+    public TodoManager getTodoManager() {
+        return todoManager;
     }
 
     public NoticeManager getNoticeManager() {

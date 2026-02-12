@@ -17,7 +17,7 @@ FancyHelper 是一款基于 AI 驱动的 Minecraft 服务器管理助手插件�
 - **旧插件清理**: 自动清理旧版本的 MineAgent 插件文件，防止干扰
 - **自动修复安全配置**: 自动检测并修复 `enforce-secure-profile` 配置问题
 - **状态可视化**: 实时显示 AI 生成状态（思考中、执行工具、等待确认等）
-- **动作栏反馈**: 使用动作栏显示实时状态，不影响聊天体验
+- **动作栏反馈**: 使用动作栏显示实时状态，不影响聊天体验（可切换至副标题显示）
 - **精确 Token 计算**: 使用 jtokkit 实现精确的 token 消耗计算
 - **防死循环检测**: 自动检测 AI 陷入重复操作或过度调用，支持豁免机制
 - **NBT/组件格式指南**: 内置 NBT 与数据组件格式转换指南，适配 1.20.5+ 版本
@@ -25,6 +25,11 @@ FancyHelper 是一款基于 AI 驱动的 Minecraft 服务器管理助手插件�
 - **自动状态清理**: 玩家退出时自动清理 CLI 会话状态，避免资源泄漏
 - **公告系统**: 支持从远程获取并显示公告，可在控制台和玩家聊天中查看
 - **总思考时间记录**: 在对话会话中记录并显示总思考时间
+- **TODO 系统**: AI 可以创建和管理 TODO 任务列表，通过虚拟书本展示给玩家
+- **文件监听**: 自动监控配置文件变动并实时重载，无需手动重载
+- **补充系统提示词**: 支持在基础系统提示词后追加自定义提示，增强 AI 行为控制
+- **深度重载**: 支持插件深度重载功能（在非 Paper 现代插件系统环境下）
+- **状态显示切换**: 支持在动作栏和副标题之间切换状态显示位置
 
 ### 技术栈
 
@@ -47,22 +52,25 @@ src/main/java/org/YanPl/
 ├── api/
 │   └── CloudFlareAI.java         # CloudFlare AI API 封装（支持 Completions 和 Responses API）
 ├── command/
-│   └── CLICommand.java           # CLI 命令处理
+│   └── CLICommand.java           # CLI 命令处理（含深度重载、设置管理、TODO 查看等）
 ├── listener/
 │   └── ChatListener.java         # 聊天消息监听器（含玩家退出状态清理）
 ├── manager/
-│   ├── CLIManager.java           # CLI 模式管理器（核心对话逻辑，含防循环检测）
-│   ├── ConfigManager.java        # 配置管理（含防循环配置读取、调试模式）
+│   ├── CLIManager.java           # CLI 模式管理器（核心对话逻辑，含防循环检测、TODO 工具处理）
+│   ├── ConfigManager.java        # 配置管理（含防循环配置读取、调试模式、补充提示词）
 │   ├── EulaManager.java          # EULA 文件管理
+│   ├── FileWatcherManager.java   # 文件监听管理器（自动监控配置文件变动并重载）
 │   ├── NoticeManager.java        # 公告管理器（远程公告获取与显示）
 │   ├── PacketCaptureManager.java # 数据包捕获管理器（ProtocolLib）
 │   ├── PromptManager.java        # AI 提示词管理
+│   ├── TodoManager.java          # TODO 管理器（管理玩家任务列表，支持虚拟书本展示）
 │   ├── UpdateManager.java        # 插件更新管理
 │   ├── VerificationManager.java  # 安全验证管理
 │   └── WorkspaceIndexer.java     # 命令和预设索引
 ├── model/
 │   ├── AIResponse.java           # AI 响应模型
-│   └── DialogueSession.java      # 对话会话模型（含工具调用历史、防循环豁免）
+│   ├── DialogueSession.java      # 对话会话模型（含工具调用历史、防循环豁免）
+│   └── TodoItem.java             # TODO 任务项模型（支持状态、优先级、描述）
 └── util/
     ├── CloudErrorReport.java     # 错误上报
     └── ResourceUtil.java         # 资源文件工具
@@ -180,7 +188,26 @@ mvn clean package
 **插件命令**：
 - `/fancyhelper` 或 `/cli` 或 `/fancy` - 进入 CLI 对话模式
 - `/fancyhelper reload` - 重新加载配置文件
+- `/fancyhelper reload [workspace|config|playerdata|eula|deeply]` - 选择性重载或深度重载
+- `/fancyhelper status` - 查看插件状态
 - `/fancyhelper notice` - 查看插件公告（需要 `fancyhelper.notice` 权限）
+- `/fancyhelper notice read` - 标记公告为已读
+- `/fancyhelper checkupdate` - 检查插件更新
+- `/fancyhelper upgrade` 或 `/fancyhelper download` - 下载并安装更新
+- `/fancyhelper yolo` - 切换到 YOLO 模式
+- `/fancyhelper normal` - 切换到正常模式
+- `/fancyhelper confirm` - 确认执行命令
+- `/fancyhelper cancel` - 取消执行命令
+- `/fancyhelper agree` - 同意用户协议或 YOLO 协议
+- `/fancyhelper read` - 打开 EULA 书本
+- `/fancyhelper thought <文本>` - 发送思考内容给 AI
+- `/fancyhelper settings` 或 `/fancyhelper set` - 打开设置菜单
+- `/fancyhelper toggle <ls|read|diff>` - 切换文件工具状态
+- `/fancyhelper display` - 切换状态显示位置（动作栏/副标题）
+- `/fancyhelper select <选项>` - 选择 AI 提供的选项
+- `/fancyhelper exempt_anti_loop` - 豁免当前会话的防循环检测
+- `/fancyhelper retry` - 重试上一次操作
+- `/fancyhelper todo` - 打开 TODO 列表书本
 
 ### 状态显示
 
@@ -201,6 +228,7 @@ AI 可以通过以下工具与服务器交互：
 - `#diff:<file>|<old_content>|<new_content>` - 修改文件
 - `#getpreset:<file>` - 获取插件预设内容
 - `#choose:<options>` - 让玩家做出选择
+- `#todo:<json>` - 创建或更新 TODO 列表（JSON 格式：`[{"id":"1","task":"描述","status":"pending"}]`）
 - `#over` - 结束当前响应
 - `#exit` - 退出 CLI 模式
 
@@ -284,6 +312,76 @@ Minecraft 在 1.20.5 版本对物品数据进行了重大重构：
   - ProtocolLib 初始化状态
   - Paper 聊天事件监听器注册状态
 
+### TODO 系统
+
+`TodoManager` 负责管理玩家的 TODO 任务列表：
+
+- **AI 创建任务**: AI 可以通过 `#todo` 工具创建或更新 TODO 列表
+- **任务状态**: 支持四种状态 - PENDING（待办）、IN_PROGRESS（进行中）、COMPLETED（已完成）、CANCELLED（已取消）
+- **优先级**: 支持设置任务优先级
+- **虚拟书本展示**: 通过 `#todo` 命令可打开包含 TODO 列表的虚拟书本
+- **聊天展示**: 在聊天栏显示 TODO 进度摘要
+- **JSON 格式**: `#todo` 工具接受 JSON 格式输入：`[{"id":"1","task":"任务描述","status":"pending"}]`
+
+**限制**:
+- 同一时间只能有一个任务处于 IN_PROGRESS 状态
+- 任务 ID 和描述不能为空
+
+**命令**:
+- `/fancyhelper todo` - 打开 TODO 列表书本
+
+### 文件监听
+
+`FileWatcherManager` 自动监控插件配置文件变动：
+
+- **监控文件**:
+  - `config.yml` - 配置文件
+  - `playerdata.yml` - 玩家数据文件
+  - `agreed_players.txt` - 同意协议的玩家列表
+  - `yolo_agreed_players.txt` - 同意 YOLO 协议的玩家列表
+  - `yolo_mode_players.txt` - 启用 YOLO 模式的玩家列表
+- **自动重载**: 检测到文件变动时自动重新加载相应配置
+- **防抖机制**: 3 秒防抖间隔，避免频繁重载
+
+### 补充系统提示词
+
+插件支持在基础系统提示词后追加自定义提示词：
+
+- **配置项**: `config.yml` 中的 `settings.supplementary_prompt`
+- **用途**: 增强或修改 AI 的行为模式
+- **示例**: 可以添加特定的规则、风格要求或限制条件
+
+### 深度重载
+
+插件支持深度重载功能（在非 Paper 现代插件系统环境下）：
+
+- **自动检测 PlugMan**: 如果检测到 PlugMan 插件，优先使用其进行重载
+- **Paper 现代插件系统**: 在 Paper 现代插件系统下，深度重载会被阻止，需要使用服务器重启
+- **重载流程**:
+  1. 卸载插件命令
+  2. 取消事件监听器
+  3. 取消所有计划任务
+  4. 禁用插件
+  5. 从管理器中移除插件
+  6. 关闭 ClassLoader
+  7. 重新加载 JAR 文件
+  8. 启用插件
+
+**命令**:
+- `/fancyhelper reload deeply` 或 `/fancyhelper reload deep` - 执行深度重载
+
+### 状态显示切换
+
+支持在动作栏和副标题之间切换状态显示位置：
+
+- **动作栏（actionbar）**: 默认位置，显示在屏幕上方
+- **副标题（subtitle）**: 显示在屏幕中央
+- **个人设置**: 每个玩家可以独立设置自己的显示位置
+
+**命令**:
+- `/fancyhelper display` - 切换状态显示位置
+- `/fancyhelper settings` - 打开设置菜单，包含显示位置切换选项
+
 ## 配置文件
 
 主要配置项位于 `config.yml`：
@@ -329,6 +427,9 @@ openai:
 settings:
   # 是否启用调试模式，启用后会在控制台输出详细调试信息
   debug: false
+
+  # 补充系统提示词（会自动追加到基础系统提示词后面）
+  supplementary_prompt: ""
 
   # CLI 模式会话的自动过期时间（以分钟为单位）
   timeout_minutes: 10
@@ -382,11 +483,14 @@ settings:
 notice:
   # 玩家加入时是否显示插件公告（需要 FancyHelper.notice 权限）
   show_on_join: true
+  # 每隔多久从服务器拉取公告（单位：分钟），默认 5 分钟
+  refresh_interval: 5
 ```
 
 **settings 节点包含以下配置：**
 
 - `debug`: 是否启用调试模式（启用后在控制台输出详细调试信息）
+- `supplementary_prompt`: 补充系统提示词（会自动追加到基础系统提示词后面）
 - `timeout_minutes`: CLI 模式会话的自动过期时间（分钟）
 - `api_timeout_seconds`: AI API 请求超时时间（秒）
   - 对于推理模型（如 `gpt-oss-120b`、`deepseek-reasoner`、`o1` 等），建议设置为 **120-300 秒**
@@ -673,7 +777,8 @@ feat(CLI): 在对话会话中记录并显示总思考时间
 - 玩家退出时自动清理 CLI 会话状态，防止资源泄漏
 - 取消待处理的操作，避免后台任务继续执行
 - 插件禁用时正确关闭所有资源（见 `FancyHelper.onDisable()` 和 `CLIManager.shutdown()`）
+- `FileWatcherManager` 会在插件禁用时自动关闭 WatchService 和监控线程
 
 ## 许可证
 
-© 2025-2026 baicaizhale, zip8919. 保留所有权利。
+© 2026 baicaizhale, zip8919. 保留所有权利。
