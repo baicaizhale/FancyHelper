@@ -214,46 +214,46 @@ public class CLIManager {
                             }
                             long elapsed = (now - startTime) / 1000;
                             message = ChatColor.GRAY + "- 思考中 " + elapsed + "s -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case EXECUTING_TOOL:
                             message = ChatColor.GRAY + "....";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case WAITING_CONFIRM:
                             message = ChatColor.YELLOW + "正在征求您的许可...";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case WAITING_CHOICE:
                             message = ChatColor.AQUA + "正在征求您的意见...";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+                            sendStatusMessage(player, message);
                             break;
                         case COMPLETED:
                             message = ChatColor.GREEN + "- ✓ -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
-                            // 清除动作栏
+                            sendStatusMessage(player, message);
+                            // 清除显示
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                                clearStatusMessage(player);
                             }, 20L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
                         case CANCELLED:
                             message = ChatColor.RED + "- ✕ -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
-                            // 清除动作栏
+                            sendStatusMessage(player, message);
+                            // 清除显示
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                                clearStatusMessage(player);
                             }, 20L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
                             break;
                         case ERROR:
                             message = ChatColor.RED + "- ERROR -";
-                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
-                            // 清除动作栏
+                            sendStatusMessage(player, message);
+                            // 清除显示
                             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                                clearStatusMessage(player);
                             }, 20L);
                             generationStates.put(uuid, GenerationStatus.IDLE);
                             generationStartTimes.remove(uuid);
@@ -264,6 +264,31 @@ public class CLIManager {
                 }
             }
         }.runTaskTimer(plugin, 5L, 5L); // 提高更新频率到 0.25s，让计时更平滑
+    }
+
+    /**
+     * 向玩家发送状态消息（根据玩家配置选择 Actionbar 或 Subtitle）
+     */
+    private void sendStatusMessage(Player player, String message) {
+        String position = plugin.getConfigManager().getPlayerDisplayPosition(player);
+        if ("subtitle".equalsIgnoreCase(position)) {
+            // 为了保证 subtitle 显示，发送空内容的 title
+            player.sendTitle("", message, 0, 20, 0);
+        } else {
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+        }
+    }
+
+    /**
+     * 清除玩家的状态消息显示
+     */
+    private void clearStatusMessage(Player player) {
+        String position = plugin.getConfigManager().getPlayerDisplayPosition(player);
+        if ("subtitle".equalsIgnoreCase(position)) {
+            player.sendTitle("", "", 0, 0, 0);
+        } else {
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+        }
     }
 
     /**
