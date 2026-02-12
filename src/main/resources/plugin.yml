@@ -15,3 +15,6 @@ permissions:
   fancyhelper.reload:
     description: 允许重新加载 FancyHelper 配置
     default: op
+  fancyhelper.notice:
+    description: 允许查看 FancyHelper 公告
+    default: op

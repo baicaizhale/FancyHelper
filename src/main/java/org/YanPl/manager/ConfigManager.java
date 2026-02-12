@@ -278,6 +278,14 @@ public class ConfigManager {
         return config.getStringList("settings.yolo_risk_commands");
     }
 
+    /**
+     * 获取是否在玩家加入时显示公告
+     * @return 是否在玩家加入时显示公告
+     */
+    public boolean isNoticeShowOnJoin() {
+        return config.getBoolean("notice.show_on_join", true);
+    }
+
     public boolean isToolEnabled(String tool) {
         return config.getBoolean("tools." + tool, false);
     }

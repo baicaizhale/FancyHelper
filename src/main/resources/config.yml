@@ -70,3 +70,8 @@ settings:
     - kill
     - nbt
     - ban
+
+# 公告配置
+notice:
+  # 玩家加入时是否显示插件公告（需要 FancyHelper.notice 权限）
+  show_on_join: true
