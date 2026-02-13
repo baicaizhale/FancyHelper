@@ -82,6 +82,19 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- OWASP 依赖检查 -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>11.1.0</version>
+                <configuration>
+                    <format>HTML</format>
+                    <outputDirectory>reports</output>
+                    <enableRetired>true</enableRetired>
+                    <enableExperimental>true</enableExperimental>
+                    <failBuildOnCVSS>0</failBuildOnCVSS>
+                </configuration>
+            </plugin>
         </plugins>
         <resources>
             <resource>

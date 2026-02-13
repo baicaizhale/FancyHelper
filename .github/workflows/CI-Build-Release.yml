@@ -99,15 +99,8 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: OWASP 依赖检查
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'FancyHelper'
-          path: '.'
-          format: 'HTML'
-          out: 'reports'
-          args: >
-            --enableRetired
-            --enableExperimental
+        run: |
+          mvn org.owasp:dependency-check-maven:check -Dformat=HTML -DoutputDirectory=reports
 
       - name: 上传安全报告
         uses: actions/upload-artifact@v4
