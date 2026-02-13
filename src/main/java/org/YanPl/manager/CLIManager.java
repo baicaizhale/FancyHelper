@@ -877,7 +877,7 @@ public class CLIManager {
                     // 保存重试信息
                     retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
 
-                    player.sendMessage("§l§bFancyHelper§b§r §7> §fAI 调用出错: " + e.getMessage());
+                    player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + e.getMessage());
 
                     // 显示重试按钮
                     TextComponent retryMsg = new TextComponent(ChatColor.YELLOW + "点击 ");
@@ -905,7 +905,7 @@ public class CLIManager {
                     // 保存重试信息
                     retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
 
-                    player.sendMessage("§l§bFancyHelper§b§r §7> §f系统内部错误: " + t.getMessage());
+                    player.sendMessage(ChatColor.RED + "⨀ 系统内部错误: " + t.getMessage());
 
                     // 显示重试按钮
                     TextComponent retryMsg = new TextComponent(ChatColor.YELLOW + "点击 ");
