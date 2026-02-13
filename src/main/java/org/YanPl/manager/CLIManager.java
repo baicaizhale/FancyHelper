@@ -762,6 +762,7 @@ public class CLIManager {
         retryInfoMap.remove(uuid);
 
         // 使用异步任务重试
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 // 如果有最后一条消息，重新加入会话（因为失败时会被移除）
@@ -770,11 +771,13 @@ public class CLIManager {
                 }
 
                 AIResponse response = ai.chat(retryInfo.session, retryInfo.systemPrompt);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
                 });
             } catch (IOException e) {
                 plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 再次失败，重新移除最后一条消息并保存重试信息
                     if (retryInfo.lastMessage != null) {
@@ -802,6 +805,7 @@ public class CLIManager {
                 });
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 再次失败，重新移除最后一条消息并保存重试信息
                     if (retryInfo.lastMessage != null) {
@@ -849,12 +853,15 @@ public class CLIManager {
         String modelName = plugin.getConfigManager().getCloudflareModel();
         plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + session.getEstimatedTokens(modelName));
 
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player));
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response));
             } catch (IOException e) {
                 plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
                     retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
@@ -882,6 +889,7 @@ public class CLIManager {
                 });
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
                     retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
@@ -1394,6 +1402,7 @@ public class CLIManager {
     }
 
     private void executeFileOperation(Player player, String type, String args) {
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 File root = Bukkit.getWorldContainer(); // 安全地获取服务器根目录
@@ -1489,6 +1498,7 @@ public class CLIManager {
                 }
 
                 final String finalResult = result;
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
                     
@@ -1505,11 +1515,13 @@ public class CLIManager {
                 });
             } catch (Exception e) {
                 plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     feedbackToAI(player, "#" + type + "_result: 错误 - " + e.getMessage());
                 });
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     feedbackToAI(player, "#" + type + "_result: 严重错误 - " + t.getMessage());
                 });
@@ -1979,15 +1991,18 @@ public class CLIManager {
         plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + feedback);
 
         // 异步调用 AI，不显示 "Thought..." 提示，因为这是后台自动反馈
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             final String systemPrompt = promptManager.getBaseSystemPrompt(player); // 在 try 块外部定义
             try {
                     AIResponse response = ai.chat(session, systemPrompt);
 
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
                 });
             } catch (IOException e) {
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
                     retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, feedback, false));
@@ -2015,6 +2030,7 @@ public class CLIManager {
                 });
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
+                if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
                     retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, feedback, false));

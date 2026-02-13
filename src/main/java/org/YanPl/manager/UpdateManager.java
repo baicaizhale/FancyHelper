@@ -261,6 +261,7 @@ public class UpdateManager implements Listener {
 
                 if (autoReload) {
                     plugin.getLogger().info("准备执行自动重载...");
+                    if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         if (sender != null) {
                             sender.performCommand("fancy reload deeply");
