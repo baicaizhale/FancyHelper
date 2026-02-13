@@ -90,6 +90,7 @@ public class PromptManager {
         // 正确示例：#run: give @p apple
         sb.append("Correct Examples:\n");
         sb.append("  #run: give @p apple\n\n");
+
         
         // 错误示例：
         // - #run: give @p apple && say hello（禁止一次执行多条命令）
@@ -137,6 +138,7 @@ public class PromptManager {
         //    注意：为保证匹配精确，| 分隔符前后不要有多余空格
         //    约束：#diff 必须是回复的最后一部分，后面不能有 #over
         sb.append("[File Tools] (Results are not visible to players)\n");
+
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
             sb.append("  #ls: <path> - List directory contents. Example: #ls: plugins/FancyHelper\n");
         }

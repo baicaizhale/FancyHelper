@@ -78,7 +78,9 @@ public class VerificationManager {
         }
 
         // 10分钟后清理
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!plugin.isEnabled()) return;
             if (activeSessions.containsKey(uuid) && activeSessions.get(uuid) == session) {
                 activeSessions.remove(uuid);
                 if (verifyFile.exists()) verifyFile.delete();

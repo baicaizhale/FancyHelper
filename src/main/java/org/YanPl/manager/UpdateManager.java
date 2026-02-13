@@ -97,42 +97,43 @@ public class UpdateManager implements Listener {
 
                     if (isNewerVersion(currentVersion, latestVersion)) {
                         hasUpdate = true;
-                        Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: v" + latestVersion);
-                        Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "下载地址: " + downloadUrl);
+                        Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f检测到新版本: v" + latestVersion);
+                        Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f下载地址: " + downloadUrl);
 
                         // 自动升级逻辑
                         if (plugin.getConfigManager().isAutoUpgrade()) {
-                            Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到自动升级已开启，正在后台下载更新...");
+                            Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f检测到自动升级已开启，正在后台下载更新...");
                             downloadAndInstall(null, true, true);
                         } else {
-                            Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "如需自动下载更新，请将 config.yml 中的 auto_upgrade 设置为 true");
+                            Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f如需自动下载更新，请将 config.yml 中的 auto_upgrade 设置为 true");
                         }
 
                         if (sender != null) {
-                            sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "检测到新版本: " + ChatColor.WHITE + "v" + latestVersion);
-                            sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.YELLOW + " 自动下载并更新。");
+                            sender.sendMessage("§l§bFancyHelper§b§r §7> §f检测到新版本: " + ChatColor.WHITE + "v" + latestVersion);
+                            sender.sendMessage("§l§bFancyHelper§b§r §7> §f使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.YELLOW + " 自动下载并更新。");
                         }
                     } else {
                         hasUpdate = false;
                         if (sender != null) {
-                            sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.GREEN + "当前已是最新版本 (v" + currentVersion + ")");
+                            sender.sendMessage("§l§bFancyHelper§b§r §7> §f当前已是最新版本 (v" + currentVersion + ")");
                         }
                     }
                 } else {
+                    Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f检查更新失败：服务器响应异常。");
                     if (sender != null) {
-                        sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "检查更新失败：服务器响应异常。");
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §f检查更新失败：服务器响应异常。");
                     }
                 }
             } catch (IOException e) {
                 plugin.getLogger().warning("检查更新失败: " + e.getMessage());
                 if (sender != null) {
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "检查更新失败: " + e.getMessage());
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f检查更新失败: " + e.getMessage());
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 plugin.getLogger().warning("检查更新被中断: " + e.getMessage());
                 if (sender != null) {
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "检查更新被中断: " + e.getMessage());
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f检查更新被中断: " + e.getMessage());
                 }
             }
         });
@@ -165,12 +166,12 @@ public class UpdateManager implements Listener {
         plugin.getLogger().info("下载并安装更新被调用 - 有可用更新: " + hasUpdate + ", 下载地址: " + downloadUrl);
 
         if (!hasUpdate || downloadUrl == null) {
-            if (sender != null) sender.sendMessage(ChatColor.RED + "当前没有可用的更新。");
+            if (sender != null) sender.sendMessage("§l§bFancyHelper§b§r §7> §f当前没有可用的更新。");
             plugin.getLogger().warning("无法下载更新：有可用更新=" + hasUpdate + ", 下载地址=" + downloadUrl);
             return;
         }
 
-        if (sender != null) sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "开始下载更新...");
+        if (sender != null) sender.sendMessage("§l§bFancyHelper§b§r §7> §f开始下载更新...");
 
         Runnable downloadTask = () -> {
             String mirror = plugin.getConfigManager().getUpdateMirror();
@@ -194,6 +195,10 @@ public class UpdateManager implements Listener {
                 HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
                 if (response.statusCode() != 200) {
+                    plugin.getLogger().severe("下载失败: " + response.statusCode());
+                    if (sender != null) {
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §f下载失败: " + response.statusCode());
+                    }
                     throw new IOException("下载失败: " + response.statusCode());
                 }
 
@@ -240,27 +245,31 @@ public class UpdateManager implements Listener {
                 }
 
                 if (sender != null) {
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.GREEN + "更新下载完成！");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f更新下载完成！");
                     if (moved) {
-                        sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "旧版本已成功移动至 plugins/FancyHelper/old/");
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §f旧版本已成功移动至 plugins/FancyHelper/old/");
                     } else if (!moveError.isEmpty()) {
-                        sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "提示：由于系统锁定，部分旧版 JAR 无法自动移动。");
-                        sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "请在下次重启前手动处理。");
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §f提示：由于系统锁定，部分旧版 JAR 无法自动移动。");
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §f请在下次重启前手动处理。");
                     }
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "新版本已就绪: " + ChatColor.WHITE + newJarName);
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f新版本已就绪: " + newJarName);
                     if (!autoReload) {
-                        sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "请重启服务器或使用 PlugMan 重载以完成更新。");
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §f请重启服务器或使用 PlugMan 重载以完成更新。");
                     }
                 } else {
-                    Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.GREEN + "更新下载完成！");
+                    Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f更新下载完成！");
                     if (moved) {
-                        Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "旧版本已成功移动至 plugins/FancyHelper/old/");
+                        Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f旧版本已成功移动至 plugins/FancyHelper/old/");
+                    } else if (!moveError.isEmpty()) {
+                        Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f提示：由于系统锁定，部分旧版 JAR 无法自动移动。");
+                        Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f请在下次重启前手动处理。");
                     }
-                    Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.LIGHT_PURPLE + "新版本已就绪: " + ChatColor.WHITE + newJarName);
+                    Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f新版本已就绪: " + newJarName);
                 }
 
                 if (autoReload) {
                     plugin.getLogger().info("准备执行自动重载...");
+                    if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         if (sender != null) {
                             sender.performCommand("fancy reload deeply");
@@ -272,13 +281,13 @@ public class UpdateManager implements Listener {
             } catch (IOException e) {
                 plugin.getLogger().severe("更新下载失败: " + e.getMessage());
                 if (sender != null) {
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "更新下载失败: " + e.getMessage());
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f更新下载失败: " + e.getMessage());
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 plugin.getLogger().severe("更新下载被中断: " + e.getMessage());
                 if (sender != null) {
-                    sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.RED + "更新下载被中断: " + e.getMessage());
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f更新下载被中断: " + e.getMessage());
                 }
             }
         };

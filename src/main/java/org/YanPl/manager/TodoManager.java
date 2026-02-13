@@ -182,7 +182,7 @@ public class TodoManager {
         int pending = (int) todos.stream().filter(t -> t.getStatus() == TodoItem.Status.PENDING).count();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("TODO 进度: ").append(completed).append("/").append(total).append(" 已完成");
+        sb.append("Progress: ").append(completed).append("/").append(total).append(" 已完成");
         
         if (inProgress > 0) {
             sb.append(" | ").append(inProgress).append(" 进行中");
@@ -203,22 +203,48 @@ public class TodoManager {
     public String getTodoDetails(UUID uuid) {
         List<TodoItem> todos = getTodos(uuid);
         if (todos.isEmpty()) {
-            return "当前没有 TODO 任务";
+            return ChatColor.GRAY + "当前没有 TODO 任务";
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("=== TODO 列表 ===\n");
+        sb.append(ChatColor.GOLD).append(ChatColor.BOLD).append("==== TODO LIST ====\n");
         
         for (int i = 0; i < todos.size(); i++) {
             TodoItem todo = todos.get(i);
-            sb.append((i + 1)).append(". ").append(todo.getFullDisplayText());
+            ChatColor statusColor;
+            
+            switch (todo.getStatus()) {
+                case COMPLETED:
+                    statusColor = ChatColor.GRAY;
+                    break;
+                case IN_PROGRESS:
+                    statusColor = ChatColor.YELLOW;
+                    break;
+                case PENDING:
+                default:
+                    statusColor = ChatColor.WHITE;
+                    break;
+            }
+            
+            sb.append(statusColor)
+              .append((i + 1))
+              .append(". ")
+              .append(todo.getStatus().getIcon())
+              .append(" ")
+              .append(todo.getTask());
             
             if (i < todos.size() - 1) {
                 sb.append("\n");
             }
         }
 
-        sb.append("\n=== 进度: ").append(getProgressText(todos)).append(" ===");
+        sb.append("\n")
+          .append(ChatColor.GOLD)
+          .append(ChatColor.BOLD)
+          .append("== Progress  ")
+          .append(getProgressText(todos))
+          .append(" ==");
+        
         return sb.toString();
     }
 
@@ -253,8 +279,8 @@ public class TodoManager {
             StringBuilder pageBuilder = new StringBuilder();
 
             // 添加标题
-            pageBuilder.append(ChatColor.GOLD).append("=== TODO 列表 ===\n\n");
-            pageBuilder.append(ChatColor.RESET).append(getTodoSummary(player.getUniqueId()));
+            // pageBuilder.append(ChatColor.GOLD).append("=== TODO 列表 ===\n\n");
+            pageBuilder.append(ChatColor.DARK_GREEN).append(ChatColor.BOLD).append(getTodoSummary(player.getUniqueId()));
             pageBuilder.append("\n\n");
             pageBuilder.append(ChatColor.GRAY).append("------------------\n\n");
             pageBuilder.append(ChatColor.RESET);
@@ -308,7 +334,8 @@ public class TodoManager {
      * @return TextComponent
      */
     public net.md_5.bungee.api.chat.TextComponent getTodoDisplayComponent(Player player) {
-        List<TodoItem> todos = getTodos(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        List<TodoItem> todos = getTodos(uuid);
         net.md_5.bungee.api.chat.TextComponent component = new net.md_5.bungee.api.chat.TextComponent();
 
         if (todos.isEmpty()) {
@@ -317,19 +344,22 @@ public class TodoManager {
         }
 
         // 构建显示文本
-        String summary = getTodoSummary(player.getUniqueId());
+        String summary = getTodoSummary(uuid);
         component.setText(ChatColor.GOLD + "☐ " + ChatColor.WHITE + summary);
 
-        // 设置点击事件
+        // 设置点击事件：保留打开书本功能
         component.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
                 net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND,
                 "/fancyhelper todo"
         ));
 
-        // 设置悬停事件
+        // 设置悬停事件：显示详细列表
+        String details = getTodoDetails(uuid);
+        String hoverText = ChatColor.AQUA + details + "\n\n" + ChatColor.GRAY + "» 点击放大";
+
         component.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                 net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new Text(ChatColor.AQUA + "点击查看完整 TODO 列表")
+                new Text(hoverText)
         ));
 
         return component;

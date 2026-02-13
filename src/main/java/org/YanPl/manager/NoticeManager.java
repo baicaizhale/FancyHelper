@@ -52,7 +52,9 @@ public class NoticeManager {
         // 转换为 tick (1分钟 = 1200 ticks)
         long ticks = (long) interval * 1200;
 
+        if (!plugin.isEnabled()) return;
         fetchTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            if (!plugin.isEnabled()) return;
             fetchNoticeAsync();
         }, 0L, ticks);
     }

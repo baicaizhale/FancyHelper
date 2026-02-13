@@ -45,8 +45,9 @@ public class ChatListener implements Listener {
         Player player = event.getPlayer();
         
         // 进服 8s 后发送公告
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline()) return;
+            if (!plugin.isEnabled() || !player.isOnline()) return;
 
             // 检查玩家是否已读当前公告
             if (plugin.getNoticeManager().hasRead(player)) {

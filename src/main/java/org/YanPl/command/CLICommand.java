@@ -64,7 +64,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         switch (subCommand) {
             case "reload":
                 if (!sender.hasPermission("fancyhelper.reload")) {
-                    sender.sendMessage("§l§bFancyHelper§b§r §7> §c你没有权限执行重载。");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f你没有权限执行重载。");
                     return true;
                 }
                 handleReload(sender, args);
@@ -75,7 +75,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "update":
             case "checkupdate":
                 if (!(sender.isOp() || sender.hasPermission("fancyhelper.reload"))) {
-                    sender.sendMessage("§l§bFancyHelper§b§r §7> §c你没有权限检查更新。");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f你没有权限检查更新。");
                     return true;
                 }
                 sender.sendMessage("§l§bFancyHelper§b§r §7> §f正在检查更新...");
@@ -83,7 +83,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "notice":
                 if (!sender.hasPermission("fancyhelper.notice")) {
-                    sender.sendMessage("§l§bFancyHelper§b§r §7> §c你没有权限查看公告。");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f你没有权限查看公告。");
                     return true;
                 }
                 if (args.length > 1 && args[1].equalsIgnoreCase("read")) {
@@ -99,7 +99,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "upgrade":
             case "download":
                 if (!sender.hasPermission("fancyhelper.reload")) {
-                    sender.sendMessage("§l§bFancyHelper§b§r §7> §c你没有权限执行更新。");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f你没有权限执行更新。");
                     return true;
                 }
                 plugin.getUpdateManager().downloadAndInstall(sender instanceof Player ? (Player) sender : null, true);
@@ -130,13 +130,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "error":
                 if (!sender.isOp()) {
-                    sender.sendMessage("§l§bFancyHelper§b§r §7> §c该测试命令仅限管理员使用。");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f该测试命令仅限管理员使用。");
                     return true;
                 }
                 if (sender instanceof Player) {
                     handleTestError((Player) sender);
                 } else {
-                    sender.sendMessage("§l§bFancyHelper§b§r §7> §c该测试命令仅限玩家使用。");
+                    sender.sendMessage("§l§bFancyHelper§b§r §7> §f该测试命令仅限玩家使用。");
                 }
                 return true;
             default:
@@ -264,7 +264,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             } else if (target.equals("deeply") || target.equals("deep")) {
                 handleDeepReload(sender);
             } else {
-                sender.sendMessage("§l§bFancyHelper§b§r §7> §c用法: /fancy reload [workspace|config|playerdata|eula|deeply]");
+                sender.sendMessage("§l§bFancyHelper§b§r §7> §f用法: /fancy reload [workspace|config|playerdata|eula|deeply]");
             }
         }
     }

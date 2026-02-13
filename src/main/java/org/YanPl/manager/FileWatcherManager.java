@@ -78,7 +78,9 @@ public class FileWatcherManager {
         }
         lastProcessed.put(fileName, now);
 
+        if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!plugin.isEnabled()) return;
             switch (fileName) {
                 case "config.yml":
                     plugin.getConfigManager().loadConfig();
