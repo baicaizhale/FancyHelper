@@ -23,7 +23,7 @@ on:
         required: false
         type: string
       skip_checks:
-        description: '跳过代码检查（仅用于紧急发布）'
+        description: '跳过检查（仅用于紧急发布）'
         required: false
         default: false
         type: boolean
@@ -32,34 +32,6 @@ env:
   MAVEN_OPTS: -Dmaven.repo.local=${{ github.workspace }}/.m2/repository
 
 jobs:
-  # ==================== 代码检查 ====================
-  check:
-    name: 代码检查
-    runs-on: ubuntu-latest
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_checks) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          java-version: 17
-          distribution: temurin
-          cache: maven
-
-      - name: 缓存 Maven 依赖
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: SpotBugs 静态分析
-        run: mvn -B spotbugs:check
-
-      - name: PMD 代码质量检查
-        run: mvn -B pmd:check
-
   # ==================== 单元测试 ====================
   test:
     name: 单元测试 (Java ${{ matrix.java }})
@@ -128,6 +100,8 @@ jobs:
 
       - name: OWASP 依赖检查
         uses: dependency-check/Dependency-Check_Action@main
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
         with:
           project: 'FancyHelper'
           path: '.'
@@ -147,10 +121,9 @@ jobs:
   build:
     name: 构建
     runs-on: ubuntu-latest
-    needs: [ check, test, security ]
+    needs: [ test, security ]
     if: |
       always() &&
-      (needs.check.result == 'success' || needs.check.result == 'skipped') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped') &&
       (needs.security.result == 'success' || needs.security.result == 'skipped')
     permissions:

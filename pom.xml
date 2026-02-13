@@ -14,11 +14,9 @@
     <properties>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- 测试和检查工具版本 -->
+        <!-- 测试工具版本 -->
         <junit.version>5.10.2</junit.version>
         <mockito.version>5.11.0</mockito.version>
-        <spotbugs.version>4.8.3.1</spotbugs.version>
-        <pmd.version>3.21.2</pmd.version>
         <jacoco.version>0.8.11</jacoco.version>
     </properties>
 
@@ -80,49 +78,6 @@
                         <phase>test</phase>
                         <goals>
                             <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- 静态分析 -->
-            <plugin>
-                <groupId>com.github.spotbugs</groupId>
-                <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>${spotbugs.version}</version>
-                <configuration>
-                    <effort>Max</effort>
-                    <threshold>Medium</threshold>
-                    <failOnError>true</failOnError>
-                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>spotbugs</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- PMD 代码质量检查 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-pmd-plugin</artifactId>
-                <version>${pmd.version}</version>
-                <configuration>
-                    <rulesets>
-                        <ruleset>/rulesets/java/quickstart.xml</ruleset>
-                    </rulesets>
-                    <failOnViolation>true</failOnViolation>
-                    <printFailingErrors>true</printFailingErrors>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>pmd</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>

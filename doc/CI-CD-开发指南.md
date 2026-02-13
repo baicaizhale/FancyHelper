@@ -9,7 +9,6 @@
 - [什么是 CI/CD？为什么要用？](#什么是-cicd为什么要用)
 - [本地开发环境配置](#本地开发环境配置)
 - [测试框架使用指南](#测试框架使用指南)
-- [代码质量检查工具](#代码质量检查工具)
 - [CI/CD 工作流详解](#cicd-工作流详解)
 - [常见问题解答](#常见问题解答)
 
@@ -37,8 +36,6 @@
 | JUnit 5 | 单元测试框架 | 考试出题系统 |
 | Mockito | 模拟依赖对象 | 考试时的"道具" |
 | JaCoCo | 统计测试覆盖率 | 考试成绩统计 |
-| SpotBugs | 检测潜在 bug | X光检查 |
-| PMD | 检查代码规范 | 语法检查器 |
 | OWASP Dependency-Check | 扫描依赖漏洞 | 安检扫描仪 |
 
 ---
@@ -259,10 +256,6 @@ mvn test -Dtest=TodoItemTest#testStatusParsing
 mvn package -DskipTests
 ```
 
----
-
-## 代码质量检查工具
-
 ### JaCoCo：测试覆盖率统计
 
 #### 什么是覆盖率？
@@ -296,70 +289,6 @@ target/site/jacoco/index.html
 | 分支覆盖率 | ≥ 60% | if/switch 分支至少 60% 被测试到 |
 | 类覆盖率 | ≥ 80% | 至少 80% 的类有对应的测试 |
 
-### SpotBugs：静态代码分析
-
-#### SpotBugs 能发现什么？
-
-SpotBugs 会扫描编译后的代码，找出潜在的 bug：
-
-- 空指针引用风险
-- 资源未关闭（数据库连接、文件流等）
-- 无限循环风险
-- 序列化问题
-- 并发问题
-
-#### 如何使用
-
-```bash
-# 运行检查（发现问题会报错）
-mvn spotbugs:check
-
-# 生成 HTML 报告（更详细）
-mvn spotbugs:spotbugs
-# 报告位置：target/spotbugs.html
-```
-
-#### 如果是误报怎么办？
-
-在 `spotbugs-exclude.xml` 中添加排除规则：
-
-```xml
-<FindBugsFilter>
-    <!-- 排除特定类型的警告 -->
-    <Match>
-        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
-    </Match>
-    
-    <!-- 排除特定类的警告 -->
-    <Match>
-        <Class name="org.YanPl.SomeClass"/>
-    </Match>
-</FindBugsFilter>
-```
-
-### PMD：代码质量检查
-
-#### PMD 检查什么？
-
-PMD 分析源代码，检查：
-
-- 复杂度过高的方法（难以维护）
-- 未使用的变量和方法
-- 空的 if/while 语句
-- 过长的参数列表
-- 重复代码
-
-#### 如何使用
-
-```bash
-# 运行检查
-mvn pmd:check
-
-# 生成报告
-mvn pmd:pmd
-# 报告位置：target/site/pmd.html
-```
-
 ---
 
 ## CI/CD 工作流详解
@@ -367,64 +296,54 @@ mvn pmd:pmd
 ### 整体流程图
 
 ```
-代码提交 → 代码检查 → 单元测试 → 安全扫描 → 构建发布
-    │          │          │          │          │
-    │          ↓          ↓          ↓          ↓
-    │       SpotBugs    JUnit5    OWASP      打包JAR
-    │          +          +          +          +
-    │         PMD      JaCoCo    漏洞扫描    发布Release
+代码提交 → 单元测试 → 安全扫描 → 构建发布
+    │          │          │          │
+    │          ↓          ↓          ↓
+    │        JUnit5     OWASP      打包JAR
+    │          +          +          +
+    │       JaCoCo     漏洞扫描    发布Release
     │
     └── 如果任意一步失败，后续步骤不会执行
 ```
 
-### 四个阶段详解
+### 三个阶段详解
 
-#### 阶段一：代码检查（check）
+#### 阶段一：单元测试（test）
 
-**触发条件**：每次 PR、推送到 master/dev 分支时自动运行
-
-**检查内容**：
-- SpotBugs 静态分析
-- PMD 代码质量检查
-
-**如果失败怎么办？**
-1. 查看 GitHub Actions 的日志
-2. 本地复现问题：`mvn spotbugs:check pmd:check`
-3. 修复问题后重新提交
-
-#### 阶段二：单元测试（test）
-
-**测试矩阵**：同时测试 Java 17 和 Java 21 两个版本
+**测试矩阵**：同时测试 Java 17 和 Java 21 两个版本，确保代码在两个版本下都能正常运行
 
 **产出**：
-- 测试报告（详细到每个测试用例）
-- 覆盖率报告（JaCoCo）
+- 测试报告（详细到每个测试用例的执行结果）
+- 覆盖率报告（JaCoCo 生成的 HTML 报告）
 
 **如果失败怎么办？**
-1. 下载 GitHub Actions 的产物（test-report-java17）
-2. 查看哪个测试用例失败了
+1. 在 GitHub Actions 页面下载产物（test-report-java17 或 test-report-java21）
+2. 查看具体哪个测试用例失败了
 3. 本地复现：`mvn test -Dtest=失败的测试类名`
 
-#### 阶段三：安全扫描（security）
+#### 阶段二：安全扫描（security）
 
-**扫描内容**：检查项目依赖的第三方库是否有已知安全漏洞
+**扫描内容**：使用 OWASP Dependency-Check 检查项目依赖的第三方库是否有已知安全漏洞（CVE）
 
-**产出**：依赖安全报告（dependency-check-report）
+**产出**：依赖安全报告（dependency-check-report），包含：
+- 发现的漏洞数量和严重等级
+- 受影响的依赖包名称和版本
+- 漏洞详情和修复建议
 
 **发现漏洞怎么办？**
-1. 查看报告确定是哪个依赖有问题
+1. 下载报告，确定是哪个依赖有问题
 2. 升级到修复了漏洞的新版本
-3. 如果暂时无法升级，评估风险并记录
+3. 如果暂时无法升级，评估风险并记录在文档中
 
-#### 阶段四：构建发布（build）
+#### 阶段三：构建发布（build）
 
-**只有在前面三个阶段都通过后才会执行**
+**只有在前面两个阶段都通过后才会执行**
 
 **构建类型**：
 
 | 触发方式 | 构建类型 | 版本号 | 说明 |
 |---------|---------|--------|------|
-| PR/日常提交 | 快照包 | #abc123d | 用 commit SHA 做版本号 |
+| PR/日常提交 | 快照包 | #abc123d | 用 commit SHA 做版本号，用于测试 |
 | 推送 v 开头的 Tag | 正式包 | 标签版本号 | 自动发布 GitHub Release |
 | 手动触发 snapshot | 快照包 | #abc123d | 用于测试 |
 | 手动触发 release | 正式包 | 自定义版本号 | 用于紧急发布 |
@@ -483,20 +402,7 @@ git push origin v3.4.0
 mvn clean test
 ```
 
-### Q2: 如何跳过某个质量检查？
-
-```bash
-# 跳过 SpotBugs
-mvn package -Dspotbugs.skip=true
-
-# 跳过 PMD
-mvn package -Dpmd.skip=true
-
-# 跳过所有检查，只打包（紧急情况使用）
-mvn package -DskipTests -Dspotbugs.skip=true -Dpmd.skip=true
-```
-
-### Q3: 如何添加新的测试类？
+### Q2: 如何添加新的测试类？
 
 1. 在 `src/test/java/org/YanPl/` 下创建测试类
 2. 类名建议以 `Test` 结尾，如 `UserServiceTest`
@@ -523,7 +429,7 @@ class MyNewTest {
 }
 ```
 
-### Q4: 覆盖率太低怎么办？
+### Q3: 覆盖率太低怎么办？
 
 1. 查看覆盖率报告：`target/site/jacoco/index.html`
 2. 找到红色标记的未覆盖代码
@@ -533,42 +439,26 @@ class MyNewTest {
    - 边界条件（空值、极端值）
    - 异常处理分支
 
-### Q5: SpotBugs 报告的问题看不懂？
-
-常见的 SpotBugs 问题类型：
-
-| 问题代码 | 含义 | 解决方法 |
-|---------|------|---------|
-| NP_NULL_ON_SOME_PATH | 可能出现空指针 | 加 null 检查 |
-| RCN_REDUNDANT_NULLCHECK | 多余的 null 检查 | 移除冗余检查 |
-| DM_DEFAULT_CASE | switch 没有 default | 添加 default 分支 |
-| EI_EXPOSE_REP2 | 暴露内部引用 | 返回副本而非原对象 |
-
-### Q6: 如何在本地完整模拟 CI 检查？
+### Q4: 如何在本地完整模拟 CI 检查？
 
 ```bash
 # 运行完整的 CI 检查流程
-mvn clean test spotbugs:check pmd:check
+mvn clean test
 ```
 
-### Q7: CI 工作流失败如何排查？
+### Q5: CI 工作流失败如何排查？
 
 1. 进入 GitHub Actions 页面
 2. 点击失败的工作流运行记录
 3. 展开失败的步骤查看日志
-4. 下载产物（测试报告、检查报告）查看详情
+4. 下载产物（测试报告、安全报告）查看详情
 5. 本地复现并修复
 
-### Q8: 紧急发布时如何跳过检查？
+### Q6: 紧急发布时如何跳过检查？
 
 ⚠️ **警告**：跳过检查有风险，仅在紧急情况下使用
 
-**方法一**：手动触发时勾选 `skip_checks`
-
-**方法二**：使用命令行
-```bash
-mvn package -DskipTests -Dspotbugs.skip=true -Dpmd.skip=true
-```
+**方法**：手动触发时勾选 `skip_checks`
 
 ---
 
@@ -580,10 +470,7 @@ mvn package -DskipTests -Dspotbugs.skip=true -Dpmd.skip=true
 |------|------|
 | `mvn test` | 运行所有测试 |
 | `mvn test -Dtest=类名` | 运行指定测试类 |
-| `mvn spotbugs:check` | SpotBugs 检查 |
-| `mvn pmd:check` | PMD 检查 |
 | `mvn clean package` | 清理并打包 |
-| `mvn clean test spotbugs:check pmd:check` | 完整 CI 检查 |
 
 ### 报告位置
 
@@ -591,8 +478,6 @@ mvn package -DskipTests -Dspotbugs.skip=true -Dpmd.skip=true
 |------|---------|
 | 测试报告 | `target/surefire-reports/` |
 | 覆盖率报告 | `target/site/jacoco/index.html` |
-| SpotBugs 报告 | `target/spotbugs.html` |
-| PMD 报告 | `target/site/pmd.html` |
 
 ### 覆盖率目标
 
@@ -607,12 +492,10 @@ mvn package -DskipTests -Dspotbugs.skip=true -Dpmd.skip=true
 - [JUnit 5 用户指南](https://junit.org/junit5/docs/current/user-guide/)
 - [Mockito 文档](https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html)
 - [JaCoCo 官方文档](https://www.jacoco.org/jacoco/trunk/doc/)
-- [SpotBugs Bug 描述](https://spotbugs.readthedocs.io/en/latest/bugDescriptions.html)
-- [PMD 规则索引](https://pmd.github.io/pmd-6.55.0/pmd_rules_java.html)
 - [OWASP Dependency-Check](https://owasp.org/www-project-dependency-check/)
 
 ---
 
-**文档版本**: 2.0  
+**文档版本**: 3.0  
 **最后更新**: 2026-02-13  
 **维护者**: FancyHelper 开发团队
