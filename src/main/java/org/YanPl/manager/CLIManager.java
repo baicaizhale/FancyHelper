@@ -54,12 +54,10 @@ public class CLIManager {
     private static class RetryInfo {
         final DialogueSession session;
         final String systemPrompt;
-        final String errorMessage;
 
-        RetryInfo(DialogueSession session, String systemPrompt, String errorMessage) {
+        RetryInfo(DialogueSession session, String systemPrompt) {
             this.session = session;
             this.systemPrompt = systemPrompt;
-            this.errorMessage = errorMessage;
         }
     }
 
@@ -770,7 +768,7 @@ public class CLIManager {
                 plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt, e.getMessage()));
+                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt));
 
                     player.sendMessage(ChatColor.RED + "⨀ AI 调用失败（重试）: " + e.getMessage());
 
@@ -830,7 +828,7 @@ public class CLIManager {
                 plugin.getCloudErrorReport().report(e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), e.getMessage()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player)));
 
                     player.sendMessage("§l§bFancyHelper§b§r §7> §cAI 调用出错: " + e.getMessage());
 
@@ -1947,7 +1945,7 @@ public class CLIManager {
             } catch (IOException e) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, e.getMessage()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt));
 
                     player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + e.getMessage());
 
@@ -2019,7 +2017,8 @@ public class CLIManager {
         // 如果本次回复包含思考过程，或者历史最后一条消息有思考过程，显示按钮
         if (session != null) {
             String thoughtToShow = currentThought;
-            int thoughtIndex = -1;
+            long thoughtMessageId = -1;
+            long thoughtThinkingTimeMs = session.getLastThinkingTimeMs();
 
             List<DialogueSession.Message> history = session.getHistory();
             if (thoughtToShow == null && !history.isEmpty()) {
@@ -2028,25 +2027,30 @@ public class CLIManager {
                     if ("assistant".equalsIgnoreCase(history.get(i).getRole())) {
                         if (history.get(i).hasThought()) {
                             thoughtToShow = history.get(i).getThought();
-                            thoughtIndex = i;
+                            thoughtMessageId = history.get(i).getId();
+                            thoughtThinkingTimeMs = history.get(i).getThinkingTimeMs();
                         }
                         break;
                     }
                 }
             } else if (thoughtToShow != null) {
-                // 如果当前提取到了思考过程，它已经被 addMessage 加入了历史，索引是 history.size() - 1
-                thoughtIndex = history.size() - 1;
+                // 如果当前提取到了思考过程，它已经被 addMessage 加入了历史
+                if (!history.isEmpty()) {
+                    DialogueSession.Message last = history.get(history.size() - 1);
+                    thoughtMessageId = last.getId();
+                    thoughtThinkingTimeMs = last.getThinkingTimeMs();
+                }
             }
             
             if (thoughtToShow != null) {
                 TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
-                // 传递索引以便查看特定思考，如果索引无效则由 handleThought 处理回退
-                String cmd = "/cli thought" + (thoughtIndex != -1 ? " " + thoughtIndex : "");
+                // 传递 messageId 以便稳定地回放对应 Thought（避免历史裁剪导致索引漂移）
+                String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
                 thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
                 
                 // 在 Thought 按钮右侧显示本次思考的时间
-                double lastSec = session.getLastThinkingTimeMs() / 1000.0;
+                double lastSec = thoughtThinkingTimeMs / 1000.0;
                 TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
                 thoughtBtn.addExtra(timeTag);
                 
@@ -2095,18 +2099,43 @@ public class CLIManager {
         }
 
         String thought = null;
-        if (args.length > 0) {
-            try {
-                int index = Integer.parseInt(args[0]);
-                List<DialogueSession.Message> history = session.getHistory();
-                if (index >= 0 && index < history.size()) {
-                    thought = history.get(index).getThought();
-                }
-            } catch (NumberFormatException ignored) {}
+        long thinkingTimeMs = session.getLastThinkingTimeMs();
+        boolean hasExplicitTarget = args.length > 0;
+        if (hasExplicitTarget) {
+            String target = args[0];
+
+            if (target.startsWith("t:")) {
+                try {
+                    long messageId = Long.parseLong(target.substring(2));
+                    DialogueSession.ThoughtSnapshot snapshot = session.getThoughtSnapshot(messageId);
+                    if (snapshot != null) {
+                        thought = snapshot.getThought();
+                        thinkingTimeMs = snapshot.getThinkingTimeMs();
+                    } else {
+                        DialogueSession.Message message = session.findMessageById(messageId);
+                        if (message != null && message.hasThought()) {
+                            thought = message.getThought();
+                            thinkingTimeMs = message.getThinkingTimeMs();
+                        }
+                    }
+                } catch (NumberFormatException ignored) {}
+            } else {
+                try {
+                    int index = Integer.parseInt(target);
+                    List<DialogueSession.Message> history = session.getHistory();
+                    if (index >= 0 && index < history.size()) {
+                        DialogueSession.Message message = history.get(index);
+                        if (message.hasThought()) {
+                            thought = message.getThought();
+                            thinkingTimeMs = message.getThinkingTimeMs();
+                        }
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
         }
 
-        // 如果没有提供索引或索引无效，则回退到最后一次思考
-        if (thought == null) {
+        // 仅当没有指定目标时，才回退到最后一次思考
+        if (!hasExplicitTarget && thought == null) {
             thought = session.getLastThought();
         }
 
@@ -2124,7 +2153,7 @@ public class CLIManager {
             meta.setAuthor("Fancy");
 
             // 获取本次思考的时长
-            double lastThinkingSec = session.getLastThinkingTimeMs() / 1000.0;
+            double lastThinkingSec = thinkingTimeMs / 1000.0;
             String timePrefix = ChatColor.DARK_GRAY + "Thought (" + String.format("%.1f", lastThinkingSec) + "s)\n\n" + ChatColor.RESET;
             String fullThought = timePrefix + thought;
             
