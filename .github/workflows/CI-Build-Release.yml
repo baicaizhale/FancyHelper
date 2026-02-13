@@ -100,8 +100,6 @@ jobs:
 
       - name: OWASP 依赖检查
         uses: dependency-check/Dependency-Check_Action@main
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
         with:
           project: 'FancyHelper'
           path: '.'
