@@ -506,7 +506,7 @@ public class CLIManager {
             player.sendMessage(ChatColor.GRAY + "⇒ 已取消待处理的操作");
         }
 
-        // 清空玩家的 TODO 列表
+        // 清空玩家的待办列表
         plugin.getTodoManager().clearTodos(uuid);
 
         // 清空重试信息
@@ -1968,9 +1968,9 @@ public class CLIManager {
     }
 
     /**
-     * 处理 TODO 工具调用
+     * 处理 待办工具调用
      * @param player 玩家
-     * @param todoJson TODO JSON 字符串
+     * @param todoJson 待办 JSON 字符串
      */
     private void handleTodoTool(Player player, String todoJson) {
         UUID uuid = player.getUniqueId();
@@ -1982,11 +1982,11 @@ public class CLIManager {
             player.sendMessage(ChatColor.RED + "⨀ " + result);
             feedbackToAI(player, "#todo_result: " + result);
         } else {
-            // 显示 TODO 摘要
+            // 显示 待办摘要
             net.md_5.bungee.api.chat.TextComponent todoDisplay = plugin.getTodoManager().getTodoDisplayComponent(player);
             player.spigot().sendMessage(todoDisplay);
             
-            // 反馈给 AI - 发送完整的 TODO 列表信息，让 AI 了解所有任务详情
+            // 反馈给 AI - 发送完整的 待办列表信息，让 AI 了解所有任务详情
             String todoDetails = plugin.getTodoManager().getTodoDetails(uuid);
             feedbackToAI(player, "#todo_result: " + todoDetails);
         }
@@ -2299,7 +2299,7 @@ public class CLIManager {
     }
 
     /**
-     * 打开 TODO 列表书本
+     * 打开 待办列表 书本
      * @param player 玩家
      */
     public void openTodoBook(Player player) {

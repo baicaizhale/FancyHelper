@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * TODO 管理器：负责管理玩家的 TODO 列表
+ * 待办管理器：负责管理玩家的 待办列表
  */
 public class TodoManager {
     private final FancyHelper plugin;
@@ -32,15 +32,15 @@ public class TodoManager {
     }
 
     /**
-     * 解析并更新玩家的 TODO 列表
+     * 解析并更新玩家的 待办列表
      *
      * @param uuid    玩家 UUID
-     * @param todoJson TODO JSON 字符串
+     * @param todoJson 待办 JSON 字符串
      * @return 解析结果消息
      */
     public String updateTodos(UUID uuid, String todoJson) {
         try {
-            plugin.getLogger().info("[TODO] 接收到 TODO JSON: " + todoJson);
+            plugin.getLogger().info("[TODO] 接收到 待办 JSON: " + todoJson);
             JsonElement jsonElement = gson.fromJson(todoJson, JsonElement.class);
 
             if (jsonElement == null || !jsonElement.isJsonArray()) {
@@ -51,7 +51,7 @@ public class TodoManager {
             JsonArray jsonArray = jsonElement.getAsJsonArray();
             List<TodoItem> newTodos = new ArrayList<>();
 
-            // 验证并解析每个 TODO 项
+            // 验证并解析每个 待办项
             for (int i = 0; i < jsonArray.size(); i++) {
                 JsonElement itemElement = jsonArray.get(i);
                 if (!itemElement.isJsonObject()) {
@@ -77,7 +77,7 @@ public class TodoManager {
                 return "错误: 同时只能有一个任务处于 in_progress 状态，当前有 " + inProgressCount + " 个";
             }
 
-            // 更新玩家的 TODO 列表
+            // 更新玩家的 待办列表
             playerTodos.put(uuid, newTodos);
             plugin.getLogger().info("[TODO] 成功更新 " + newTodos.size() + " 个任务");
             return "TODO 列表已更新";
@@ -92,7 +92,7 @@ public class TodoManager {
     }
 
     /**
-     * 解析单个 TODO 项
+     * 解析单个 待办项
      *
      * @param itemObj  JSON 对象
      * @param index    索引（用于错误提示）
@@ -135,17 +135,17 @@ public class TodoManager {
     }
 
     /**
-     * 获取玩家的 TODO 列表
+     * 获取玩家的 待办列表
      *
      * @param uuid 玩家 UUID
-     * @return TODO 列表（如果没有则返回空列表）
+     * @return 待办列表（如果没有则返回空列表）
      */
     public List<TodoItem> getTodos(UUID uuid) {
         return playerTodos.getOrDefault(uuid, new ArrayList<>());
     }
 
     /**
-     * 清除玩家的 TODO 列表
+     * 清除玩家的 待办列表
      *
      * @param uuid 玩家 UUID
      */
@@ -154,10 +154,10 @@ public class TodoManager {
     }
 
     /**
-     * 检查玩家是否有 TODO 列表
+     * 检查玩家是否有 待办列表
      *
      * @param uuid 玩家 UUID
-     * @return 是否有 TODO 列表
+     * @return 是否有 待办列表
      */
     public boolean hasTodos(UUID uuid) {
         List<TodoItem> todos = playerTodos.get(uuid);
@@ -165,7 +165,7 @@ public class TodoManager {
     }
 
     /**
-     * 获取 TODO 列表的简要显示文本
+     * 获取待办列表的简要显示文本
      *
      * @param uuid 玩家 UUID
      * @return 显示文本
@@ -195,7 +195,7 @@ public class TodoManager {
     }
 
     /**
-     * 获取 TODO 列表的详细显示文本
+     * 获取 待办列表的详细显示文本
      *
      * @param uuid 玩家 UUID
      * @return 显示文本
@@ -251,7 +251,7 @@ public class TodoManager {
     /**
      * 获取进度文本
      *
-     * @param todos TODO 列表
+     * @param todos 待办列表
      * @return 进度文本
      */
     private String getProgressText(List<TodoItem> todos) {
@@ -261,10 +261,10 @@ public class TodoManager {
     }
 
     /**
-     * 创建一个包含 TODO 内容的虚拟书本
+     * 创建一个包含 待办内容的虚拟书本
      *
      * @param player 玩家
-     * @return 包含 TODO 的 ItemStack (WRITTEN_BOOK)
+     * @return 包含 待办 的 ItemStack (WRITTEN_BOOK)
      */
     public ItemStack getTodoBook(Player player) {
         List<TodoItem> todos = getTodos(player.getUniqueId());
@@ -278,14 +278,13 @@ public class TodoManager {
             final int MAX_PAGE_CHARS = 128;
             StringBuilder pageBuilder = new StringBuilder();
 
-            // 添加标题
-            // pageBuilder.append(ChatColor.GOLD).append("=== TODO 列表 ===\n\n");
+            // 添加标题和概览
             pageBuilder.append(ChatColor.DARK_GREEN).append(ChatColor.BOLD).append(getTodoSummary(player.getUniqueId()));
             pageBuilder.append("\n\n");
             pageBuilder.append(ChatColor.GRAY).append("------------------\n\n");
             pageBuilder.append(ChatColor.RESET);
 
-            // 添加 TODO 项
+            // 添加 待办 项
             for (int i = 0; i < todos.size(); i++) {
                 TodoItem todo = todos.get(i);
                 String itemText = (i + 1) + ". " + todo.getFullDisplayText() + "\n\n";
@@ -313,7 +312,7 @@ public class TodoManager {
                 meta.addPage(ChatColor.RESET.toString() + pageBuilder.toString());
             }
 
-            // 如果所有 TODO 都已完成，添加完成标记
+            // 如果所有 待办 都已完成，添加完成标记
             if (!todos.isEmpty()) {
                 boolean allCompleted = todos.stream().allMatch(t -> t.getStatus() == TodoItem.Status.COMPLETED);
                 if (allCompleted) {
@@ -328,7 +327,7 @@ public class TodoManager {
     }
 
     /**
-     * 获取带点击事件的 TODO 显示组件
+     * 获取带点击事件的 待办 显示组件
      *
      * @param player 玩家
      * @return TextComponent

@@ -68,7 +68,7 @@ public final class FancyHelper extends JavaPlugin {
         workspaceIndexer = new WorkspaceIndexer(this);
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> workspaceIndexer.indexAll());
 
-        // 初始化 TODO 管理器
+        // 初始化待办管理器
         todoManager = new TodoManager(this);
 
         // 初始化 CLI 管理器（管理玩家的 AI 会话）

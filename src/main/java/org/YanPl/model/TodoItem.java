@@ -1,7 +1,7 @@
 package org.YanPl.model;
 
 /**
- * TODO 任务项数据模型
+ * 待办 任务项数据模型
  */
 public class TodoItem {
     /**
