@@ -90,7 +90,7 @@ tavily:
   enabled: true
   # Tavily API 密钥，从 https://app.tavily.com/home 获取。如果你有霍格沃兹环境请使用自己的密钥。
   api_key: "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"
-  # Tavily API 代理地址，用于解决国内网络访问问题，留空则使用官方地址。我简直算是为了这个代理而买了一个域名QWQ。
+  # Tavily API 代理地址，用于解决国内网络访问问题，留空则使用官方地址。我简直算是为了这个代理而买了一个域名QWQ(求赞助)。
   proxy_url: "https://tavilyproxy.baicaizhale.top" 
   # 搜索结果数量限制（1-10）
   max_results: 5

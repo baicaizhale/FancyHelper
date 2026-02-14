@@ -1,4 +1,6 @@
-# FancyHelper 🤖
+# FancyHelper
+
+<img src="pic/image.jpg" alt="FancyHelper Logo" width="50%">
 
 FancyHelper 是一款基于 AI 驱动的 Minecraft 服务器管理助手插件。它允许管理员通过简单的自然语言与 AI 对话，自动生成并执行复杂的服务器指令，极大地降低了插件学习成本和管理负担。
 
@@ -129,6 +131,7 @@ FancyHelper 支持 [ProtocolLib](https://www.spigotmc.org/resources/protocollib.
 FancyHelper 会自动检测此问题并尝试将 `server.properties` 中的 `enforce-secure-profile` 设置为 `false`。如果自动修改成功，只需重启服务器即可。
 
 如果自动修改失败，请手动执行以下步骤：
+
 1. 打开服务器的 `server.properties` 文件
 2. 将 `enforce-secure-profile` 设置为 `false`
 3. 重启服务器
@@ -140,6 +143,7 @@ FancyHelper 会自动检测此问题并尝试将 `server.properties` 中的 `enf
 插件启动时会自动清理旧版本的 Fancyhelper（或MineAgent） 插件文件，并将移动到 `plugins/FancyHelper/old/` 目录，防止干扰。
 
 **注意事项**：
+
 - 不会删除任何文件，只是移动到 old 目录
 - 如果移动失败，会在日志中显示警告
 
@@ -150,26 +154,6 @@ FancyHelper 会自动检测此问题并尝试将 `server.properties` 中的 `enf
 | `/fancyhelper` | 插件主指令 (别名: `/cli`, `/fancy`) | `fancyhelper.cli` |
 | `/fancyhelper reload` | 重载插件配置 | `fancyhelper.reload` |
 
-## 📚 支持的插件预设
-
-FancyHelper 内置了对以下插件的深度理解（位于 `src/main/resources/preset/`）：
-
-- 默认预设（default.txt）
-- EssentialsX（essentialsx.txt）
-- LuckPerms（luckperms.txt）
-- WorldEdit（worldedit.txt）
-- CoreProtect（coreprotect.txt）
-- mcMMO（mcmmo.txt）
-- Multiverse（multiverse.txt）
-- PlaceholderAPI（papi.txt）
-- PlugMan（plugman.txt）
-- ProtocolLib（protocollib.txt）
-- Residence（residence.txt）
-- Vault（vault.txt）
-- 造房预设（造房预设.txt）
-- Give 命令指南（give.txt）
-- NBT 格式指南（nbt格式（用则必看）.txt）
-
 ## 🛠️ 开发与构建
 
 项目使用 Maven 进行管理。
@@ -179,6 +163,14 @@ git clone https://github.com/baicaizhale/FancyHelper.git
 cd FancyHelper
 mvn clean package
 ```
+
+## ❤ 赞助我们
+
+为铸FancyHelper，吾等焚膏继晷，兀兀穷年，耗尽心血。若此物有幸助君一臂之力，不知可否邀君共饮一杯薄酒，或赐一盏清茶之资？
+
+**baicaizhale**![baicaizhale](pic\Sponsor-baicaizhale.png)
+
+**zip8919**![zip8919](pic\Sponsor-zip8919.jpg)
 
 ---
 
