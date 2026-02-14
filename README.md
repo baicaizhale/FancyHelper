@@ -168,9 +168,9 @@ mvn clean package
 
 为铸FancyHelper，吾等焚膏继晷，兀兀穷年，耗尽心血。若此物有幸助君一臂之力，不知可否邀君共饮一杯薄酒，或赐一盏清茶之资？
 
-**baicaizhale**![baicaizhale](pic\Sponsor-baicaizhale.png)
+**baicaizhale**![baicaizhale](.\pic\Sponsor-baicaizhale.png)
 
-**zip8919**![zip8919](pic\Sponsor-zip8919.jpg)
+**zip8919**![zip8919](.\pic\Sponsor-zip8919.jpg)
 
 ---
 
