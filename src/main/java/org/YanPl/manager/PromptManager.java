@@ -153,7 +153,7 @@ public class PromptManager {
         sb.append("\n");
         
         // 【任务管理工具】
-        // #todo: <json> - 创建或更新 TODO 任务列表
+        // #todo: <json> - 创建或更新 任务列表
         //    JSON 数组格式，包含任务对象
         //    必填字段：id（唯一标识）、task（任务描述）
         //    可选字段：status（pending/in_progress/completed/cancelled）、description（详细描述）、priority（high/medium/low）
@@ -163,7 +163,7 @@ public class PromptManager {
         //    正确做法：先调用 #todo 创建任务列表，然后在下一次回复中调用其他工具执行任务
         //    示例：#todo: [{"id":"1","task":"创建配置文件","status":"in_progress"}]
         //    查看TODO：调用 #todo 后系统会反馈完整列表，玩家可通过 /fancyhelper todo 命令查看
-        //    重要：每次调用 #todo 时，系统会返回当前完整的 TODO 列表详情，你可以据此了解所有任务状态
+        //    重要：每次调用 #todo 时，系统会返回当前完整的列表详情，你可以据此了解所有任务状态
         //    建议做法：完成一个任务后立即更新状态为 completed，让玩家清楚进度
         sb.append("[Task Management Tool]\n");
         sb.append("  #todo: <json> - Create or update TODO task list.\n");
@@ -185,10 +185,10 @@ public class PromptManager {
         //    - 不读预设就执行命令极大概率会出错，不同插件的命令格式差异巨大
         //    - 例如：玩家询问 LuckPerms 权限时，必须先调用 #getpreset: luckperms.txt
         // 2. **处理复杂任务**：当需要 3 步及以上才能完成的任务时，使用 #todo 创建任务列表，让用户了解进度
-        // 3. **TODO 使用原则**：
+        // 3. **使用原则**：
         //    - 应该使用：复杂多步骤任务、需要规划的任务、需要显示进度的任务
         //    - 不应该使用：2 步内的简单任务、单次响应可回答的问题、紧凑循环任务
-        //    - 收到复杂任务后立即创建 TODO 列表，及时更新任务状态
+        //    - 收到复杂任务后立即创建待办列表，及时更新任务状态
         //    - 重要：调用 #todo 后必须立即结束回复，禁止在同一回复中调用其他工具
         sb.append("[Usage Guide]\n");
         sb.append("1. **Read Presets First**: You MUST call #getpreset to read relevant preset files before handling tasks.\n");
