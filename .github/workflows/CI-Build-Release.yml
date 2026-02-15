@@ -67,14 +67,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report-java${{ matrix.java }}
-          path: target/surefire-reports/
+          path: FancyHelper/target/surefire-reports/
 
       - name: 上传覆盖率报告
         if: matrix.java == 17
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: target/site/jacoco/
+          path: FancyHelper/target/site/jacoco/
 
   # ==================== 构建和发布 ====================
   build:
@@ -150,31 +150,63 @@ jobs:
       - name: 手动触发-设置快照版本
         if: github.event_name == 'workflow_dispatch' && inputs.build_type == 'snapshot'
         run: |
+          # 设置父 POM 版本
           mvn -B versions:set \
               -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} \
               -DgenerateBackupPoms=false
+          # 设置 FancyHelper 子模块版本
+          mvn -B versions:set \
+              -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} \
+              -DgenerateBackupPoms=false \
+              -pl FancyHelper
+          # 设置 FancyHelperUpdateService 子模块版本
+          mvn -B versions:set \
+              -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} \
+              -DgenerateBackupPoms=false \
+              -pl FancyHelperUpdateService
 
       # 原有逻辑-快照版本设置（排除手动触发场景）
       - name: 设置快照版本
         if: (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/v')) && github.event_name != 'workflow_dispatch'
         run: |
+          # 设置父 POM 版本
           mvn -B versions:set \
               -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} \
               -DgenerateBackupPoms=false
+          # 设置 FancyHelper 子模块版本
+          mvn -B versions:set \
+              -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} \
+              -DgenerateBackupPoms=false \
+              -pl FancyHelper
+          # 设置 FancyHelperUpdateService 子模块版本
+          mvn -B versions:set \
+              -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} \
+              -DgenerateBackupPoms=false \
+              -pl FancyHelperUpdateService
 
       # 手动触发-正式包版本设置
       - name: 手动触发-设置发布版本
         if: github.event_name == 'workflow_dispatch' && inputs.build_type == 'release'
         run: |
           VERSION=${{ inputs.custom_version || steps.sha.outputs.SHORT_SHA }}
+          # 设置父 POM 版本
           mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          # 设置 FancyHelper 子模块版本
+          mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false -pl FancyHelper
+          # 设置 FancyHelperUpdateService 子模块版本
+          mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false -pl FancyHelperUpdateService
 
       # 原有逻辑-正式版本设置
       - name: 设置发布版本
         if: steps.check_release.outputs.IS_RELEASE == 'true' && github.event_name != 'workflow_dispatch'
         run: |
           VERSION=${{ steps.check_release.outputs.RELEASE_VERSION }}
+          # 设置父 POM 版本
           mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          # 设置 FancyHelper 子模块版本
+          mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false -pl FancyHelper
+          # 设置 FancyHelperUpdateService 子模块版本
+          mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false -pl FancyHelperUpdateService
 
       # 手动触发-快照包编译打包
       - name: 手动触发-编译测试&打包快照
@@ -202,7 +234,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FancyHelper-manual-snapshot-#${{ steps.sha.outputs.SHORT_SHA }}
-          path: target/FancyHelper-*.jar
+          path: |
+            FancyHelper/target/FancyHelper-*.jar
+            FancyHelperUpdateService/target/FancyHelperUpdateService-*.jar
 
       # 生成安全的ref名称
       - name: 生成安全的ref名称
@@ -232,7 +266,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FancyHelper-${{ steps.safe_ref_name.outputs.SAFE_REF_NAME }}-#${{ steps.sha.outputs.SHORT_SHA }}
-          path: target/FancyHelper-*.jar
+          path: |
+            FancyHelper/target/FancyHelper-*.jar
+            FancyHelperUpdateService/target/FancyHelperUpdateService-*.jar
 
       # 手动触发-上传正式包
       - name: 手动触发-上传正式包
@@ -240,7 +276,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FancyHelper-manual-release-${{ inputs.custom_version || steps.sha.outputs.SHORT_SHA }}
-          path: target/FancyHelper-*.jar
+          path: |
+            FancyHelper/target/FancyHelper-*.jar
+            FancyHelperUpdateService/target/FancyHelperUpdateService-*.jar
 
       # 原有逻辑-发布正式Release
       - name: 发布正式 Release
@@ -248,7 +286,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: target/FancyHelper-*.jar
+          files: |
+            FancyHelper/target/FancyHelper-*.jar
+            FancyHelperUpdateService/target/FancyHelperUpdateService-*.jar
           tag_name: v${{ steps.check_release.outputs.RELEASE_VERSION }}
           name: Release v${{ steps.check_release.outputs.RELEASE_VERSION }}
           target_commitish: ${{ github.sha }}
