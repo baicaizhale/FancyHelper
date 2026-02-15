@@ -323,6 +323,38 @@ public class ConfigManager {
     }
 
     /**
+     * 获取是否启用 Metaso AI 搜索
+     * @return 是否启用
+     */
+    public boolean isMetasoEnabled() {
+        return config.getBoolean("metaso.enabled", false);
+    }
+
+    /**
+     * 获取 Metaso API 令牌
+     * @return API 令牌
+     */
+    public String getMetasoApiToken() {
+        return config.getString("metaso.api_token", "");
+    }
+
+    /**
+     * 获取 Metaso 模型名称
+     * @return 模型名称（fast 或 pro）
+     */
+    public String getMetasoModel() {
+        return config.getString("metaso.model", "fast");
+    }
+
+    /**
+     * 获取 Metaso 是否启用简洁摘要模式
+     * @return 是否启用简洁摘要
+     */
+    public boolean isMetasoConciseSnippet() {
+        return config.getBoolean("metaso.concise_snippet", true);
+    }
+
+    /**
      * 获取公告刷新间隔（分钟）
      * @return 刷新间隔
      */

@@ -6,7 +6,7 @@ settings:
   # 是否启用调试模式，启用后会在控制台输出详细调试信息
   debug: false
   # 是否启用猫娘模式，启用后Fancy将扮演猫娘，注意某些模型(特别是国产模型)可能会拒绝这个要求
-  meow: false
+  meow: true
   # 补充系统提示词（会自动追加到基础系统提示词后面，不会就留空）
   supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
@@ -85,9 +85,20 @@ openai:
   #   - 阿里云通义千问: qwen3-max
   model: gpt-4o
 
-# Tavily 搜索 API 配置（用于增强全网搜索能力）
+# Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
+metaso:
+  # 是否启用 Metaso AI 搜索（默认关闭，启用后将使用 Metaso API 进行 AI 搜索）
+  enabled: false
+  # Metaso API 令牌，从 https://metaso.cn/search-api/api-keys 获取
+  api_token: mk-A8D756FEDE5A65D47124446CDF97D728
+  # 使用的模型名称（fast: 快速模型，pro: 专业模型）
+  model: fast
+  # 是否启用简洁摘要模式
+  concise_snippet: true
+
+# Tavily 搜索 API 配置（用于增强全网搜索能力，优先级小于Metaso）
 tavily:
-  # 是否启用 Tavily 搜索（启用后将使用 Tavily API 进行全网搜索，关闭时使用免费的UAPI进行搜索）
+  # 是否启用 Tavily 搜索（启用后将使用 Tavily API 进行全网搜索，Metaso和Tavily同时关闭时使用免费的UAPI进行搜索）
   enabled: true
   # Tavily API 密钥，从 https://app.tavily.com/home 获取。如果你有霍格沃兹环境请使用自己的密钥
   api_key: "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"

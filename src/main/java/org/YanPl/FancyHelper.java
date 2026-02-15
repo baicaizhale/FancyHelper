@@ -1,5 +1,6 @@
 package org.YanPl;
 
+import org.YanPl.api.MetasoAPI;
 import org.YanPl.api.TavilyAPI;
 import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
@@ -34,6 +35,7 @@ public final class FancyHelper extends JavaPlugin {
     private NoticeManager noticeManager;
     private FileWatcherManager fileWatcherManager;
     private TavilyAPI tavilyAPI;
+    private MetasoAPI metasoAPI;
 
     @Override
     public void onEnable() {
@@ -88,6 +90,9 @@ public final class FancyHelper extends JavaPlugin {
 
         // 初始化 Tavily API
         tavilyAPI = new TavilyAPI(this);
+
+        // 初始化 Metaso API
+        metasoAPI = new MetasoAPI(this);
 
         CLICommand cliCommand = new CLICommand(this);
         getCommand("fancyhelper").setExecutor(cliCommand);
@@ -248,6 +253,11 @@ public final class FancyHelper extends JavaPlugin {
             fileWatcherManager.shutdown();
         }
 
+        // 关闭 Metaso API
+        if (metasoAPI != null) {
+            metasoAPI.shutdown();
+        }
+
         // 等待短暂时间以确保后台任务结束
         try {
             Thread.sleep(500);
@@ -300,5 +310,9 @@ public final class FancyHelper extends JavaPlugin {
 
     public TavilyAPI getTavilyAPI() {
         return tavilyAPI;
+    }
+
+    public MetasoAPI getMetasoAPI() {
+        return metasoAPI;
     }
 }

@@ -1828,8 +1828,10 @@ public class CLIManager {
             if (query.toLowerCase().contains("widely")) {
                 // 全网搜索模式
                 String q = query.replace("widely", "").trim();
-                // 优先使用 Tavily API
-                if (plugin.getConfigManager().isTavilyEnabled()) {
+                // 优先使用 Metaso API（AI 搜索，效果更好）
+                if (plugin.getMetasoAPI().isAvailable()) {
+                    result = plugin.getMetasoAPI().search(q);
+                } else if (plugin.getConfigManager().isTavilyEnabled()) {
                     result = plugin.getTavilyAPI().search(q);
                 } else {
                     result = fetchPublicSearchResult(q);
@@ -1840,8 +1842,10 @@ public class CLIManager {
                 // 如果 Wiki 没搜到，自动尝试全网搜索
                 if (result.equals("未找到相关 Wiki 条目。")) {
                     player.sendMessage(ChatColor.GRAY + "〇 Wiki 无结果，正在尝试全网搜索...");
-                    // 优先使用 Tavily API
-                    if (plugin.getConfigManager().isTavilyEnabled()) {
+                    // 优先使用 Metaso API（AI 搜索，效果更好）
+                    if (plugin.getMetasoAPI().isAvailable()) {
+                        result = plugin.getMetasoAPI().search(query);
+                    } else if (plugin.getConfigManager().isTavilyEnabled()) {
                         result = plugin.getTavilyAPI().search(query);
                     } else {
                         result = fetchPublicSearchResult(query);

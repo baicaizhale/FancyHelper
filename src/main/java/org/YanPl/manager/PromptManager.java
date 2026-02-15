@@ -133,10 +133,12 @@ public class PromptManager {
         
         // 【查询类工具】
         // #search: <args> - 在互联网搜索（优先 Wiki，若无则全网搜索）。注意使用精确的关键词，Wiki查询请不要使用自然语言
+        //    添加 widely 关键词可强制进行全网搜索，例如：#search: widely Minecraft 最新版本
         // #getpreset: <file> - 获取预设文件内容。处理任务时优先查看相关预设
         // #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，适合有多种实现途径的场景
         sb.append("[Query Tools]\n");
         sb.append("  #search: <args> - Search on the internet (prioritize Wiki, then general search if not found). Use precise keywords, avoid natural language for Wiki queries.\n");
+        sb.append("    Add 'widely' keyword to force general web search. Example: #search: widely Minecraft latest version\n");
         sb.append("  #getpreset: <file> - Get preset file content. Prioritize reading relevant presets when handling tasks.\n");
         sb.append("  #choose: <A>,<B>,<C>... - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n\n");
         

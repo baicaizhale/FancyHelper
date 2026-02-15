@@ -84,6 +84,22 @@ openai:
   model: "gpt-4o"
 ```
 
+#### Metaso AI 搜索（可选）
+
+Metaso（秘塔 AI 搜索）是一个强大的 AI 搜索引擎，可以提供更智能的搜索结果。当启用时，搜索功能会优先使用 Metaso API。
+
+在 `config.yml` 中配置：
+
+```yaml
+metaso:
+  enabled: true
+  api_token: "your-metaso-api-token"
+  model: "fast"  # fast: 快速模型, pro: 专业模型
+  concise_snippet: true  # 是否启用简洁摘要模式
+```
+
+**搜索优先级**：Metaso > Tavily > UAPI（免费公共搜索）
+
 ### 3. 使用方法
 
 - 在游戏中输入 `/cli` 或 `/fancy` 进入 AI 对话模式。
