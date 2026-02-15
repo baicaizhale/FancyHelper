@@ -325,13 +325,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             pluginManager.enablePlugin(reloaded);
 
             sender.sendMessage(ChatColor.GREEN + "深度重载完成: " + reloaded.getDescription().getFullName());
-
-            // 启用 FancyHelperUpdateService
-            Plugin updateService = pluginManager.getPlugin("FancyHelperUpdateService");
-            if (updateService != null && !updateService.isEnabled()) {
-                pluginManager.enablePlugin(updateService);
-                sender.sendMessage(ChatColor.GREEN + "FancyHelperUpdateService 已启用。");
-            }
         } catch (Throwable t) {
             plugin.getCloudErrorReport().report(t);
             sender.sendMessage(ChatColor.RED + "深度重载失败: " + t.getClass().getSimpleName() + " - " + (t.getMessage() == null ? "无错误信息" : t.getMessage()));

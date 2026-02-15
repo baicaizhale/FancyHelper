@@ -314,13 +314,22 @@ public class UpdateManager implements Listener {
                 }
 
                 if (autoReload) {
-                    plugin.getLogger().info("准备执行自动重载...");
+                    plugin.getLogger().info("准备启用 FancyHelperUpdateService 进行自动重载...");
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        if (sender != null) {
-                            sender.performCommand("fancy reload deeply");
+                        // 启用 FancyHelperUpdateService，它会负责深度重载 FancyHelper
+                        var updateService = Bukkit.getPluginManager().getPlugin("FancyHelperUpdateService");
+                        if (updateService != null) {
+                            Bukkit.getPluginManager().enablePlugin(updateService);
+                            plugin.getLogger().info("FancyHelperUpdateService 已启用，将执行深度重载。");
+                            if (sender != null) {
+                                sender.sendMessage("§l§bFancyHelper§b§r §7> §fFancyHelperUpdateService 已启用，正在执行深度重载...");
+                            }
                         } else {
-                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "fancy reload deeply");
+                            plugin.getLogger().warning("FancyHelperUpdateService 未找到，无法执行自动重载。");
+                            if (sender != null) {
+                                sender.sendMessage("§l§bFancyHelper§b§r §7> §fFancyHelperUpdateService 未找到，请手动重载。");
+                            }
                         }
                     });
                 }
