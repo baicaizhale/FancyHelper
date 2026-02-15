@@ -1,0 +1,6 @@
+name: FancyHelperUpdateService
+version: 1.0.0
+main: org.YanPl.UpdateService.FancyHelperUpdateService
+api-version: 1.18
+author: baicaizhale
+description: FancyHelper 更新服务插件
