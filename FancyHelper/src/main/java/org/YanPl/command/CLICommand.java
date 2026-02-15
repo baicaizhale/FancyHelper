@@ -359,8 +359,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         List<File> preferred = Arrays.stream(jars)
                 .filter(File::isFile)
                 .filter(f -> {
-                    String n = f.getName().toLowerCase();
-                    return n.contains("fancyhelper") || n.contains(pluginNameLower);
+                    String n = f.getName();
+                    // 使用正则匹配：FancyHelper-*.jar
+                    return n.matches("(?i)^FancyHelper-.*\\.jar$");
                 })
                 .sorted(Comparator.comparingLong(File::lastModified).reversed())
                 .collect(Collectors.toList());

@@ -45,6 +45,9 @@ public final class FancyHelper extends JavaPlugin {
         // 执行旧插件清理（清理带有 mineagent 关键词的文件）
         cleanOldPluginFiles();
 
+        // 卸载 FancyHelperUpdateService（避免重复重载）
+        unloadUpdateService();
+
         // 初始化 EULA 管理器（优先于配置，以便更新时强制替换 EULA）
         eulaManager = new EulaManager(this);
 
@@ -266,6 +269,61 @@ public final class FancyHelper extends JavaPlugin {
         }
 
         getLogger().info("FancyHelper 已禁用！");
+    }
+
+    /**
+     * 卸载并删除 FancyHelperUpdateService 插件
+     * 使用正则匹配查找、卸载并删除 FancyHelperUpdateService 的 JAR 文件
+     */
+    private void unloadUpdateService() {
+        var pluginManager = getServer().getPluginManager();
+        var updateServicePlugin = pluginManager.getPlugin("FancyHelperUpdateService");
+
+        // 卸载插件
+        if (updateServicePlugin != null && updateServicePlugin != this && updateServicePlugin.isEnabled()) {
+            getLogger().info("正在卸载 FancyHelperUpdateService...");
+            pluginManager.disablePlugin(updateServicePlugin);
+            getLogger().info("FancyHelperUpdateService 已卸载。");
+        } else {
+            getLogger().info("FancyHelperUpdateService 未启用或不存在。");
+        }
+
+        // 删除 JAR 文件
+        var pluginsDir = getDataFolder().getParentFile();
+        if (pluginsDir == null || !pluginsDir.isDirectory()) {
+            getLogger().warning("无法访问 plugins 目录，跳过删除。");
+            return;
+        }
+
+        var files = pluginsDir.listFiles();
+        if (files == null) {
+            getLogger().warning("无法列出 plugins 目录文件，跳过删除。");
+            return;
+        }
+
+        // 使用正则匹配 FancyHelperUpdateService-*.jar
+        var pattern = java.util.regex.Pattern.compile(
+                "^FancyHelperUpdateService-.*\\.jar$",
+                java.util.regex.Pattern.CASE_INSENSITIVE
+        );
+
+        for (var file : files) {
+            if (!file.isFile()) continue;
+
+            var matcher = pattern.matcher(file.getName());
+            if (matcher.matches()) {
+                try {
+                    var deleted = file.delete();
+                    if (deleted) {
+                        getLogger().info("已删除 FancyHelperUpdateService 文件: " + file.getName());
+                    } else {
+                        getLogger().warning("无法删除 FancyHelperUpdateService 文件: " + file.getName());
+                    }
+                } catch (Exception e) {
+                    getLogger().warning("删除 FancyHelperUpdateService 文件时出错: " + e.getMessage());
+                }
+            }
+        }
     }
 
     public ConfigManager getConfigManager() {
