@@ -117,6 +117,20 @@ public class PluginReloadManager {
 
         LOGGER.info("Reloading plugin '" + pluginName + "'...");
 
+        // 在卸载之前先获取文件路径
+        var pluginFile = getPluginFileFromPlugin(plugin);
+        if (pluginFile == null) {
+            LOGGER.warning("Failed to get plugin file from plugin object, trying to find it...");
+            pluginFile = findPluginFile(pluginName);
+        }
+
+        if (pluginFile == null) {
+            LOGGER.warning("Failed to find plugin file for '" + pluginName + "'!");
+            return false;
+        }
+
+        LOGGER.info("Found plugin file: " + pluginFile.getAbsolutePath());
+
         // 卸载插件
         if (!unloadPlugin(plugin)) {
             LOGGER.warning("Failed to unload plugin '" + pluginName + "'!");
@@ -124,12 +138,6 @@ public class PluginReloadManager {
         }
 
         // 加载插件
-        var pluginFile = findPluginFile(pluginName);
-        if (pluginFile == null) {
-            LOGGER.warning("Failed to find plugin file for '" + pluginName + "'!");
-            return false;
-        }
-
         if (!loadPlugin(pluginFile)) {
             LOGGER.warning("Failed to load plugin '" + pluginName + "'!");
             return false;
@@ -225,29 +233,46 @@ public class PluginReloadManager {
     private static File findPluginFile(String pluginName) {
         var pluginDir = new File("plugins");
         if (!pluginDir.isDirectory()) {
+            LOGGER.warning("plugins directory not found!");
             return null;
         }
 
-        // 直接查找
+        // 直接查找（精确匹配）
         var pluginFile = new File(pluginDir, pluginName + ".jar");
         if (pluginFile.isFile()) {
+            LOGGER.info("Found plugin file by exact match: " + pluginFile.getName());
             return pluginFile;
         }
 
         // 遍历所有 JAR 文件查找
-        for (var file : pluginDir.listFiles()) {
-            if (file.getName().endsWith(".jar")) {
-                try {
-                    var desc = getPluginDescription(file);
-                    if (desc != null && desc.getName().equalsIgnoreCase(pluginName)) {
+        var files = pluginDir.listFiles();
+        if (files == null) {
+            LOGGER.warning("Cannot list files in plugins directory!");
+            return null;
+        }
+
+        LOGGER.info("Searching for plugin '" + pluginName + "' in " + files.length + " files...");
+
+        for (var file : files) {
+            if (!file.getName().endsWith(".jar")) {
+                continue;
+            }
+
+            try {
+                var desc = getPluginDescription(file);
+                if (desc != null) {
+                    LOGGER.info("Checking file: " + file.getName() + " -> " + desc.getName());
+                    if (desc.getName().equalsIgnoreCase(pluginName)) {
+                        LOGGER.info("Found plugin file: " + file.getName());
                         return file;
                     }
-                } catch (Exception e) {
-                    // 跳过无法读取的文件
                 }
+            } catch (Exception e) {
+                LOGGER.warning("Failed to read plugin description from " + file.getName() + ": " + e.getMessage());
             }
         }
 
+        LOGGER.warning("Plugin file for '" + pluginName + "' not found!");
         return null;
     }
 
@@ -259,16 +284,73 @@ public class PluginReloadManager {
         var server = Bukkit.getServer();
         var pluginLoader = FieldAccessor.getValue(server.getClass(), "pluginLoader", server);
         if (pluginLoader == null) {
+            LOGGER.warning("PluginLoader is null!");
             return null;
         }
 
-        // 调用 getPluginDescription 方法
-        var method = MethodAccessor.getMethod(pluginLoader.getClass(), "getPluginDescription", File.class);
-        if (method == null) {
-            return null;
+        // 尝试多种方法名
+        String[] methodNames = {"getPluginDescription", "loadPluginDescription"};
+        for (var methodName : methodNames) {
+            try {
+                var method = MethodAccessor.getMethod(pluginLoader.getClass(), methodName, File.class);
+                if (method != null) {
+                    var desc = (org.bukkit.plugin.PluginDescriptionFile) MethodAccessor.invoke(methodName, pluginLoader, new Class<?>[]{File.class}, file);
+                    if (desc != null) {
+                        return desc;
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.fine("Method '" + methodName + "' not available: " + e.getMessage());
+            }
         }
 
-        return MethodAccessor.invoke("getPluginDescription", pluginLoader, new Class<?>[]{File.class}, file);
+        return null;
+    }
+
+    /**
+     * 从插件对象获取其文件路径（使用正则匹配）
+     */
+    private static File getPluginFileFromPlugin(Plugin plugin) {
+        try {
+            var desc = plugin.getDescription();
+            if (desc == null) {
+                return null;
+            }
+
+            var pluginName = desc.getName();
+            var pluginDir = new File("plugins");
+            if (!pluginDir.isDirectory()) {
+                return null;
+            }
+
+            // 构建正则表达式，匹配插件名后跟 "-" 和任意字符，最后以 .jar 结尾
+            var pattern = java.util.regex.Pattern.compile(
+                    "^" + java.util.regex.Pattern.quote(pluginName) + "-.*\\.jar$",
+                    java.util.regex.Pattern.CASE_INSENSITIVE
+            );
+
+            var files = pluginDir.listFiles();
+            if (files == null) {
+                return null;
+            }
+
+            for (var file : files) {
+                if (!file.getName().endsWith(".jar")) {
+                    continue;
+                }
+
+                var matcher = pattern.matcher(file.getName());
+                if (matcher.matches()) {
+                    LOGGER.info("Found plugin file using regex: " + file.getName());
+                    return file;
+                }
+            }
+
+            return null;
+        } catch (Exception e) {
+            LOGGER.warning("Failed to get plugin file from plugin object: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
