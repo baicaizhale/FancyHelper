@@ -28,11 +28,15 @@ import java.time.Duration;
  */
 public class UpdateManager implements Listener {
     private final FancyHelper plugin;
-    private final String repoUrl = "https://api.github.com/repos/baicaizhale/FancyHelper/releases/latest";
+    private final String repoUrl = "https://api.github.com/repos/zip8919/FancyHelper-test/releases/latest";
     private String latestVersion = null;
     private String downloadUrl = null;
     private String latestFileName = null;
     private boolean hasUpdate = false;
+
+    // FancyHelperUpdateService 相关
+    private String updateServiceDownloadUrl = null;
+    private String updateServiceFileName = null;
 
     public UpdateManager(FancyHelper plugin) {
         this.plugin = plugin;
@@ -76,15 +80,20 @@ public class UpdateManager implements Listener {
 
                     latestVersion = jsonObject.get("tag_name").getAsString().replace("v", "");
 
-                    // 获取第一个 .jar 文件的下载地址和文件名
+                    // 获取 .jar 文件的下载地址和文件名
                     JsonArray assets = jsonObject.getAsJsonArray("assets");
                     for (JsonElement assetElement : assets) {
                         JsonObject asset = assetElement.getAsJsonObject();
                         String name = asset.get("name").getAsString();
                         if (name.endsWith(".jar")) {
-                            downloadUrl = asset.get("browser_download_url").getAsString();
-                            latestFileName = name;
-                            break;
+                            // 使用正则匹配：FancyHelper-*.jar 或 FancyHelperUpdateService-*.jar
+                            if (name.matches("(?i)^FancyHelper-.*\\.jar$")) {
+                                downloadUrl = asset.get("browser_download_url").getAsString();
+                                latestFileName = name;
+                            } else if (name.matches("(?i)^FancyHelperUpdateService-.*\\.jar$")) {
+                                updateServiceDownloadUrl = asset.get("browser_download_url").getAsString();
+                                updateServiceFileName = name;
+                            }
                         }
                     }
 
@@ -244,6 +253,37 @@ public class UpdateManager implements Listener {
                     }
                 }
 
+                // 下载 FancyHelperUpdateService
+                boolean updateServiceDownloaded = false;
+                if (updateServiceDownloadUrl != null && updateServiceFileName != null) {
+                    try {
+                        plugin.getLogger().info("开始下载 FancyHelperUpdateService...");
+                        String updateServiceUrl = mirror + updateServiceDownloadUrl;
+
+                        HttpRequest updateServiceRequest = HttpRequest.newBuilder()
+                                .uri(URI.create(updateServiceUrl))
+                                .header("User-Agent", "FancyHelper-Updater")
+                                .timeout(Duration.ofSeconds(60))
+                                .GET()
+                                .build();
+
+                        HttpResponse<InputStream> updateServiceResponse = client.send(updateServiceRequest, HttpResponse.BodyHandlers.ofInputStream());
+
+                        if (updateServiceResponse.statusCode() == 200) {
+                            File updateServiceFile = new File(pluginsDir, updateServiceFileName);
+                            try (InputStream inputStream = updateServiceResponse.body()) {
+                                Files.copy(inputStream, updateServiceFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            }
+                            plugin.getLogger().info("FancyHelperUpdateService 下载完成: " + updateServiceFileName);
+                            updateServiceDownloaded = true;
+                        } else {
+                            plugin.getLogger().warning("FancyHelperUpdateService 下载失败: " + updateServiceResponse.statusCode());
+                        }
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("下载 FancyHelperUpdateService 时出错: " + e.getMessage());
+                    }
+                }
+
                 if (sender != null) {
                     sender.sendMessage("§l§bFancyHelper§b§r §7> §f更新下载完成！");
                     if (moved) {
@@ -253,6 +293,9 @@ public class UpdateManager implements Listener {
                         sender.sendMessage("§l§bFancyHelper§b§r §7> §f请在下次重启前手动处理。");
                     }
                     sender.sendMessage("§l§bFancyHelper§b§r §7> §f新版本已就绪: " + newJarName);
+                    if (updateServiceDownloaded) {
+                        sender.sendMessage("§l§bFancyHelper§b§r §7> §fFancyHelperUpdateService 也已更新。");
+                    }
                     if (!autoReload) {
                         sender.sendMessage("§l§bFancyHelper§b§r §7> §f请重启服务器或使用 PlugMan 重载以完成更新。");
                     }
@@ -265,6 +308,9 @@ public class UpdateManager implements Listener {
                         Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f请在下次重启前手动处理。");
                     }
                     Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §f新版本已就绪: " + newJarName);
+                    if (updateServiceDownloaded) {
+                        Bukkit.getConsoleSender().sendMessage("§l§bFancyHelper§b§r §7> §fFancyHelperUpdateService 也已更新。");
+                    }
                 }
 
                 if (autoReload) {

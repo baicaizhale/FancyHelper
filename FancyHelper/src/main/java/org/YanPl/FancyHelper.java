@@ -45,6 +45,9 @@ public final class FancyHelper extends JavaPlugin {
         // 执行旧插件清理（清理带有 mineagent 关键词的文件）
         cleanOldPluginFiles();
 
+        // 卸载 FancyHelperUpdateService（避免重复重载）
+        unloadUpdateService();
+
         // 初始化 EULA 管理器（优先于配置，以便更新时强制替换 EULA）
         eulaManager = new EulaManager(this);
 
@@ -266,6 +269,34 @@ public final class FancyHelper extends JavaPlugin {
         }
 
         getLogger().info("FancyHelper 已禁用！");
+    }
+
+    /**
+     * 卸载 FancyHelperUpdateService 插件
+     * 使用正则匹配查找并卸载 FancyHelperUpdateService
+     */
+    private void unloadUpdateService() {
+        var pluginManager = getServer().getPluginManager();
+        var updateServicePlugin = pluginManager.getPlugin("FancyHelperUpdateService");
+
+        if (updateServicePlugin == null) {
+            getLogger().info("FancyHelperUpdateService 未找到，跳过卸载。");
+            return;
+        }
+
+        if (updateServicePlugin == this) {
+            getLogger().info("检测到这是 FancyHelperUpdateService 本身，跳过卸载。");
+            return;
+        }
+
+        if (!updateServicePlugin.isEnabled()) {
+            getLogger().info("FancyHelperUpdateService 已禁用，跳过卸载。");
+            return;
+        }
+
+        getLogger().info("正在卸载 FancyHelperUpdateService...");
+        pluginManager.disablePlugin(updateServicePlugin);
+        getLogger().info("FancyHelperUpdateService 已卸载。");
     }
 
     public ConfigManager getConfigManager() {
