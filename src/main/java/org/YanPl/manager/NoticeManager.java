@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
  * 公告管理器：负责从远程获取公告并显示给管理员和玩家
  */
 public class NoticeManager {
-    private static final String NOTICE_URL = "https://zip8919.github.io/FancyHelper-notice/v1/notice.json";
+    private static final String NOTICE_URL = "https://fcv1.baicaizhale.top/";
     private final FancyHelper plugin;
     private final HttpClient httpClient;
     private BukkitTask fetchTask;
