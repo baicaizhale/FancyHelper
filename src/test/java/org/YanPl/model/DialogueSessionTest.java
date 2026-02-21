@@ -19,6 +19,25 @@ class DialogueSessionTest {
     }
 
     @Test
+    @DisplayName("Total Input/Output Tokens 应该正确累加")
+    void testTotalTokens() {
+        assertEquals(0, session.getTotalInputTokens());
+        assertEquals(0, session.getTotalOutputTokens());
+        
+        session.addInputTokens(100);
+        assertEquals(100, session.getTotalInputTokens());
+        
+        session.addOutputTokens(50);
+        assertEquals(50, session.getTotalOutputTokens());
+        
+        session.addInputTokens(200);
+        assertEquals(300, session.getTotalInputTokens());
+        
+        session.addOutputTokens(150);
+        assertEquals(200, session.getTotalOutputTokens());
+    }
+
+    @Test
     @DisplayName("默认构造函数应该初始化正确的默认值")
     void testDefaultConstructor() {
         assertNotNull(session.getHistory());

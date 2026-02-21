@@ -943,6 +943,16 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
+        // 更新 Token 统计
+        if (aiResponse.getPromptTokens() > 0 || aiResponse.getCompletionTokens() > 0) {
+            session.addInputTokens(aiResponse.getPromptTokens());
+            session.addOutputTokens(aiResponse.getCompletionTokens());
+            plugin.getLogger().info("[CLI] Token Usage - Input: " + aiResponse.getPromptTokens() + 
+                ", Output: " + aiResponse.getCompletionTokens() + 
+                ", Total Input: " + session.getTotalInputTokens() + 
+                ", Total Output: " + session.getTotalOutputTokens());
+        }
+
         // 收到 AI 回复，立即停止计时
         recordThinkingTime(uuid);
         generationStates.put(uuid, GenerationStatus.COMPLETED);
@@ -1129,12 +1139,18 @@ public class CLIManager {
 
         // 1. 计算 System Prompt Token
         String systemPrompt = promptManager.getBaseSystemPrompt(player);
+        // System Prompt 是一条完整的消息: <|im_start|>system\n{content}<|im_end|>\n
         int systemPromptTokens = DialogueSession.calculateTokens(systemPrompt, modelName);
+        systemPromptTokens += DialogueSession.calculateTokens("system", modelName);
+        systemPromptTokens += 3; // per-message overhead
 
         // 2. 获取历史记录 Token
         int historyTokens = session.getEstimatedTokens(modelName);
+        
+        // 3. 回复引导 (Reply Primer): <|im_start|>assistant\n
+        int replyPrimerTokens = 3;
 
-        return systemPromptTokens + historyTokens;
+        return systemPromptTokens + historyTokens + replyPrimerTokens;
     }
 
     private void executeTool(Player player, String toolCall) {
@@ -1244,6 +1260,11 @@ public class CLIManager {
         if (session == null) return;
 
         session.addMessage("user", feedback);
+        
+        // 记录反馈后的 Token 估算
+        int estimatedTokens = calculateTotalEstimatedTokens(player, session);
+        plugin.getLogger().info("[CLI] Feedback added. Session size: " + session.getHistory().size() + ", Estimated Tokens for next request: " + estimatedTokens);
+
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
         generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -1612,8 +1633,16 @@ public class CLIManager {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         
-        int tokens = session != null ? calculateTotalEstimatedTokens(player, session) : 0;
-        int thoughtTokens = session != null ? session.getThoughtTokens() : 0;
+        long totalTokens = 0;
+        long inputTokens = 0;
+        long outputTokens = 0;
+        
+        if (session != null) {
+            inputTokens = session.getTotalInputTokens();
+            outputTokens = session.getTotalOutputTokens();
+            totalTokens = inputTokens + outputTokens;
+        }
+
         long durationMs = session != null ? System.currentTimeMillis() - session.getStartTime() : 0;
         double durationSec = durationMs / 1000.0;
         
@@ -1623,7 +1652,8 @@ public class CLIManager {
         player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage("");
         player.sendMessage(ChatColor.WHITE + "已退出 FancyHelper");
-        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + (tokens + thoughtTokens) + "  | 时长: " + String.format("%.1f", durationSec) + " 秒 (思考: " + String.format("%.1f", thinkingSec) + " 秒)");
+        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + totalTokens + " (In: " + inputTokens + ", Out: " + outputTokens + ")");
+        player.sendMessage(ChatColor.GRAY + "总时长: " + String.format("%.1f", durationSec) + " 秒 (思考: " + String.format("%.1f", thinkingSec) + " 秒)");
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "==================");
     }

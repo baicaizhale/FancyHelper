@@ -30,6 +30,8 @@ public class DialogueSession {
     private int toolFailureCount = 0;
     private int currentChainToolCount = 0;
     private int thoughtTokens = 0;
+    private long totalInputTokens = 0;
+    private long totalOutputTokens = 0;
     private long totalThinkingTimeMs = 0;
     private boolean antiLoopExempted = false;
     private Mode mode = Mode.NORMAL;
@@ -151,7 +153,11 @@ public class DialogueSession {
         Encoding encoding = getEncodingForModel(modelName);
         int totalTokens = 0;
         for (Message msg : history) {
+            // 每条消息的基础消耗: <|im_start|>{role}\n{content}<|im_end|>\n
+            // 约为: tokens(role) + tokens(content) + 3
+            totalTokens += encoding.countTokens(msg.getRole());
             totalTokens += encoding.countTokens(msg.getContent());
+            totalTokens += 3; 
         }
         return totalTokens;
     }
@@ -186,6 +192,22 @@ public class DialogueSession {
 
     public int getThoughtTokens() {
         return thoughtTokens;
+    }
+
+    public long getTotalInputTokens() {
+        return totalInputTokens;
+    }
+
+    public long getTotalOutputTokens() {
+        return totalOutputTokens;
+    }
+
+    public void addInputTokens(long tokens) {
+        this.totalInputTokens += tokens;
+    }
+
+    public void addOutputTokens(long tokens) {
+        this.totalOutputTokens += tokens;
     }
 
     public void addThoughtTokens(int tokens) {

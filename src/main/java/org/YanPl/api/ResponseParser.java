@@ -21,6 +21,24 @@ public class ResponseParser {
     public AIResponse parseResponse(JsonObject responseJson) {
         String textContent = null;
         String thoughtContent = null;
+        long promptTokens = 0;
+        long completionTokens = 0;
+
+        // 解析 Token 使用情况 (OpenAI 格式)
+        if (responseJson.has("usage") && responseJson.get("usage").isJsonObject()) {
+            JsonObject usage = responseJson.getAsJsonObject("usage");
+            promptTokens = usage.has("prompt_tokens") ? usage.get("prompt_tokens").getAsLong() : 0;
+            completionTokens = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
+        }
+        // 解析 Token 使用情况 (CloudFlare result.usage 格式)
+        else if (responseJson.has("result") && responseJson.get("result").isJsonObject()) {
+            JsonObject result = responseJson.getAsJsonObject("result");
+            if (result.has("usage") && result.get("usage").isJsonObject()) {
+                JsonObject usage = result.getAsJsonObject("usage");
+                promptTokens = usage.has("prompt_tokens") ? usage.get("prompt_tokens").getAsLong() : 0;
+                completionTokens = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
+            }
+        }
 
         // 1. 尝试解析 OpenAI 兼容格式 (choices 数组)
         ParsedContent openAiContent = parseOpenAiFormat(responseJson);
@@ -44,7 +62,7 @@ public class ResponseParser {
         }
 
         if (textContent != null) {
-            return new AIResponse(textContent, thoughtContent);
+            return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens);
         }
         return null;
     }
