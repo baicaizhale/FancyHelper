@@ -122,17 +122,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "help":
                 sendHelp(sender);
                 return true;
-            case "error":
-                if (!sender.isOp()) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该测试命令仅限管理员使用。"));
-                    return true;
-                }
-                if (sender instanceof Player) {
-                    handleTestError((Player) sender);
-                } else {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该测试命令仅限玩家使用。"));
-                }
-                return true;
             default:
                 sendHelp(sender);
                 break;
@@ -145,16 +134,22 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f可用子命令:"));
         sender.sendMessage(" §7- §b/cli §f: 切换进入/退出 CLI 模式");
         sender.sendMessage(" §7- §b/cli reload §f: 重新加载配置与工作区");
+        sender.sendMessage(" §7- §b/cli reload deeply §f: 深度重载（完全重启插件）");
         sender.sendMessage(" §7- §b/cli status §f: 查看插件运行状态");
+        sender.sendMessage(" §7- §b/cli checkupdate §f: 检查更新");
+        sender.sendMessage(" §7- §b/cli upgrade §f: 下载并安装更新");
+        sender.sendMessage(" §7- §b/cli notice §f: 查看系统公告");
+        sender.sendMessage(" §7- §b/cli notice read §f: 将公告标记为已读");
+        sender.sendMessage(" §7- §b/cli todo §f: 查看待办事项列表");
         sender.sendMessage(" §7- §b/cli settings §f: 打开个人设置界面");
         sender.sendMessage(" §7- §b/cli memory §f: 管理偏好记忆");
-        sender.sendMessage(" §7- §b/cli notice §f: 查看系统公告");
+        sender.sendMessage(" §7- §b/cli tools §f: 查看工具列表");
+        sender.sendMessage(" §7- §b/cli toggle <ls|read|diff> §f: 启用/禁用工具");
+        sender.sendMessage(" §7- §b/cli display §f: 切换显示位置");
+        sender.sendMessage(" §7- §b/cli yolo §f: 切换到 YOLO 模式（自动执行命令）");
+        sender.sendMessage(" §7- §b/cli normal §f: 切换到普通模式（需要确认）");
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
-        sender.sendMessage(" §7- §b/cli todo §f: 查看待办事项列表");
-        sender.sendMessage(" §7- §b/cli yolo/normal §f: 切换 YOLO 模式 (自动执行) / 普通模式");
-        if (sender.hasPermission("fancyhelper.reload")) {
-            sender.sendMessage(" §7- §b/cli update §f: 检查并安装插件更新");
-        }
+        sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
     }
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
@@ -557,16 +552,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.spigot().sendMessage(message);
     }
 
-    private void handleTestError(Player player) {
-        try {
-            player.sendMessage(ChatColor.YELLOW + "正在触发测试异常...");
-            throw new RuntimeException("这是一个手动触发的测试异常，用于验证云端上报功能。");
-        } catch (Exception e) {
-            plugin.getCloudErrorReport().report(e);
-            player.sendMessage(ChatColor.GREEN + "测试异常已捕获并尝试上报，请查看后台日志。");
-        }
-    }
-
     private void handleNotice(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "[FancyHelper] " + ChatColor.YELLOW + "正在获取公告...");
         
@@ -587,7 +572,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> subCommands = new ArrayList<>(Arrays.asList("reload", "status", "yolo", "normal", "checkupdate", "upgrade", "read", "set", "settings", "tools", "display", "toggle", "notice", "retry", "todo", "memory"));
+            List<String> subCommands = new ArrayList<>(Arrays.asList(
+                "reload", "status", "yolo", "normal", "checkupdate", "upgrade", 
+                "read", "set", "settings", "tools", "display", "toggle", 
+                "notice", "retry", "todo", "memory", "mem", "confirm", 
+                "cancel", "agree", "thought", "select", "exempt_anti_loop", 
+                "stop", "download", "help"
+            ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());

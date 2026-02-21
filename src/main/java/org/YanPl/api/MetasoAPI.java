@@ -18,7 +18,7 @@ import java.time.Duration;
  * Metaso AI 搜索 API 封装类
  * 秘塔 AI 搜索，支持联网搜索能力
  * 
- * @see <a href="https://metaso.cn">秘塔 AI 搜索</a>
+ * @see https://metaso.cn
  */
 public class MetasoAPI {
     
