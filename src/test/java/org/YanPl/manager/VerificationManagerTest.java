@@ -9,12 +9,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.io.File;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -44,6 +46,9 @@ class VerificationManagerTest {
     @Mock
     private org.bukkit.scheduler.BukkitScheduler scheduler;
 
+    @TempDir
+    File tempDir;
+
     private VerificationManager verificationManager;
     private UUID testUuid;
     private String testPlayerName = "TestPlayer";
@@ -58,6 +63,7 @@ class VerificationManagerTest {
             when(plugin.getCloudErrorReport()).thenReturn(cloudErrorReport);
             when(plugin.isEnabled()).thenReturn(true);
             when(plugin.getServer()).thenReturn(server);
+            when(plugin.getDataFolder()).thenReturn(tempDir);
 
             verificationManager = new VerificationManager(plugin);
             testUuid = UUID.randomUUID();

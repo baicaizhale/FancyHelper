@@ -870,8 +870,7 @@ public class CLIManager {
         playerMsg.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断")));
         player.spigot().sendMessage(playerMsg);
 
-        String modelName = plugin.getConfigManager().getCloudflareModel();
-        plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + session.getEstimatedTokens(modelName));
+        plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + calculateTotalEstimatedTokens(player, session));
 
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -1113,14 +1112,29 @@ public class CLIManager {
     }
 
     private void checkTokenWarning(Player player, DialogueSession session) {
-        String modelName = plugin.getConfigManager().getCloudflareModel();
-        int estimatedTokens = session.getEstimatedTokens(modelName);
+        int estimatedTokens = calculateTotalEstimatedTokens(player, session);
         int maxTokens = 12800;
         int remaining = maxTokens - estimatedTokens;
 
         if (remaining < plugin.getConfigManager().getTokenWarningThreshold()) {
             player.sendMessage(ChatColor.YELLOW + "⨀ 剩余上下文长度不足 ，Fancy 可能会遗忘较早的对话内容来保证对话继续。");
         }
+    }
+
+    /**
+     * 计算当前会话的预计总 Token 数（包括 System Prompt 和历史记录）
+     */
+    private int calculateTotalEstimatedTokens(Player player, DialogueSession session) {
+        String modelName = plugin.getConfigManager().getCloudflareModel();
+
+        // 1. 计算 System Prompt Token
+        String systemPrompt = promptManager.getBaseSystemPrompt(player);
+        int systemPromptTokens = DialogueSession.calculateTokens(systemPrompt, modelName);
+
+        // 2. 获取历史记录 Token
+        int historyTokens = session.getEstimatedTokens(modelName);
+
+        return systemPromptTokens + historyTokens;
     }
 
     private void executeTool(Player player, String toolCall) {
@@ -1597,8 +1611,8 @@ public class CLIManager {
     private void sendExitMessage(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
-        String modelName = plugin.getConfigManager().getCloudflareModel();
-        int tokens = session != null ? session.getEstimatedTokens(modelName) : 0;
+        
+        int tokens = session != null ? calculateTotalEstimatedTokens(player, session) : 0;
         int thoughtTokens = session != null ? session.getThoughtTokens() : 0;
         long durationMs = session != null ? System.currentTimeMillis() - session.getStartTime() : 0;
         double durationSec = durationMs / 1000.0;
