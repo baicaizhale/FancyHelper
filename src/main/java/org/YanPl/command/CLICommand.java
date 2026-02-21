@@ -339,6 +339,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         toolsBtn.addExtra(toolsStatus);
         player.spigot().sendMessage(toolsBtn);
         
+        TextComponent memoryBtn = new TextComponent(ChatColor.WHITE + "- 记忆管理: ");
+        TextComponent enterBtn = new TextComponent(ChatColor.YELLOW + "[管理]");
+        enterBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
+        enterBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
+        memoryBtn.addExtra(enterBtn);
+        player.spigot().sendMessage(memoryBtn);
+
         String displayPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
         TextComponent displayMsg = new TextComponent(ChatColor.WHITE + "- 状态显示位置: ");
         TextComponent posStatus = new TextComponent(ChatColor.AQUA + "[" + displayPos + "]");
@@ -346,13 +353,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         posStatus.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换 (actionbar/subtitle)")));
         displayMsg.addExtra(posStatus);
         player.spigot().sendMessage(displayMsg);
-
-        TextComponent memoryBtn = new TextComponent(ChatColor.WHITE + "- 记忆管理: ");
-        TextComponent enterBtn = new TextComponent(ChatColor.YELLOW + "[管理]");
-        enterBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
-        enterBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
-        memoryBtn.addExtra(enterBtn);
-        player.spigot().sendMessage(memoryBtn);
     }
 
     private void handleTools(Player player) {
