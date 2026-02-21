@@ -9,6 +9,7 @@ import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
@@ -27,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  * 公告管理器：负责从远程获取公告并显示给管理员和玩家
  */
 public class NoticeManager {
-    private static final String NOTICE_URL = "https://fcv1.baicaizhale.top/";
+    private static final String NOTICE_URL = "https://fcnotice.baicaizhale.top/v2/notice.json";
     private final FancyHelper plugin;
     private final HttpClient httpClient;
     private BukkitTask fetchTask;
@@ -128,19 +129,22 @@ public class NoticeManager {
      * 异步获取公告
      */
     public CompletableFuture<NoticeData> fetchNoticeAsync() {
-        return CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<NoticeData> future = new CompletableFuture<>();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 NoticeData data = fetchNotice();
                 if (data != null) {
                     this.currentNotice = data;
                     checkAndUpdateNotice(data);
                 }
-                return data;
-            } catch (IOException e) {
-                plugin.getLogger().warning("获取公告失败: " + e.getMessage());
-                return null;
+                future.complete(data);
+            } catch (Exception e) {
+                String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                plugin.getLogger().warning("获取公告失败: " + errorMsg);
+                future.complete(null);
             }
         });
+        return future;
     }
 
     /**
@@ -164,8 +168,9 @@ public class NoticeManager {
 
             boolean noticeEnabled = json.has("notice") && json.get("notice").getAsBoolean();
             String text = json.has("text") ? json.get("text").getAsString() : "";
+            int level = json.has("level") ? json.get("level").getAsInt() : 1;
 
-            return new NoticeData(noticeEnabled, text);
+            return new NoticeData(noticeEnabled, text, level);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("获取公告被中断", e);
@@ -179,14 +184,29 @@ public class NoticeManager {
      */
     public void showNoticeToConsole(NoticeData noticeData) {
         if (noticeData != null && noticeData.enabled) {
-            plugin.getLogger().info("========================================");
-            plugin.getLogger().info("【FancyHelper】");
+            String colorCode;
+
+            switch (noticeData.level) {
+                case 3:
+                    colorCode = ChatColor.RED.toString();
+                    break;
+                case 2:
+                    colorCode = ChatColor.YELLOW.toString();
+                    break;
+                case 1:
+                default:
+                    colorCode = ChatColor.WHITE.toString();
+                    break;
+            }
+
+            Bukkit.getConsoleSender().sendMessage(ChatColor.GRAY + "========================================");
+            Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "【FancyHelper】");
             if (noticeData.text != null && !noticeData.text.isEmpty()) {
                 for (String line : noticeData.text.split("\\n")) {
-                    plugin.getLogger().info(line);
+                    Bukkit.getConsoleSender().sendMessage(colorCode + line);
                 }
             }
-            plugin.getLogger().info("========================================");
+            Bukkit.getConsoleSender().sendMessage(ChatColor.GRAY + "========================================");
         }
     }
 
@@ -198,11 +218,25 @@ public class NoticeManager {
      */
     public void showNoticeToPlayer(org.bukkit.entity.Player player, NoticeData noticeData) {
         if (noticeData != null && noticeData.enabled && player.hasPermission("fancyhelper.notice")) {
+            String colorCode;
+            switch (noticeData.level) {
+                case 3:
+                    colorCode = "§c";
+                    break;
+                case 2:
+                    colorCode = "§e";
+                    break;
+                case 1:
+                default:
+                    colorCode = "§f";
+                    break;
+            }
+
             player.sendMessage("========================================");
             player.sendMessage("§e【FancyHelper 公告】");
             if (noticeData.text != null && !noticeData.text.isEmpty()) {
                 for (String line : noticeData.text.split("\\n")) {
-                    player.sendMessage("§f" + line);
+                    player.sendMessage(colorCode + line);
                 }
             }
             
@@ -225,10 +259,12 @@ public class NoticeManager {
     public static class NoticeData {
         public final boolean enabled;
         public final String text;
+        public final int level;
 
-        public NoticeData(boolean enabled, String text) {
+        public NoticeData(boolean enabled, String text, int level) {
             this.enabled = enabled;
             this.text = text;
+            this.level = level;
         }
     }
 
