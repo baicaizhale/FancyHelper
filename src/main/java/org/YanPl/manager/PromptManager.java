@@ -31,9 +31,7 @@ public class PromptManager {
         sb.append("[Environment]\n");
         sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
         
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        sb.append("Current Time: ").append(now.format(formatter)).append("\n");
+
         sb.append("Player: ").append(player.getName()).append("\n");
         sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
         sb.append("Available Presets: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n\n");
@@ -271,6 +269,13 @@ public class PromptManager {
         sb.append("   - Create TODO list immediately after receiving complex task, update task status timely\n");
         sb.append("   - Important: After calling #todo, you MUST end the response immediately. Do not call other tools in the same response.\n\n");
         
+        // ==================== Current Time / 当前时间 ====================
+        // 【当前时间】放在最后以确保缓存命中优化
+        sb.append("[Current Time]\n");
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        sb.append("Current Time: ").append(now.format(formatter)).append("\n");
+
         return sb.toString(); 
     }
 }
