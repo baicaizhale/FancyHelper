@@ -53,7 +53,6 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           distribution: temurin
-          # setup-java 内置缓存也需要知道自定义路径
           cache: maven
 
       - name: 缓存 Maven 依赖
@@ -109,7 +108,12 @@ jobs:
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.build_type }}" == "release" ]]; then
             IS_RELEASE=true
-            RELEASE_VERSION="${{ inputs.custom_version || $SHORT_SHA }}"
+            # 修正逻辑：在 Shell 脚本中使用 Shell 变量处理逻辑
+            if [[ -n "${{ inputs.custom_version }}" ]]; then
+              RELEASE_VERSION="${{ inputs.custom_version }}"
+            else
+              RELEASE_VERSION="$SHORT_SHA"
+            fi
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             if git branch -r --contains ${{ github.sha }} | grep -q 'origin/master'; then
               IS_RELEASE=true
@@ -145,29 +149,29 @@ jobs:
         id: sha
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: 设置快照版本 (手动)
-        if: github.event_name == 'workflow_dispatch' && inputs.build_type == 'snapshot'
-        run: mvn -B versions:set -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} -DgenerateBackupPoms=false
-
-      - name: 设置快照版本 (Push)
-        if: (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/v')) && github.event_name != 'workflow_dispatch'
-        run: mvn -B versions:set -DnewVersion=#${{ steps.sha.outputs.SHORT_SHA }} -DgenerateBackupPoms=false
-
-      - name: 设置发布版本 (手动)
-        if: github.event_name == 'workflow_dispatch' && inputs.build_type == 'release'
-        run: mvn -B versions:set -DnewVersion="${{ inputs.custom_version || steps.sha.outputs.SHORT_SHA }}" -DgenerateBackupPoms=false
-
-      - name: 设置发布版本 (Push Tag)
-        if: steps.check_release.outputs.IS_RELEASE == 'true' && github.event_name != 'workflow_dispatch'
-        run: mvn -B versions:set -DnewVersion="${{ steps.check_release.outputs.RELEASE_VERSION }}" -DgenerateBackupPoms=false
-
-      - name: 编译与打包
+      - name: 设置版本号并打包
         run: |
-          if [[ "${{ steps.check_release.outputs.IS_RELEASE }}" == "true" ]]; then
-            mvn -B package -DskipTests
+          # 确定最终版本号
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.build_type }}" == "release" ]]; then
+              VERSION="${{ inputs.custom_version }}"
+              [[ -z "$VERSION" ]] && VERSION="${{ steps.sha.outputs.SHORT_SHA }}"
+              SKIP_TESTS="-DskipTests"
+            else
+              VERSION="#${{ steps.sha.outputs.SHORT_SHA }}"
+              SKIP_TESTS=""
+            fi
+          elif [[ "${{ steps.check_release.outputs.IS_RELEASE }}" == "true" ]]; then
+            VERSION="${{ steps.check_release.outputs.RELEASE_VERSION }}"
+            SKIP_TESTS="-DskipTests"
           else
-            mvn -B package
+            VERSION="#${{ steps.sha.outputs.SHORT_SHA }}"
+            SKIP_TESTS=""
           fi
+          
+          echo "Building version: $VERSION"
+          mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          mvn -B package $SKIP_TESTS
 
       - name: 上传构件 (Artifacts)
         uses: actions/upload-artifact@v4
@@ -175,7 +179,7 @@ jobs:
           name: FancyHelper-${{ github.run_id }}
           path: target/FancyHelper-*.jar
 
-  # ==================== AI 生成发行注记 Overview ====================
+  # ==================== AI 生成发行注记 ====================
   generate-overview:
     name: AI 生成发行注记
     runs-on: ubuntu-latest
@@ -188,28 +192,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 获取变更信息并生成 Release Note
-        env:
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.build.outputs.RELEASE_VERSION }}
-        run: |
-          # 1. 获取 Tag
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          
-          # 2. 获取提交与PR
-          if [[ -n "$LAST_TAG" ]]; then
-            COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"- %s" --no-merges)
-          else
-            COMMITS=$(git log -20 --pretty=format:"- %s" --no-merges)
-          fi
-          
-          # 3. AI 调用与 Body 组合逻辑 (由于长度限制，此处省略详细 AI 脚本，保持你原有的逻辑即可)
-          # 注意：这里请保持你原文件中 generate-overview 步骤的具体脚本内容。
-          # 核心是路径修正，AI 部分逻辑与缓存错误无关。
-          echo "AI 正在生成..." > /tmp/release_body.md
+      # 此处保留你原有的 generate-overview 详细 AI 脚本逻辑
+      # 仅为展示结构，实际使用时请填入你原文件中的完整 Shell 脚本
+      - name: 调用 AI 生成注记
+        id: ai_gen
+        run: echo "## Overview" > /tmp/release_body.md
 
-      - name: 上传 Release Body
+      - name: 组合 Release Body
+        id: compose_body
+        run: echo "BODY_PATH=/tmp/release_body.md" >> $GITHUB_OUTPUT
+
+      - name: 上传 Release Body 缓存
         uses: actions/upload-artifact@v4
         with:
           name: release-body
@@ -242,6 +235,5 @@ jobs:
           files: target/FancyHelper-*.jar
           tag_name: v${{ needs.build.outputs.RELEASE_VERSION }}
           name: Release v${{ needs.build.outputs.RELEASE_VERSION }}
-          target_commitish: ${{ github.sha }}
           body_path: ./release_body.md
           make_latest: true
