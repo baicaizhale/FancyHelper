@@ -15,6 +15,7 @@ import org.YanPl.manager.TodoManager;
 import org.YanPl.manager.NoticeManager;
 import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.manager.InstructionManager;
+import org.YanPl.manager.PlanManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -46,6 +47,7 @@ public final class FancyHelper extends JavaPlugin {
     private MetasoAPI metasoAPI;
     private ErrorHandler errorHandler;
     private InstructionManager instructionManager;
+    private PlanManager planManager;
 
     @Override
     public void onEnable() {
@@ -95,6 +97,9 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化 CLI 管理器（管理玩家的 AI 会话）
             cliManager = new CLIManager(this);
+
+            // 初始化计划模式管理器
+            planManager = new PlanManager(this, cliManager, cliManager.getToolExecutor());
 
             // 初始化更新管理器并检查更新
             updateManager = new UpdateManager(this);
@@ -432,6 +437,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public InstructionManager getInstructionManager() {
         return instructionManager;
+    }
+
+    public PlanManager getPlanManager() {
+        return planManager;
     }
 
     /**

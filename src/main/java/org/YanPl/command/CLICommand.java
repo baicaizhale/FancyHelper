@@ -7,6 +7,7 @@ import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.manager.InstructionManager;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.ExecutionPlan;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -111,6 +112,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "todo":
             case "retry":
             case "stop":
+            case "plan":
+            case "view_plan":
+            case "approve":
+            case "answer":
             case "memory":
             case "mem":
                 if (!(sender instanceof Player)) {
@@ -226,6 +231,18 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "todo":
                 plugin.getCliManager().openTodoBook(player);
+                return true;
+            case "plan":
+                handlePlan(player, args);
+                return true;
+            case "approve":
+                handleApprove(player, args);
+                return true;
+            case "answer":
+                handleAnswer(player, args);
+                return true;
+            case "view_plan":
+                plugin.getPlanManager().displayPlanBook(player);
                 return true;
             case "memory":
             case "mem":
@@ -573,11 +590,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "reload", "status", "yolo", "normal", "checkupdate", "upgrade", 
-                "read", "set", "settings", "tools", "display", "toggle", 
-                "notice", "retry", "todo", "memory", "mem", "confirm", 
-                "cancel", "agree", "thought", "select", "exempt_anti_loop", 
-                "stop", "download", "help"
+                "reload", "status", "yolo", "normal", "checkupdate", "upgrade",
+                "read", "set", "settings", "tools", "display", "toggle",
+                "notice", "retry", "todo", "memory", "mem", "confirm",
+                "cancel", "agree", "thought", "select", "exempt_anti_loop",
+                "stop", "download", "plan", "approve", "answer", "help"
             ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
@@ -600,5 +617,94 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .collect(Collectors.toList());
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * 处理计划模式命令
+     * 
+     * @param player 玩家
+     * @param args 参数
+     */
+    private void handlePlan(Player player, String[] args) {
+        // 检查玩家是否在CLI模式中
+        if (!plugin.getCliManager().isInCLI(player)) {
+            player.sendMessage(ChatColor.RED + "请先进入 CLI 模式：/fancyhelper");
+            return;
+        }
+
+        if (args.length == 1) {
+            // /cli plan - 切换计划模式（类似 /cli yolo）
+            plugin.getCliManager().switchMode(player, DialogueSession.Mode.PLAN);
+        } else {
+            String action = args[1].toLowerCase();
+            switch (action) {
+                case "exit":
+                    plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
+                    break;
+                case "modify":
+                    plugin.getPlanManager().openPlanEditGUI(player);
+                    break;
+                case "continue":
+                    plugin.getPlanManager().handlePlanApproval(player, ExecutionPlan.ExecutionMode.CONTINUE);
+                    break;
+                case "cancel":
+                    plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
+                    player.sendMessage(ChatColor.RED + "计划已取消");
+                    break;
+                default:
+                    player.sendMessage(ChatColor.GRAY + "用法: /cli plan [exit|modify|continue|cancel]");
+                    break;
+            }
+        }
+    }
+
+    /**
+     * 处理计划批准命令
+     * 
+     * @param player 玩家
+     * @param args 参数
+     */
+    private void handleApprove(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "请指定执行模式: /cli approve [yolo|normal]");
+            return;
+        }
+
+        String mode = args[1].toLowerCase();
+        switch (mode) {
+            case "yolo":
+                plugin.getPlanManager().handlePlanApproval(player, ExecutionPlan.ExecutionMode.YOLO);
+                break;
+            case "normal":
+                plugin.getPlanManager().handlePlanApproval(player, ExecutionPlan.ExecutionMode.NORMAL);
+                break;
+            default:
+                player.sendMessage(ChatColor.RED + "无效的执行模式，请使用 yolo 或 normal");
+                break;
+        }
+    }
+
+    /**
+     * 处理问题回答命令
+     * 
+     * @param player 玩家
+     * @param args 参数
+     */
+    private void handleAnswer(Player player, String[] args) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("input")) {
+            // /cli answer_input - 打开输入框
+            player.sendMessage(ChatColor.GRAY + "» " + ChatColor.WHITE + "请直接在聊天框输入您的答案");
+            player.sendMessage(ChatColor.GRAY + "» " + ChatColor.WHITE + "输入完成后按 Enter 发送");
+            return;
+        }
+
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "请提供答案内容");
+            return;
+        }
+
+        // 合并所有参数作为答案
+        String answer = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        plugin.getPlanManager().handleAnswer(player, answer);
     }
 }

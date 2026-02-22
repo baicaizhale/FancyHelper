@@ -16,7 +16,7 @@ public class DialogueSession {
      * 对话模式
      */
     public enum Mode {
-        NORMAL, YOLO
+        NORMAL, YOLO, PLAN
     }
 
     /**
@@ -45,6 +45,12 @@ public class DialogueSession {
             return size() > 50;
         }
     };
+
+    // 计划模式相关字段
+    private boolean isInPlanMode = false;
+    private List<Question> planQuestions = new ArrayList<>();
+    private int currentQuestionIndex = 0;
+    private ExecutionPlan currentPlan = null;
 
     /**
      * 编码注册表（单例）
@@ -364,6 +370,41 @@ public class DialogueSession {
         public long getThinkingTimeMs() {
             return thinkingTimeMs;
         }
+    }
+
+    // ===== 计划模式相关方法 =====
+
+    public boolean isInPlanMode() {
+        return isInPlanMode;
+    }
+
+    public void setInPlanMode(boolean inPlanMode) {
+        this.isInPlanMode = inPlanMode;
+    }
+
+    public List<Question> getPlanQuestions() {
+        return planQuestions;
+    }
+
+    public void setPlanQuestions(List<Question> questions) {
+        this.planQuestions = questions;
+        this.currentQuestionIndex = 0;
+    }
+
+    public int getCurrentQuestionIndex() {
+        return currentQuestionIndex;
+    }
+
+    public void setCurrentQuestionIndex(int index) {
+        this.currentQuestionIndex = index;
+    }
+
+    public ExecutionPlan getCurrentPlan() {
+        return currentPlan;
+    }
+
+    public void setCurrentPlan(ExecutionPlan plan) {
+        this.currentPlan = plan;
     }
 
     public static class Message {
