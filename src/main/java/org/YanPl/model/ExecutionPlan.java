@@ -53,6 +53,32 @@ public class ExecutionPlan {
     }
 
     /**
+     * 从另一个计划复制数据（深拷贝）
+     * 
+     * @param other 源计划
+     */
+    public void copyFrom(ExecutionPlan other) {
+        if (other == null) {
+            return;
+        }
+
+        this.id = other.id;
+        this.title = other.title;
+        this.description = other.description;
+        this.createdAt = other.createdAt;
+        this.modified = other.modified;
+        this.executionMode = other.executionMode;
+
+        // 深拷贝步骤列表
+        this.steps.clear();
+        for (PlanStep otherStep : other.steps) {
+            PlanStep newStep = new PlanStep(otherStep.getOrder(), otherStep.getDescription());
+            newStep.setNotes(otherStep.getNotes());
+            this.steps.add(newStep);
+        }
+    }
+
+    /**
      * 添加步骤
      * 
      * @param step 步骤

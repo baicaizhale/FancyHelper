@@ -4,6 +4,8 @@ import org.YanPl.api.MetasoAPI;
 import org.YanPl.api.TavilyAPI;
 import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
+import org.YanPl.listener.GUIListener;
+import org.YanPl.gui.GUIManager;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
 import org.YanPl.manager.PacketCaptureManager;
@@ -48,6 +50,7 @@ public final class FancyHelper extends JavaPlugin {
     private ErrorHandler errorHandler;
     private InstructionManager instructionManager;
     private PlanManager planManager;
+    private GUIManager guiManager;
 
     @Override
     public void onEnable() {
@@ -126,8 +129,12 @@ public final class FancyHelper extends JavaPlugin {
                 getLogger().severe("无法注册命令 'fancyhelper' - 请检查 plugin.yml！");
             }
 
+            // 初始化GUI管理器
+            guiManager = new GUIManager(this);
+
             // 注册事件监听器
             getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+            getServer().getPluginManager().registerEvents(new GUIListener(this, guiManager), this);
 
             // bStats 统计
             int pluginId = 29036;
@@ -441,6 +448,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public PlanManager getPlanManager() {
         return planManager;
+    }
+
+    public GUIManager getGuiManager() {
+        return guiManager;
     }
 
     /**

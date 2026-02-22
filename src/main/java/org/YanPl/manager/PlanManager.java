@@ -34,6 +34,7 @@ public class PlanManager {
     private final Map<UUID, List<Question>> questionsMap = new ConcurrentHashMap<>();
     private final Map<UUID, ExecutionPlan> plansMap = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> questionIndexMap = new ConcurrentHashMap<>();
+    private final Map<UUID, org.YanPl.gui.PlanEditGUI> editGUIMap = new ConcurrentHashMap<>();
 
     public PlanManager(FancyHelper plugin, CLIManager cliManager, ToolExecutor toolExecutor) {
         this.plugin = plugin;
@@ -408,10 +409,10 @@ public class PlanManager {
 
     /**
      * 发送执行选项
-     * 
+     *
      * @param player 玩家
      */
-    private void sendExecutionOptions(Player player) {
+    public void sendExecutionOptions(Player player) {
         TextComponent message = new TextComponent(ChatColor.GREEN + "✓ " + ChatColor.WHITE + "计划已生成！请选择执行模式：\n");
         
         TextComponent yoloBtn = new TextComponent(ChatColor.GREEN + "[ YOLO模式 ]");
@@ -483,7 +484,7 @@ public class PlanManager {
 
     /**
      * 打开计划修改GUI
-     * 
+     *
      * @param player 玩家
      */
     public void openPlanEditGUI(Player player) {
@@ -492,9 +493,29 @@ public class PlanManager {
             player.sendMessage(ChatColor.RED + "没有可编辑的计划");
             return;
         }
-        
-        player.sendMessage(ChatColor.GRAY + "» " + ChatColor.WHITE + "计划编辑功能开发中...");
-        // TODO: 实现Inventory GUI
+
+        UUID uuid = player.getUniqueId();
+
+        // 检查是否已有编辑GUI实例
+        org.YanPl.gui.PlanEditGUI editGUI = editGUIMap.get(uuid);
+
+        if (editGUI == null) {
+            // 创建新的编辑GUI实例
+            editGUI = new org.YanPl.gui.PlanEditGUI(plugin, player, plan);
+            editGUIMap.put(uuid, editGUI);
+        }
+
+        // 使用guiManager打开GUI，确保压入栈中
+        plugin.getGuiManager().openGUI(player, editGUI);
+    }
+
+    /**
+     * 清理编辑GUI实例
+     *
+     * @param uuid 玩家UUID
+     */
+    public void clearEditGUI(UUID uuid) {
+        editGUIMap.remove(uuid);
     }
 
     /**
