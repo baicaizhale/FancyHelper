@@ -12,9 +12,9 @@ import net.md_5.bungee.api.ChatColor;
 public class ColorUtil {
 
     // 自定义颜色代码映射
-    private static final ChatColor COLOR_X = ChatColor.of("#11A8CD");  // §x 颜色
-    private static final ChatColor COLOR_Z = ChatColor.of("#30AEE5");  // §z 颜色
-
+    private static final ChatColor COLOR_X = net.md_5.bungee.api.ChatColor.of("#11A8CD");  // §x 颜色
+    private static final ChatColor COLOR_Z = net.md_5.bungee.api.ChatColor.of("#30AEE5");  // §z 颜色
+    
     /**
      * 转换自定义颜色代码 §x 和 §z 为实际颜色
      * 同时处理标准的 & 和 § 颜色代码
@@ -27,13 +27,24 @@ public class ColorUtil {
             return message;
         }
 
-        // 先处理标准的 & 和 § 颜色代码
+        // 1. 先将 & 转换为 § (处理 &x, &z, &1, &a 等)
         message = ChatColor.translateAlternateColorCodes('&', message);
 
-        // 处理自定义颜色代码 §x 和 §z
-        message = message.replace("§x", COLOR_X.toString());
-        message = message.replace("§z", COLOR_Z.toString());
-
+        // 2. 将自定义的 §x 和 §z 替换为实际的颜色对象
+        // BungeeCord ChatColor.of(...).toString() 返回的是形如 §x§1§1§A§A§B§B 的格式
+        
+        // 我们直接将字符串中的 §x 和 §z 替换为对应的颜色序列
+        String colorX = COLOR_X.toString();
+        String colorZ = COLOR_Z.toString();
+        
+        // 处理被 translateAlternateColorCodes 转换过的 §x 和 §z
+        message = message.replace("§x", colorX);
+        message = message.replace("§z", colorZ);
+        
+        // 处理可能残留的 &x 和 &z (防止用户输入 &x 或 &z 被漏掉)
+        message = message.replace("&x", colorX);
+        message = message.replace("&z", colorZ);
+        
         return message;
     }
 
