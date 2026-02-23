@@ -188,7 +188,7 @@ public class PromptManager {
         //    例如：#forget: 1 删除第一条记忆，#forget: all 清空所有
         // #editmem: <index>|<content> - 修改指定序号的记忆
         //    格式：#editmem: 序号|新内容 或 #editmem: 序号|分类|新内容
-        //    例如：#editmem: 1|回复时使用英文
+        //    例如：#editmem: 1|回复时使用英文 
         sb.append("[Memory Tools]\n");
         sb.append("  #remember: <content> - Remember player preferences or instructions for future conversations.\n");
         sb.append("    Format: #remember: content OR #remember: category|content\n");
