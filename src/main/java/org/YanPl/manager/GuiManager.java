@@ -4,7 +4,6 @@ import org.YanPl.FancyHelper;
 import org.YanPl.model.DialogueSession;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;

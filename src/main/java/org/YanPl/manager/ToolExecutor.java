@@ -210,7 +210,7 @@ public class ToolExecutor {
                 sendConfirmButtons(player, cleanCommand);
                 return true;
             } else {
-                player.sendMessage(ChatColor.GOLD + "⇒ YOLO RUN " + ChatColor.WHITE + cleanCommand);
+                player.sendMessage(ChatColor.GOLD + ">> YOLO RUN " + ChatColor.WHITE + cleanCommand);
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                 executeCommand(player, cleanCommand);
                 return true;
@@ -309,7 +309,7 @@ public class ToolExecutor {
      */
     public void sendConfirmButtons(Player player, String displayAction) {
         TextComponent message = new TextComponent(displayAction != null && !displayAction.trim().isEmpty() 
-            ? (ChatColor.GRAY + "⇒ " + displayAction + " ") : "");
+            ? (ChatColor.GRAY + ">> " + ChatColor.WHITE + displayAction + " ") : "");
 
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
@@ -483,6 +483,7 @@ public class ToolExecutor {
     /**
      * 执行 diff 操作
      */
+    private String executeDiffOperation(File root, String pathArg) throws IOException {
         String[] diffParts = pathArg.split("\\|", 3);
         
         if (diffParts.length < 3) {

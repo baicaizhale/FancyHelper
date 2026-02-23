@@ -710,12 +710,12 @@ public class CLIManager {
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.CANCELLED);
                     generationStartTimes.put(uuid, System.currentTimeMillis());
-                    player.sendMessage(ChatColor.YELLOW + "⇒ 已打断 Fancy 生成");
+                    player.sendMessage(ChatColor.YELLOW + "⨉" + ChatColor.WHITE + " 已打断 Fancy 生成");
                     interrupted = true;
                 }
                 if (pendingCommands.containsKey(uuid)) {
                     pendingCommands.remove(uuid);
-                    player.sendMessage(ChatColor.GRAY + "⇒ 已取消当前待处理的操作");
+                    player.sendMessage(ChatColor.YELLOW + "⨉" + ChatColor.WHITE + " 已取消当前待处理的操作");
                     isGenerating.put(uuid, false);
                     generationStates.put(uuid, GenerationStatus.CANCELLED);
                     generationStartTimes.put(uuid, System.currentTimeMillis());

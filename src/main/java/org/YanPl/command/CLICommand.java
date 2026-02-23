@@ -637,17 +637,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         showMemoryList(player);
     }
 
-    private void sendToggleMessage(Player player, String tool, String description) {
-        boolean enabled = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
-        TextComponent message = new TextComponent(ChatColor.WHITE + "- " + description + " (" + tool + "): ");
-        
-        TextComponent status = new TextComponent(enabled ? ChatColor.GREEN + "[已启用]" : ChatColor.RED + "[已禁用]");
-        status.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli toggle " + tool));
-        status.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态")));
-        
-        message.addExtra(status);
-        player.spigot().sendMessage(message);
-    }
+
 
     private void handleNotice(CommandSender sender) {
         sender.sendMessage("§zFancyHelper§b§r §7> §f正在获取公告...");
