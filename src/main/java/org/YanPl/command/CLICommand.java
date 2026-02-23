@@ -7,6 +7,7 @@ import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.manager.InstructionManager;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.ExecutionPlan;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -109,10 +110,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "select":
             case "exempt_anti_loop":
             case "todo":
-            case "gui":
-            case "menu":
             case "retry":
             case "stop":
+            case "plan":
+            case "view_plan":
+            case "approve":
+            case "answer":
             case "memory":
             case "mem":
                 if (!(sender instanceof Player)) {
@@ -229,9 +232,17 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "todo":
                 plugin.getCliManager().openTodoBook(player);
                 return true;
-            case "gui":
-            case "menu":
-                plugin.getGuiManager().openSettingsMenu(player);
+case "plan":
+                handlePlan(player, args);
+                return true;
+            case "approve":
+                handleApprove(player, args);
+                return true;
+            case "answer":
+                handleAnswer(player, args);
+                return true;
+            case "view_plan":
+                plugin.getPlanManager().displayPlanBook(player);
                 return true;
             case "memory":
             case "mem":
@@ -331,70 +342,76 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSettings(Player player) {
-        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
-        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Settings"));
+        // Header
+        player.sendMessage(ColorUtil.translateCustomColors("&z&lFancyHelper &f&l设置"));
         player.sendMessage("");
         
-        // 1. Mode Switch
-        boolean isYolo = plugin.getCliManager().getSession(player.getUniqueId()) != null && 
-                         plugin.getCliManager().getSession(player.getUniqueId()).getMode() == org.YanPl.model.DialogueSession.Mode.YOLO;
+        // 1. Mode - 三个模式循环切换
+        org.YanPl.model.DialogueSession.Mode currentMode = org.YanPl.model.DialogueSession.Mode.NORMAL;
+        if (plugin.getCliManager().getSession(player.getUniqueId()) != null) {
+            currentMode = plugin.getCliManager().getSession(player.getUniqueId()).getMode();
+        }
         
-        TextComponent modeLine = new TextComponent(ColorUtil.translateCustomColors("&7  Mode: "));
-        TextComponent modeVal = new TextComponent(ColorUtil.translateCustomColors(isYolo ? "&cYOLO" : "&aNormal"));
-        modeLine.addExtra(modeVal);
-        modeLine.addExtra("  ");
+        // 计算下一个模式
+        org.YanPl.model.DialogueSession.Mode nextMode;
+        String modeColor;
+        if (currentMode == org.YanPl.model.DialogueSession.Mode.NORMAL) {
+            nextMode = org.YanPl.model.DialogueSession.Mode.YOLO;
+            modeColor = "&a";
+        } else if (currentMode == org.YanPl.model.DialogueSession.Mode.YOLO) {
+            nextMode = org.YanPl.model.DialogueSession.Mode.PLAN;
+            modeColor = "&c";
+        } else {
+            nextMode = org.YanPl.model.DialogueSession.Mode.NORMAL;
+            modeColor = "&b";
+        }
         
-        TextComponent modeBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
-        // modeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli " + (isYolo ? "normal" : "yolo")));
-        modeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "不可在此处更改")));
+        String modeName = currentMode.name();
+        
+        TextComponent modeLine = new TextComponent(ColorUtil.translateCustomColors("&f运行模式: "));
+        TextComponent modeValue = new TextComponent(ColorUtil.translateCustomColors(modeColor + modeName));
+        TextComponent modeBtn = new TextComponent(ColorUtil.translateCustomColors(" &7[切换]"));
+        modeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli " + nextMode.name().toLowerCase()));
+        modeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换模式")));
+        modeLine.addExtra(modeValue);
         modeLine.addExtra(modeBtn);
         player.spigot().sendMessage(modeLine);
-
+        
         // 2. Display Position
         String displayPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
-        TextComponent posLine = new TextComponent(ColorUtil.translateCustomColors("&7  Display: &f" + displayPos + "  "));
-        TextComponent posBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
-        posBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
-        posBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态显示位置 (actionbar/subtitle)")));
-        posLine.addExtra(posBtn);
-        player.spigot().sendMessage(posLine);
+        boolean isActionBar = "actionbar".equalsIgnoreCase(displayPos);
         
-        player.sendMessage("");
-
-        // 3. Management Buttons
-        TextComponent toolsLine = new TextComponent("  ");
+        TextComponent displayLine = new TextComponent(ColorUtil.translateCustomColors("&f显示位置: "));
+        TextComponent displayValue = new TextComponent(ColorUtil.translateCustomColors(isActionBar ? "&eActionBar" : "&eSubtitle"));
+        TextComponent displayBtn = new TextComponent(ColorUtil.translateCustomColors(" &7[切换]"));
+        displayBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
+        displayBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换显示位置")));
+        displayLine.addExtra(displayValue);
+        displayLine.addExtra(displayBtn);
+        player.spigot().sendMessage(displayLine);
         
-        TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6Tools &8]"));
+        // 3. Tools
+        TextComponent toolsLine = new TextComponent(ColorUtil.translateCustomColors("&f工具权限: "));
+        TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&6[管理]"));
         toolsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli tools"));
-        toolsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理文件工具权限")));
-        
-        TextComponent memBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &bMemory &8]"));
-        memBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
-        memBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理持久化记忆")));
-        
+        toolsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理工具权限")));
         toolsLine.addExtra(toolsBtn);
-        toolsLine.addExtra(new TextComponent(" "));
-        toolsLine.addExtra(memBtn);
         player.spigot().sendMessage(toolsLine);
         
-        player.sendMessage("");
-        
-        // 4. GUI Button (Hidden as requested)
-        /*
-        TextComponent guiLine = new TextComponent("      ");
-        TextComponent guiBtn = new TextComponent(ColorUtil.translateCustomColors("&z[OPEN GUI MENU]"));
-        guiBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli gui"));
-        guiBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Open Inventory Menu")));
-        guiLine.addExtra(guiBtn);
-        player.spigot().sendMessage(guiLine);
-        */
+        // 4. Memory
+        TextComponent memLine = new TextComponent(ColorUtil.translateCustomColors("&f记忆管理: "));
+        TextComponent memBtn = new TextComponent(ColorUtil.translateCustomColors("&b[管理]"));
+        memBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
+        memBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理记忆")));
+        memLine.addExtra(memBtn);
+        player.spigot().sendMessage(memLine);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
     }
 
     private void handleTools(Player player) {
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
-        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Tool Permissions"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7工具权限"));
         player.sendMessage("");
         
         // LS Tool
@@ -411,9 +428,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.GRAY + "  重新启用需要验证。");
         
         player.sendMessage("");
-        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7返回 &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "返回设置")));
         player.spigot().sendMessage(backBtn);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -424,10 +441,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         
         TextComponent statusBtn;
         if (enabled) {
-            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aEnabled &8]"));
+            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &a已启用 &8]"));
             statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击禁用 " + tool)));
         } else {
-            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDisabled &8]"));
+            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &c已禁用 &8]"));
             statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击启用 " + tool + " (需要验证)")));
         }
         statusBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli toggle " + tool));
@@ -495,7 +512,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             plugin.getInstructionManager().getInstructions(player.getUniqueId());
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
-        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Memory Management"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7记忆管理"));
         player.sendMessage("");
         
         if (instructions.isEmpty()) {
@@ -519,14 +536,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 // Action Buttons Line
                 TextComponent actions = new TextComponent("     ");
                 
-                TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &eEdit &8]"));
+                TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &e编辑 &8]"));
                 editBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory edit " + (i + 1) + " " + inst.getContent()));
                 editBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击修改此记忆")));
                 actions.addExtra(editBtn);
                 
                 actions.addExtra(" ");
                 
-                TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDel &8]"));
+                TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &c删除 &8]"));
                 delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory del " + (i + 1)));
                 delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击删除此记忆")));
                 actions.addExtra(delBtn);
@@ -541,14 +558,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         // Bottom Buttons
         TextComponent bottomLine = new TextComponent("  ");
         
-        TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aAdd Memory &8]"));
+        TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &a添加记忆 &8]"));
         addBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory add "));
         addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击添加新记忆\n格式: 内容 或 分类|内容")));
         bottomLine.addExtra(addBtn);
         
         if (!instructions.isEmpty()) {
             bottomLine.addExtra("     ");
-            TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cClear All &8]"));
+            TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &c清空全部 &8]"));
             clearBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory clear"));
             clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击清空所有记忆")));
             bottomLine.addExtra(clearBtn);
@@ -557,9 +574,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.spigot().sendMessage(bottomLine);
         
         player.sendMessage("");
-        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7返回 &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "返回设置")));
         player.spigot().sendMessage(backBtn);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -660,11 +677,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "reload", "status", "yolo", "normal", "checkupdate", "upgrade", 
-                "read", "set", "settings", "tools", "display", "toggle", 
-                "notice", "retry", "todo", "memory", "mem", "confirm", 
-                "cancel", "agree", "thought", "select", "exempt_anti_loop", 
-                "stop", "download", "help"
+                "reload", "status", "yolo", "normal", "checkupdate", "upgrade",
+                "read", "set", "settings", "tools", "display", "toggle",
+                "notice", "retry", "todo", "memory", "mem", "confirm",
+                "cancel", "agree", "thought", "select", "exempt_anti_loop",
+                "stop", "download", "plan", "approve", "answer", "help"
             ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
@@ -687,5 +704,94 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .collect(Collectors.toList());
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * 处理计划模式命令
+     * 
+     * @param player 玩家
+     * @param args 参数
+     */
+    private void handlePlan(Player player, String[] args) {
+        // 检查玩家是否在CLI模式中
+        if (!plugin.getCliManager().isInCLI(player)) {
+            player.sendMessage(ChatColor.RED + "请先进入 CLI 模式：/fancyhelper");
+            return;
+        }
+
+        if (args.length == 1) {
+            // /cli plan - 切换计划模式（类似 /cli yolo）
+            plugin.getCliManager().switchMode(player, DialogueSession.Mode.PLAN);
+        } else {
+            String action = args[1].toLowerCase();
+            switch (action) {
+                case "exit":
+                    plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
+                    break;
+                case "modify":
+                    plugin.getPlanManager().openPlanEditGUI(player);
+                    break;
+                case "continue":
+                    plugin.getPlanManager().handlePlanApproval(player, ExecutionPlan.ExecutionMode.CONTINUE);
+                    break;
+                case "cancel":
+                    plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
+                    player.sendMessage(ChatColor.RED + "计划已取消");
+                    break;
+                default:
+                    player.sendMessage(ChatColor.GRAY + "用法: /cli plan [exit|modify|continue|cancel]");
+                    break;
+            }
+        }
+    }
+
+    /**
+     * 处理计划批准命令
+     * 
+     * @param player 玩家
+     * @param args 参数
+     */
+    private void handleApprove(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "请指定执行模式: /cli approve [yolo|normal]");
+            return;
+        }
+
+        String mode = args[1].toLowerCase();
+        switch (mode) {
+            case "yolo":
+                plugin.getPlanManager().handlePlanApproval(player, ExecutionPlan.ExecutionMode.YOLO);
+                break;
+            case "normal":
+                plugin.getPlanManager().handlePlanApproval(player, ExecutionPlan.ExecutionMode.NORMAL);
+                break;
+            default:
+                player.sendMessage(ChatColor.RED + "无效的执行模式，请使用 yolo 或 normal");
+                break;
+        }
+    }
+
+    /**
+     * 处理问题回答命令
+     * 
+     * @param player 玩家
+     * @param args 参数
+     */
+    private void handleAnswer(Player player, String[] args) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("input")) {
+            // /cli answer_input - 打开输入框
+            player.sendMessage(ChatColor.GRAY + "» " + ChatColor.WHITE + "请直接在聊天框输入您的答案");
+            player.sendMessage(ChatColor.GRAY + "» " + ChatColor.WHITE + "输入完成后按 Enter 发送");
+            return;
+        }
+
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "请提供答案内容");
+            return;
+        }
+
+        // 合并所有参数作为答案
+        String answer = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        plugin.getPlanManager().handleAnswer(player, answer);
     }
 }

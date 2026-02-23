@@ -8,6 +8,7 @@ import org.YanPl.FancyHelper;
 import org.YanPl.api.CloudFlareAI;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.Question;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -69,6 +70,9 @@ public class CLIManager {
         EXECUTING_TOOL,
         WAITING_CONFIRM,
         WAITING_CHOICE,
+        PLANNING,              // 计划模式：AI正在分析需求
+        WAITING_ANSWER,        // 计划模式：等待用户回答问题
+        WAITING_PLAN_APPROVAL, // 计划模式：等待计划批准
         COMPLETED,
         CANCELLED,
         ERROR,
@@ -555,11 +559,22 @@ public class CLIManager {
             saveYoloModeState(uuid, true); // 保存 YOLO 状态
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 YOLO 模式。在该模式下，Fancy 执行命令将不再请求您的确认。");
+            // 通知 AI 模式已切换到 YOLO
+            feedbackToAI(player, "#mode_changed: YOLO");
+        } else if (targetMode == DialogueSession.Mode.PLAN) {
+            session.setMode(DialogueSession.Mode.PLAN);
+            player.sendMessage(ChatColor.GRAY + "------------------");
+            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Plan 模式。在该模式下，Fancy 将通过提问收集需求，然后生成执行计划。");
+            player.sendMessage(ChatColor.GRAY + "» 描述您的需求，Fancy 将引导您完成计划制定");
+            // 通知 AI 模式已切换到 PLAN
+            feedbackToAI(player, "#mode_changed: PLAN");
         } else {
             session.setMode(DialogueSession.Mode.NORMAL);
             saveYoloModeState(uuid, false); // 移除 YOLO 状态
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Normal 模式。");
+            // 通知 AI 模式已切换到 NORMAL
+            feedbackToAI(player, "#mode_changed: NORMAL");
         }
         sendEnterMessage(player); // 重新发送页眉以显示新状态
     }
@@ -770,13 +785,25 @@ public class CLIManager {
                 }
                 return true;
             }
+
+            DialogueSession session = sessions.get(uuid);
+            
+            // 处理计划模式下的问题回答
+            if (session != null && session.getMode() == DialogueSession.Mode.PLAN) {
+                List<Question> planQuestions = session.getPlanQuestions();
+                int currentIndex = session.getCurrentQuestionIndex();
+                
+                // 如果有待回答的问题，将消息作为答案处理
+                if (planQuestions != null && !planQuestions.isEmpty() && currentIndex < planQuestions.size()) {
+                    plugin.getPlanManager().handleAnswer(player, message);
+                    return true;
+                }
+            }
             
             if (isGenerating.getOrDefault(uuid, false)) {
                 player.sendMessage(ChatColor.RED + "⨀ 请不要在 Fancy 生成内容时发送消息，如需打断请输入 stop");
                 return true;
             }
-
-            DialogueSession session = sessions.get(uuid);
             // 用户发送了消息，重置工具链计数
             if (session != null) {
                 session.resetToolChain();
@@ -891,10 +918,23 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
-        // 记录用户消息
+// 记录用户消息
         session.appendLog("USER_INPUT", message);
 
-        session.addMessage("user", message);
+        // 检查是否有待发送的计划内容
+        String pendingPlan = session.getPendingPlanMessage();
+        final String finalMessage;
+        if (pendingPlan != null && !pendingPlan.isEmpty()) {
+            // 将计划内容附加到消息前面
+            finalMessage = pendingPlan + "\n\n用户消息: " + message;
+            // 清除待发送的计划
+            session.clearPendingPlanMessage();
+            player.sendMessage(ChatColor.GRAY + "» " + ChatColor.AQUA + "已附带保存的计划内容");
+        } else {
+            finalMessage = message;
+        }
+
+        session.addMessage("user", finalMessage);
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
         generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -1055,7 +1095,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff", "#todo", "#remember", "#forget", "#editmem");
+        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff", "#todo", "#remember", "#forget", "#editmem", "#ask_questions", "#create_plan");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -1284,6 +1324,26 @@ public class CLIManager {
         // 如果该工具之前被中断过且现在继续执行，清除记录
         interruptedToolCalls.remove(uuid);
 
+        // PLAN 模式双重检查：与 ToolExecutor 中的限制逻辑保持一致
+        if (session.getMode() == DialogueSession.Mode.PLAN) {
+            String lowerToolCall = toolCall.toLowerCase().trim();
+            // 允许的工具：#ask_questions、#create_plan、#search、#getpreset、#over、#exit
+            boolean isAllowedTool = lowerToolCall.startsWith("#ask_questions") ||
+                                   lowerToolCall.startsWith("#create_plan") ||
+                                   lowerToolCall.startsWith("#search") ||
+                                   lowerToolCall.startsWith("#getpreset") ||
+                                   lowerToolCall.startsWith("#over") ||
+                                   lowerToolCall.startsWith("#exit");
+
+            if (!isAllowedTool) {
+                plugin.getLogger().warning("[CLI] PLAN 模式下阻止了非法工具调用: " + toolCall);
+                player.sendMessage(ChatColor.RED + "⨀ PLAN 模式下只允许 #ask_questions、#create_plan、#search、#getpreset 工具");
+                feedbackToAI(player, "#error: PLAN 模式禁止直接执行命令。允许的工具：#ask_questions、#create_plan、#search、#getpreset。禁止的工具：#run、#ls、#read、#diff、#todo、#remember、#forget、#editmem、#choose。");
+                // 不设置生成状态为false，让feedbackToAI自动管理
+                return;
+            }
+        }
+
         // 委托给 ToolExecutor 执行
         boolean toolSuccess = toolExecutor.executeTool(player, toolCall, session);
 
@@ -1301,7 +1361,20 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
-        session.addMessage("user", feedback);
+        // 检查是否有待发送的计划内容
+        String pendingPlan = session.getPendingPlanMessage();
+        final String finalFeedback;
+        if (pendingPlan != null && !pendingPlan.isEmpty()) {
+            // 将计划内容附加到反馈前面
+            finalFeedback = pendingPlan + "\n\n" + feedback;
+            // 清除待发送的计划
+            session.clearPendingPlanMessage();
+            player.sendMessage(ChatColor.GRAY + "» " + ChatColor.AQUA + "已附带保存的计划内容");
+        } else {
+            finalFeedback = feedback;
+        }
+
+        session.addMessage("user", finalFeedback);
         
         // 记录反馈后的 Token 估算
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
@@ -1652,19 +1725,25 @@ public class CLIManager {
         player.sendMessage("");
         
         TextComponent message = new TextComponent(ChatColor.WHITE + "Chatting with Fancy ");
-        
+
         if (mode == DialogueSession.Mode.NORMAL) {
             TextComponent modeTag = new TextComponent(ChatColor.GREEN + " (Normal) ");
             modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GOLD + "点击进入 YOLO 模式")));
             modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli yolo"));
             message.addExtra(modeTag);
+        } else if (mode == DialogueSession.Mode.PLAN) {
+            TextComponent modeTag = new TextComponent(ChatColor.AQUA + " (Plan) ");
+            modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击进入 Normal 模式")));
+            modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli normal"));
+            message.addExtra(modeTag);
         } else {
             TextComponent modeTag = new TextComponent(ChatColor.RED + " (YOLO) ");
-            modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击回到 Normal 模式")));
-            modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli normal"));
+            modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.AQUA + "点击进入 Plan 模式")));
+            modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan"));
             message.addExtra(modeTag);
         }
 
+        message.addExtra(ChatColor.GRAY + " ");
         TextComponent settingsBtn = new TextComponent(ChatColor.GRAY + "[Settings]");
         settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击打开工具设置")));
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
@@ -1770,6 +1849,13 @@ public class CLIManager {
      */
     public DialogueSession getSession(UUID uuid) {
         return sessions.get(uuid);
+    }
+
+    /**
+     * 获取工具执行器
+     */
+    public ToolExecutor getToolExecutor() {
+        return toolExecutor;
     }
 
     /**
