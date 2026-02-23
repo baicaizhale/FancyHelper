@@ -31,12 +31,17 @@ class ToolExecutorTest {
     @Mock
     private org.bukkit.entity.Player player;
 
+    @Mock
+    private ConfigManager configManager;
+
     private ToolExecutor toolExecutor;
     private UUID testUuid;
 
     @BeforeEach
     void setUp() {
         when(plugin.getLogger()).thenReturn(Logger.getLogger("TestLogger"));
+        when(plugin.getConfigManager()).thenReturn(configManager);
+        when(configManager.isDebug()).thenReturn(true);
         
         toolExecutor = new ToolExecutor(plugin, cliManager);
         testUuid = UUID.randomUUID();

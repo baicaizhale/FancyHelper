@@ -1,7 +1,9 @@
 package org.YanPl.api;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.AIResponse;
@@ -86,37 +88,35 @@ public class CloudFlareAI {
     }
 
     /**
-     * 记录调试日志到文件（服务器控制台风格）
-     * 每次进入 CLI 模式创建一个文件，该会话的所有 AI 调用都追加到该文件
-     * @param session 对话会话
-     * @param input 向 AI 发送的原始输入
-     * @param output AI 返回的原始输出
+     * 记录交互日志到文件
+     * 记录完整的请求和响应内容（排除 API Key，格式化 JSON）
      */
-    private void logDebug(DialogueSession session, String input, String output) {
+    private void logInteraction(DialogueSession session, String requestBody, String responseBody) {
         try {
-            String logFilePath = session.getLogFilePath();
-            if (logFilePath == null) {
-                return; // 如果没有设置日志文件路径，不记录
+            StringBuilder sb = new StringBuilder();
+            Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
+            
+            // 1. 格式化 Request
+            try {
+                JsonElement reqEl = gson.fromJson(requestBody, JsonElement.class);
+                sb.append("Request Payload:\n").append(prettyGson.toJson(reqEl)).append("\n\n");
+            } catch (Exception e) {
+                sb.append("Request Payload (Raw):\n").append(requestBody).append("\n\n");
             }
 
-            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
-            String pluginName = plugin.getName();
+            // 2. 格式化 Response
+            try {
+                JsonElement respEl = gson.fromJson(responseBody, JsonElement.class);
+                sb.append("Response Payload:\n").append(prettyGson.toJson(respEl)).append("\n");
+            } catch (Exception e) {
+                 sb.append("Response Payload (Raw):\n").append(responseBody).append("\n");
+            }
 
-            StringBuilder logContent = new StringBuilder();
-            logContent.append("[").append(time).append(" INFO]: [").append(pluginName).append("]\n");
-            logContent.append("--------------------------------------------------\n");
-            logContent.append("[REQUEST]\n");
-            logContent.append(input != null ? input : "(null)").append("\n");
-            logContent.append("\n[RESPONSE]\n");
-            logContent.append(output != null ? output : "(null)").append("\n");
-            logContent.append("==================================================\n\n");
-
-            // 追加到日志文件
-            Files.write(Paths.get(logFilePath), logContent.toString().getBytes(StandardCharsets.UTF_8),
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-
-        } catch (IOException e) {
-            plugin.getLogger().warning("[AI 调试] 写入调试日志失败: " + e.getMessage());
+            session.appendLog("AI_INTERACTION", sb.toString());
+            
+        } catch (Exception e) {
+            // 异常回退
+            session.appendLog("AI_RAW_DEBUG", "Request: " + requestBody + "\nResponse: " + responseBody);
         }
     }
 
@@ -137,17 +137,23 @@ public class CloudFlareAI {
         systemMsg.addProperty("role", "system");
         systemMsg.addProperty("content", safeSystemPrompt);
         messagesArray.add(systemMsg);
-        plugin.getLogger().info("[AI 请求] 已添加 System Prompt (长度: " + safeSystemPrompt.length() + ")");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] 已添加 System Prompt (长度: " + safeSystemPrompt.length() + ")");
+        }
 
         List<DialogueSession.Message> historyCopy = new ArrayList<>(session.getHistory());
-        plugin.getLogger().info("[AI 请求] 正在处理 " + historyCopy.size() + " 条历史消息");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] 正在处理 " + historyCopy.size() + " 条历史消息");
+        }
 
         for (DialogueSession.Message msg : historyCopy) {
             String content = msg.getContent();
             String role = msg.getRole();
 
             if (content == null || role == null) {
-                plugin.getLogger().warning("[AI 请求] 跳过内容或角色为空的消息");
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[AI 请求] 已跳过内容或角色为空的消息 (Role: " + role + ")");
+                }
                 continue;
             }
 
@@ -155,12 +161,16 @@ public class CloudFlareAI {
             role = role.trim();
 
             if (content.isEmpty() || role.isEmpty()) {
-                plugin.getLogger().warning("[AI 请求] 跳过修整后内容或角色为空的消息");
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[AI 请求] 已跳过修整后为空的消息 (Role: " + role + ")");
+                }
                 continue;
             }
 
             if ("system".equalsIgnoreCase(role)) {
-                plugin.getLogger().info("[AI 请求] 跳过重复的 system 消息");
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[AI 请求] 跳过重复的 system 消息");
+                }
                 continue;
             }
 
@@ -187,7 +197,9 @@ public class CloudFlareAI {
             m.addProperty("role", "user");
             m.addProperty("content", "hello");
             messagesArray.add(m);
-            plugin.getLogger().info("[AI 请求] 已添加备用用户消息");
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[AI 请求] 已添加备用用户消息");
+            }
         }
 
         return messagesArray;
@@ -256,8 +268,10 @@ public class CloudFlareAI {
             plugin.getLogger().warning("[AI] OpenAI 模型名称为空，已回退到默认值: " + model);
         }
 
-        plugin.getLogger().info("[AI 请求] 使用 OpenAI 兼容 API: " + apiUrl);
-        plugin.getLogger().info("[AI 请求] 模型: " + model);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] 使用 OpenAI 兼容 API: " + apiUrl);
+            plugin.getLogger().info("[AI 请求] 模型: " + model);
+        }
 
         // 如果 API 地址包含 aliyuncs.com 但不包含 /chat/completions，尝试自动补全（针对阿里云通义千问）
         if (apiUrl.contains("aliyuncs.com") && !apiUrl.contains("/chat/completions")) {
@@ -266,7 +280,9 @@ public class CloudFlareAI {
             } else {
                 apiUrl += "/compatible-mode/v1/chat/completions";
             }
-            plugin.getLogger().info("[AI 请求] 检测到阿里云 API，已自动补全路径: " + apiUrl);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[AI 请求] 检测到阿里云 API，已自动补全路径: " + apiUrl);
+            }
         }
 
         // 构建消息数组
@@ -284,7 +300,9 @@ public class CloudFlareAI {
         }
 
         String bodyString = gson.toJson(bodyJson);
-        plugin.getLogger().info("[AI 请求] 消息数: " + messagesArray.size());
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] 消息数: " + messagesArray.size());
+        }
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -297,16 +315,18 @@ public class CloudFlareAI {
 
             HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
-            plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+            }
 
             // 调试日志：输出响应体前 500 个字符
-            if (responseBody != null) {
+            if (responseBody != null && plugin.getConfigManager().isDebug()) {
                 String debugBody = responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody;
                 plugin.getLogger().info("[AI 调试] 响应体内容: " + debugBody);
             }
 
             // 记录原始输入和输出到调试日志文件
-            logDebug(session, bodyString, responseBody);
+            logInteraction(session, bodyString, responseBody);
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
@@ -319,7 +339,9 @@ public class CloudFlareAI {
             if (aiResponse != null && aiResponse.getContent() != null) {
                 String thoughtContent = aiResponse.getThought();
                 if (thoughtContent != null && !thoughtContent.isEmpty()) {
-                    plugin.getLogger().info("[AI] 检测到思考内容 (长度: " + thoughtContent.length() + ")");
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[AI] 检测到思考内容 (长度: " + thoughtContent.length() + ")");
+                    }
                 }
                 return aiResponse;
             }
@@ -359,7 +381,9 @@ public class CloudFlareAI {
 
         boolean useResponsesApi = model.contains("gpt-oss");
         String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
-        plugin.getLogger().info("[AI 请求] URL: " + url);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] URL: " + url);
+        }
 
         // 使用公共方法构建消息数组
         JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
@@ -383,8 +407,10 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
-        plugin.getLogger().info("[AI 请求] 模型: " + model);
-        plugin.getLogger().info("[AI 请求] 数组中的总消息数: " + messagesArray.size());
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] 模型: " + model);
+            plugin.getLogger().info("[AI 请求] 数组中的总消息数: " + messagesArray.size());
+        }
 
         if (bodyString.contains("\"content\":null") || bodyString.contains("\"role\":null")) {
             plugin.getLogger().severe("[AI 错误] 严重：载荷中包含空的 content 或 role！");
@@ -393,7 +419,9 @@ public class CloudFlareAI {
         }
 
         if (bodyString.matches(".*\"content\":\\s*\"\"\\s*[,}].*")) {
-            plugin.getLogger().warning("[AI 请求] 警告：检测到空的内容字符串");
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().warning("[AI 请求] 警告：检测到空的内容字符串");
+            }
         }
 
         try {
@@ -407,10 +435,12 @@ public class CloudFlareAI {
 
             HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
-            plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[AI 响应] 状态码: " + response.statusCode());
+            }
 
             // 记录原始输入和输出到调试日志文件
-            logDebug(session, bodyString, responseBody);
+            logInteraction(session, bodyString, responseBody);
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
@@ -430,9 +460,13 @@ public class CloudFlareAI {
             if (aiResponse != null && aiResponse.getContent() != null) {
                 String thoughtContent = aiResponse.getThought();
                 if (thoughtContent != null) {
-                    plugin.getLogger().info("[AI] Detected thought content in API field (length: " + thoughtContent.length() + ")");
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[AI] Detected thought content in API field (length: " + thoughtContent.length() + ")");
+                    }
                 } else if (aiResponse.getContent().contains("<thought>")) {
-                    plugin.getLogger().info("[AI] Detected thought tags inside text content");
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[AI] Detected thought tags inside text content");
+                    }
                 }
                 return aiResponse;
             }
@@ -483,7 +517,9 @@ public class CloudFlareAI {
         }
 
         String simpleBodyString = gson.toJson(simpleBody);
-        plugin.getLogger().info("[AI Request] Retrying with simplified payload: " + simpleBodyString);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI Request] Retrying with simplified payload: " + simpleBodyString);
+        }
 
         HttpRequest simpleRequest = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -495,10 +531,13 @@ public class CloudFlareAI {
 
         HttpResponse<String> simpleResp = sendWithRetry(simpleRequest);
         String simpleRespBody = simpleResp.body();
-        plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.statusCode());
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI Response - Retry] Code: " + simpleResp.statusCode());
+        }
 
         // 记录重试的原始输入和输出到调试日志文件
-        logDebug(session, simpleBodyString + " (RETRY)", simpleRespBody);
+        session.appendLog("SYSTEM", "Retrying with simplified payload...");
+        logInteraction(session, simpleBodyString, simpleRespBody);
 
         if (simpleResp.statusCode() != 200) {
             plugin.getLogger().warning("[AI Error - Retry] Response Body: " + simpleRespBody);

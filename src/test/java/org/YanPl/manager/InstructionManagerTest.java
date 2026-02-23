@@ -38,6 +38,9 @@ class InstructionManagerTest {
     @Mock
     private org.bukkit.OfflinePlayer offlinePlayer;
 
+    @Mock
+    private ConfigManager configManager;
+
     private InstructionManager instructionManager;
     private UUID testUuid;
     private String testPlayerName = "TestPlayer";
@@ -52,6 +55,8 @@ class InstructionManagerTest {
         when(plugin.getServer()).thenReturn(server);
         when(server.getOfflinePlayer(any(UUID.class))).thenReturn(offlinePlayer);
         when(offlinePlayer.getName()).thenReturn(testPlayerName);
+        when(plugin.getConfigManager()).thenReturn(configManager);
+        when(configManager.isDebug()).thenReturn(true);
 
         instructionManager = new InstructionManager(plugin);
         testUuid = UUID.randomUUID();

@@ -66,7 +66,9 @@ public class InstructionManager {
         instructions.add(instruction);
         saveInstructions(uuid, instructions);
         
-        plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 添加了新记忆: " + content);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 添加了新记忆: " + content);
+        }
         return "success: 已记住: " + content;
     }
 
@@ -81,7 +83,9 @@ public class InstructionManager {
         PlayerInstruction removed = instructions.remove(index - 1);
         saveInstructions(uuid, instructions);
         
-        plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 删除了记忆: " + removed.getContent());
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 删除了记忆: " + removed.getContent());
+        }
         return "success: 已删除第 " + index + " 条记忆: " + removed.getContent();
     }
 
@@ -101,7 +105,9 @@ public class InstructionManager {
         instructions.set(index - 1, updated);
         saveInstructions(uuid, instructions);
         
-        plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 修改了第 " + index + " 条记忆: " + content);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 修改了第 " + index + " 条记忆: " + content);
+        }
         return "success: 已修改第 " + index + " 条记忆为: " + content;
     }
 
@@ -114,7 +120,9 @@ public class InstructionManager {
             file.delete();
         }
         
-        plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 清空了所有记忆");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 清空了所有记忆");
+        }
         return "success: 已清空所有记忆";
     }
 

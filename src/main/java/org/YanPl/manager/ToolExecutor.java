@@ -42,12 +42,19 @@ public class ToolExecutor {
     public boolean executeTool(Player player, String toolCall, DialogueSession session) {
         UUID uuid = player.getUniqueId();
 
+        // 记录工具调用日志
+        if (session != null) {
+            session.appendLog("TOOL_EXECUTION", "Executing tool: " + toolCall);
+        }
+
         // 解析工具名称和参数
         ToolParseResult parseResult = parseToolCall(toolCall);
         String toolName = parseResult.toolName;
         String args = parseResult.args;
 
-        plugin.getLogger().info("[CLI] 正在为 " + player.getName() + " 执行工具: " + toolName + " (参数: " + args + ")");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 正在为 " + player.getName() + " 执行工具: " + toolName + " (参数: " + args + ")");
+        }
 
         // 显示工具调用信息
         displayToolCall(player, toolName, args);
@@ -220,18 +227,33 @@ public class ToolExecutor {
      * 检查是否为风险命令
      */
     private boolean isRiskyCommand(String cmd) {
+        String cleanCmd = cmd.trim();
+        if (cleanCmd.toLowerCase().startsWith("minecraft:")) {
+            cleanCmd = cleanCmd.substring(10).trim();
+        }
+        
+        // 处理 execute 命令的递归检查
+        if (cleanCmd.toLowerCase().startsWith("execute")) {
+            String lower = cleanCmd.toLowerCase();
+            int runIndex = lower.indexOf(" run ");
+            if (runIndex != -1) {
+                String subCmd = cleanCmd.substring(runIndex + 5).trim();
+                return isRiskyCommand(subCmd);
+            }
+        }
+
         List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
         if (risky == null || risky.isEmpty()) return false;
         
-        String lc = cmd.toLowerCase();
+        String lc = cleanCmd.toLowerCase();
         for (String r : risky) {
             if (r == null) continue;
             String rr = r.trim().toLowerCase();
             if (rr.isEmpty()) continue;
-            if (lc.startsWith(rr)) return true;
-            int spaceIdx = lc.indexOf(' ');
-            String first = spaceIdx >= 0 ? lc.substring(0, spaceIdx) : lc;
-            if (first.equals(rr)) return true;
+            
+            // 精确匹配命令名或带参数的命令
+            if (lc.equals(rr)) return true;
+            if (lc.startsWith(rr + " ")) return true;
         }
         return false;
     }
@@ -506,6 +528,8 @@ public class ToolExecutor {
                 Arrays.asList("fill", "setblock", "tp", "teleport", "give", "gamemode", 
                               "spawnpoint", "weather", "time", "msg", "tell", "w", "say", "list", "execute").contains(cmdName);
 
+            player.sendMessage(ChatColor.GRAY + "⇒ 命令已下发，等待反馈中...");
+
             boolean success;
             if (!isVanilla) {
                 try {
@@ -519,18 +543,49 @@ public class ToolExecutor {
             }
 
             boolean finalSuccess = success;
-            player.sendMessage(ChatColor.GRAY + "⇒ 命令已下发，等待反馈中...");
 
             if (!plugin.isEnabled()) return;
+            
+            // 延迟 1 秒 (20 ticks) 检查反馈
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                String packetOutput = "";
+                String currentPacketOutput = "";
+                String currentProxyOutput = output.toString();
+                boolean hasOutput = false;
+
+                // 检查 PacketCapture 是否有内容
                 if (plugin.getPacketCaptureManager() != null) {
-                    packetOutput = plugin.getPacketCaptureManager().stopCapture(player);
+                    currentPacketOutput = plugin.getPacketCaptureManager().peekCapture(player);
+                    if (!currentPacketOutput.isEmpty()) hasOutput = true;
+                }
+                // 检查拦截器是否有内容
+                if (!currentProxyOutput.isEmpty()) hasOutput = true;
+
+                // 如果有输出，或者命令执行失败，则立即结束
+                if (hasOutput || !finalSuccess) {
+                    String finalPacketOutput = "";
+                    if (plugin.getPacketCaptureManager() != null) {
+                        finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
+                    }
+                    String finalResult = buildCommandResult(command, finalPacketOutput, currentProxyOutput, finalSuccess);
+                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
+                    cliManager.feedbackToAI(player, "#run_result: " + finalResult);
+                    return;
                 }
 
-                String finalResult = buildCommandResult(command, packetOutput, output.toString(), finalSuccess);
-                player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
-                cliManager.feedbackToAI(player, "#run_result: " + finalResult);
+                // 如果没有输出，延长等待 5 秒 (100 ticks)
+                player.sendMessage(ChatColor.GRAY + "⇒ 暂无反馈，延长等待 5秒...");
+                
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    String delayedPacketOutput = "";
+                    if (plugin.getPacketCaptureManager() != null) {
+                        delayedPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
+                    }
+                    
+                    String finalResult = buildCommandResult(command, delayedPacketOutput, output.toString(), finalSuccess);
+                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
+                    cliManager.feedbackToAI(player, "#run_result: " + finalResult);
+                }, 100L);
+
             }, 20L);
         });
     }
