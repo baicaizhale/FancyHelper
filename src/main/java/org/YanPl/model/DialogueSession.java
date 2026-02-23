@@ -5,6 +5,13 @@ import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -147,6 +154,30 @@ public class DialogueSession {
      */
     public void setLogFilePath(String logFilePath) {
         this.logFilePath = logFilePath;
+    }
+
+    /**
+     * 追加内容到会话日志文件
+     *
+     * @param type    日志类型 (如 USER, AI, SYSTEM, TOOL, ERROR)
+     * @param content 日志内容
+     */
+    public synchronized void appendLog(String type, String content) {
+        if (logFilePath == null) return;
+        try {
+            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            StringBuilder sb = new StringBuilder();
+            sb.append("[").append(time).append("] [").append(type).append("]\n");
+            if (content != null && !content.isEmpty()) {
+                sb.append(content).append("\n");
+            }
+            sb.append("----------------------------------------\n");
+            
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // 忽略日志写入错误，避免影响主流程
+        }
     }
 
     public List<Message> getHistory() {

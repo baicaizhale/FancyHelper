@@ -187,8 +187,10 @@ public class PromptManager {
         //    例如：#remember: language|回复时使用英文
         //    限制：每个玩家最多存储 50 条记忆
         //    **重要**：记忆必须简洁明了，每条不超过50字，提炼关键信息
+        //    **禁止**：不要记录临时状态或正在进行的任务（如“正在分析日志”），任务请使用 #todo
         //    正确：#remember: style|用简洁的中文回复
         //    错误：#remember: style|我希望你在回复我的时候能够使用简洁明了的中文，不要太啰嗦
+        //    错误：#remember: task|正在修复登录bug
         // #forget: <index|all> - 删除指定序号的记忆或清空所有记忆
         //    例如：#forget: 1 删除第一条记忆，#forget: all 清空所有
         // #editmem: <index>|<content> - 修改指定序号的记忆
@@ -201,9 +203,11 @@ public class PromptManager {
         sb.append("    Example: #remember: language|Reply in English\n");
         sb.append("    Limit: Max 50 memories per player.\n");
         sb.append("    **IMPORTANT**: Keep memories concise. Each memory MUST NOT exceed 50 characters. Extract key information only.\n");
+        sb.append("    **DO NOT** remember temporary states or in-progress tasks (e.g., 'Analyzing logs', 'Fixing bug'). Use #todo for tasks.\n");
         sb.append("    **Use objective phrasing**: Avoid pronouns like 'I', 'you', 'me'. Use 'player' or imperative mood instead.\n");
         sb.append("    Correct: #remember: style|Reply in concise Chinese\n");
         sb.append("    Wrong: #remember: style|I want you to use concise and clear Chinese when replying to me\n");
+        sb.append("    Wrong: #remember: task|Currently fixing the login bug\n");
         sb.append("  #forget: <index|all> - Delete a specific memory by index or clear all memories.\n");
         sb.append("    Example: #forget: 1 (delete first memory), #forget: all (clear all)\n");
         sb.append("  #editmem: <index>|<content> - Modify a specific memory by index.\n");

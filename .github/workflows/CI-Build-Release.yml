@@ -32,10 +32,6 @@ permissions:
   contents: write
   pull-requests: read
 
-env:
-  # 【修复】定义全局变量，确保 Maven 将依赖下载到工作目录，方便 Actions 缓存识别
-  MAVEN_OPTS: -Dmaven.repo.local=${{ github.workspace }}/.m2/repository
-
 jobs:
   # ==================== 单元测试 ====================
   test:
@@ -54,16 +50,6 @@ jobs:
           java-version: ${{ matrix.java }}
           distribution: temurin
           cache: maven
-
-      - name: 缓存 Maven 依赖
-        uses: actions/cache@v4
-        with:
-          # 【修复】将路径从 ~/.m2/repository 改为与 MAVEN_OPTS 一致的路径
-          path: ${{ github.workspace }}/.m2/repository
-          key: ${{ runner.os }}-maven-java${{ matrix.java }}-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-java${{ matrix.java }}-
-            ${{ runner.os }}-maven-
 
       - name: 运行单元测试
         run: mvn -B test
@@ -127,14 +113,6 @@ jobs:
           java-version: 17
           distribution: temurin
           cache: maven
-
-      - name: 缓存 Maven 依赖
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
 
       - name: 生成短 SHA
         id: sha

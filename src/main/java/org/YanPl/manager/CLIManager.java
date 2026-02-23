@@ -362,7 +362,9 @@ public class CLIManager {
      * 关闭管理器，清理资源
      */
     public void shutdown() {
-        plugin.getLogger().info("[CLI] 正在关闭 CLIManager...");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 正在关闭 CLIManager...");
+        }
         
         // 移除所有活跃的CLI玩家
         for (UUID uuid : new ArrayList<>(activeCLIPayers)) {
@@ -381,7 +383,9 @@ public class CLIManager {
             ai.shutdown();
         }
         
-        plugin.getLogger().info("[CLI] CLIManager 已完成关闭。");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] CLIManager 已完成关闭。");
+        }
     }
 
     /**
@@ -397,11 +401,15 @@ public class CLIManager {
             return;
         }
 
-        plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在进入 FancyHelper。");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在进入 FancyHelper。");
+        }
         
         // 检查用户协议
         if (!agreedPlayers.contains(uuid)) {
-            plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 需要同意协议。");
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 需要同意协议。");
+            }
             sendAgreement(player);
             pendingAgreementPlayers.add(uuid);
             return;
@@ -422,7 +430,9 @@ public class CLIManager {
             String logFileName = timestamp + ".log";
             Path logFilePath = logDir.resolve(logFileName);
             session.setLogFilePath(logFilePath.toString());
-            plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+            }
         } catch (IOException e) {
             plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
         }
@@ -507,7 +517,9 @@ public class CLIManager {
             return;
         }
         
-        plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在退出 FancyHelper。");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在退出 FancyHelper。");
+        }
         
         // 退出前自动取消待确认的工具调用
         if (pendingCommands.containsKey(uuid)) {
@@ -588,6 +600,11 @@ public class CLIManager {
 
     public void handleConfirm(Player player) {
         UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session != null && pendingCommands.containsKey(uuid)) {
+            session.appendLog("USER_ACTION", "Confirmed command: " + pendingCommands.get(uuid));
+        }
+
         if (pendingCommands.containsKey(uuid)) {
             String cmd = pendingCommands.get(uuid);
             if (!"CHOOSING".equals(cmd)) {
@@ -626,6 +643,11 @@ public class CLIManager {
 
     public void handleCancel(Player player) {
         UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session != null && pendingCommands.containsKey(uuid)) {
+            session.appendLog("USER_ACTION", "Cancelled command: " + pendingCommands.get(uuid));
+        }
+
         if (pendingCommands.containsKey(uuid)) {
             pendingCommands.remove(uuid);
             player.sendMessage(ChatColor.GRAY + "⇒ 命令已取消");
@@ -650,7 +672,9 @@ public class CLIManager {
 
         // 如果玩家在等待协议同意
         if (pendingAgreementPlayers.contains(uuid)) {
-            plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 发送了协议同意消息: " + message);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 发送了协议同意消息: " + message);
+            }
             if (message.equalsIgnoreCase("agree")) {
                 // 再次检查 EULA 状态
                 if (!plugin.getEulaManager().isEulaValid()) {
@@ -686,7 +710,9 @@ public class CLIManager {
             if (message.startsWith("！") || message.startsWith("!")) {
                 return false;
             }
-            plugin.getLogger().info("[CLI] 拦截到来自 " + player.getName() + " 的消息: " + message);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 拦截到来自 " + player.getName() + " 的消息: " + message);
+            }
             if (message.equalsIgnoreCase("exit")) {
                 exitCLI(player);
                 return true;
@@ -795,6 +821,11 @@ public class CLIManager {
      */
     public void handleRetry(Player player) {
         UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session != null) {
+            session.appendLog("USER_ACTION", "Retrying AI call");
+        }
+        
         RetryInfo retryInfo = retryInfoMap.get(uuid);
         if (retryInfo == null) {
             player.sendMessage(ChatColor.GRAY + "没有可重试的操作。");
@@ -887,6 +918,9 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
+// 记录用户消息
+        session.appendLog("USER_INPUT", message);
+
         // 检查是否有待发送的计划内容
         String pendingPlan = session.getPendingPlanMessage();
         final String finalMessage;
@@ -910,7 +944,9 @@ public class CLIManager {
         playerMsg.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断")));
         player.spigot().sendMessage(playerMsg);
 
-        plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + calculateTotalEstimatedTokens(player, session));
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + calculateTotalEstimatedTokens(player, session));
+        }
 
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -987,10 +1023,12 @@ public class CLIManager {
         if (aiResponse.getPromptTokens() > 0 || aiResponse.getCompletionTokens() > 0) {
             session.addInputTokens(aiResponse.getPromptTokens());
             session.addOutputTokens(aiResponse.getCompletionTokens());
-            plugin.getLogger().info("[CLI] Token Usage - Input: " + aiResponse.getPromptTokens() + 
-                ", Output: " + aiResponse.getCompletionTokens() + 
-                ", Total Input: " + session.getTotalInputTokens() + 
-                ", Total Output: " + session.getTotalOutputTokens());
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] Token Usage - Input: " + aiResponse.getPromptTokens() + 
+                    ", Output: " + aiResponse.getCompletionTokens() + 
+                    ", Total Input: " + session.getTotalInputTokens() + 
+                    ", Total Output: " + session.getTotalOutputTokens());
+            }
         }
 
         // 收到 AI 回复，立即停止计时
@@ -1000,14 +1038,18 @@ public class CLIManager {
 
         // 如果生成已被打断，则丢弃响应
         if (!isGenerating.getOrDefault(uuid, false)) {
-            plugin.getLogger().info("[CLI] 由于被中断，丢弃了 " + player.getName() + " 的 AI 响应。");
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 由于被中断，丢弃了 " + player.getName() + " 的 AI 响应。");
+            }
             return;
         }
 
         String response = aiResponse.getContent();
         String thoughtContent = aiResponse.getThought() != null ? aiResponse.getThought() : "";
 
-        plugin.getLogger().info("[CLI] 已收到 " + player.getName() + " 的 AI 响应 (长度: " + response.length() + ")");
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 已收到 " + player.getName() + " 的 AI 响应 (长度: " + response.length() + ")");
+        }
 
         // 如果 response 里面还有 <thought> 或 <thinking> 标签（API 可能没拆分出来），则继续尝试提取
         java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(response);
@@ -1336,14 +1378,18 @@ public class CLIManager {
         
         // 记录反馈后的 Token 估算
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
-        plugin.getLogger().info("[CLI] Feedback added. Session size: " + session.getHistory().size() + ", Estimated Tokens for next request: " + estimatedTokens);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] Feedback added. Session size: " + session.getHistory().size() + ", Estimated Tokens for next request: " + estimatedTokens);
+        }
 
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
         generationStartTimes.put(uuid, System.currentTimeMillis());
 
         // 工具返回信息不显示给玩家，仅在日志记录并触发 AI 思考
-        plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + feedback);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + feedback);
+        }
 
         // 异步调用 AI，不显示 "Thought..." 提示，因为这是后台自动反馈
         if (!plugin.isEnabled()) return;

@@ -18,6 +18,7 @@ import org.YanPl.manager.NoticeManager;
 import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.manager.InstructionManager;
 import org.YanPl.manager.PlanManager;
+import org.YanPl.manager.GuiManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -50,7 +51,8 @@ public final class FancyHelper extends JavaPlugin {
     private ErrorHandler errorHandler;
     private InstructionManager instructionManager;
     private PlanManager planManager;
-    private GUIManager guiManager;
+    private org.YanPl.gui.GUIManager guiManager;
+    private GuiManager guiSettingsManager;
 
     @Override
     public void onEnable() {
@@ -100,6 +102,10 @@ public final class FancyHelper extends JavaPlugin {
             // 初始化偏好记忆管理器
             instructionManager = new InstructionManager(this);
 
+            // 初始化 GUI 设置菜单管理器
+            guiSettingsManager = new GuiManager(this);
+            getServer().getPluginManager().registerEvents(guiSettingsManager, this);
+
             // 初始化 CLI 管理器（管理玩家的 AI 会话）
             cliManager = new CLIManager(this);
 
@@ -131,8 +137,8 @@ public final class FancyHelper extends JavaPlugin {
                 getLogger().severe("无法注册命令 'fancyhelper' - 请检查 plugin.yml！");
             }
 
-            // 初始化GUI管理器
-            guiManager = new GUIManager(this);
+            // 初始化 GUI 栈管理器
+            guiManager = new org.YanPl.gui.GUIManager(this);
 
             // 注册事件监听器
             getServer().getPluginManager().registerEvents(new ChatListener(this), this);
@@ -448,12 +454,16 @@ public final class FancyHelper extends JavaPlugin {
         return instructionManager;
     }
 
-    public PlanManager getPlanManager() {
+public PlanManager getPlanManager() {
         return planManager;
     }
 
-    public GUIManager getGuiManager() {
+    public org.YanPl.gui.GUIManager getGuiManager() {
         return guiManager;
+    }
+
+    public GuiManager getGuiSettingsManager() {
+        return guiSettingsManager;
     }
 
     /**

@@ -219,7 +219,9 @@ public class UpdateManager implements Listener {
      * @param alreadyAsync 是否已经在异步任务中执行
      */
     public void downloadAndInstall(Player sender, boolean autoReload, boolean alreadyAsync) {
-        plugin.getLogger().info("下载并安装更新被调用 - 有可用更新: " + hasUpdate + ", 下载地址: " + downloadUrl);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("下载并安装更新被调用 - 有可用更新: " + hasUpdate + ", 下载地址: " + downloadUrl);
+        }
 
         if (!hasUpdate || downloadUrl == null) {
             if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可用的更新。"));
@@ -233,8 +235,10 @@ public class UpdateManager implements Listener {
             String mirror = plugin.getConfigManager().getUpdateMirror();
             String finalUrl = mirror + downloadUrl;
 
-            plugin.getLogger().info("开始下载更新，镜像源: " + mirror);
-            plugin.getLogger().info("下载URL: " + finalUrl);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("开始下载更新，镜像源: " + mirror);
+                plugin.getLogger().info("下载URL: " + finalUrl);
+            }
 
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(30))
@@ -262,8 +266,10 @@ public class UpdateManager implements Listener {
                 File pluginsDir = plugin.getDataFolder().getParentFile();
                 String newJarName = latestFileName;
                 File newJarFile = new File(pluginsDir, newJarName);
-
-                plugin.getLogger().info("准备保存新版本到: " + newJarFile.getAbsolutePath());
+                
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("准备保存新版本到: " + newJarFile.getAbsolutePath());
+                }
 
                 try (InputStream inputStream = response.body()) {
                     Files.copy(inputStream, newJarFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
@@ -324,7 +330,9 @@ public class UpdateManager implements Listener {
                 }
 
                 if (autoReload) {
+                    if (plugin.getConfigManager().isDebug()) {
                     plugin.getLogger().info("准备执行自动重载...");
+                }
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         // 强制使用控制台执行深度重载，避免权限或上下文问题

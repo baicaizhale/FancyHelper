@@ -40,7 +40,9 @@ public class TodoManager {
      */
     public String updateTodos(UUID uuid, String todoJson) {
         try {
-            plugin.getLogger().info("[TODO] 接收到 待办 JSON: " + todoJson);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[TODO] 接收到 待办 JSON: " + todoJson);
+            }
             JsonElement jsonElement = gson.fromJson(todoJson, JsonElement.class);
 
             if (jsonElement == null || !jsonElement.isJsonArray()) {
@@ -79,7 +81,9 @@ public class TodoManager {
 
             // 更新玩家的 待办列表
             playerTodos.put(uuid, newTodos);
-            plugin.getLogger().info("[TODO] 成功更新 " + newTodos.size() + " 个任务");
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[TODO] 成功更新 " + newTodos.size() + " 个任务");
+            }
             return "TODO 列表已更新";
 
         } catch (JsonSyntaxException e) {

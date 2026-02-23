@@ -110,6 +110,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "select":
             case "exempt_anti_loop":
             case "todo":
+            case "gui":
+            case "menu":
             case "retry":
             case "stop":
             case "plan":
@@ -232,7 +234,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "todo":
                 plugin.getCliManager().openTodoBook(player);
                 return true;
-            case "plan":
+case "plan":
                 handlePlan(player, args);
                 return true;
             case "approve":
@@ -243,6 +245,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "view_plan":
                 plugin.getPlanManager().displayPlanBook(player);
+                return true;
+            case "gui":
+            case "menu":
+                plugin.getGuiSettingsManager().openSettingsMenu(player);
                 return true;
             case "memory":
             case "mem":
@@ -342,42 +348,109 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSettings(Player player) {
-        player.sendMessage(ChatColor.GOLD + "--- FancyHelper 设置 ---");
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Settings"));
+        player.sendMessage("");
         
-        TextComponent toolsBtn = new TextComponent(ChatColor.WHITE + "- 工具权限: ");
-        TextComponent toolsStatus = new TextComponent(ChatColor.YELLOW + "[管理]");
-        toolsStatus.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli tools"));
-        toolsStatus.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理文件工具权限")));
-        toolsBtn.addExtra(toolsStatus);
-        player.spigot().sendMessage(toolsBtn);
+        // 1. Mode Switch
+        boolean isYolo = plugin.getCliManager().getSession(player.getUniqueId()) != null && 
+                         plugin.getCliManager().getSession(player.getUniqueId()).getMode() == org.YanPl.model.DialogueSession.Mode.YOLO;
         
-        TextComponent memoryBtn = new TextComponent(ChatColor.WHITE + "- 记忆管理: ");
-        TextComponent enterBtn = new TextComponent(ChatColor.YELLOW + "[管理]");
-        enterBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
-        enterBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
-        memoryBtn.addExtra(enterBtn);
-        player.spigot().sendMessage(memoryBtn);
+        TextComponent modeLine = new TextComponent(ColorUtil.translateCustomColors("&7  Mode: "));
+        TextComponent modeVal = new TextComponent(ColorUtil.translateCustomColors(isYolo ? "&cYOLO" : "&aNormal"));
+        modeLine.addExtra(modeVal);
+        modeLine.addExtra("  ");
+        
+        TextComponent modeBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
+        // modeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli " + (isYolo ? "normal" : "yolo")));
+        modeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "不可在此处更改")));
+        modeLine.addExtra(modeBtn);
+        player.spigot().sendMessage(modeLine);
 
+        // 2. Display Position
         String displayPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
-        TextComponent displayMsg = new TextComponent(ChatColor.WHITE + "- 状态显示位置: ");
-        TextComponent posStatus = new TextComponent(ChatColor.AQUA + "[" + displayPos + "]");
-        posStatus.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
-        posStatus.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换 (actionbar/subtitle)")));
-        displayMsg.addExtra(posStatus);
-        player.spigot().sendMessage(displayMsg);
+        TextComponent posLine = new TextComponent(ColorUtil.translateCustomColors("&7  Display: &f" + displayPos + "  "));
+        TextComponent posBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
+        posBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
+        posBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态显示位置 (actionbar/subtitle)")));
+        posLine.addExtra(posBtn);
+        player.spigot().sendMessage(posLine);
+        
+        player.sendMessage("");
+
+        // 3. Management Buttons
+        TextComponent toolsLine = new TextComponent("  ");
+        
+        TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6Tools &8]"));
+        toolsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli tools"));
+        toolsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理文件工具权限")));
+        
+        TextComponent memBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &bMemory &8]"));
+        memBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
+        memBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理持久化记忆")));
+        
+        toolsLine.addExtra(toolsBtn);
+        toolsLine.addExtra(new TextComponent(" "));
+        toolsLine.addExtra(memBtn);
+        player.spigot().sendMessage(toolsLine);
+        
+        player.sendMessage("");
+        
+        // 4. GUI Button (Hidden as requested)
+        /*
+        TextComponent guiLine = new TextComponent("      ");
+        TextComponent guiBtn = new TextComponent(ColorUtil.translateCustomColors("&z[OPEN GUI MENU]"));
+        guiBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli gui"));
+        guiBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Open Inventory Menu")));
+        guiLine.addExtra(guiBtn);
+        player.spigot().sendMessage(guiLine);
+        */
+        
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
     }
 
     private void handleTools(Player player) {
-        player.sendMessage(ChatColor.GOLD + "--- 工具权限管理 ---");
-        sendToggleMessage(player, "ls", "列出文件列表");
-        sendToggleMessage(player, "read", "读取文件内容");
-        sendToggleMessage(player, "diff", "修改文件内容");
-        player.sendMessage(ChatColor.GRAY + "注意：工具关闭后再开启需要重新进行安全验证。");
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Tool Permissions"));
+        player.sendMessage("");
         
-        TextComponent backBtn = new TextComponent(ChatColor.GRAY + "[返回设置]");
+        // LS Tool
+        sendToolLine(player, "ls", "列出目录(ls)", plugin.getConfigManager().isPlayerToolEnabled(player, "ls"));
+        
+        // READ Tool
+        sendToolLine(player, "read", "读取文件(read)", plugin.getConfigManager().isPlayerToolEnabled(player, "read"));
+        
+        // DIFF Tool
+        sendToolLine(player, "diff", "编辑文件(diff)", plugin.getConfigManager().isPlayerToolEnabled(player, "diff"));
+        
+        player.sendMessage("");
+        player.sendMessage(ChatColor.GRAY + "  点击按钮切换工具权限。");
+        player.sendMessage(ChatColor.GRAY + "  重新启用需要验证。");
+        
+        player.sendMessage("");
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击返回设置界面")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
         player.spigot().sendMessage(backBtn);
+        
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+    }
+    
+    private void sendToolLine(Player player, String tool, String description, boolean enabled) {
+        TextComponent line = new TextComponent(ColorUtil.translateCustomColors("&7  " + description + ": "));
+        
+        TextComponent statusBtn;
+        if (enabled) {
+            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aEnabled &8]"));
+            statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击禁用 " + tool)));
+        } else {
+            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDisabled &8]"));
+            statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击启用 " + tool + " (需要验证)")));
+        }
+        statusBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli toggle " + tool));
+        
+        line.addExtra(statusBtn);
+        player.spigot().sendMessage(line);
     }
 
     private void handleMemory(Player player, String[] args) {
@@ -438,51 +511,75 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         java.util.List<InstructionManager.PlayerInstruction> instructions = 
             plugin.getInstructionManager().getInstructions(player.getUniqueId());
         
-        player.sendMessage(ChatColor.GOLD + "--- 记忆管理 ---");
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Memory Management"));
+        player.sendMessage("");
         
         if (instructions.isEmpty()) {
-            player.sendMessage(ChatColor.GRAY + "暂无记忆记录");
+            player.sendMessage(ChatColor.GRAY + "  暂无记忆记录。");
+            player.sendMessage(ChatColor.GRAY + "  AI 将不会保留任何长期记忆。");
         } else {
             for (int i = 0; i < instructions.size(); i++) {
                 InstructionManager.PlayerInstruction inst = instructions.get(i);
-                TextComponent line = new TextComponent(ChatColor.WHITE + "" + (i + 1) + ". ");
                 
-                TextComponent category = new TextComponent(ChatColor.AQUA + "[" + inst.getCategory() + "] ");
+                // Memory Content Line
+                TextComponent line = new TextComponent(ColorUtil.translateCustomColors("&8  " + (i + 1) + ". "));
+                
+                TextComponent category = new TextComponent(ColorUtil.translateCustomColors("&3" + inst.getCategory() + " &8| "));
                 line.addExtra(category);
                 
-                TextComponent content = new TextComponent(ChatColor.WHITE + inst.getContent());
+                TextComponent content = new TextComponent(ColorUtil.translateCustomColors("&7" + inst.getContent()));
                 line.addExtra(content);
                 
-                line.addExtra(ChatColor.GRAY + " ");
+                player.spigot().sendMessage(line);
                 
-                TextComponent editBtn = new TextComponent(ChatColor.YELLOW + "[改]");
+                // Action Buttons Line
+                TextComponent actions = new TextComponent("     ");
+                
+                TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &eEdit &8]"));
                 editBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory edit " + (i + 1) + " " + inst.getContent()));
                 editBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击修改此记忆")));
-                line.addExtra(editBtn);
+                actions.addExtra(editBtn);
                 
-                line.addExtra(ChatColor.GRAY + " ");
+                actions.addExtra(" ");
                 
-                TextComponent delBtn = new TextComponent(ChatColor.RED + "[删]");
+                TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDel &8]"));
                 delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory del " + (i + 1)));
                 delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击删除此记忆")));
-                line.addExtra(delBtn);
+                actions.addExtra(delBtn);
                 
-                player.spigot().sendMessage(line);
+                player.spigot().sendMessage(actions);
+                player.sendMessage(""); // Spacer
             }
         }
         
-        player.sendMessage(ChatColor.GRAY + "");
-        TextComponent addBtn = new TextComponent(ChatColor.GREEN + "[+ 新增记忆]");
+        player.sendMessage("");
+        
+        // Bottom Buttons
+        TextComponent bottomLine = new TextComponent("  ");
+        
+        TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aAdd Memory &8]"));
         addBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory add "));
-        addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击添加新记忆")));
-        player.spigot().sendMessage(addBtn);
+        addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击添加新记忆\n格式: 内容 或 分类|内容")));
+        bottomLine.addExtra(addBtn);
         
         if (!instructions.isEmpty()) {
-            TextComponent clearBtn = new TextComponent(ChatColor.RED + "[清空全部]");
+            bottomLine.addExtra("     ");
+            TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cClear All &8]"));
             clearBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory clear"));
-            clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击清空所有记忆")));
-            player.spigot().sendMessage(clearBtn);
+            clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击清空所有记忆")));
+            bottomLine.addExtra(clearBtn);
         }
+        
+        player.spigot().sendMessage(bottomLine);
+        
+        player.sendMessage("");
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
+        backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        player.spigot().sendMessage(backBtn);
+        
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
     }
 
     private void handleMemoryAdd(Player player, String content) {
@@ -498,15 +595,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
         
         if (memoryContent.isEmpty()) {
-            player.sendMessage(ChatColor.RED + "记忆内容不能为空");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c记忆内容不能为空"));
             return;
         }
         
         String result = plugin.getInstructionManager().addInstruction(player, memoryContent, category);
         if (result.startsWith("success")) {
-            player.sendMessage(ChatColor.GREEN + "已添加记忆: " + memoryContent);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已添加记忆: " + memoryContent));
         } else {
-            player.sendMessage(ChatColor.RED + result);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
         showMemoryList(player);
     }
@@ -514,9 +611,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleMemoryDelete(Player player, int index) {
         String result = plugin.getInstructionManager().removeInstruction(player, index);
         if (result.startsWith("success")) {
-            player.sendMessage(ChatColor.YELLOW + "已删除第 " + index + " 条记忆");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e已删除第 " + index + " 条记忆"));
         } else {
-            player.sendMessage(ChatColor.RED + result);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
         showMemoryList(player);
     }
@@ -534,15 +631,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
         
         if (memoryContent.isEmpty()) {
-            player.sendMessage(ChatColor.RED + "记忆内容不能为空");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c记忆内容不能为空"));
             return;
         }
         
         String result = plugin.getInstructionManager().updateInstruction(player, index, memoryContent, category);
         if (result.startsWith("success")) {
-            player.sendMessage(ChatColor.GREEN + "已修改第 " + index + " 条记忆");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已修改第 " + index + " 条记忆"));
         } else {
-            player.sendMessage(ChatColor.RED + result);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
         showMemoryList(player);
     }
@@ -550,9 +647,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleMemoryClear(Player player) {
         String result = plugin.getInstructionManager().clearInstructions(player);
         if (result.startsWith("success")) {
-            player.sendMessage(ChatColor.YELLOW + "已清空所有记忆");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e已清空所有记忆"));
         } else {
-            player.sendMessage(ChatColor.RED + result);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
         showMemoryList(player);
     }
