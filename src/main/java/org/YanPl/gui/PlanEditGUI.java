@@ -13,9 +13,7 @@ import org.YanPl.model.ExecutionPlan;
 import org.YanPl.model.PlanStep;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 计划编辑主界面（54槽Chest GUI）
@@ -185,6 +183,8 @@ public class PlanEditGUI extends GUI {
      */
     private void fillSteps() {
         List<PlanStep> currentSteps = getCurrentPageSteps();
+        int totalSteps = temporaryPlan.getSteps().size();
+        int startIndex = currentPage * ITEMS_PER_PAGE;
 
         // 填充步骤物品（第1-4行，每行9个）
         for (int i = 0; i < ITEMS_PER_PAGE; i++) {
@@ -192,35 +192,23 @@ public class PlanEditGUI extends GUI {
 
             if (i < currentSteps.size()) {
                 PlanStep step = currentSteps.get(i);
-                inventory.setItem(slot, createStepItem(step, i + 1));
+                // 显示全局步骤序号
+                inventory.setItem(slot, createStepItem(step, startIndex + i + 1));
             } else {
                 // 空槽位填充灰色玻璃板
-                inventory.setItem(slot, createGlassPane(ChatColor.of("#AAAAAA"), " "));
-            }
-        }
-
-        // 第5行：分页按钮
-        if (getTotalPages() > 1) {
-            if (currentPage > 0) {
-                inventory.setItem(PREV_PAGE_SLOT, createPageButton("上一页", Material.ARROW));
-            }
-            if (currentPage < getTotalPages() - 1) {
-                inventory.setItem(NEXT_PAGE_SLOT, createPageButton("下一页", Material.ARROW));
-            }
-        }
-
-        // 第5行其他位置填充灰色玻璃板
-        for (int slot = 45; slot < 54; slot++) {
-            if (slot != PREV_PAGE_SLOT && slot != NEXT_PAGE_SLOT && slot != CANCEL_SLOT && slot != SAVE_SLOT) {
                 inventory.setItem(slot, createGlassPane(ChatColor.of("#AAAAAA"), " "));
             }
         }
     }
 
     /**
-     * 填充操作按钮行
+     * 填充操作按钮行（第5行）
+     * 布局：[取消][页信息][上一页][页码][分隔][页码][下一页][页信息][保存]
+     * 槽位：  45     46      47    48    49    50    51      52     53
      */
     private void fillActionButtons() {
+        int totalPages = getTotalPages();
+
         // 取消按钮
         ItemStack cancelItem = new ItemStack(Material.BARRIER);
         ItemMeta cancelMeta = cancelItem.getItemMeta();
@@ -243,12 +231,62 @@ public class PlanEditGUI extends GUI {
         }
         inventory.setItem(SAVE_SLOT, saveItem);
 
-        // 其余位置填充绿色玻璃板
-        for (int slot = 46; slot < 53; slot++) {
-            if (slot != CANCEL_SLOT && slot != SAVE_SLOT) {
+        // 分页相关按钮（仅当有多页时显示）
+        if (totalPages > 1) {
+            // 上一页按钮
+            if (currentPage > 0) {
+                inventory.setItem(PREV_PAGE_SLOT, createPageButton("上一页", Material.SPECTRAL_ARROW));
+            } else {
+                inventory.setItem(PREV_PAGE_SLOT, createGlassPane(ChatColor.of("#666666"), " "));
+            }
+
+            // 下一页按钮
+            if (currentPage < totalPages - 1) {
+                inventory.setItem(NEXT_PAGE_SLOT, createPageButton("下一页", Material.SPECTRAL_ARROW));
+            } else {
+                inventory.setItem(NEXT_PAGE_SLOT, createGlassPane(ChatColor.of("#666666"), " "));
+            }
+
+            // 页码显示（槽位48和50）
+            ItemStack pageInfo = createPageInfo();
+            inventory.setItem(48, pageInfo);
+            inventory.setItem(50, pageInfo);
+
+            // 中间分隔（槽位49）
+            inventory.setItem(49, createGlassPane(ChatColor.of("#AAFFAA"), " "));
+
+            // 页码信息指示器（槽位46和52）
+            inventory.setItem(46, createGlassPane(ChatColor.of("#AAFFAA"), " "));
+            inventory.setItem(52, createGlassPane(ChatColor.of("#AAFFAA"), " "));
+        } else {
+            // 单页模式，填充绿色玻璃板
+            for (int slot = 46; slot < 53; slot++) {
                 inventory.setItem(slot, createGlassPane(ChatColor.of("#AAFFAA"), " "));
             }
         }
+    }
+
+    /**
+     * 创建页码信息物品
+     */
+    private ItemStack createPageInfo() {
+        ItemStack item = new ItemStack(Material.KNOWLEDGE_BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            int totalPages = getTotalPages();
+            int totalSteps = temporaryPlan.getSteps().size();
+            meta.setDisplayName(ChatColor.AQUA + "第 " + ChatColor.YELLOW + (currentPage + 1) + 
+                              ChatColor.AQUA + " / " + ChatColor.YELLOW + totalPages + ChatColor.AQUA + " 页");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "共 " + ChatColor.WHITE + totalSteps + ChatColor.GRAY + " 个步骤");
+            lore.add("");
+            lore.add(ChatColor.GRAY + "当前显示: " + ChatColor.WHITE + 
+                    (currentPage * ITEMS_PER_PAGE + 1) + " - " + 
+                    Math.min((currentPage + 1) * ITEMS_PER_PAGE, totalSteps));
+            meta.setLore(lore);
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 
     /**
