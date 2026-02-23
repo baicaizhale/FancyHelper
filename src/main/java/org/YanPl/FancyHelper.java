@@ -4,8 +4,6 @@ import org.YanPl.api.MetasoAPI;
 import org.YanPl.api.TavilyAPI;
 import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
-import org.YanPl.listener.GUIListener;
-import org.YanPl.gui.GUIManager;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
 import org.YanPl.manager.PacketCaptureManager;
@@ -17,7 +15,7 @@ import org.YanPl.manager.TodoManager;
 import org.YanPl.manager.NoticeManager;
 import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.manager.InstructionManager;
-import org.YanPl.manager.PlanManager;
+import org.YanPl.manager.GuiManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -49,8 +47,7 @@ public final class FancyHelper extends JavaPlugin {
     private MetasoAPI metasoAPI;
     private ErrorHandler errorHandler;
     private InstructionManager instructionManager;
-    private PlanManager planManager;
-    private org.YanPl.gui.GUIManager guiManager;
+    private GuiManager guiManager;
 
     @Override
     public void onEnable() {
@@ -79,12 +76,10 @@ public final class FancyHelper extends JavaPlugin {
             // 检查 ProtocolLib 依赖并初始化数据包捕获管理器
             if (getServer().getPluginManager().isPluginEnabled("ProtocolLib")) {
                 initPacketCapture();
-                // 初始化告示牌编辑器
-                org.YanPl.gui.SignEditor.init(this);
             } else {
                 getLogger().warning("==================");
                 getLogger().warning("未检测到 ProtocolLib！");
-                getLogger().warning("FancyHelper 的部分高级功能（如命令输出捕获、告示牌编辑）将无法使用。");
+                getLogger().warning("FancyHelper 的部分高级功能（如命令输出捕获）将无法使用。");
                 getLogger().warning("建议前往 https://www.spigotmc.org/resources/protocollib.1997/ 下载并安装以获得最佳体验。");
                 getLogger().warning("==================");
                 packetCaptureManager = null;
@@ -100,11 +95,12 @@ public final class FancyHelper extends JavaPlugin {
             // 初始化偏好记忆管理器
             instructionManager = new InstructionManager(this);
 
+            // 初始化 GUI 管理器
+            guiManager = new GuiManager(this);
+            getServer().getPluginManager().registerEvents(guiManager, this);
+
             // 初始化 CLI 管理器（管理玩家的 AI 会话）
             cliManager = new CLIManager(this);
-
-            // 初始化计划模式管理器
-            planManager = new PlanManager(this, cliManager, cliManager.getToolExecutor());
 
             // 初始化更新管理器并检查更新
             updateManager = new UpdateManager(this);
@@ -131,12 +127,8 @@ public final class FancyHelper extends JavaPlugin {
                 getLogger().severe("无法注册命令 'fancyhelper' - 请检查 plugin.yml！");
             }
 
-            // 初始化 GUI 栈管理器
-            guiManager = new org.YanPl.gui.GUIManager(this);
-
             // 注册事件监听器
             getServer().getPluginManager().registerEvents(new ChatListener(this), this);
-            getServer().getPluginManager().registerEvents(new GUIListener(this, guiManager), this);
 
             // bStats 统计
             int pluginId = 29036;
@@ -448,11 +440,7 @@ public final class FancyHelper extends JavaPlugin {
         return instructionManager;
     }
 
-public PlanManager getPlanManager() {
-        return planManager;
-    }
-
-    public org.YanPl.gui.GUIManager getGuiManager() {
+    public GuiManager getGuiManager() {
         return guiManager;
     }
 

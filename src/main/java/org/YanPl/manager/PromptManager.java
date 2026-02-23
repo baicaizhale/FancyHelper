@@ -1,7 +1,6 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
-import org.YanPl.model.DialogueSession;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -147,17 +146,10 @@ public class PromptManager {
         // #run: <command> - 以玩家身份执行命令。**注意：一次只能执行一条命令**
         // #over - 任务完成标志。**必须放在回复末尾，且前面必须有对玩家的总结回复，严禁单独调用**
         // #exit - 当用户想退出 FancyHelper 时调用
-        // #execute_plan: <plan_content> - 执行计划指令（由系统发送，表示用户已批准计划）
         sb.append("[Execution Tools]\n");
         sb.append("  #run: <command> - Execute command as player. **Note: Only ONE command per call**.\n");
         sb.append("  #over - Task completion marker. **Must be at the end of response, with a summary to player before it. NEVER call it alone.**\n");
-        sb.append("  #exit - Call when user wants to exit FancyHelper.\n");
-        sb.append("  #execute_plan: <plan_content> - System instruction indicating user has approved the execution plan. Contains plan title, description, and steps.\n");
-        sb.append("    IMPORTANT: When you receive #execute_plan, you MUST:\n");
-        sb.append("    1. Create a TODO list using #todo based on the plan steps\n");
-        sb.append("    2. Set the first task status to 'in_progress'\n");
-        sb.append("    3. Start executing the first step\n");
-        sb.append("    4. Do NOT create a new plan, execute the existing one\n");
+        sb.append("  #exit - Call when user wants to exit FancyHelper.\n\n");
         
         // 【文件类工具】（以下工具的执行结果玩家不可见）
         // #ls: <path> - 列出目录内容。如 #ls: plugins/FancyHelper
@@ -242,57 +234,7 @@ public class PromptManager {
         sb.append("    View TODO: After calling #todo, the system will return the complete list. Players can also use /fancyhelper todo command.\n");
         sb.append("    Important: Each #todo call returns complete TODO list details. You can understand all task statuses from it.\n");
         sb.append("    Best practice: Update task status to completed immediately after finishing, so players know the progress.\n\n");
-
-        // 【计划模式工具】（仅在计划模式下显示）
-        DialogueSession session = plugin.getCliManager().getSession(player.getUniqueId());
-        if (session != null && session.getMode() == DialogueSession.Mode.PLAN) {
-            sb.append("[Plan Mode Tools] (Available ONLY in plan mode)\n");
-            sb.append("[IMPORTANT: PLAN MODE CONSTRAINTS]\n");
-            sb.append("In PLAN mode, you are RESTRICTED to using ONLY specific tools.\n");
-            sb.append("ALLOWED tools: #ask_questions, #create_plan, #search, #getpreset, #over, #exit\n");
-            sb.append("FORBIDDEN tools: #run, #ls, #read, #diff, #todo, #remember, #forget, #editmem, #choose\n");
-            sb.append("VIOLATION: Attempting to call forbidden tools in PLAN mode will result in ERROR.\n");
-            sb.append("CRITICAL: In PLAN mode, you MUST use #ask_questions tool to ask questions. DO NOT ask questions directly in your response text.\n");
-            sb.append("  - Wrong: \"请问您想要什么样的房子？\" (text-based question - forbidden)\n");
-            sb.append("  - Right: #ask_questions: [{\"id\":\"1\",\"type\":\"text\",\"text\":\"请问您想要什么样的房子？\",\"order\":1}] (use tool)\n");
-            sb.append("WORKFLOW:\n");
-            sb.append("  1. Use #ask_questions tool to collect user requirements. NEVER ask questions in text.\n");
-            sb.append("  2. Before gathering information, ALWAYS check Available Presets list first. If relevant preset exists, use #getpreset to read it. Otherwise use #search.\n");
-            sb.append("  3. After all questions are answered, use #create_plan to generate execution plan based on collected information\n");
-            sb.append("  4. Wait for user approval of the plan\n");
-            sb.append("  5. After plan is approved, execution will be handled by the system\n");
-            sb.append("IMPORTANT: Prioritize reading preset files in PLAN mode. DO NOT guess or assume plugin commands.\n");
-            sb.append("  #ask_questions: <json> - Ask players questions to collect requirements (plan mode only).\n");
-            sb.append("    JSON array format with question objects.\n");
-            sb.append("    Required fields: id (unique identifier), type (question type: text/checkbox/radio), text (question text), order (sequence)\n");
-            sb.append("    Optional fields: options (option list, for checkbox/radio only), required (whether required, default true)\n");
-            sb.append("    CRITICAL: This is the ONLY way to ask questions in PLAN mode. NEVER ask questions in your response text.\n");
-            sb.append("    Type descriptions:\n");
-            sb.append("      - text: Text input, player types answer in chat\n");
-            sb.append("      - checkbox: Multiple choice, player enters option numbers separated by commas\n");
-            sb.append("      - radio: Single choice, player enters option number\n");
-            sb.append("    Constraint: After all questions are answered, system will collect answers and notify AI. AI should then call #create_plan to generate plan.\n");
-            sb.append("    Example: #ask_questions: [{\"id\":\"1\",\"type\":\"text\",\"text\":\"Describe your requirement\",\"order\":1},{\"id\":\"2\",\"type\":\"checkbox\",\"text\":\"What features do you need?\",\"options\":[\"FeatureA\",\"FeatureB\",\"FeatureC\"],\"order\":2}]\n");
-            sb.append("  #create_plan: <json> - Create execution plan (plan mode only).\n");
-            sb.append("    JSON object format.\n");
-            sb.append("    Required fields: title (plan title), steps (step array)\n");
-            sb.append("    Optional fields: description (plan description)\n");
-            sb.append("    Step object required fields: order (sequence), description (step description, only describes what to do, not specific commands)\n");
-            sb.append("    Step object optional fields: notes (additional notes)\n");
-            sb.append("    Constraint: Plan steps only describe 'what to do', not specific Minecraft commands. Commands will be dynamically generated by AI during execution.\n");
-            sb.append("    IMPORTANT: After calling #create_plan, you MUST STOP and wait for the user to select an execution mode (YOLO, Normal, or Modify). Do NOT call any other tools after #create_plan.\n");
-            sb.append("    Example: #create_plan: {\"title\":\"Build House\",\"description\":\"Build a house with a pool\",\"steps\":[{\"order\":1,\"description\":\"Select building location\"},{\"order\":2,\"description\":\"Clear area\"},{\"order\":3,\"description\":\"Build foundation\"}]}\n\n");
-        }
-
-        // ===== 模式切换通知 =====
-        // 【模式切换通知】当收到 #mode_changed 指令时，AI 需要根据新模式调整行为
-        sb.append("[Mode Change Notification]\n");
-        sb.append("When you receive #mode_changed: <MODE> instruction, the current mode has been switched. Adjust your behavior accordingly:\n");
-        sb.append("  - #mode_changed: PLAN: You are now in PLAN mode. Use #ask_questions and #create_plan tools. DO NOT execute any commands.\n");
-        sb.append("  - #mode_changed: YOLO: You are now in YOLO mode. You can execute commands directly without confirmation. Use #todo to track progress for complex tasks.\n");
-        sb.append("  - #mode_changed: NORMAL: You are now in NORMAL mode. Each command execution requires user confirmation. Use #todo to track progress for complex tasks.\n");
-        sb.append("IMPORTANT: When switching from PLAN mode to YOLO or NORMAL mode (after plan approval), you MUST create a TODO list based on the plan steps.\n\n");
-
+        
         // ==================== Usage Guide / 使用指南 ====================
         // 【使用指南】
         // 1. **先检查预设是否存在**：调用 #getpreset 前必须先检查 Available Presets 列表中是否存在该预设
@@ -330,8 +272,7 @@ public class PromptManager {
         sb.append("   - Should use: Complex multi-step tasks, tasks needing planning, tasks needing progress display\n");
         sb.append("   - Should NOT use: Simple tasks under 2 steps, questions answerable in single response, tight loop tasks\n");
         sb.append("   - Create TODO list immediately after receiving complex task, update task status timely\n");
-        sb.append("   - Important: After calling #todo, you MUST end the response immediately. Do not call other tools in the same response.\n");
-        sb.append("   - **Special Case**: When receiving #execute_plan instruction (after plan approval), you MUST create a TODO list based on the plan steps.\n\n");
+        sb.append("   - Important: After calling #todo, you MUST end the response immediately. Do not call other tools in the same response.\n\n");
         
         // ==================== Current Time / 当前时间 ====================
         // 【当前时间】放在最后以确保缓存命中优化

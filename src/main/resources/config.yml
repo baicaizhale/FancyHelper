@@ -18,15 +18,15 @@ settings:
   # Token（字符数）剩余警告阈值
   token_warning_threshold: 100
   # 是否启用匿名错误上报，帮助开发者改进插件
-  auto_report: true
+  auto_report: true  
   # 是否启用自动更新检查
-  check_update: true
+  check_update: true  
   # 是否在管理员进入服务器时提示更新
-  op_update_notify: true
+  op_update_notify: true 
   # 是否在检测到新版本时自动下载并安装更新，Paper及下游服务端推荐开启（使用Spigot及上游服务端请关闭此选项，目前还是会出bug）
-  auto_upgrade: true
+  auto_upgrade: true  
   # GitHub 镜像源，用于加速下载
-  update_mirror: "https://ghproxy.net/"
+  update_mirror: "https://ghproxy.net/"  
   # 自动检测重复工具调用 (防止 AI 陷入死循环)
   anti_loop:
     # 连续多少次相似调用触发中断
