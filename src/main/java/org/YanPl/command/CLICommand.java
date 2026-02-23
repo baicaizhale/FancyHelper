@@ -349,19 +349,19 @@ case "plan":
 
     private void handleSettings(Player player) {
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
-        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Settings"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7设置"));
         player.sendMessage("");
         
         // 1. Mode Switch
         boolean isYolo = plugin.getCliManager().getSession(player.getUniqueId()) != null && 
                          plugin.getCliManager().getSession(player.getUniqueId()).getMode() == org.YanPl.model.DialogueSession.Mode.YOLO;
         
-        TextComponent modeLine = new TextComponent(ColorUtil.translateCustomColors("&7  Mode: "));
+        TextComponent modeLine = new TextComponent(ColorUtil.translateCustomColors("&7  模式："));
         TextComponent modeVal = new TextComponent(ColorUtil.translateCustomColors(isYolo ? "&cYOLO" : "&aNormal"));
         modeLine.addExtra(modeVal);
         modeLine.addExtra("  ");
         
-        TextComponent modeBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
+        TextComponent modeBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7切换 &8]"));
         // modeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli " + (isYolo ? "normal" : "yolo")));
         modeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "不可在此处更改")));
         modeLine.addExtra(modeBtn);
@@ -369,8 +369,8 @@ case "plan":
 
         // 2. Display Position
         String displayPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
-        TextComponent posLine = new TextComponent(ColorUtil.translateCustomColors("&7  Display: &f" + displayPos + "  "));
-        TextComponent posBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
+        TextComponent posLine = new TextComponent(ColorUtil.translateCustomColors("&7  显示位置：&f" + displayPos + "  "));
+        TextComponent posBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7切换 &8]"));
         posBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
         posBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态显示位置 (actionbar/subtitle)")));
         posLine.addExtra(posBtn);
@@ -381,11 +381,11 @@ case "plan":
         // 3. Management Buttons
         TextComponent toolsLine = new TextComponent("  ");
         
-        TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6Tools &8]"));
+        TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6工具 &8]"));
         toolsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli tools"));
         toolsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理文件工具权限")));
         
-        TextComponent memBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &bMemory &8]"));
+        TextComponent memBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &b记忆 &8]"));
         memBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
         memBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理持久化记忆")));
         
@@ -398,9 +398,9 @@ case "plan":
         
         // 4. GUI Button
         TextComponent guiLine = new TextComponent("      ");
-        TextComponent guiBtn = new TextComponent(ColorUtil.translateCustomColors("&z[OPEN GUI MENU]"));
+        TextComponent guiBtn = new TextComponent(ColorUtil.translateCustomColors("&z[打开 GUI 菜单]"));
         guiBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli gui"));
-        guiBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Open Inventory Menu")));
+        guiBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "打开背包菜单")));
         guiLine.addExtra(guiBtn);
         player.spigot().sendMessage(guiLine);
         
@@ -409,7 +409,7 @@ case "plan":
 
     private void handleTools(Player player) {
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
-        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Tool Permissions"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7工具权限"));
         player.sendMessage("");
         
         // LS Tool
@@ -426,9 +426,9 @@ case "plan":
         player.sendMessage(ChatColor.GRAY + "  重新启用需要验证。");
         
         player.sendMessage("");
-        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7返回 &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "返回设置")));
         player.spigot().sendMessage(backBtn);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -439,10 +439,10 @@ case "plan":
         
         TextComponent statusBtn;
         if (enabled) {
-            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aEnabled &8]"));
+            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &a已启用 &8]"));
             statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击禁用 " + tool)));
         } else {
-            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDisabled &8]"));
+            statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &c已禁用 &8]"));
             statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击启用 " + tool + " (需要验证)")));
         }
         statusBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli toggle " + tool));
@@ -510,7 +510,7 @@ case "plan":
             plugin.getInstructionManager().getInstructions(player.getUniqueId());
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
-        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Memory Management"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7记忆管理"));
         player.sendMessage("");
         
         if (instructions.isEmpty()) {
@@ -534,14 +534,14 @@ case "plan":
                 // Action Buttons Line
                 TextComponent actions = new TextComponent("     ");
                 
-                TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &eEdit &8]"));
+                TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &e编辑 &8]"));
                 editBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory edit " + (i + 1) + " " + inst.getContent()));
                 editBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击修改此记忆")));
                 actions.addExtra(editBtn);
                 
                 actions.addExtra(" ");
                 
-                TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDel &8]"));
+                TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &c删除 &8]"));
                 delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory del " + (i + 1)));
                 delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击删除此记忆")));
                 actions.addExtra(delBtn);
@@ -556,14 +556,14 @@ case "plan":
         // Bottom Buttons
         TextComponent bottomLine = new TextComponent("  ");
         
-        TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aAdd Memory &8]"));
+        TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &a添加记忆 &8]"));
         addBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory add "));
         addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击添加新记忆\n格式: 内容 或 分类|内容")));
         bottomLine.addExtra(addBtn);
         
         if (!instructions.isEmpty()) {
             bottomLine.addExtra("     ");
-            TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cClear All &8]"));
+            TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &c清空全部 &8]"));
             clearBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory clear"));
             clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击清空所有记忆")));
             bottomLine.addExtra(clearBtn);
@@ -572,9 +572,9 @@ case "plan":
         player.spigot().sendMessage(bottomLine);
         
         player.sendMessage("");
-        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7返回 &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "返回设置")));
         player.spigot().sendMessage(backBtn);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
