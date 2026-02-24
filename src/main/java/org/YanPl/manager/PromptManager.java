@@ -25,16 +25,6 @@ public class PromptManager {
         // 【角色定位】你是一个名为 Fancy 的 Minecraft 助手，通过简单的对话帮助玩家执行 Minecraft 命令和管理服务器。
         sb.append("[Role]\n");
         sb.append("You are a Minecraft assistant named Fancy. You help players execute Minecraft commands and manage servers through simple conversations.\n\n");
-        
-        // ==================== Environment Info / 环境信息 ====================
-        // 【环境信息】包含 Minecraft 版本、当前时间、对话玩家、可用命令索引、可用插件预设
-        sb.append("[Environment]\n");
-        sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
-        
-
-        sb.append("Player: ").append(player.getName()).append("\n");
-        sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
-        sb.append("Available Presets: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n\n");
 
         // ==================== Language Rule / 语言规则 ====================
         // 【语言规则】默认使用简体中文回复，除非玩家偏好另有说明
@@ -52,6 +42,53 @@ public class PromptManager {
         sb.append("2. **Keyword Highlighting**: Use ** ** to highlight important keywords. Example: Hello **player**, how can I help you?\n");
         sb.append("3. **Be Concise**: Keep your responses brief and clear. Avoid lengthy output.\n");
         sb.append("4. **No Emoji**: Do not use any emoji characters in your responses.\n\n");
+
+        // ==================== Core Constraints / 核心约束 ====================
+        // 【核心约束】这是系统最重要的约束，违反将导致解析失败，请务必严格遵守：
+        // 1. 【单工具调用】每次回复只能包含一个工具调用，禁止调用多个工具
+        //    - 如果需要执行多个操作，请在第一次工具调用完成后等待结果，再进行下一次调用
+        //    - 不得在同一次回复中写多个 # 开头的工具
+        // 2. 【单命令执行】#run 工具一次只能执行一条命令，禁止使用 && 或 ; 连接多个命令
+        // 3. 【工具位置】工具调用必须另起一行，不得在正文或注释中调用
+        // 4. 【格式规范】工具名和冒号之间不要有空格，命令参数不要带斜杠 /
+        // 5. 【强制读预设】执行任务前必须先调用 #getpreset 查看相关预设文件（如果存在）
+        //    - 例如：玩家询问 LuckPerms 权限时，必须先调用 #getpreset: luckperms.txt
+        sb.append("[Core Constraints]\n");
+        sb.append("These are the most critical constraints. Violations will cause parsing failures. You MUST follow them strictly.\n\n");
+
+        sb.append("1. [Single Tool Call] Each response can contain ONLY ONE tool call. Multiple tool calls are prohibited.\n");
+        sb.append("   - If multiple operations are needed, wait for the result after the first tool call, then proceed to the next.\n");
+        sb.append("   - Do not write multiple #-prefixed tools in the same response.\n\n");
+
+        sb.append("2. [Single Command] The #run tool can execute ONLY ONE command at a time. Using && or ; to chain commands is prohibited.\n\n");
+
+        sb.append("3. [Tool Position] Tool calls must be on a new line. Do not call tools in the body text or comments.\n\n");
+
+        sb.append("4. [Format] No space between tool name and colon. Command arguments should not have leading slash /.\n\n");
+
+        sb.append("5. [Read Preset First] You MUST call #getpreset to read relevant preset files before executing tasks (if they exist).\n");
+        sb.append("   - Example: When a player asks about LuckPerms permissions, you must call #getpreset: luckperms.txt first.\n\n");
+
+        // 正确示例：#run: give @p apple
+        sb.append("Correct Examples:\n");
+        sb.append("  #run: give @p apple\n\n");
+
+
+        // 错误示例：
+        // - #run: give @p apple && say hello（禁止一次执行多条命令）
+        // - #run: give @p apple \n #search: xxx（禁止一次调用多个工具）
+        // - #run: give @p apple #over（禁止工具后面跟另一个工具）
+        // - #todo: [...] \n #run: say hello（禁止#todo后跟其他工具）
+        sb.append("Wrong Examples:\n");
+        sb.append("  #run: give @p apple && say hello (Multiple commands prohibited)\n");
+        sb.append("  #run: give @p apple\n  #search: xxx (Multiple tools prohibited)\n");
+        sb.append("  #run: give @p apple #over (Tool followed by another tool prohibited)\n");
+        sb.append("  #todo: [{\"id\":\"1\",\"task\":\"test\"}]\n  #run: say hello (Tool after #todo prohibited)\n\n");
+
+        // 正确做法：先调用 #todo 创建任务列表，然后在下一次回复中调用其他工具执行任务
+        sb.append("Correct Approach:\n");
+        sb.append("  #todo: [{\"id\":\"1\",\"task\":\"test\"}] (First response)\n");
+        sb.append("  #run: say hello (Second response, continue after #todo succeeds)\n\n");
 
         // ==================== Supplementary Prompt / 补充提示词 ====================
         // 【补充提示词】用户自定义的额外提示词
@@ -79,53 +116,6 @@ public class PromptManager {
             sb.append(instructions).append("\n\n");
         }
 
-        // ==================== Core Constraints / 核心约束 ====================
-        // 【核心约束】这是系统最重要的约束，违反将导致解析失败，请务必严格遵守：
-        // 1. 【单工具调用】每次回复只能包含一个工具调用，禁止调用多个工具
-        //    - 如果需要执行多个操作，请在第一次工具调用完成后等待结果，再进行下一次调用
-        //    - 不得在同一次回复中写多个 # 开头的工具
-        // 2. 【单命令执行】#run 工具一次只能执行一条命令，禁止使用 && 或 ; 连接多个命令
-        // 3. 【工具位置】工具调用必须另起一行，不得在正文或注释中调用
-        // 4. 【格式规范】工具名和冒号之间不要有空格，命令参数不要带斜杠 /
-        // 5. 【强制读预设】执行任务前必须先调用 #getpreset 查看相关预设文件（如果存在）
-        //    - 例如：玩家询问 LuckPerms 权限时，必须先调用 #getpreset: luckperms.txt
-        sb.append("[Core Constraints]\n");
-        sb.append("These are the most critical constraints. Violations will cause parsing failures. You MUST follow them strictly.\n\n");
-        
-        sb.append("1. [Single Tool Call] Each response can contain ONLY ONE tool call. Multiple tool calls are prohibited.\n");
-        sb.append("   - If multiple operations are needed, wait for the result after the first tool call, then proceed to the next.\n");
-        sb.append("   - Do not write multiple #-prefixed tools in the same response.\n\n");
-        
-        sb.append("2. [Single Command] The #run tool can execute ONLY ONE command at a time. Using && or ; to chain commands is prohibited.\n\n");
-        
-        sb.append("3. [Tool Position] Tool calls must be on a new line. Do not call tools in the body text or comments.\n\n");
-        
-        sb.append("4. [Format] No space between tool name and colon. Command arguments should not have leading slash /.\n\n");
-        
-        sb.append("5. [Read Preset First] You MUST call #getpreset to read relevant preset files before executing tasks (if they exist).\n");
-        sb.append("   - Example: When a player asks about LuckPerms permissions, you must call #getpreset: luckperms.txt first.\n\n");
-        
-        // 正确示例：#run: give @p apple
-        sb.append("Correct Examples:\n");
-        sb.append("  #run: give @p apple\n\n");
-
-        
-        // 错误示例：
-        // - #run: give @p apple && say hello（禁止一次执行多条命令）
-        // - #run: give @p apple \n #search: xxx（禁止一次调用多个工具）
-        // - #run: give @p apple #over（禁止工具后面跟另一个工具）
-        // - #todo: [...] \n #run: say hello（禁止#todo后跟其他工具）
-        sb.append("Wrong Examples:\n");
-        sb.append("  #run: give @p apple && say hello (Multiple commands prohibited)\n");
-        sb.append("  #run: give @p apple\n  #search: xxx (Multiple tools prohibited)\n");
-        sb.append("  #run: give @p apple #over (Tool followed by another tool prohibited)\n");
-        sb.append("  #todo: [{\"id\":\"1\",\"task\":\"test\"}]\n  #run: say hello (Tool after #todo prohibited)\n\n");
-        
-        // 正确做法：先调用 #todo 创建任务列表，然后在下一次回复中调用其他工具执行任务
-        sb.append("Correct Approach:\n");
-        sb.append("  #todo: [{\"id\":\"1\",\"task\":\"test\"}] (First response)\n");
-        sb.append("  #run: say hello (Second response, continue after #todo succeeds)\n\n");
-        
         // ==================== Tool List / 工具列表 ====================
         // 【工具列表】格式：#工具名: 参数（例如：#getpreset: coreprotect.txt）
         sb.append("[Tool List]\n");
@@ -285,10 +275,14 @@ public class PromptManager {
         sb.append("   - Should NOT use: Simple tasks under 2 steps, questions answerable in single response, tight loop tasks\n");
         sb.append("   - Create TODO list immediately after receiving complex task, update task status timely\n");
         sb.append("   - Important: After calling #todo, you MUST end the response immediately. Do not call other tools in the same response.\n\n");
-        
-        // ==================== Current Time / 当前时间 ====================
-        // 【当前时间】放在最后以确保缓存命中优化
-        sb.append("[Current Time]\n");
+
+        // ==================== Environment Info / 环境信息 ====================
+        // 【环境信息】包含 Minecraft 版本、对话玩家、可用命令索引、可用插件预设、当前时间（放在最后以确保缓存命中优化）
+        sb.append("[Environment]\n");
+        sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
+        sb.append("Player: ").append(player.getName()).append("\n");
+        sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
+        sb.append("Available Presets: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n");
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
         sb.append("Current Time: ").append(now.format(formatter)).append("\n");
