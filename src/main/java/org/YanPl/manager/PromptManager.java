@@ -171,7 +171,7 @@ public class PromptManager {
             sb.append("    Mode 2 (Line Range): #diff: path|start-end|content (e.g. #diff: file.yml|10-20|new lines)\n");
             sb.append("    Constraint: #diff must be the last part of response. No #over after it.\n");
         }
-        sb.append("\n");
+        sb.append("  Prohibition: Do NOT use #read to access preset files under plugins/FancyHelper/preset. Use #getpreset: <file> instead.\n\n");
         
         // 【记忆管理工具】
         // #remember: <content> - 记住玩家的偏好或指令，下次对话时会自动注入到系统提示中
@@ -205,7 +205,19 @@ public class PromptManager {
         sb.append("    Example: #forget: 1 (delete first memory), #forget: all (clear all)\n");
         sb.append("  #editmem: <index>|<content> - Modify a specific memory by index.\n");
         sb.append("    Format: #editmem: index|content OR #editmem: index|category|content\n");
-        sb.append("    Example: #editmem: 1|Reply in English\n\n");
+        sb.append("    Example: #editmem: 1|Reply in Chinese\n\n");
+        
+        // 长期记忆与过滤准则
+        sb.append("[Memory Guidelines]\n");
+        sb.append("Purpose: Maintain long-term memory. Identify and extract information with long-term value from conversations.\n");
+        sb.append("Recording Criteria:\n");
+        sb.append("  1) Explicit Preferences: Record user's explicit requirements for language, style, format, or taboos (e.g., 'Always answer in Simplified Chinese').\n");
+        sb.append("  2) Factual Information: Record user's profession, tech stack, current project, or geographic location.\n");
+        sb.append("  3) Decision Patterns: Record user's tendency towards brevity vs. detail, rigor vs. humor.\n");
+        sb.append("Filtering Criteria:\n");
+        sb.append("  - Do NOT record trivial, one-off, or time-sensitive information (e.g., 'I ate a sandwich for lunch today').\n");
+        sb.append("  - Do NOT record repeated instructions unless they form a stable pattern.\n");
+        sb.append("Conciseness Requirement: Even when recording the above, keep each memory concise and within the 50-character limit.\n\n");
         
         
         // 【任务管理工具】

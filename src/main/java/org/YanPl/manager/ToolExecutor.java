@@ -264,6 +264,24 @@ public class ToolExecutor {
     private void handleFileTool(Player player, String type, String args, DialogueSession session) {
         UUID uuid = player.getUniqueId();
 
+        if ("read".equals(type)) {
+            String pathArg = args == null ? "" : args.trim();
+            String[] parts = pathArg.split("\\s+");
+            String path = parts.length > 0 ? parts[0] : "";
+            try {
+                String cleaned = path.startsWith("/") || path.startsWith("\\") ? path.substring(1) : path;
+                java.io.File worldRoot = org.bukkit.Bukkit.getWorldContainer();
+                java.io.File target = new java.io.File(worldRoot, cleaned).getCanonicalFile();
+                java.io.File presetDir = new java.io.File(plugin.getDataFolder(), "preset").getCanonicalFile();
+                if (target.getPath().startsWith(presetDir.getPath() + java.io.File.separator) || target.equals(presetDir)) {
+                    String name = target.getName();
+                    player.sendMessage(org.bukkit.ChatColor.YELLOW + "提示: 预设文件请使用 #getpreset: " + name);
+                    cliManager.feedbackToAI(player, "#read_result: 错误 - 预设文件请使用 #getpreset: " + name);
+                    return;
+                }
+            } catch (Exception ignored) {}
+        }
+
         // YOLO 模式下直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "DIFF");
