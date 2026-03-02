@@ -45,6 +45,8 @@ public class ToolExecutor {
         // 记录工具调用日志
         if (session != null) {
             session.appendLog("TOOL_EXECUTION", "Executing tool: " + toolCall);
+            // 清除之前的错误信息
+            session.setLastError(null);
         }
 
         // 解析工具名称和参数
@@ -105,7 +107,11 @@ public class ToolExecutor {
                 break;
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
-                cliManager.feedbackToAI(player, "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。");
+                String error = "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。";
+                cliManager.feedbackToAI(player, error);
+                if (session != null) {
+                    session.setLastError(error);
+                }
                 success = false;
                 break;
         }
@@ -194,7 +200,11 @@ public class ToolExecutor {
     private boolean handleRunTool(Player player, String command, DialogueSession session) {
         if (command.isEmpty()) {
             player.sendMessage(ChatColor.RED + "错误: #run 工具需要提供命令参数");
-            cliManager.feedbackToAI(player, "#error: #run 工具需要提供命令参数，例如 #run: say hello");
+            String error = "#error: #run 工具需要提供命令参数，例如 #run: say hello";
+            cliManager.feedbackToAI(player, error);
+            if (session != null) {
+                session.setLastError(error);
+            }
             return false;
         }
 

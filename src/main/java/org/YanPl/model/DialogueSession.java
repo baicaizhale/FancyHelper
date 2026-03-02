@@ -46,6 +46,7 @@ public class DialogueSession {
     private long lastThinkingTimeMs = 0;
     private long nextMessageId = 0;
     private String logFilePath = null;
+    private String lastError = null;
     private final Map<Long, ThoughtSnapshot> thoughtSnapshots = new LinkedHashMap<Long, ThoughtSnapshot>(64, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, ThoughtSnapshot> eldest) {
@@ -356,6 +357,14 @@ public class DialogueSession {
 
     public void setLastThought(String lastThought) {
         this.lastThought = lastThought;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
     }
 
     /**

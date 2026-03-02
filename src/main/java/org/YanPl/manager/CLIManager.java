@@ -1772,6 +1772,11 @@ public class CLIManager {
         return sessions.get(uuid);
     }
 
+    public String getLastError(UUID uuid) {
+        DialogueSession session = sessions.get(uuid);
+        return session != null ? session.getLastError() : null;
+    }
+
     /**
      * 记录思考时间
      */

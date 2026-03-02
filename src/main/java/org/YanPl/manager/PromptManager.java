@@ -125,6 +125,13 @@ public class PromptManager {
         sb.append("Correct Approach:\n");
         sb.append("  #todo: [{\"id\":\"1\",\"task\":\"test\"}] (First response)\n");
         sb.append("  #run: say hello (Second response, continue after #todo succeeds)\n\n");
+
+        // ==================== Recent Errors / 最近错误 ====================
+        String lastError = plugin.getCliManager().getLastError(player.getUniqueId());
+        if (lastError != null) {
+            sb.append("[Last Action Error]\n");
+            sb.append("Your last tool call failed with error: ").append(lastError).append("\nPlease correct your format in the next attempt.\n\n");
+        }
         
         // ==================== Tool List / 工具列表 ====================
         // 【工具列表】格式：#工具名: 参数（例如：#getpreset: coreprotect.txt）
