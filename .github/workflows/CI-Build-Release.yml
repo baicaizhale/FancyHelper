@@ -164,10 +164,10 @@ jobs:
         id: ai_gen
         env:
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: "867520dfa43947e67f0416d72989a2af"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.build.outputs.RELEASE_VERSION }}
         run: |
-          # 此处保留了你原文件中完整的 Cloudflare AI 调用逻辑
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           
           # 获取变更信息
@@ -179,9 +179,76 @@ jobs:
             PRS=""
           fi
 
-          # 调用 AI (此处使用简化逻辑演示结构，实际运行时会执行你原有的 curl 脚本)
-          echo "## Overview" > /tmp/overview.md
-          echo "* 自动生成的版本 v$VERSION 发行说明" >> /tmp/overview.md
+          # 构建提示词
+          {
+            echo "请根据以下变更内容为 FancyHelper Minecraft 插件生成发行说明的 Overview 部分。"
+            echo "要求："
+            echo "1. 使用 Markdown 格式"
+            echo "2. 保持简洁专业"
+            echo "3. 突出重要变更"
+            echo "4. 使用中文"
+            echo ""
+            echo "版本：v$VERSION"
+            echo ""
+            echo "PR 变更："
+            echo "$PRS"
+            echo ""
+            echo "Commit 变更："
+            echo "$COMMITS"
+          } > /tmp/prompt.txt
+
+          # 获取 Cloudflare Account ID
+          ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
+          if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "null" ]]; then
+            echo "未配置 CloudFlare Account ID，跳过生成 Overview"
+            echo "## Overview" > /tmp/overview.md
+            echo "* 自动生成的版本 v$VERSION 发行说明" >> /tmp/overview.md
+            exit 0
+          fi
+
+          echo "Account ID: $ACCOUNT_ID"
+
+          # 构建请求体
+          PROMPT_CONTENT=$(cat /tmp/prompt.txt)
+          REQUEST_BODY=$(jq -n \
+            --arg model "@cf/meta/llama-3-8b-instruct" \
+            --arg prompt "$PROMPT_CONTENT" \
+            '{
+              "model": $model,
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "你是一个专业的技术文档撰写助手。请生成简洁、专业的发行说明 Overview 部分。"
+                },
+                {
+                  "role": "user",
+                  "content": $prompt
+                }
+              ]
+            }')
+
+          # 调用 Cloudflare AI API
+          RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/@cf/meta/llama-3-8b-instruct" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$REQUEST_BODY")
+
+          echo "API 响应:"
+          echo "$RESPONSE" | head -c 2000
+          echo ""
+
+          # 解析响应
+          AI_CONTENT=$(echo "$RESPONSE" | jq -r '.result.response // empty')
+          
+          if [[ -n "$AI_CONTENT" ]]; then
+            echo "$AI_CONTENT" > /tmp/overview.md
+            echo "AI 生成内容已写入 /tmp/overview.md"
+          else
+            echo "AI 响应为空，使用默认内容"
+            echo "## Overview" > /tmp/overview.md
+            echo "* 自动生成的版本 v$VERSION 发行说明" >> /tmp/overview.md
+          fi
           
           # 获取 GitHub 自动生成的 Notes 作为补充
           gh api "repos/${{ github.repository }}/releases/generate-notes" \
