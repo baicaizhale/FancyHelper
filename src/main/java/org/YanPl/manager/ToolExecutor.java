@@ -66,45 +66,59 @@ public class ToolExecutor {
         String lowerToolName = toolName.toLowerCase();
 
         switch (lowerToolName) {
-            case "#over":
+            // 会话管理工具
+            case "#end":
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.COMPLETED);
                 break;
             case "#exit":
                 cliManager.exitCLI(player);
                 break;
+            
+            // 执行工具
             case "#run":
                 success = handleRunTool(player, args, session);
                 break;
-            case "#ls":
+            
+            // 文件工具
+            case "#list":
                 handleFileTool(player, "ls", args, session);
                 break;
             case "#read":
                 handleFileTool(player, "read", args, session);
                 break;
-            case "#diff":
+            case "#edit":
                 handleFileTool(player, "diff", args, session);
                 break;
-            case "#getpreset":
+            case "#get_preset":
                 handleGetTool(player, args);
                 break;
+            
+            // 交互工具
             case "#choose":
                 handleChooseTool(player, args);
                 break;
+            
+            // 搜索工具
             case "#search":
                 handleSearchTool(player, args);
                 break;
+            
+            // 任务工具
             case "#todo":
                 handleTodoTool(player, args);
                 break;
+            
+            // 记忆工具
             case "#remember":
                 handleRememberTool(player, args);
                 break;
             case "#forget":
                 handleForgetKeyTool(player, args);
                 break;
-            case "#editmem":
+            case "#edit_memory":
                 handleEditmemTool(player, args);
                 break;
+            
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
                 String error = "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。";
@@ -134,29 +148,27 @@ public class ToolExecutor {
 
     /**
      * 解析工具调用字符串
+     * 支持统一的工具调用格式：#工具名: 参数
      */
     public ToolParseResult parseToolCall(String toolCall) {
         String toolName;
         String args = "";
 
-        // 查找第一个冒号或空格的位置
+        // 查找第一个冒号的位置
         int colonIndex = toolCall.indexOf(":");
-        int spaceIndex = toolCall.indexOf(" ");
 
-        int splitIndex = -1;
-        if (colonIndex != -1 && spaceIndex != -1) {
-            splitIndex = Math.min(colonIndex, spaceIndex);
-        } else if (colonIndex != -1) {
-            splitIndex = colonIndex;
-        } else if (spaceIndex != -1) {
-            splitIndex = spaceIndex;
-        }
-
-        if (splitIndex != -1) {
-            toolName = toolCall.substring(0, splitIndex).trim();
-            args = toolCall.substring(splitIndex + 1).trim();
+        if (colonIndex != -1) {
+            toolName = toolCall.substring(0, colonIndex).trim();
+            args = toolCall.substring(colonIndex + 1).trim();
         } else {
-            toolName = toolCall.trim();
+            // 兼容旧格式，查找第一个空格
+            int spaceIndex = toolCall.indexOf(" ");
+            if (spaceIndex != -1) {
+                toolName = toolCall.substring(0, spaceIndex).trim();
+                args = toolCall.substring(spaceIndex + 1).trim();
+            } else {
+                toolName = toolCall.trim();
+            }
         }
 
         return new ToolParseResult(toolName, args);
@@ -169,7 +181,7 @@ public class ToolExecutor {
         String lowerToolName = toolName.toLowerCase();
 
         if (lowerToolName.equals("#remember") || lowerToolName.equals("#forget") ||
-            lowerToolName.equals("#editmem")) {
+            lowerToolName.equals("#edit_memory")) {
             TextComponent message = new TextComponent(ChatColor.WHITE + "⁕ Fancy 正在记住你说的话.. ");
             TextComponent manageBtn = new TextComponent("[管理记忆]");
             manageBtn.setColor(net.md_5.bungee.api.ChatColor.of(ColorUtil.getColorZ()));
@@ -177,7 +189,7 @@ public class ToolExecutor {
             manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
-        } else if (lowerToolName.equals("#diff")) {
+        } else if (lowerToolName.equals("#edit")) {
             String[] parts = args.split("\\|", 3);
             String path = parts.length > 0 ? parts[0].trim() : "";
             player.sendMessage(ChatColor.GRAY + "〇 正在修改文件: " + ChatColor.WHITE + path);
@@ -188,7 +200,7 @@ public class ToolExecutor {
         } else if (lowerToolName.equals("#exit")) {
             player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
         } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && 
-            !lowerToolName.equals("#over") && !lowerToolName.equals("#ls") && 
+            !lowerToolName.equals("#end") && !lowerToolName.equals("#list") && 
             !lowerToolName.equals("#read") && !lowerToolName.equals("#todo")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         }
@@ -294,7 +306,7 @@ public class ToolExecutor {
 
         // YOLO 模式下直接执行
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "DIFF");
+            String actionDesc = type.equals("ls") ? "LIST" : (type.equals("read") ? "READ" : "EDIT");
             player.sendMessage(ChatColor.GOLD + "⇒ YOLO " + actionDesc + " " + ChatColor.WHITE + args);
 
             // 检查是否被冻结
@@ -660,21 +672,13 @@ public class ToolExecutor {
             String cmdName = command.split(" ")[0].toLowerCase();
             if (cmdName.startsWith("/")) cmdName = cmdName.substring(1);
 
-            boolean isVanilla = cmdName.startsWith("minecraft:") || 
-                Arrays.asList("fill", "setblock", "tp", "teleport", "give", "gamemode", 
-                              "spawnpoint", "weather", "time", "msg", "tell", "w", "say", "list", "execute").contains(cmdName);
-
             player.sendMessage(ChatColor.GRAY + "⇒ 命令已下发，等待反馈中...");
 
             boolean success;
-            if (!isVanilla) {
-                try {
-                    org.bukkit.command.CommandSender interceptor = createInterceptor(player, output);
-                    success = Bukkit.dispatchCommand(interceptor, command);
-                } catch (Throwable t) {
-                    success = player.performCommand(command);
-                }
-            } else {
+            try {
+                org.bukkit.command.CommandSender interceptor = createInterceptor(player, output);
+                success = Bukkit.dispatchCommand(interceptor, command);
+            } catch (Throwable t) {
                 success = player.performCommand(command);
             }
 
@@ -700,7 +704,14 @@ public class ToolExecutor {
                 if (hasOutput || !finalSuccess) {
                     String finalPacketOutput = "";
                     if (plugin.getPacketCaptureManager() != null) {
-                        finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
+                        // 如果拦截器已有输出，则忽略数据包捕获的输出，避免广播消息污染
+                        if (!currentProxyOutput.isEmpty()) {
+                            // 停止捕获但丢弃输出
+                            plugin.getPacketCaptureManager().stopCapture(player);
+                            finalPacketOutput = "";
+                        } else {
+                            finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
+                        }
                     }
                     String finalResult = buildCommandResult(command, finalPacketOutput, currentProxyOutput, finalSuccess);
                     player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
@@ -730,11 +741,11 @@ public class ToolExecutor {
      * 构建命令执行结果
      */
     private String buildCommandResult(String command, String packetOutput, String proxyOutput, boolean success) {
-        if (!packetOutput.isEmpty()) {
-            return packetOutput;
-        }
         if (!proxyOutput.isEmpty()) {
             return proxyOutput;
+        }
+        if (!packetOutput.isEmpty()) {
+            return packetOutput;
         }
         if (success) {
             if (command.toLowerCase().startsWith("tp")) {
