@@ -90,12 +90,16 @@ public class PacketCaptureManager {
                             }
 
                             // 过滤常见的广播消息格式，防止多管理员环境下上下文互串
-                            if ((stripped.matches("^\\[[^\\]]+\\].*") || stripped.matches("^【[^】]+】.*")) && !stripped.contains("<")) {
+                            boolean isBracketFormat = stripped.matches("^\\[[^\\]]+\\].*") || stripped.matches("^【[^】]+】.*");
+                            boolean isLogPrefix = stripped.matches("^\\[(?i)(INFO|ERROR|WARN|DEBUG|WARNING|信息|错误|警告|调试)\\].*")
+                                    || stripped.matches("^【(信息|错误|警告|调试)】.*");
+                            if (isBracketFormat && !stripped.contains("<") && !isLogPrefix) {
                                 return;
                             }
 
                             // 重复广播检测：如果消息最近已被其他玩家捕获，则跳过（防止多管理员上下文互串）
-                            if (recentBroadcastMessages.contains(stripped)) {
+                            // 但日志前缀消息除外，因为它们可能是命令输出的一部分
+                            if (!isLogPrefix && recentBroadcastMessages.contains(stripped)) {
                                 return;
                             }
                             recentBroadcastMessages.add(stripped);
