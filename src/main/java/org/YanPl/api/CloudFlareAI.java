@@ -268,15 +268,26 @@ public class CloudFlareAI {
             plugin.getLogger().info("[AI 请求] 模型: " + model);
         }
 
-        // 如果 API 地址包含 aliyuncs.com 但不包含 /chat/completions，尝试自动补全（针对阿里云通义千问）
-        if (apiUrl.contains("aliyuncs.com") && !apiUrl.contains("/chat/completions")) {
-            if (apiUrl.endsWith("/")) {
-                apiUrl += "compatible-mode/v1/chat/completions";
+        // 如果 API 地址不包含 /chat/completions，尝试自动补全（针对 OpenAI 兼容 API）
+        if (!apiUrl.contains("/chat/completions")) {
+            String originalUrl = apiUrl;
+            // 针对阿里云通义千问的特殊处理
+            if (apiUrl.contains("aliyuncs.com")) {
+                if (apiUrl.endsWith("/")) {
+                    apiUrl += "compatible-mode/v1/chat/completions";
+                } else {
+                    apiUrl += "/compatible-mode/v1/chat/completions";
+                }
             } else {
-                apiUrl += "/compatible-mode/v1/chat/completions";
+                // 通用处理：在 URL 末尾添加 /chat/completions
+                if (apiUrl.endsWith("/")) {
+                    apiUrl += "chat/completions";
+                } else {
+                    apiUrl += "/chat/completions";
+                }
             }
             if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[AI 请求] 检测到阿里云 API，已自动补全路径: " + apiUrl);
+                plugin.getLogger().info("[AI 请求] 检测到 OpenAI 兼容 API，已自动补全路径：" + apiUrl);
             }
         }
 
