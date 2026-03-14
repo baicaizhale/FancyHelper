@@ -14,6 +14,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PacketCaptureManager {
     private final FancyHelper plugin;
     private final Map<UUID, StringBuilder> captureBuffers = new ConcurrentHashMap<>();
+    private final Set<String> recentBroadcastMessages = ConcurrentHashMap.newKeySet();
     private boolean enabled = false;
 
     /**
@@ -86,6 +88,21 @@ public class PacketCaptureManager {
                                 stripped.matches("^\\* [^ ]+ .*")) { // /me 命令格式
                                 return;
                             }
+
+                            // 过滤常见的广播消息格式，防止多管理员环境下上下文互串
+                            if ((stripped.matches("^\\[[^\\]]+\\].*") || stripped.matches("^【[^】]+】.*")) && !stripped.contains("<")) {
+                                return;
+                            }
+
+                            // 重复广播检测：如果消息最近已被其他玩家捕获，则跳过（防止多管理员上下文互串）
+                            if (recentBroadcastMessages.contains(stripped)) {
+                                return;
+                            }
+                            recentBroadcastMessages.add(stripped);
+                            // 3秒后自动清除，避免内存泄漏
+                            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                                recentBroadcastMessages.remove(stripped);
+                            }, 60L); // 3秒 = 60 ticks
 
                             StringBuilder buffer = captureBuffers.get(uuid);
                             synchronized (buffer) {
