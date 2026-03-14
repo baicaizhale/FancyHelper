@@ -79,9 +79,9 @@ class ToolExecutorTest {
     @Test
     @DisplayName("parseToolCall 无分隔符应返回原字符串")
     void testParseToolCall_NoSeparator_ReturnsOriginal() {
-        ToolExecutor.ToolParseResult result = toolExecutor.parseToolCall("#over");
+        ToolExecutor.ToolParseResult result = toolExecutor.parseToolCall("#end");
 
-        assertEquals("#over", result.toolName);
+        assertEquals("#end", result.toolName);
         assertEquals("", result.args);
     }
 
@@ -113,12 +113,12 @@ class ToolExecutorTest {
     }
 
     @Test
-    @DisplayName("parseToolCall 空格在冒号前应正确解析")
-    void testParseToolCall_SpaceBeforeColon_UsesSpaceIndex() {
+    @DisplayName("parseToolCall 空格在冒号前应优先使用冒号")
+    void testParseToolCall_SpaceBeforeColon_UsesColonIndex() {
         ToolExecutor.ToolParseResult result = toolExecutor.parseToolCall("#run say:hello");
 
-        assertEquals("#run", result.toolName);
-        assertEquals("say:hello", result.args);
+        assertEquals("#run say", result.toolName);
+        assertEquals("hello", result.args);
     }
 
     @Test
@@ -142,11 +142,11 @@ class ToolExecutorTest {
     }
 
     @Test
-    @DisplayName("executeTool #over 工具应正常执行")
-    void testExecuteTool_OverTool_Executes() {
+    @DisplayName("executeTool #end 工具应正常执行")
+    void testExecuteTool_EndTool_Executes() {
         DialogueSession session = mock(DialogueSession.class);
 
-        boolean result = toolExecutor.executeTool(player, "#over", session);
+        boolean result = toolExecutor.executeTool(player, "#end", session);
 
         assertTrue(result);
         verify(cliManager).setGenerating(eq(testUuid), eq(false), eq(CLIManager.GenerationStatus.COMPLETED));
@@ -177,7 +177,7 @@ class ToolExecutorTest {
     @Test
     @DisplayName("executeTool 带 session 参数应为 null")
     void testExecuteTool_NullSession_HandlesCorrectly() {
-        boolean result = toolExecutor.executeTool(player, "#over", null);
+        boolean result = toolExecutor.executeTool(player, "#end", null);
 
         assertTrue(result);
     }
