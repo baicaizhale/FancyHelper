@@ -387,6 +387,14 @@ public class ConfigManager {
     }
 
     /**
+     * 获取日志保留天数
+     * @return 日志保留天数
+     */
+    public int getLogRetentionDays() {
+        return config.getInt("settings.log_retention_days", 15);
+    }
+
+    /**
      * 获取是否启用猫娘模式
      * @return 是否启用猫娘模式
      */

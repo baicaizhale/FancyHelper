@@ -227,7 +227,7 @@ public class CLIManager {
                         return;
                     }
                     
-                    int retentionDays = plugin.getConfigManager().getConfig().getInt("settings.log_retention_days", 15);
+                     int retentionDays = plugin.getConfigManager().getLogRetentionDays();
                     long cutoffTime = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000L);
                     
                     Files.list(logDir)
