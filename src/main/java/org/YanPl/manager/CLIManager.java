@@ -426,6 +426,8 @@ public class CLIManager {
             String logFileName = timestamp + ".log";
             Path logFilePath = logDir.resolve(logFileName);
             session.setLogFilePath(logFilePath.toString());
+            // 根据调试模式设置详细日志级别
+            session.setVerboseLogging(plugin.getConfigManager().isDebug());
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
             }

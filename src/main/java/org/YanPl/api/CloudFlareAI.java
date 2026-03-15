@@ -87,31 +87,161 @@ public class CloudFlareAI {
      * 记录完整的请求和响应内容（排除 API Key，格式化 JSON）
      */
     private void logInteraction(DialogueSession session, String requestBody, String responseBody) {
+        boolean isDebug = plugin.getConfigManager().isDebug();
+        
         try {
             StringBuilder sb = new StringBuilder();
             Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
             
-            // 1. 格式化 Request
-            try {
-                JsonElement reqEl = gson.fromJson(requestBody, JsonElement.class);
-                sb.append("Request Payload:\n").append(prettyGson.toJson(reqEl)).append("\n\n");
-            } catch (Exception e) {
-                sb.append("Request Payload (Raw):\n").append(requestBody).append("\n\n");
-            }
+            if (isDebug || session.isVerboseLogging()) {
+                // 调试模式或详细日志模式下记录完整信息（但已优化）
+                try {
+                    JsonElement reqEl = gson.fromJson(requestBody, JsonElement.class);
+                    if (reqEl.isJsonObject()) {
+                        JsonObject reqObj = reqEl.getAsJsonObject();
+                        sb.append("Request Summary:\n");
+                        
+                        // 记录模型信息
+                        if (reqObj.has("model")) {
+                            sb.append("  Model: ").append(reqObj.get("model").getAsString()).append("\n");
+                        }
+                        
+                        // 记录消息数量（不记录具体内容）
+                        if (reqObj.has("messages") && reqObj.get("messages").isJsonArray()) {
+                            JsonArray messages = reqObj.get("messages").getAsJsonArray();
+                            sb.append("  Messages: ").append(messages.size()).append(" items\n");
+                            
+                            // 只记录最后一条用户消息的内容摘要
+                            for (int i = messages.size() - 1; i >= 0; i--) {
+                                JsonObject msg = messages.get(i).getAsJsonObject();
+                                if (msg.has("role") && "user".equals(msg.get("role").getAsString()) && msg.has("content")) {
+                                    String content = msg.get("content").getAsString();
+                                    // 截取前100个字符作为摘要
+                                    String summary = content.length() > 100 ? content.substring(0, 100) + "..." : content;
+                                    sb.append("  Last User Message: ").append(summary.replace("\n", " ")).append("\n");
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 记录其他关键信息
+                        if (reqObj.has("max_tokens")) {
+                            sb.append("  Max Tokens: ").append(reqObj.get("max_tokens").getAsInt()).append("\n");
+                        }
+                        if (reqObj.has("temperature")) {
+                            sb.append("  Temperature: ").append(reqObj.get("temperature").getAsDouble()).append("\n");
+                        }
+                        sb.append("\n");
+                    }
+                } catch (Exception e) {
+                    sb.append("Request Payload (Raw, truncated):\n").append(requestBody.length() > 500 ? requestBody.substring(0, 500) + "..." : requestBody).append("\n\n");
+                }
 
-            // 2. 格式化 Response
-            try {
-                JsonElement respEl = gson.fromJson(responseBody, JsonElement.class);
-                sb.append("Response Payload:\n").append(prettyGson.toJson(respEl)).append("\n");
-            } catch (Exception e) {
-                 sb.append("Response Payload (Raw):\n").append(responseBody).append("\n");
-            }
+                // 2. 格式化 Response - 只记录摘要信息
+                try {
+                    JsonElement respEl = gson.fromJson(responseBody, JsonElement.class);
+                    if (respEl.isJsonObject()) {
+                        JsonObject respObj = respEl.getAsJsonObject();
+                        sb.append("Response Summary:\n");
+                        
+                        // 记录响应状态
+                        if (respObj.has("choices") && respObj.get("choices").isJsonArray()) {
+                            JsonArray choices = respObj.get("choices").getAsJsonArray();
+                            if (!choices.isEmpty()) {
+                                JsonObject choice = choices.get(0).getAsJsonObject();
+                                if (choice.has("message") && choice.get("message").isJsonObject()) {
+                                    JsonObject message = choice.get("message").getAsJsonObject();
+                                    if (message.has("content")) {
+                                        String content = message.get("content").getAsString();
+                                        // 截取前150个字符作为摘要
+                                        String summary = content.length() > 150 ? content.substring(0, 150) + "..." : content;
+                                        sb.append("  Content: ").append(summary.replace("\n", " ")).append("\n");
+                                    }
+                                    if (message.has("role")) {
+                                        sb.append("  Role: ").append(message.get("role").getAsString()).append("\n");
+                                    }
+                                }
+                                if (choice.has("finish_reason")) {
+                                    sb.append("  Finish Reason: ").append(choice.get("finish_reason").getAsString()).append("\n");
+                                }
+                            }
+                            sb.append("  Choices Count: ").append(choices.size()).append("\n");
+                        }
+                        
+                        // 记录使用情况
+                        if (respObj.has("usage") && respObj.get("usage").isJsonObject()) {
+                            JsonObject usage = respObj.get("usage").getAsJsonObject();
+                            sb.append("  Usage:\n");
+                            if (usage.has("prompt_tokens")) {
+                                sb.append("    Prompt Tokens: ").append(usage.get("prompt_tokens").getAsInt()).append("\n");
+                            }
+                            if (usage.has("completion_tokens")) {
+                                sb.append("    Completion Tokens: ").append(usage.get("completion_tokens").getAsInt()).append("\n");
+                            }
+                            if (usage.has("total_tokens")) {
+                                sb.append("    Total Tokens: ").append(usage.get("total_tokens").getAsInt()).append("\n");
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    sb.append("Response Payload (Raw, truncated):\n").append(responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody).append("\n");
+                }
 
-            session.appendLog("AI_INTERACTION", sb.toString());
+                session.appendLog("AI_INTERACTION", sb.toString());
+            } else {
+                // 非调试模式下只记录最基本的信息
+                try {
+                    JsonElement respEl = gson.fromJson(responseBody, JsonElement.class);
+                    if (respEl.isJsonObject()) {
+                        JsonObject respObj = respEl.getAsJsonObject();
+                        StringBuilder minimalSb = new StringBuilder();
+                        
+                        // 只记录token使用情况和响应摘要
+                        if (respObj.has("usage") && respObj.get("usage").isJsonObject()) {
+                            JsonObject usage = respObj.get("usage").getAsJsonObject();
+                            minimalSb.append("Token Usage: ");
+                            if (usage.has("total_tokens")) {
+                                minimalSb.append(usage.get("total_tokens").getAsInt()).append(" total");
+                            }
+                            if (usage.has("prompt_tokens") && usage.has("completion_tokens")) {
+                                minimalSb.append(" (").append(usage.get("prompt_tokens").getAsInt())
+                                         .append("+").append(usage.get("completion_tokens").getAsInt()).append(")");
+                            }
+                            minimalSb.append("\n");
+                        }
+                        
+                        // 记录响应内容摘要
+                        if (respObj.has("choices") && respObj.get("choices").isJsonArray()) {
+                            JsonArray choices = respObj.get("choices").getAsJsonArray();
+                            if (!choices.isEmpty()) {
+                                JsonObject choice = choices.get(0).getAsJsonObject();
+                                if (choice.has("message") && choice.get("message").isJsonObject()) {
+                                    JsonObject message = choice.get("message").getAsJsonObject();
+                                    if (message.has("content")) {
+                                        String content = message.get("content").getAsString();
+                                        // 截取前50个字符作为摘要
+                                        String summary = content.length() > 50 ? content.substring(0, 50) + "..." : content;
+                                        minimalSb.append("Response: ").append(summary.replace("\n", " "));
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (minimalSb.length() > 0) {
+                            session.appendLog("AI_INTERACTION", minimalSb.toString());
+                        }
+                    }
+                } catch (Exception e) {
+                    // 解析失败时记录简要信息
+                    session.appendLog("AI_INTERACTION", "API Response (unparsed, length: " + responseBody.length() + " chars)");
+                }
+            }
             
         } catch (Exception e) {
-            // 异常回退
-            session.appendLog("AI_RAW_DEBUG", "Request: " + requestBody + "\nResponse: " + responseBody);
+            // 异常回退 - 只记录摘要
+            String reqSummary = requestBody.length() > 300 ? requestBody.substring(0, 300) + "..." : requestBody;
+            String respSummary = responseBody.length() > 300 ? responseBody.substring(0, 300) + "..." : responseBody;
+            session.appendLog("AI_RAW_DEBUG", "Request (truncated): " + reqSummary + "\nResponse (truncated): " + respSummary);
         }
     }
 

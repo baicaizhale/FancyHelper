@@ -47,6 +47,7 @@ public class DialogueSession {
     private long nextMessageId = 0;
     private String logFilePath = null;
     private String lastError = null;
+    private boolean verboseLogging = false;
     private final Map<Long, ThoughtSnapshot> thoughtSnapshots = new LinkedHashMap<Long, ThoughtSnapshot>(64, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, ThoughtSnapshot> eldest) {
@@ -156,6 +157,12 @@ public class DialogueSession {
      */
     public synchronized void appendLog(String type, String content) {
         if (logFilePath == null) return;
+        
+        // 根据日志类型和详细级别决定是否记录
+        if (!shouldLog(type)) {
+            return;
+        }
+        
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
@@ -169,6 +176,37 @@ public class DialogueSession {
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 忽略日志写入错误，避免影响主流程
+        }
+    }
+    
+    /**
+     * 根据日志类型和详细级别决定是否记录
+     * @param type 日志类型
+     * @return 是否应该记录
+     */
+    private boolean shouldLog(String type) {
+        // 总是记录错误和系统重要信息
+        if (type.contains("ERROR") || type.equals("SYSTEM")) {
+            return true;
+        }
+        
+        // 如果启用详细日志，记录所有类型
+        if (verboseLogging) {
+            return true;
+        }
+        
+        // 非详细日志模式下，只记录关键信息
+        switch (type) {
+            case "USER_INPUT":
+            case "USER_ACTION":
+            case "TOOL_EXECUTION":
+            case "AI_INTERACTION":
+                return true;
+            case "AI_RAW_DEBUG":
+                // 只在详细模式下记录原始调试信息
+                return false;
+            default:
+                return true;
         }
     }
 
@@ -365,6 +403,22 @@ public class DialogueSession {
 
     public void setLastError(String lastError) {
         this.lastError = lastError;
+    }
+
+    /**
+     * 设置是否启用详细日志记录
+     * @param verboseLogging 是否启用详细日志
+     */
+    public void setVerboseLogging(boolean verboseLogging) {
+        this.verboseLogging = verboseLogging;
+    }
+
+    /**
+     * 获取是否启用详细日志记录
+     * @return 是否启用详细日志
+     */
+    public boolean isVerboseLogging() {
+        return verboseLogging;
     }
 
     /**
