@@ -61,8 +61,36 @@ public class ResponseParser {
             if (thoughtContent == null) thoughtContent = cfResultContent.thought;
         }
 
+        // 检查 finish_reason 是否为 length（表示输出被截断）
+        String finishReason = extractFinishReason(responseJson);
+        boolean isTruncated = "length".equals(finishReason);
+        if (isTruncated && textContent == null) {
+            // 当 finish_reason 为 length 且 content 为 null 时，返回空内容但标记为截断
+            return new AIResponse("", thoughtContent, promptTokens, completionTokens, true);
+        } else if (isTruncated && textContent != null) {
+            // 当 finish_reason 为 length 但有内容时，标记为截断
+            return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens, true);
+        }
+
         if (textContent != null) {
             return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens);
+        }
+        return null;
+    }
+
+    /**
+     * 提取 finish_reason 字段
+     */
+    private String extractFinishReason(JsonObject responseJson) {
+        // 尝试 OpenAI 格式
+        if (responseJson.has("choices") && responseJson.get("choices").isJsonArray()) {
+            JsonArray choices = responseJson.getAsJsonArray("choices");
+            if (choices.size() > 0) {
+                JsonObject choice = choices.get(0).getAsJsonObject();
+                if (choice.has("finish_reason") && !choice.get("finish_reason").isJsonNull()) {
+                    return choice.get("finish_reason").getAsString();
+                }
+            }
         }
         return null;
     }

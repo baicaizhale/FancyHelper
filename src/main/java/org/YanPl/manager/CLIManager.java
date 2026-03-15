@@ -1064,7 +1064,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#over", "#exit", "#run", "#getpreset", "#choose", "#search", "#ls", "#read", "#diff", "#todo", "#remember", "#forget", "#editmem");
+        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#get_preset", "#choose", "#search", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -1166,10 +1166,48 @@ public class CLIManager {
         if (!toolCall.isEmpty()) {
             executeTool(player, toolCall);
         } else {
-            isGenerating.put(uuid, false);
-            generationStates.put(uuid, GenerationStatus.COMPLETED);
-            checkTokenWarning(player, session);
+            // 检查响应是否被截断
+            if (aiResponse.isTruncated()) {
+                // 显示截断提示
+                player.sendMessage(ChatColor.YELLOW + "⨀ 响应被截断，正在继续生成...");
+                // 自动继续生成
+                continueGeneration(player, session);
+            } else {
+                isGenerating.put(uuid, false);
+                generationStates.put(uuid, GenerationStatus.COMPLETED);
+                checkTokenWarning(player, session);
+            }
         }
+    }
+
+    /**
+     * 继续生成被截断的响应
+     */
+    private void continueGeneration(Player player, DialogueSession session) {
+        UUID uuid = player.getUniqueId();
+        
+        // 添加一个提示消息，让AI知道继续生成
+        session.addMessage("user", "请继续生成剩余的内容");
+        
+        // 异步调用 AI 继续生成
+        if (!plugin.isEnabled()) return;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player));
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    handleAIResponse(player, response);
+                });
+            } catch (IOException e) {
+                plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "⨀ 继续生成失败: " + e.getMessage());
+                    isGenerating.put(uuid, false);
+                    generationStates.put(uuid, GenerationStatus.ERROR);
+                });
+            }
+        });
     }
 
     private void checkTokenWarning(Player player, DialogueSession session) {
