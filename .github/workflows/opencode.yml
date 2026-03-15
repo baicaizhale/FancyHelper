@@ -28,6 +28,6 @@ jobs:
       - name: Run opencode
         uses: anomalyco/opencode/github@latest
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          MODELSCOPE_API_KEY: ${{ secrets.MODELSCOPE_API_KEY }}
         with:
-          model: opencode/nemotron-3-super-free
+          model: modelscope/Qwen/Qwen3-235B-A22B-Instruct-2507
