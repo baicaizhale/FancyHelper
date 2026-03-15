@@ -30,4 +30,4 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/kimi-k2.5-free
+          model: opencode/nemotron-3-super-free
