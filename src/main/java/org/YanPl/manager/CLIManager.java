@@ -88,6 +88,7 @@ public class CLIManager {
         loadYoloModePlayers();
         startTimeoutTask();
         startThinkingTask();
+        startLogCleanupTask();
     }
 
     public void loadAgreedPlayers() {
@@ -211,6 +212,48 @@ public class CLIManager {
                 }
             }
         }.runTaskTimer(plugin, 20L * 60, 20L * 60); // 每分钟检查一次
+    }
+    
+    /**
+     * 启动日志清理任务，定期删除超过配置天数的日志文件
+     */
+    private void startLogCleanupTask() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    Path logDir = plugin.getDataFolder().toPath().resolve("logs");
+                    if (!Files.exists(logDir)) {
+                        return;
+                    }
+                    
+                    int retentionDays = plugin.getConfigManager().getConfig().getInt("settings.log_retention_days", 15);
+                    long cutoffTime = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000L);
+                    
+                    Files.list(logDir)
+                        .filter(path -> path.toString().endsWith(".log"))
+                        .filter(path -> {
+                            try {
+                                return Files.getLastModifiedTime(path).toMillis() < cutoffTime;
+                            } catch (IOException e) {
+                                return false;
+                            }
+                        })
+                        .forEach(path -> {
+                            try {
+                                Files.delete(path);
+                                if (plugin.getConfigManager().isDebug()) {
+                                    plugin.getLogger().info("[CLI] 已删除过期日志文件: " + path.getFileName());
+                                }
+                            } catch (IOException e) {
+                                plugin.getLogger().warning("[CLI] 删除日志文件失败: " + path.getFileName() + " - " + e.getMessage());
+                            }
+                        });
+                } catch (IOException e) {
+                    plugin.getLogger().warning("[CLI] 日志清理任务出错: " + e.getMessage());
+                }
+            }
+        }.runTaskTimerAsynchronously(plugin, 0L, 20L * 60 * 60); // 每小时检查一次
     }
 
     /**
