@@ -1064,7 +1064,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#get_preset", "#choose", "#search", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory");
+        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#choose", "#search", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -1186,6 +1186,11 @@ public class CLIManager {
     private void continueGeneration(Player player, DialogueSession session) {
         UUID uuid = player.getUniqueId();
         
+        // 设置生成状态
+        isGenerating.put(uuid, true);
+        generationStates.put(uuid, GenerationStatus.THINKING);
+        generationStartTimes.put(uuid, System.currentTimeMillis());
+        
         // 添加一个提示消息，让AI知道继续生成
         session.addMessage("user", "请继续生成剩余的内容");
         
@@ -1205,6 +1210,7 @@ public class CLIManager {
                     player.sendMessage(ChatColor.RED + "⨀ 继续生成失败: " + e.getMessage());
                     isGenerating.put(uuid, false);
                     generationStates.put(uuid, GenerationStatus.ERROR);
+                    generationStartTimes.remove(uuid);
                 });
             }
         });

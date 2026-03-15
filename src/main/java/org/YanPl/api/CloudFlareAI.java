@@ -255,7 +255,7 @@ public class CloudFlareAI {
         String model = plugin.getConfigManager().getOpenAiModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            return new AIResponse("错误: 请先在配置文件中设置 openai.api_key。", null);
+            return new AIResponse("错误: 请先在配置文件中设置 openai.api_key。", null, 0, 0, false);
         }
 
         if (model == null || model.isEmpty()) {
@@ -367,7 +367,7 @@ public class CloudFlareAI {
         String model = plugin.getConfigManager().getCloudflareModel();
 
         if (cfKey == null || cfKey.isEmpty()) {
-            return new AIResponse("错误: 请先在配置文件中设置 CloudFlare cf_key。", null);
+            return new AIResponse("错误: 请先在配置文件中设置 CloudFlare cf_key。", null, 0, 0, false);
         }
 
         if (model == null || model.isEmpty()) {

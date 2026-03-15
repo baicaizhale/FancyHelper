@@ -89,7 +89,7 @@ public class ToolExecutor {
             case "#edit":
                 handleFileTool(player, "diff", args, session);
                 break;
-            case "#get_preset":
+            case "#getpreset":
                 handleGetTool(player, args);
                 break;
             

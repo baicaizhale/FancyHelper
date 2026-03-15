@@ -51,8 +51,8 @@ public class PromptManager {
         // 2. 【单命令执行】#run 工具一次只能执行一条命令，禁止使用 && 或 ; 连接多个命令
         // 3. 【工具位置】工具调用必须另起一行，不得在正文或注释中调用
         // 4. 【格式规范】工具名和冒号之间不要有空格，命令参数不要带斜杠 /
-        // 5. 【强制读预设】执行任务前必须先调用 #get_preset 查看相关预设文件（如果存在）
-        //    - 例如：玩家询问 LuckPerms 权限时，必须先调用 #get_preset: luckperms.txt
+        // 5. 【强制读预设】执行任务前必须先调用 #getpreset 查看相关预设文件（如果存在）
+        //    - 例如：玩家询问 LuckPerms 权限时，必须先调用 #getpreset: luckperms.txt
         sb.append("[Core Constraints]\n");
         sb.append("These are the most critical constraints. Violations will cause parsing failures. You MUST follow them strictly.\n\n");
 
@@ -66,8 +66,8 @@ public class PromptManager {
 
         sb.append("4. [Format] No space between tool name and colon. Command arguments should not have leading slash /.\n\n");
 
-        sb.append("5. [Read Preset First] You MUST call #get_preset to read relevant preset files before executing tasks (if they exist).\n");
-        sb.append("   - Example: When a player asks about LuckPerms permissions, you must call #get_preset: luckperms.txt first.\n\n");
+        sb.append("5. [Read Preset First] You MUST call #getpreset to read relevant preset files before executing tasks (if they exist).\n");
+        sb.append("   - Example: When a player asks about LuckPerms permissions, you must call #getpreset: luckperms.txt first.\n\n");
 
         // 正确示例：#run: give @p apple
         sb.append("Correct Examples:\n");
@@ -125,19 +125,18 @@ public class PromptManager {
         }
 
         // ==================== Tool List / 工具列表 ====================
-        // 【工具列表】格式：#工具名: 参数（例如：#get_preset: coreprotect.txt）
+        // 【工具列表】格式：#工具名: 参数（例如：#getpreset: coreprotect.txt）
         sb.append("[Tool List]\n");
-        sb.append("Format: #tool_name: argument (Example: #get_preset: coreprotect.txt)\n\n");
+        sb.append("Format: #tool_name: argument (Example: #getpreset: coreprotect.txt)\n\n");
         
         // 【查询类工具】
         // #search: <args> - 在互联网搜索（优先 Wiki，若无则全网搜索）。注意使用精确的关键词，Wiki查询请不要使用自然语言
         //    添加 widely 关键词可强制进行全网搜索，例如：#search: widely Minecraft 最新版本
-        // #get_preset: <file> - 获取预设文件内容。处理任务时优先查看相关预设
-        // #choose: <A>,<B>,<C>... - 展示多个选项供用户选择，适合有多种实现途径的场景
+        // #getpreset: <file> - 获取预设文件内容。处理任务时优先查看相关预设
         sb.append("[Query Tools]\n");
         sb.append("  #search: <args> - Search on the internet (prioritize Wiki, then general search if not found). Use precise keywords, avoid natural language for Wiki queries.\n");
         sb.append("    Add 'widely' keyword to force general web search. Example: #search: widely Minecraft latest version\n");
-        sb.append("  #get_preset: <file> - Get preset file content. Prioritize reading relevant presets when handling tasks.\n");
+        sb.append("  #getpreset: <file> - Get preset file content. Prioritize reading relevant presets when handling tasks.\n");
         sb.append("  #choose: <A>,<B>,<C>... - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n\n");
         
         // 【执行类工具】
@@ -169,7 +168,7 @@ public class PromptManager {
             sb.append("    Mode 2 (Line Range): #edit: path|start-end|content (e.g. #edit: file.yml|10-20|new lines)\n");
             sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
         }
-        sb.append("  Prohibition: Do NOT use #read to access preset files under plugins/FancyHelper/preset. Use #get_preset: <file> instead.\n\n");
+        sb.append("  Prohibition: Do NOT use #read to access preset files under plugins/FancyHelper/preset. Use #getpreset: <file> instead.\n\n");
         
         // 【记忆管理工具】
         // #remember: <content> - 记住玩家的偏好或指令，下次对话时会自动注入到系统提示中
@@ -247,27 +246,17 @@ public class PromptManager {
         
         // ==================== Usage Guide / 使用指南 ====================
         // 【使用指南】
-        // 1. **先检查预设是否存在**：调用 #get_preset 前必须先检查 Available Presets 列表中是否存在该预设
-        //    - 如果预设存在：调用 #get_preset: <plugin_name>.txt 读取预设
+        // 1. **先检查预设是否存在**：调用 #getpreset 前必须先检查 Available Presets 列表中是否存在该预设
+        //    - 如果预设存在：调用 #getpreset: <plugin_name>.txt 读取预设
         //    - 如果预设不存在：必须使用 #search 搜索文档，禁止猜测命令
-        //    - 例如：玩家询问 LuckPerms → 检查列表 → 'luckperms.txt' 存在 → 调用 #get_preset: luckperms.txt
+        //    - 例如：玩家询问 LuckPerms → 检查列表 → 'luckperms.txt' 存在 → 调用 #getpreset: luckperms.txt
         //    - 例如：玩家询问 SomeUnknownPlugin → 检查列表 → 未找到 → 调用 #search: SomeUnknownPlugin command usage
-        // 2. **禁止猜测命令**：如果预设不存在且未搜索过，禁止执行命令，必须先搜索
-        // 3. **备用策略**：如果搜索无果，尝试不带参数或带 'help' 参数运行命令来发现用法
-        //    - 例如：#run: pluginname → 可能显示命令列表
-        //    - 例如：#run: pluginname help → 可能显示帮助文档
-        // 4. **处理复杂任务**：当需要 3 步及以上才能完成的任务时，使用 #todo 创建任务列表，让用户了解进度
-        // 5. **使用原则**：
-        //    - 应该使用：复杂多步骤任务、需要规划的任务、需要显示进度的任务
-        //    - 不应该使用：2 步内的简单任务、单次响应可回答的问题、紧凑循环任务
-        //    - 收到复杂任务后立即创建待办列表，及时更新任务状态
-        //    - 重要：调用 #todo 后必须立即结束回复，禁止在同一回复中调用其他工具
         sb.append("[Usage Guide]\n");
-        sb.append("1. **Check Preset Availability First**: BEFORE calling #get_preset, you MUST check if the preset exists in the Available Presets list below.\n");
+        sb.append("1. **Check Preset Availability First**: BEFORE calling #getpreset, you MUST check if the preset exists in the Available Presets list below.\n");
         sb.append("   - Available presets: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n");
-        sb.append("   - If preset exists: Call #get_preset: <plugin_name>.txt to read the preset.\n");
+        sb.append("   - If preset exists: Call #getpreset: <plugin_name>.txt to read the preset.\n");
         sb.append("   - If preset does NOT exist: You MUST use #search to search for documentation. DO NOT guess commands.\n");
-        sb.append("   - Example: Player asks about LuckPerms → Check list → 'luckperms.txt' exists → Call #get_preset: luckperms.txt\n");
+        sb.append("   - Example: Player asks about LuckPerms → Check list → 'luckperms.txt' exists → Call #getpreset: luckperms.txt\n");
         sb.append("   - Example: Player asks about SomeUnknownPlugin → Check list → Not found → Call #search: SomeUnknownPlugin command usage\n\n");
         
         sb.append("2. **Never Guess Commands**: If no preset exists and you haven't searched, you MUST NOT execute commands. Always search first.\n\n");
