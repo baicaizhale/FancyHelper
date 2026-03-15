@@ -30,4 +30,4 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         with:
-          model: deepseek/deepseek-reasoner
+          model: deepseek/deepseek-chat
