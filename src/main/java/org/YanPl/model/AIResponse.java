@@ -8,16 +8,22 @@ public class AIResponse {
     private final String thought;
     private final long promptTokens;
     private final long completionTokens;
+    private final boolean truncated;
 
     public AIResponse(String content, String thought) {
-        this(content, thought, 0, 0);
+        this(content, thought, 0, 0, false);
     }
 
     public AIResponse(String content, String thought, long promptTokens, long completionTokens) {
+        this(content, thought, promptTokens, completionTokens, false);
+    }
+
+    public AIResponse(String content, String thought, long promptTokens, long completionTokens, boolean truncated) {
         this.content = content;
         this.thought = thought;
         this.promptTokens = promptTokens;
         this.completionTokens = completionTokens;
+        this.truncated = truncated;
     }
 
     public String getContent() {
@@ -38,5 +44,9 @@ public class AIResponse {
 
     public long getCompletionTokens() {
         return completionTokens;
+    }
+
+    public boolean isTruncated() {
+        return truncated;
     }
 }
