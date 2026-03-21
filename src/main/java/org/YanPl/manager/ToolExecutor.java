@@ -201,7 +201,8 @@ public class ToolExecutor {
             player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
         } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && 
             !lowerToolName.equals("#end") && !lowerToolName.equals("#list") && 
-            !lowerToolName.equals("#read") && !lowerToolName.equals("#todo")) {
+            !lowerToolName.equals("#read") && !lowerToolName.equals("#todo") &&
+            !lowerToolName.equals("#getpreset")) {
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         }
     }
@@ -335,10 +336,7 @@ public class ToolExecutor {
         String pendingStr = type.toUpperCase() + ":" + args;
         cliManager.setPendingCommand(uuid, pendingStr);
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
-        
-        // 为 #edit 工具提供操作描述
-        String actionDesc = "请求修改文件";
-        sendConfirmButtons(player, actionDesc + " " + ChatColor.WHITE + args);
+        sendConfirmButtons(player, "");
     }
 
     /**
@@ -939,6 +937,8 @@ public class ToolExecutor {
      * 处理 #getpreset 工具
      */
     private void handleGetTool(Player player, String fileName) {
+        // 显示正在读取预设的信息
+        player.sendMessage(ChatColor.GRAY + "〇 正在读取预设...");
         cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
         
         File presetFile = new File(plugin.getDataFolder(), "preset/" + fileName);
