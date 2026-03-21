@@ -188,9 +188,12 @@ jobs:
               R2_KEY="${UPLOAD_DIR}/${FILENAME}"
               echo "上传 ${FILENAME} -> ${R2_KEY}"
               
+              # URL 编码路径（处理 # 等特殊字符）
+              ENCODED_PATH=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${R2_KEY}', safe=''))")
+              
               # 通过 Worker API 上传
               RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-                "${WORKER_URL}?path=${R2_KEY}" \
+                "${WORKER_URL}?path=${ENCODED_PATH}" \
                 -H "X-Builds-Key: ${BUILDS_KEY}" \
                 -H "Content-Type: application/java-archive" \
                 --data-binary "@${jar}")
