@@ -193,7 +193,7 @@ jobs:
               
               # 通过 Worker API 上传
               RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-                "${WORKER_URL}?path=${ENCODED_PATH}" \
+                "${WORKER_URL}/upload?path=${ENCODED_PATH}" \
                 -H "X-Builds-Key: ${BUILDS_KEY}" \
                 -H "Content-Type: application/java-archive" \
                 --data-binary "@${jar}")
