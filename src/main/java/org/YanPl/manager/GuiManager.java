@@ -21,9 +21,55 @@ public class GuiManager implements Listener {
 
     private final FancyHelper plugin;
     private final String SETTINGS_TITLE = ColorUtil.translateCustomColors("&zFancyHelper &8| &7Settings");
+    private final String MODE_SELECTION_TITLE = ColorUtil.translateCustomColors("&zFancyHelper &8| &7模式选择");
 
     public GuiManager(FancyHelper plugin) {
         this.plugin = plugin;
+    }
+
+    /**
+     * 打开模式选择菜单
+     */
+    public void openModeSelectionMenu(Player player) {
+        Inventory inv = Bukkit.createInventory(null, 9, MODE_SELECTION_TITLE);
+
+        // 填充背景板
+        ItemStack bg = createItem(Material.BLACK_STAINED_GLASS_PANE, " ");
+        for (int i = 0; i < 9; i++) {
+            inv.setItem(i, bg);
+        }
+
+        // 1. Normal 模式
+        ItemStack normalItem = createItem(Material.LIME_DYE, ColorUtil.translateCustomColors("&a&lNormal 模式"), 
+                ColorUtil.translateCustomColors("&8&m------------------------"),
+                ColorUtil.translateCustomColors("&7普通模式"),
+                ColorUtil.translateCustomColors("&7AI 执行敏感操作需手动确认"),
+                "",
+                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                ColorUtil.translateCustomColors("&8&m------------------------"));
+        inv.setItem(2, normalItem);
+
+        // 2. SMART 模式
+        ItemStack smartItem = createItem(Material.BLUE_DYE, ColorUtil.translateCustomColors("&9&lSMART 模式"), 
+                ColorUtil.translateCustomColors("&8&m------------------------"),
+                ColorUtil.translateCustomColors("&7智能模式"),
+                ColorUtil.translateCustomColors("&7AI 会评估操作风险，高风险需确认"),
+                "",
+                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                ColorUtil.translateCustomColors("&8&m------------------------"));
+        inv.setItem(4, smartItem);
+
+        // 3. YOLO 模式
+        ItemStack yoloItem = createItem(Material.RED_DYE, ColorUtil.translateCustomColors("&c&lYOLO 模式"), 
+                ColorUtil.translateCustomColors("&8&m------------------------"),
+                ColorUtil.translateCustomColors("&7激进模式"),
+                ColorUtil.translateCustomColors("&7AI 将自动执行大部分命令"),
+                "",
+                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                ColorUtil.translateCustomColors("&8&m------------------------"));
+        inv.setItem(6, yoloItem);
+
+        player.openInventory(inv);
     }
 
     /**
@@ -84,6 +130,14 @@ public class GuiManager implements Listener {
                     ColorUtil.translateCustomColors("&7当前为 &a普通模式"),
                     ColorUtil.translateCustomColors("&7AI 执行敏感操作需手动确认"),
                     "",
+                    ColorUtil.translateCustomColors("&e▸ 点击切换至 SMART 模式"),
+                    ColorUtil.translateCustomColors("&8&m------------------------"));
+        } else if (mode == DialogueSession.Mode.SMART) {
+            item = createItem(Material.BLUE_DYE, ColorUtil.translateCustomColors("&9&l当前模式: SMART"), 
+                    ColorUtil.translateCustomColors("&8&m------------------------"),
+                    ColorUtil.translateCustomColors("&7当前为 &9智能模式"),
+                    ColorUtil.translateCustomColors("&7AI 会评估操作风险，高风险需确认"),
+                    "",
                     ColorUtil.translateCustomColors("&e▸ 点击切换至 YOLO 模式"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         } else {
@@ -138,7 +192,8 @@ public class GuiManager implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!event.getView().getTitle().equals(SETTINGS_TITLE)) {
+        String title = event.getView().getTitle();
+        if (!title.equals(SETTINGS_TITLE) && !title.equals(MODE_SELECTION_TITLE)) {
             return;
         }
 
@@ -159,6 +214,8 @@ public class GuiManager implements Listener {
             DialogueSession.Mode currentMode = (session != null) ? session.getMode() : DialogueSession.Mode.NORMAL;
             
             if (currentMode == DialogueSession.Mode.NORMAL) {
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.SMART);
+            } else if (currentMode == DialogueSession.Mode.SMART) {
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.YOLO);
             } else {
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
@@ -190,6 +247,26 @@ public class GuiManager implements Listener {
         else if (slot == 26) {
             player.closeInventory();
             player.playSound(player.getLocation(), "ui.button.click", 1, 1);
+        }
+        
+        // 模式选择菜单处理
+        if (event.getView().getTitle().equals(MODE_SELECTION_TITLE)) {
+            if (slot == 2) {
+                // Normal 模式
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
+                player.closeInventory();
+                player.playSound(player.getLocation(), "ui.button.click", 1, 1);
+            } else if (slot == 4) {
+                // SMART 模式
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.SMART);
+                player.closeInventory();
+                player.playSound(player.getLocation(), "ui.button.click", 1, 1);
+            } else if (slot == 6) {
+                // YOLO 模式
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.YOLO);
+                player.closeInventory();
+                player.playSound(player.getLocation(), "ui.button.click", 1, 1);
+            }
         }
     }
 }

@@ -322,9 +322,10 @@ class DialogueSessionTest {
     @Test
     @DisplayName("Mode 枚举值")
     void testModeEnum() {
-        assertEquals(2, DialogueSession.Mode.values().length);
+        assertEquals(3, DialogueSession.Mode.values().length);
         assertEquals(DialogueSession.Mode.NORMAL, DialogueSession.Mode.valueOf("NORMAL"));
         assertEquals(DialogueSession.Mode.YOLO, DialogueSession.Mode.valueOf("YOLO"));
+        assertEquals(DialogueSession.Mode.SMART, DialogueSession.Mode.valueOf("SMART"));
     }
 
     @Test

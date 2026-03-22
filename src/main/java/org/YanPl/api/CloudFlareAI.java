@@ -698,4 +698,15 @@ public class CloudFlareAI {
         }
         return "Hello";
     }
+
+    /**
+     * 简单的单轮对话方法，不使用会话历史
+     * @param prompt 用户提示
+     * @return AI响应
+     */
+    public AIResponse chatSimple(String prompt) throws IOException {
+        DialogueSession tempSession = new DialogueSession();
+        tempSession.addMessage("user", prompt);
+        return chat(tempSession, "你是一个得力的助手。");
+    }
 }

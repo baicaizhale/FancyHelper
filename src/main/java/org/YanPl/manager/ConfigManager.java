@@ -403,6 +403,14 @@ public class ConfigManager {
     }
 
     /**
+     * 获取 SMART 模式的风险阈值
+     * @return 风险阈值（0-100）
+     */
+    public int getSmartRiskThreshold() {
+        return config.getInt("settings.smart_risk_threshold", 50);
+    }
+
+    /**
      * 获取玩家数据配置对象
      * @return FileConfiguration
      */

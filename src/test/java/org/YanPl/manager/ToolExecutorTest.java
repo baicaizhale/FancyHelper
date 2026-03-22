@@ -42,6 +42,8 @@ class ToolExecutorTest {
         when(plugin.getLogger()).thenReturn(Logger.getLogger("TestLogger"));
         when(plugin.getConfigManager()).thenReturn(configManager);
         when(configManager.isDebug()).thenReturn(true);
+        when(configManager.getApiTimeoutSeconds()).thenReturn(120);
+        when(configManager.getSmartRiskThreshold()).thenReturn(50);
         
         toolExecutor = new ToolExecutor(plugin, cliManager);
         testUuid = UUID.randomUUID();

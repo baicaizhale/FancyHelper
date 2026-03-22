@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 3.6.5
+version: 3.6.6
 
 # 插件设置
 settings:
@@ -27,7 +27,7 @@ settings:
   auto_upgrade: true  
   # GitHub 镜像源，用于加速下载
   update_mirror: "https://ghproxy.net/"  
-  # 自动检测重复工具调用 (防止 AI 陷入死循环)
+  # 防循环检测的连续相似调用阈值
   anti_loop:
     # 连续多少次相似调用触发中断
     threshold_count: 4
@@ -35,6 +35,8 @@ settings:
     similarity_threshold: 0.95
     # 单次对话中连续调用工具的最大次数 (防止 AI 陷入逻辑循环或过度消耗)
     max_chain_count: 30
+  # SMART 模式风险阈值 (0-100)，当风险值高于此值时需要玩家确认
+  smart_risk_threshold: 50
 # 日志保留天数，超过此天数的日志将被自动删除
   log_retention_days: 15
   # YOLO 模式下需要手动确认的风险命令列表（匹配前缀）
