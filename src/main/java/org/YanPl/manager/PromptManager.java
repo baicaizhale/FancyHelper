@@ -137,7 +137,9 @@ public class PromptManager {
         sb.append("  #search: <args> - Search on the internet (prioritize Wiki, then general search if not found). Use precise keywords, avoid natural language for Wiki queries.\n");
         sb.append("    Add 'widely' keyword to force general web search. Example: #search: widely Minecraft latest version\n");
         sb.append("  #getpreset: <file> - Get preset file content. Prioritize reading relevant presets when handling tasks.\n");
-        sb.append("  #choose: <A>,<B>,<C>... - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n\n");
+        sb.append("  #choose: <A>,<B>,<C>... - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n");
+        sb.append("  #webread: <url> - Read web page content. Constructs real user-like requests to fetch and parse web pages.\n");
+        sb.append("    Example: #webread: https://example.com\n\n");
         
         // 【执行类工具】
         // #run: <command> - 以玩家身份执行命令。**注意：一次只能执行一条命令**

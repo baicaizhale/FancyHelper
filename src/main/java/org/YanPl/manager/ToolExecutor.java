@@ -121,6 +121,11 @@ public class ToolExecutor {
                 handleEditmemTool(player, args);
                 break;
             
+            // 网页阅读工具
+            case "#webread":
+                handleWebReaderTool(player, args, session);
+                break;
+            
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
                 String error = "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。";
@@ -1350,5 +1355,205 @@ public class ToolExecutor {
         } catch (NumberFormatException e) {
             cliManager.feedbackToAI(player, "#editmem_result: error - 无效的序号: " + parts[0].trim());
         }
+    }
+
+    /**
+     * 处理 #webread 工具 - 读取网页内容
+     * 格式: #webread: https://example.com
+     */
+    private void handleWebReaderTool(Player player, String args, DialogueSession session) {
+        UUID uuid = player.getUniqueId();
+        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        if (args == null || args.trim().isEmpty()) {
+            player.sendMessage(ChatColor.RED + "错误: #webread 工具需要提供URL参数");
+            cliManager.feedbackToAI(player, "#webread_result: error - 需要提供URL参数，例如 #webread: https://example.com");
+            return;
+        }
+
+        // 清理URL，去除可能的Markdown格式和其他无关字符
+        String url = args.trim();
+        
+        // 去除反引号
+        url = url.replaceAll("`", "");
+        
+        // 去除可能的括号
+        url = url.replaceAll("^\\(", "");
+        url = url.replaceAll("\\)$", "");
+        
+        // 去除引号
+        url = url.replaceAll("^['\"](.*)['\"]$", "$1");
+        
+        // 再次修剪空格
+        url = url.trim();
+        
+        player.sendMessage(ChatColor.GRAY + "〇 正在读取网页: " + ChatColor.WHITE + url);
+
+        // 直接执行网页阅读，不需要验证
+        executeWebReader(player, url);
+    }
+
+    /**
+     * 执行网页阅读操作
+     */
+    private void executeWebReader(Player player, String url) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                String result = fetchWebPage(url);
+                final String finalResult = result;
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.GRAY + "⇒ 网页内容已获取，正在处理...");
+                    cliManager.feedbackToAI(player, "#webread_result: " + finalResult);
+                });
+            } catch (Exception e) {
+                plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    String errorMessage = "#webread_result: 错误 - " + e.getMessage();
+                    cliManager.feedbackToAI(player, errorMessage);
+                    player.sendMessage(ChatColor.RED + "读取网页失败: " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    /**
+     * 获取网页内容并解析
+     */
+    protected String fetchWebPage(String url) throws Exception {
+        // 验证URL格式
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            throw new IllegalArgumentException("URL必须以http://或https://开头");
+        }
+
+        // 创建HTTP客户端
+        java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(30))
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                .build();
+
+        // 构造真实用户的请求头，按照真实浏览器的顺序和内容
+        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .timeout(java.time.Duration.ofSeconds(45))
+                // 基础头信息
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                .header("Accept-Encoding", "gzip, deflate, br")
+                // 安全相关头
+                .header("Sec-Ch-Ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
+                .header("Sec-Ch-Ua-Mobile", "?0")
+                .header("Sec-Ch-Ua-Platform", "\"Windows\"")
+                // 浏览行为头
+                .header("Upgrade-Insecure-Requests", "1")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "none")
+                .header("Sec-Fetch-User", "?1")
+                // 缓存和引用头
+                .header("Cache-Control", "max-age=0")
+                .header("Referer", "https://www.google.com/")
+                .header("DNT", "1")
+                .GET()
+                .build();
+
+        // 发送请求
+        java.net.http.HttpResponse<byte[]> response = httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+
+        if (response.statusCode() != 200) {
+            throw new Exception("HTTP请求失败，状态码: " + response.statusCode());
+        }
+
+        // 等待5秒，确保网页完全加载
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // 处理响应内容，自动检测编码和压缩
+        byte[] bodyBytes = response.body();
+        String contentType = response.headers().firstValue("Content-Type").orElse("text/html");
+        String contentEncoding = response.headers().firstValue("Content-Encoding").orElse("identity");
+        
+        // 处理压缩内容
+        byte[] decompressedBytes = bodyBytes;
+        try {
+            if (contentEncoding.contains("gzip")) {
+                java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bodyBytes);
+                java.util.zip.GZIPInputStream gis = new java.util.zip.GZIPInputStream(bis);
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = gis.read(buffer)) > 0) {
+                    bos.write(buffer, 0, len);
+                }
+                gis.close();
+                bos.close();
+                decompressedBytes = bos.toByteArray();
+            } else if (contentEncoding.contains("deflate")) {
+                java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bodyBytes);
+                java.util.zip.InflaterInputStream iis = new java.util.zip.InflaterInputStream(bis);
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = iis.read(buffer)) > 0) {
+                    bos.write(buffer, 0, len);
+                }
+                iis.close();
+                bos.close();
+                decompressedBytes = bos.toByteArray();
+            }
+        } catch (Exception e) {
+            // 解压失败，使用原始字节
+            decompressedBytes = bodyBytes;
+        }
+        
+        // 尝试从Content-Type中提取编码
+        String charset = "UTF-8"; // 默认编码
+        if (contentType.contains("charset=")) {
+            int charsetIndex = contentType.indexOf("charset=");
+            charset = contentType.substring(charsetIndex + 8).trim();
+            // 移除可能的引号
+            if (charset.startsWith("\"")) {
+                charset = charset.substring(1, charset.length() - 1);
+            }
+        }
+        
+        // 将字节数组转换为字符串
+        String htmlContent;
+        try {
+            htmlContent = new String(decompressedBytes, charset);
+        } catch (java.io.UnsupportedEncodingException e) {
+            // 如果编码不支持，回退到UTF-8
+            htmlContent = new String(decompressedBytes, java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        // 解析HTML内容
+        org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(htmlContent);
+
+        // 提取标题
+        String title = doc.title();
+
+        // 提取正文内容，去除脚本和样式
+        doc.select("script, style").remove();
+        String bodyText = doc.body().text();
+
+        // 限制内容长度
+        final int MAX_CONTENT_LENGTH = 5000;
+        if (bodyText.length() > MAX_CONTENT_LENGTH) {
+            bodyText = bodyText.substring(0, MAX_CONTENT_LENGTH) + "... (内容过长，已截断)";
+        }
+
+        // 构建结果
+        StringBuilder result = new StringBuilder();
+        result.append("网页标题: ").append(title).append("\n");
+        result.append("网页URL: ").append(url).append("\n");
+        result.append("\n正文内容:\n");
+        result.append(bodyText);
+
+        return result.toString();
     }
 }
