@@ -26,10 +26,12 @@ import java.util.UUID;
 public class ToolExecutor {
     private final FancyHelper plugin;
     private final CLIManager cliManager;
+    private final RiskAssessmentManager riskAssessmentManager;
 
     public ToolExecutor(FancyHelper plugin, CLIManager cliManager) {
         this.plugin = plugin;
         this.cliManager = cliManager;
+        this.riskAssessmentManager = new RiskAssessmentManager(plugin);
     }
 
     /**
@@ -224,6 +226,29 @@ public class ToolExecutor {
         UUID uuid = player.getUniqueId();
         String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
 
+        // SMART 模式下评估风险
+        if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
+            player.sendMessage(ChatColor.GRAY + "⁕ 正在评估操作风险...");
+            cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.THINKING);
+            
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                RiskAssessmentManager.RiskAssessment assessment = 
+                    riskAssessmentManager.assessRisk("run", cleanCommand);
+                
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    int threshold = plugin.getConfigManager().getSmartRiskThreshold();
+                    if (assessment.level >= threshold) {
+                        cliManager.sendSmartRiskConfirm(player, "run", cleanCommand, assessment);
+                    } else {
+                        player.sendMessage(ChatColor.GOLD + ">> SMART RUN " + ChatColor.WHITE + cleanCommand);
+                        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+                        executeCommand(player, cleanCommand);
+                    }
+                });
+            });
+            return true;
+        }
+
         // YOLO 模式下风险命令需要确认
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             if (isRiskyCommand(cleanCommand)) {
@@ -333,6 +358,29 @@ public class ToolExecutor {
         }
 
         // #edit (diff) 需要确认
+        if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
+            player.sendMessage(ChatColor.GRAY + "⁕ 正在评估操作风险...");
+            cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.THINKING);
+            
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                RiskAssessmentManager.RiskAssessment assessment = 
+                    riskAssessmentManager.assessRisk("edit", args);
+                
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    int threshold = plugin.getConfigManager().getSmartRiskThreshold();
+                    if (assessment.level >= threshold) {
+                        cliManager.sendSmartRiskConfirm(player, "edit", args, assessment);
+                    } else {
+                        String pendingStr = type.toUpperCase() + ":" + args;
+                        cliManager.setPendingCommand(uuid, pendingStr);
+                        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
+                        sendConfirmButtons(player, "");
+                    }
+                });
+            });
+            return;
+        }
+
         String pendingStr = type.toUpperCase() + ":" + args;
         cliManager.setPendingCommand(uuid, pendingStr);
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);

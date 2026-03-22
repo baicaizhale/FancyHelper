@@ -36,9 +36,12 @@ public class CLIManager {
     private final Set<UUID> yoloAgreedPlayers = new HashSet<>();
     private final Set<UUID> yoloModePlayers = new HashSet<>();
     private final Set<UUID> pendingYoloAgreementPlayers = new HashSet<>();
+    private final Set<UUID> smartModePlayers = new HashSet<>();
     private final File agreedPlayersFile;
     private final File yoloAgreedPlayersFile;
     private final File yoloModePlayersFile;
+    private final File smartModePlayersFile;
+    private final Map<UUID, PendingSmartAction> pendingSmartActions = new ConcurrentHashMap<>();
     private final Map<UUID, DialogueSession> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> isGenerating = new ConcurrentHashMap<>();
     private final Map<UUID, GenerationStatus> generationStates = new ConcurrentHashMap<>();
@@ -64,6 +67,21 @@ public class CLIManager {
         }
     }
 
+    /**
+     * 待处理的SMART操作信息
+     */
+    private static class PendingSmartAction {
+        final String actionType;
+        final String actionContent;
+        final RiskAssessmentManager.RiskAssessment assessment;
+
+        PendingSmartAction(String actionType, String actionContent, RiskAssessmentManager.RiskAssessment assessment) {
+            this.actionType = actionType;
+            this.actionContent = actionContent;
+            this.assessment = assessment;
+        }
+    }
+
     public enum GenerationStatus {
         THINKING,
         EXECUTING_TOOL,
@@ -83,9 +101,11 @@ public class CLIManager {
         this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
         this.yoloAgreedPlayersFile = new File(plugin.getDataFolder(), "yolo_agreed_players.txt");
         this.yoloModePlayersFile = new File(plugin.getDataFolder(), "yolo_mode_players.txt");
+        this.smartModePlayersFile = new File(plugin.getDataFolder(), "smart_mode_players.txt");
         loadAgreedPlayers();
         loadYoloAgreedPlayers();
         loadYoloModePlayers();
+        loadSmartModePlayers();
         startTimeoutTask();
         startThinkingTask();
         startLogCleanupTask();
@@ -189,6 +209,49 @@ public class CLIManager {
             plugin.getCloudErrorReport().report(e);
         }
     }
+
+    public void loadSmartModePlayers() {
+        smartModePlayers.clear();
+        if (!smartModePlayersFile.exists()) return;
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(smartModePlayersFile.toPath());
+            for (String line : lines) {
+                try {
+                    smartModePlayers.add(UUID.fromString(line.trim()));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法加载处于 SMART 模式的玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    private void saveSmartModeState(UUID uuid, boolean isSmart) {
+        if (isSmart) {
+            if (smartModePlayers.add(uuid)) {
+                writeSmartModePlayers();
+            }
+        } else {
+            if (smartModePlayers.remove(uuid)) {
+                writeSmartModePlayers();
+            }
+        }
+    }
+
+    private void writeSmartModePlayers() {
+        try {
+            List<String> lines = new ArrayList<>();
+            for (UUID uuid : smartModePlayers) {
+                lines.add(uuid.toString());
+            }
+            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines);
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法保存 SMART 模式玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+
 
     private void startTimeoutTask() {
         new BukkitRunnable() {
@@ -459,6 +522,8 @@ public class CLIManager {
         // 恢复上次的模式
         if (yoloModePlayers.contains(uuid)) {
             session.setMode(DialogueSession.Mode.YOLO);
+        } else if (smartModePlayers.contains(uuid)) {
+            session.setMode(DialogueSession.Mode.SMART);
         }
 
         // 创建日志文件
@@ -597,16 +662,24 @@ public class CLIManager {
                 return;
             }
             session.setMode(DialogueSession.Mode.YOLO);
-            saveYoloModeState(uuid, true); // 保存 YOLO 状态
+            saveYoloModeState(uuid, true);
+            saveSmartModeState(uuid, false);
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 YOLO 模式。在该模式下，Fancy 执行命令将不再请求您的确认。");
+        } else if (targetMode == DialogueSession.Mode.SMART) {
+            session.setMode(DialogueSession.Mode.SMART);
+            saveSmartModeState(uuid, true);
+            saveYoloModeState(uuid, false);
+            player.sendMessage(ChatColor.GRAY + "------------------");
+            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 SMART 模式。在该模式下，Fancy 会先评估操作风险，高风险操作需要您的确认。");
         } else {
             session.setMode(DialogueSession.Mode.NORMAL);
-            saveYoloModeState(uuid, false); // 移除 YOLO 状态
+            saveYoloModeState(uuid, false);
+            saveSmartModeState(uuid, false);
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Normal 模式。");
         }
-        sendEnterMessage(player); // 重新发送页眉以显示新状态
+        sendEnterMessage(player);
     }
 
     private void sendYoloWarning(Player player) {
@@ -626,6 +699,61 @@ public class CLIManager {
 
         player.spigot().sendMessage(message);
         player.sendMessage(ChatColor.RED + "===============");
+    }
+
+    /**
+     * 发送SMART模式风险确认界面
+     */
+    public void sendSmartRiskConfirm(Player player, String actionType, String actionContent, 
+                                    RiskAssessmentManager.RiskAssessment assessment) {
+        UUID uuid = player.getUniqueId();
+        
+        pendingSmartActions.put(uuid, new PendingSmartAction(actionType, actionContent, assessment));
+        setGenerating(uuid, false, GenerationStatus.WAITING_CONFIRM);
+        
+        player.sendMessage(ChatColor.WHITE + "⁕ " + ChatColor.GRAY + "检测到风险操作，是否继续？");
+        
+        if ("run".equals(actionType)) {
+            player.sendMessage(ChatColor.WHITE + "  运行命令 " + ChatColor.YELLOW + actionContent);
+        } else if ("edit".equals(actionType)) {
+            String[] parts = actionContent.split("\\|", 3);
+            String path = parts.length > 0 ? parts[0].trim() : "";
+            player.sendMessage(ChatColor.WHITE + "  修改文件 " + ChatColor.YELLOW + path);
+            if (parts.length >= 3) {
+                player.sendMessage(ChatColor.WHITE + "  From " + ChatColor.GRAY + parts[1]);
+                player.sendMessage(ChatColor.WHITE + "  To " + ChatColor.GRAY + parts[2]);
+            }
+        }
+        
+        if (assessment.reason != null && !assessment.reason.isEmpty()) {
+            player.sendMessage(ChatColor.WHITE + "  原因 " + ChatColor.GRAY + assessment.reason);
+        }
+        
+        TextComponent message = new TextComponent("");
+        
+        TextComponent allowBtn = new TextComponent(ChatColor.GREEN + "[本次允许]");
+        allowBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_allow"));
+        allowBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("允许本次操作")));
+        
+        TextComponent spacer1 = new TextComponent(" ");
+        
+        TextComponent denyBtn = new TextComponent(ChatColor.RED + "[拒绝]");
+        denyBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_deny"));
+        denyBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("拒绝此操作")));
+        
+        TextComponent spacer2 = new TextComponent(" ");
+        
+        TextComponent neverAskBtn = new TextComponent(ChatColor.AQUA + "[不再询问]");
+        neverAskBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_never"));
+        neverAskBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("允许本次操作并不再询问")));
+        
+        message.addExtra(allowBtn);
+        message.addExtra(spacer1);
+        message.addExtra(denyBtn);
+        message.addExtra(spacer2);
+        message.addExtra(neverAskBtn);
+        
+        player.spigot().sendMessage(message);
     }
 
     public void handleConfirm(Player player) {
@@ -684,6 +812,78 @@ public class CLIManager {
             isGenerating.put(uuid, false);
             generationStates.put(uuid, GenerationStatus.CANCELLED);
             generationStartTimes.put(uuid, System.currentTimeMillis());
+        }
+    }
+
+    /**
+     * 处理SMART模式 - 本次允许
+     */
+    public void handleSmartAllow(Player player) {
+        UUID uuid = player.getUniqueId();
+        PendingSmartAction action = pendingSmartActions.get(uuid);
+        if (action == null) {
+            return;
+        }
+        
+        pendingSmartActions.remove(uuid);
+        executeSmartAction(player, action);
+    }
+
+    /**
+     * 处理SMART模式 - 拒绝
+     */
+    public void handleSmartDeny(Player player) {
+        UUID uuid = player.getUniqueId();
+        PendingSmartAction action = pendingSmartActions.get(uuid);
+        if (action == null) {
+            return;
+        }
+        
+        pendingSmartActions.remove(uuid);
+        player.sendMessage(ChatColor.GRAY + "⇒ 操作已拒绝");
+        isGenerating.put(uuid, false);
+        generationStates.put(uuid, GenerationStatus.CANCELLED);
+        generationStartTimes.put(uuid, System.currentTimeMillis());
+        
+        feedbackToAI(player, "#error: 用户拒绝了此操作。");
+    }
+
+    /**
+     * 处理SMART模式 - 不再询问
+     */
+    public void handleSmartNever(Player player) {
+        UUID uuid = player.getUniqueId();
+        PendingSmartAction action = pendingSmartActions.get(uuid);
+        if (action == null) {
+            return;
+        }
+        
+        pendingSmartActions.remove(uuid);
+        
+        DialogueSession session = sessions.get(uuid);
+        if (session != null) {
+            session.setMode(DialogueSession.Mode.YOLO);
+            player.sendMessage(ChatColor.GRAY + "⇒ 已临时切换到 YOLO 模式，本次会话内不再询问");
+        }
+        
+        executeSmartAction(player, action);
+    }
+
+    /**
+     * 执行SMART模式的操作
+     */
+    private void executeSmartAction(Player player, PendingSmartAction action) {
+        UUID uuid = player.getUniqueId();
+        
+        if ("run".equals(action.actionType)) {
+            player.sendMessage(ChatColor.GOLD + ">> SMART RUN " + ChatColor.WHITE + action.actionContent);
+            setGenerating(uuid, false, GenerationStatus.EXECUTING_TOOL);
+            toolExecutor.executeCommand(player, action.actionContent);
+        } else if ("edit".equals(action.actionType)) {
+            String pendingStr = "DIFF:" + action.actionContent;
+            setPendingCommand(uuid, pendingStr);
+            setGenerating(uuid, false, GenerationStatus.WAITING_CONFIRM);
+            toolExecutor.sendConfirmButtons(player, "");
         }
     }
 

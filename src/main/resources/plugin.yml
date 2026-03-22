@@ -1,5 +1,5 @@
 name: FancyHelper
-version: 3.6.5
+version: 3.6.6
 main: org.YanPl.FancyHelper
 api-version: '1.18'
 softdepend: [ProtocolLib]

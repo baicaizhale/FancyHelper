@@ -96,6 +96,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "yolo":
             case "normal":
+            case "smart":
             case "confirm":
             case "cancel":
             case "agree":
@@ -115,6 +116,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "stop":
             case "memory":
             case "mem":
+            case "smart_allow":
+            case "smart_deny":
+            case "smart_never":
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
                     return true;
@@ -149,6 +153,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli toggle <ls|read|diff> §f: 启用/禁用工具");
         sender.sendMessage(" §7- §b/cli display §f: 切换显示位置");
         sender.sendMessage(" §7- §b/cli yolo §f: 切换到 YOLO 模式（自动执行命令）");
+        sender.sendMessage(" §7- §b/cli smart §f: 切换到 SMART 模式（AI评估风险）");
         sender.sendMessage(" §7- §b/cli normal §f: 切换到普通模式（需要确认）");
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
         sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
@@ -162,11 +167,23 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "normal":
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
                 return true;
+            case "smart":
+                plugin.getCliManager().switchMode(player, DialogueSession.Mode.SMART);
+                return true;
             case "confirm":
                 plugin.getCliManager().handleConfirm(player);
                 return true;
             case "cancel":
                 plugin.getCliManager().handleCancel(player);
+                return true;
+            case "smart_allow":
+                plugin.getCliManager().handleSmartAllow(player);
+                return true;
+            case "smart_deny":
+                plugin.getCliManager().handleSmartDeny(player);
+                return true;
+            case "smart_never":
+                plugin.getCliManager().handleSmartNever(player);
                 return true;
             case "agree":
                 plugin.getCliManager().handleChat(player, "agree");
@@ -660,7 +677,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "reload", "status", "yolo", "normal", "checkupdate", "upgrade", 
+                "reload", "status", "yolo", "normal", "smart", "checkupdate", "upgrade", 
                 "read", "set", "settings", "tools", "display", "toggle", 
                 "notice", "retry", "todo", "memory", "mem", "confirm", 
                 "cancel", "agree", "thought", "select", "exempt_anti_loop", 
