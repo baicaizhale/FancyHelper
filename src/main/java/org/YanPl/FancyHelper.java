@@ -149,11 +149,30 @@ public final class FancyHelper extends JavaPlugin {
 
             // 尝试同步命令，修复热重载后的 Brigadier 缓存问题
             syncCommands();
+            
+            // 检查在线玩家是否有预加载的会话，如果有则自动进入CLI模式
+            checkOnlinePlayersForPreloadedSessions();
         } catch (Throwable e) {
             getLogger().severe("FancyHelper 启动失败: " + e.getMessage());
             e.printStackTrace();
             setEnabled(false);
         }
+    }
+
+    /**
+     * 检查在线玩家是否有预加载的会话，如果有则自动进入CLI模式
+     */
+    private void checkOnlinePlayersForPreloadedSessions() {
+        getServer().getScheduler().runTaskLater(this, () -> {
+            for (org.bukkit.entity.Player player : getServer().getOnlinePlayers()) {
+                if (cliManager.hasPreloadedSession(player.getUniqueId())) {
+                    if (getConfigManager().isDebug()) {
+                        getLogger().info("[FancyHelper] 玩家 " + player.getName() + " 有预加载的会话，自动进入CLI模式");
+                    }
+                    cliManager.enterCLI(player);
+                }
+            }
+        }, 20L); // 延迟1秒执行，确保插件完全加载
     }
 
 // 下面一些代码只是为了清理旧插件防止干扰，没有任何恶意
