@@ -562,6 +562,15 @@ public class CLIManager {
     }
 
     /**
+     * 检查玩家是否有预加载的会话
+     * @param uuid 玩家UUID
+     * @return 是否有预加载的会话
+     */
+    public boolean hasPreloadedSession(UUID uuid) {
+        return sessions.containsKey(uuid);
+    }
+
+    /**
      * 切换玩家的 CLI 模式
      */
     public void toggleCLI(Player player) {
@@ -808,8 +817,6 @@ public class CLIManager {
             return;
         }
         
-        activeCLIPayers.add(uuid);
-        
         // 检查是否已经有预加载的会话
         DialogueSession session = sessions.get(uuid);
         boolean restored = session != null;
@@ -829,15 +836,7 @@ public class CLIManager {
             } else if (smartModePlayers.contains(uuid)) {
                 session.setMode(DialogueSession.Mode.SMART);
             }
-        }
-
-        sessions.put(uuid, session);
-        sendEnterMessage(player);
-        
-        // 如果恢复了历史会话，显示恢复提示
-        if (restored) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"));
-        } else {
+            
             // 创建日志文件
             try {
                 Path logDir = plugin.getDataFolder().toPath().resolve("logs");
@@ -855,9 +854,20 @@ public class CLIManager {
                 plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
             }
             
-            // 触发 AI 问候
+            // 发送进入消息和问候
+            sendEnterMessage(player);
             triggerGreeting(player);
+        } else {
+            // 有预加载的会话，静默进入CLI模式
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 静默进入CLI模式，会话已恢复");
+            }
+            // 显示恢复提示
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"));
         }
+        
+        activeCLIPayers.add(uuid);
+        sessions.put(uuid, session);
     }
 
     /**

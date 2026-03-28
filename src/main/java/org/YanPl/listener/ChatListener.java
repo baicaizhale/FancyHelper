@@ -37,12 +37,24 @@ public class ChatListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        
+        // 检查玩家是否有预加载的会话，如果有则静默进入CLI模式
+        if (plugin.getCliManager().hasPreloadedSession(player.getUniqueId())) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[ChatListener] 玩家 " + player.getName() + " 有预加载的会话，静默进入CLI模式");
+            }
+            // 延迟1秒后自动进入CLI模式，确保玩家完全加载
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!plugin.isEnabled() || !player.isOnline()) return;
+                plugin.getCliManager().enterCLI(player);
+            }, 20L); // 1秒 = 20 ticks
+        }
+        
         // 检查配置是否启用公告显示
         if (!plugin.getConfigManager().isNoticeShowOnJoin()) {
             return;
         }
-
-        Player player = event.getPlayer();
         
         // 进服 8s 后发送公告
         if (!plugin.isEnabled()) return;
