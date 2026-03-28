@@ -535,7 +535,17 @@ public class CLIManager {
             Map<String, Object> sessionData = gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
             
             // 检查时间戳
-            long timestamp = (long) sessionData.getOrDefault("timestamp", 0);
+            Object timestampObj = sessionData.getOrDefault("timestamp", 0);
+            long timestamp;
+            if (timestampObj instanceof Double) {
+                timestamp = ((Double) timestampObj).longValue();
+            } else if (timestampObj instanceof Long) {
+                timestamp = (Long) timestampObj;
+            } else if (timestampObj instanceof Integer) {
+                timestamp = (Integer) timestampObj;
+            } else {
+                timestamp = 0;
+            }
             long now = System.currentTimeMillis();
             long thirtyMinutesMs = 30 * 60 * 1000;
             
