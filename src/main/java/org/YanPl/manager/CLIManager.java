@@ -1031,8 +1031,6 @@ public class CLIManager {
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Normal 模式。");
         }
-        // 保存会话历史，确保模式切换被持久化
-        saveSessionHistory(uuid, session);
         sendEnterMessage(player);
     }
 
