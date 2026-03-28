@@ -150,7 +150,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli settings §f: 打开个人设置界面");
         sender.sendMessage(" §7- §b/cli memory §f: 管理偏好记忆");
         sender.sendMessage(" §7- §b/cli tools §f: 查看工具列表");
-        sender.sendMessage(" §7- §b/cli toggle <ls|read|diff> §f: 启用/禁用工具");
+        sender.sendMessage(" §7- §b/cli toggle <ls|read|edit> §f: 启用/禁用工具");
         sender.sendMessage(" §7- §b/cli display §f: 切换显示位置");
         sender.sendMessage(" §7- §b/cli yolo §f: 切换到 YOLO 模式（自动执行命令）");
         sender.sendMessage(" §7- §b/cli smart §f: 切换到 SMART 模式（AI评估风险）");
@@ -201,7 +201,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "toggle":
                 if (args.length > 1) {
                     String tool = args[1].toLowerCase();
-                    if (tool.equals("ls") || tool.equals("read") || tool.equals("diff")) {
+                    if (tool.equals("ls") || tool.equals("read") || tool.equals("edit")) {
                         boolean currentState = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
                         if (currentState) {
                             plugin.getConfigManager().setPlayerToolEnabled(player, tool, false);
@@ -429,8 +429,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         // READ Tool
         sendToolLine(player, "read", "读取文件(read)", plugin.getConfigManager().isPlayerToolEnabled(player, "read"));
         
-        // DIFF Tool
-        sendToolLine(player, "diff", "编辑文件(diff)", plugin.getConfigManager().isPlayerToolEnabled(player, "diff"));
+        // EDIT Tool
+        sendToolLine(player, "edit", "编辑文件(edit)", plugin.getConfigManager().isPlayerToolEnabled(player, "edit"));
         
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "  点击按钮切换工具权限。");
@@ -700,7 +700,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
-            return Arrays.asList("ls", "read", "diff").stream()
+            return Arrays.asList("ls", "read", "edit").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("notice")) {

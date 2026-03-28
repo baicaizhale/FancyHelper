@@ -103,20 +103,22 @@ public class CloudFlareAI {
                             sb.append("  Model: ").append(reqObj.get("model").getAsString()).append("\n");
                         }
                         
-                        // 记录消息数量（不记录具体内容）
+                        // 记录消息数量
                         if (reqObj.has("messages") && reqObj.get("messages").isJsonArray()) {
                             JsonArray messages = reqObj.get("messages").getAsJsonArray();
                             sb.append("  Messages: ").append(messages.size()).append(" items\n");
                             
-                            // 只记录最后一条用户消息的内容摘要
-                            for (int i = messages.size() - 1; i >= 0; i--) {
+                            // 记录所有消息的完整内容
+                            for (int i = 0; i < messages.size(); i++) {
                                 JsonObject msg = messages.get(i).getAsJsonObject();
-                                if (msg.has("role") && "user".equals(msg.get("role").getAsString()) && msg.has("content")) {
+                                if (msg.has("role") && msg.has("content")) {
+                                    String role = msg.get("role").getAsString();
                                     String content = msg.get("content").getAsString();
-                                    // 截取前100个字符作为摘要
-                                    String summary = content.length() > 100 ? content.substring(0, 100) + "..." : content;
-                                    sb.append("  Last User Message: ").append(summary.replace("\n", " ")).append("\n");
-                                    break;
+                                    sb.append("  [").append(role).append("]:\n");
+                                    // 记录完整内容，每行缩进
+                                    for (String line : content.split("\n")) {
+                                        sb.append("    ").append(line).append("\n");
+                                    }
                                 }
                             }
                         }
@@ -131,7 +133,7 @@ public class CloudFlareAI {
                         sb.append("\n");
                     }
                 } catch (Exception e) {
-                    sb.append("Request Payload (Raw, truncated):\n").append(requestBody.length() > 500 ? requestBody.substring(0, 500) + "..." : requestBody).append("\n\n");
+                    sb.append("Request Payload (Raw):\n").append(requestBody).append("\n\n");
                 }
 
                 // 2. 格式化 Response - 只记录摘要信息
@@ -150,9 +152,11 @@ public class CloudFlareAI {
                                     JsonObject message = choice.get("message").getAsJsonObject();
                                     if (message.has("content")) {
                                         String content = message.get("content").getAsString();
-                                        // 截取前150个字符作为摘要
-                                        String summary = content.length() > 150 ? content.substring(0, 150) + "..." : content;
-                                        sb.append("  Content: ").append(summary.replace("\n", " ")).append("\n");
+                                        sb.append("  Content:\n");
+                                        // 记录完整内容，每行缩进
+                                        for (String line : content.split("\n")) {
+                                            sb.append("    ").append(line).append("\n");
+                                        }
                                     }
                                     if (message.has("role")) {
                                         sb.append("  Role: ").append(message.get("role").getAsString()).append("\n");
@@ -181,7 +185,7 @@ public class CloudFlareAI {
                         }
                     }
                 } catch (Exception e) {
-                    sb.append("Response Payload (Raw, truncated):\n").append(responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody).append("\n");
+                    sb.append("Response Payload (Raw):\n").append(responseBody).append("\n");
                 }
 
                 session.appendLog("AI_INTERACTION", sb.toString());
@@ -235,10 +239,8 @@ public class CloudFlareAI {
             }
             
         } catch (Exception e) {
-            // 异常回退 - 只记录摘要
-            String reqSummary = requestBody.length() > 300 ? requestBody.substring(0, 300) + "..." : requestBody;
-            String respSummary = responseBody.length() > 300 ? responseBody.substring(0, 300) + "..." : responseBody;
-            session.appendLog("AI_RAW_DEBUG", "Request (truncated): " + reqSummary + "\nResponse (truncated): " + respSummary);
+            // 异常回退 - 记录原始内容
+            session.appendLog("AI_RAW_DEBUG", "Request:\n" + requestBody + "\n\nResponse:\n" + responseBody);
         }
     }
 

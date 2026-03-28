@@ -15,7 +15,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 验证管理器：处理 ls, read, diff 工具的首次使用验证逻辑。
+ * 验证管理器：处理 ls, read, edit 工具的首次使用验证逻辑。
  */
 public class VerificationManager {
     private final FancyHelper plugin;
@@ -32,7 +32,7 @@ public class VerificationManager {
     }
 
     private static class VerificationSession {
-        String type; // "ls", "read" or "diff"
+        String type; // "ls", "read" or "edit"
         String password;
         long expiry;
         int attempts;
@@ -50,7 +50,7 @@ public class VerificationManager {
     /**
      * 开始验证过程
      * @param player 玩家
-     * @param type "read" (ls/read) 或 "diff"
+     * @param type "read" (ls/read) 或 "edit"
      * @param onVerify 验证成功后的回调
      */
     public void startVerification(Player player, String type, Runnable onVerify) {
@@ -125,7 +125,7 @@ public class VerificationManager {
                 success = true;
             }
         } else {
-            // diff 模式：检查文件内容
+            // edit 模式：检查文件内容
             File verifyFile = new File(verifyDir, player.getName() + "-" + session.type + ".txt");
             try {
                 if (verifyFile.exists()) {

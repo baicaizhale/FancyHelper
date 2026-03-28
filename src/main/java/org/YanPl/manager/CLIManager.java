@@ -246,7 +246,9 @@ public class CLIManager {
             for (UUID uuid : smartModePlayers) {
                 lines.add(uuid.toString());
             }
-            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines);
+            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines, 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 SMART 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -411,6 +413,12 @@ public class CLIManager {
                                 
                                 if (plugin.getConfigManager().isDebug()) {
                                     plugin.getLogger().info("[CLI] 已预加载会话历史: " + path.getFileName());
+                                }
+                                
+                                // 加载完成后删除历史文件
+                                Files.deleteIfExists(path);
+                                if (plugin.getConfigManager().isDebug()) {
+                                    plugin.getLogger().info("[CLI] 已删除会话历史文件: " + path.getFileName());
                                 }
                             } else {
                                 // 超过30分钟，删除过期文件
@@ -733,6 +741,9 @@ public class CLIManager {
             if (historyFile != null) {
                 try {
                     Files.deleteIfExists(historyFile);
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[CLI] 已删除历史文件: " + historyFile.getFileName());
+                    }
                 } catch (IOException e) {
                     plugin.getLogger().warning("[CLI] 删除历史文件失败: " + e.getMessage());
                 }
@@ -745,9 +756,10 @@ public class CLIManager {
      * @param player 玩家
      */
     public void sendUnloadMessage(Player player) {
-        // 创建主消息 - 使用fromLegacyText正确解析颜色代码
+        // 创建主消息 - 使用标准的颜色代码
+        @SuppressWarnings("deprecation")
         net.md_5.bungee.api.chat.BaseComponent[] components = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
-            ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f与Fancy的会话已被挂起 ")
+            "§bFancyHelper§r §7> §f与Fancy的会话已被挂起 "
         );
         TextComponent message = new TextComponent(components);
 
@@ -829,12 +841,9 @@ public class CLIManager {
         
         // 检查是否已经有预加载的会话
         DialogueSession session = sessions.get(uuid);
-        boolean restored = session != null;
-        
         // 如果没有预加载的会话，尝试加载历史会话
         if (session == null) {
             session = loadSessionHistory(uuid);
-            restored = session != null;
         }
         
         // 如果仍然没有会话，创建新会话
@@ -846,6 +855,9 @@ public class CLIManager {
             } else if (smartModePlayers.contains(uuid)) {
                 session.setMode(DialogueSession.Mode.SMART);
             }
+            
+            // 先将会话放入 Map，确保后续操作能获取到正确的模式
+            sessions.put(uuid, session);
             
             // 创建日志文件
             try {
@@ -877,7 +889,10 @@ public class CLIManager {
         }
         
         activeCLIPayers.add(uuid);
-        sessions.put(uuid, session);
+        // 注意：新会话已经在上面放入 Map，这里只处理恢复会话的情况
+        if (session != null) {
+            sessions.put(uuid, session);
+        }
     }
 
     /**
@@ -971,6 +986,13 @@ public class CLIManager {
 
         recordThinkingTime(uuid);
         sendExitMessage(player);
+        
+        // 保存会话历史 - 仅在插件卸载时保存
+        // DialogueSession session = sessions.get(uuid);
+        // if (session != null) {
+        //     saveSessionHistory(uuid, session);
+        // }
+        
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
         pendingYoloAgreementPlayers.remove(uuid);
@@ -1009,6 +1031,8 @@ public class CLIManager {
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Normal 模式。");
         }
+        // 保存会话历史，确保模式切换被持久化
+        saveSessionHistory(uuid, session);
         sendEnterMessage(player);
     }
 
@@ -1110,11 +1134,13 @@ public class CLIManager {
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
                 generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
-                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:")) {
+                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:") || cmd.startsWith("EDIT:")) {
                     String[] parts = cmd.split(":", 2);
                     String type = parts[0].toLowerCase();
                     String args = parts[1];
-                    checkVerificationAndExecute(player, type, args);
+                    // 将内部类型映射到配置中的工具名称
+                    String toolName = mapTypeToToolName(type);
+                    checkVerificationAndExecute(player, type, toolName, args);
                 } else {
                     toolExecutor.executeCommand(player, cmd);
                 }
@@ -1122,23 +1148,37 @@ public class CLIManager {
         }
     }
 
-    private void checkVerificationAndExecute(Player player, String type, String args) {
+    private void checkVerificationAndExecute(Player player, String type, String toolName, String args) {
         // 检查是否被冻结
         long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
         if (freezeRemaining > 0) {
             player.sendMessage(ChatColor.RED + "验证已冻结，请在 " + freezeRemaining + " 秒后重试。");
             return;
         }
-        
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {
+
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, toolName)) {
             toolExecutor.executeFileOperation(player, type, args);
         } else {
-            player.sendMessage(ChatColor.YELLOW + "首次使用 " + type + " 工具需要完成安全验证。");
-            plugin.getVerificationManager().startVerification(player, type, () -> {
-                plugin.getConfigManager().setPlayerToolEnabled(player, type, true);
+            player.sendMessage(ChatColor.YELLOW + "首次使用 " + toolName + " 工具需要完成安全验证。");
+            plugin.getVerificationManager().startVerification(player, toolName, () -> {
+                plugin.getConfigManager().setPlayerToolEnabled(player, toolName, true);
                 toolExecutor.executeFileOperation(player, type, args);
             });
         }
+    }
+
+    /**
+     * 将内部类型映射到配置中的工具名称
+     * @param type 内部类型（ls, read, edit, diff）
+     * @return 配置中的工具名称（ls, read, edit）
+     */
+    private String mapTypeToToolName(String type) {
+        return switch (type.toLowerCase()) {
+            case "ls" -> "ls";
+            case "read" -> "read";
+            case "edit", "diff" -> "edit";
+            default -> type;
+        };
     }
 
     public void handleCancel(Player player) {
@@ -1643,7 +1683,7 @@ public class CLIManager {
         }
         
         // 增强的工具调用提取逻辑：寻找第一个处于行首的工具调用
-        // 这样可以避免 AI 在回复末尾多加一个 #over 导致前面的主要工具（如 #diff）被忽略
+        // 这样可以避免 AI 在回复末尾多加一个 #over 导致前面的主要工具（如 #edit）被忽略
         String content = cleanResponse;
         String toolCall = "";
 

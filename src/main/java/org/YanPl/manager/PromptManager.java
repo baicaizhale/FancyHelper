@@ -142,26 +142,29 @@ public class PromptManager {
         sb.append("    Example: #webread: https://example.com\n\n");
         
         // 【执行类工具】
-        // #run: <command> - 以玩家身份执行命令。**注意：一次只能执行一条命令**
+        // #run: <command> - 以玩家身份执行Minecraft命令。**注意：一次只能执行一条命令，且只能执行Minecraft游戏内命令**
         // #end - 任务完成标志。**必须放在回复末尾，且前面必须有对玩家的总结回复，严禁单独调用**
         // #exit - 当用户想退出 FancyHelper 时调用
         sb.append("[Execution Tools]\n");
-        sb.append("  #run: <command> - Execute command as player. **Note: Only ONE command per call**.\n");
+        sb.append("  #run: <command> - Execute Minecraft command as player. **Note: Only ONE Minecraft command per call, and only Minecraft in-game commands are allowed**\n");
         sb.append("  #end - Task completion marker. **Must be at end of response, with a summary to player before it. NEVER call it alone.**\n");
         sb.append("  #exit - Call when user wants to exit FancyHelper.\n\n");
         
-        sb.append("**IMPORTANT: When you need to execute any Minecraft command, you MUST use the #run tool.**\n");
+        sb.append("**IMPORTANT: When you need to execute any Minecraft command, you MUST use the #run tool, and only Minecraft in-game commands are allowed**\n");
         sb.append("  - You CANNOT directly output commands in your response text.\n");
-        sb.append("  - You MUST wrap all commands with #run: <command> format.\n");
+        sb.append("  - You MUST wrap all Minecraft commands with #run: <command> format.\n");
+        sb.append("  - You MUST NOT use #run tool for non-Minecraft commands (like system commands, shell commands, etc.).\n");
         sb.append("  - Example: To give player an apple, write: #run: give @p apple\n");
         sb.append("  - Example: To set time to day, write: #run: time set day\n");
-        sb.append("  - Example: To teleport player, write: #run: tp @p 100 64 100\n\n");
+        sb.append("  - Example: To teleport player, write: #run: tp @p 100 64 100\n");
+        sb.append("  - Example: #run: ls (wrong - non-Minecraft command)\n\n");
         
         // 【文件类工具】（以下工具的执行结果玩家不可见）
         // #list: <path> - 列出目录内容。如 #list: plugins/FancyHelper
         // #read: <path> - 读取文件内容。如 #read: plugins/FancyHelper/config.yml
-        // #edit: <path>|<search>|<replace> - 修改文件内容（查找替换）
-        //    注意：为保证匹配精确，| 分隔符前后不要有多余空格
+        // #edit: <path>|<range>|<original>|<replacement> - 修改指定行号范围的内容
+        //    格式：#edit: path|range|original|replacement
+        //    示例：#edit: config.yml|10-15|old content|new content
         //    约束：#edit 必须是回复的最后一部分，后面不能有 #end
         sb.append("[File Tools] (Results are not visible to players)\n");
 
@@ -171,10 +174,10 @@ public class PromptManager {
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
             sb.append("  #read: <path> [start]-[end] - Read file content. Optional line range. Example: #read: plugins/FancyHelper/config.yml 1-50\n");
         }
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "diff")) {
-            sb.append("  #edit: <path>|<search_or_range>|<replace> - Modify file content.\n");
-            sb.append("    Mode 1 (Text Match): #edit: path|search|replace\n");
-            sb.append("    Mode 2 (Line Range): #edit: path|start-end|content (e.g. #edit: file.yml|10-20|new lines)\n");
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "edit")) {
+            sb.append("  #edit: <path>|<range>|<original>|<replacement> - Modify file content by line range.\n");
+            sb.append("    Format: #edit: path|range|original|replacement\n");
+            sb.append("    Example: #edit: config.yml|10-15|old text|new text\n");
             sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
         }
         sb.append("  Prohibition: Do NOT use #read to access preset files under plugins/FancyHelper/preset. Use #getpreset: <file> instead.\n\n");

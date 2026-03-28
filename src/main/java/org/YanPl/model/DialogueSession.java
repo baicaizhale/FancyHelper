@@ -163,19 +163,52 @@ public class DialogueSession {
             return;
         }
         
+        // 简化日志内容，避免记录过长的提示词或上下文
+        String simplifiedContent = simplifyLogContent(type, content);
+        
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append("[").append(time).append("] [").append(type).append("]\n");
-            if (content != null && !content.isEmpty()) {
-                sb.append(content).append("\n");
+            sb.append("[").append(time).append("] [").append(type).append("] ");
+            if (simplifiedContent != null && !simplifiedContent.isEmpty()) {
+                sb.append(simplifiedContent);
             }
-            sb.append("----------------------------------------\n");
+            sb.append("\n");
             
             Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 忽略日志写入错误，避免影响主流程
+        }
+    }
+    
+    /**
+     * 简化日志内容，避免记录重复的提示词和过长的上下文
+     * @param type 日志类型
+     * @param content 原始内容
+     * @return 简化后的内容
+     */
+    private String simplifyLogContent(String type, String content) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+        
+        // 限制日志内容长度
+        final int MAX_LENGTH = 500;
+        
+        switch (type) {
+            case "TOOL_EXECUTION":
+                // 工具调用只记录工具名称和简要参数
+                return content;
+            case "USER_INPUT":
+                // 用户输入直接记录，但限制长度
+                return content.length() > MAX_LENGTH ? content.substring(0, MAX_LENGTH) + "..." : content;
+            case "USER_ACTION":
+                // 用户动作直接记录
+                return content;
+            default:
+                // 其他类型限制长度
+                return content.length() > MAX_LENGTH ? content.substring(0, MAX_LENGTH) + "..." : content;
         }
     }
     
