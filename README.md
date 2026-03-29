@@ -107,7 +107,7 @@ metaso:
   concise_snippet: true  # 是否启用简洁摘要模式
 ```
 
-**搜索优先级**：Metaso > Tavily > UAPI（免费公共搜索）
+**搜索优先级**：Metaso > Tavily
 
 ### 3. 使用方法
 

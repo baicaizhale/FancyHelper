@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 3.6.6
+version: 3.6.7
 
 # 插件设置
 settings:
@@ -11,8 +11,8 @@ settings:
   supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
   timeout_minutes: 10
-  # AI API 请求超时时间（以秒为单位）
-  # 对于推理模型（如 gpt-oss-120b、deepseek-reasoner、o1 等），建议设置为 120-300 秒
+  # API 请求超时时间（以秒为单位）
+  # 对于推理模型（如 gpt-oss-120b、deepseek-reasoner、kimi-k2.5 等），建议设置为 120-300 秒
   # 对于普通模型（如 gpt-4o、gpt-4o-mini），建议设置为 60-120 秒
   api_timeout_seconds: 120
   # Token（字符数）剩余警告阈值
@@ -70,8 +70,8 @@ notice:
 cloudflare:
   # CloudFlare Workers AI API 密钥，FancyHelper会自动根据密钥来获取对应的account-id
   cf_key: "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0"
-  # 使用的模型名称，不推荐更改，可以是任何一个Text-Generation模型，默认gpt-oss-120b（最聪明）
-  model: "@cf/openai/gpt-oss-120b"
+  # 使用的模型名称，不推荐更改，可以是任何一个Text-Generation模型
+  model: "@cf/moonshotai/kimi-k2.5"
 
 # OpenAI 兼容 API 配置（支持自定义 OpenAI 接口）
 openai:
@@ -83,7 +83,7 @@ openai:
   #   - DeepSeek: https://api.deepseek.com/chat/completions
   #   - Ollama (本地): http://localhost:11434/v1/chat/completions
   #   - 阿里云通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-  #   - 心流开放平台：https://apis.iflow.cn/v1/chat/completions
+  #   - Kimi开放平台: https://api.moonshot.cn/v1/chat/completions
   #   - 其他兼容 OpenAI 格式的 API
   api_url: https://api.openai.com/v1/chat/completions
   # API 密钥
@@ -93,13 +93,14 @@ openai:
   #   - OpenAI: gpt-4o, gpt-4o-mini, o1-preview, o1-mini
   #   - DeepSeek: deepseek-chat, deepseek-reasoner
   #   - Ollama: llama3, mistral
+  #   - Kimi开放平台: kimi-k2.5
   #   - 阿里云通义千问: qwen3-max
   model: gpt-4o
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:
   # 是否启用 Metaso AI 搜索（默认关闭，启用后将使用 Metaso API 进行 AI 搜索）
-  enabled: false
+  enabled: true
   # Metaso API 令牌，从 https://metaso.cn/search-api/api-keys 获取
   api_token: mk-A8D756FEDE5A65D47124446CDF97D728
   # 使用的模型名称（fast: 快速模型，pro: 专业模型）
@@ -109,14 +110,14 @@ metaso:
 
 # Tavily 搜索 API 配置（用于增强全网搜索能力，优先级小于Metaso）
 tavily:
-  # 是否启用 Tavily 搜索（启用后将使用 Tavily API 进行全网搜索，Metaso和Tavily同时关闭时使用免费的UAPI进行搜索）
+  # 是否启用 Tavily 搜索（启用后将使用 Tavily API 进行全网搜索）
   enabled: true
   # Tavily API 密钥，从 https://app.tavily.com/home 获取。如果你有霍格沃兹环境请使用自己的密钥
   api_key: "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"
   # Tavily API 代理地址，用于解决国内网络访问问题，留空则使用官方地址。我简直算是为了这个代理而买了一个域名QWQ(求赞助)
   proxy_url: "https://tavilyproxy.baicaizhale.top" 
   # 搜索结果数量限制（1-10）
-  max_results: 5
+  max_results: 7
   # 是否包含原始内容（可能增加响应时间）
   include_raw_content: false
 

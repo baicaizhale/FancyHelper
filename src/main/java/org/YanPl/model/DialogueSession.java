@@ -48,6 +48,7 @@ public class DialogueSession {
     private String logFilePath = null;
     private String lastError = null;
     private boolean verboseLogging = false;
+    private boolean systemPromptLogged = false;
     private final Map<Long, ThoughtSnapshot> thoughtSnapshots = new LinkedHashMap<Long, ThoughtSnapshot>(64, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, ThoughtSnapshot> eldest) {
@@ -158,19 +159,14 @@ public class DialogueSession {
     public synchronized void appendLog(String type, String content) {
         if (logFilePath == null) return;
         
-        // 根据日志类型和详细级别决定是否记录
-        if (!shouldLog(type)) {
-            return;
-        }
-        
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append("[").append(time).append("] [").append(type).append("]\n");
+            sb.append("[").append(time).append("] [").append(type).append("] ");
             if (content != null && !content.isEmpty()) {
-                sb.append(content).append("\n");
+                sb.append(content);
             }
-            sb.append("----------------------------------------\n");
+            sb.append("\n");
             
             Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -180,33 +176,70 @@ public class DialogueSession {
     }
     
     /**
-     * 根据日志类型和详细级别决定是否记录
-     * @param type 日志类型
-     * @return 是否应该记录
+     * 记录系统提示词（每个会话只记录一次）
+     * @param systemPrompt 系统提示词内容
      */
-    private boolean shouldLog(String type) {
-        // 总是记录错误和系统重要信息
-        if (type.contains("ERROR") || type.equals("SYSTEM")) {
-            return true;
-        }
+    public synchronized void logSystemPrompt(String systemPrompt) {
+        if (logFilePath == null || systemPromptLogged) return;
         
-        // 如果启用详细日志，记录所有类型
-        if (verboseLogging) {
-            return true;
-        }
+        systemPromptLogged = true;
         
-        // 非详细日志模式下，只记录关键信息
-        switch (type) {
-            case "USER_INPUT":
-            case "USER_ACTION":
-            case "TOOL_EXECUTION":
-            case "AI_INTERACTION":
-                return true;
-            case "AI_RAW_DEBUG":
-                // 只在详细模式下记录原始调试信息
-                return false;
-            default:
-                return true;
+        try {
+            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            StringBuilder sb = new StringBuilder();
+            sb.append("[").append(time).append("] [SYSTEM_PROMPT] \n");
+            sb.append(systemPrompt);
+            sb.append("\n");
+            sb.append("─".repeat(80)).append("\n");
+            
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // 忽略日志写入错误
+        }
+    }
+    
+    /**
+     * 记录 AI 请求内容
+     * @param requestContent 请求内容
+     */
+    public synchronized void logAIRequest(String requestContent) {
+        if (logFilePath == null) return;
+        
+        try {
+            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            StringBuilder sb = new StringBuilder();
+            sb.append("[").append(time).append("] [AI_REQUEST] \n");
+            sb.append(requestContent);
+            sb.append("\n");
+            sb.append("─".repeat(80)).append("\n");
+            
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // 忽略日志写入错误
+        }
+    }
+    
+    /**
+     * 记录 AI 响应内容
+     * @param responseContent 响应内容
+     */
+    public synchronized void logAIResponse(String responseContent) {
+        if (logFilePath == null) return;
+        
+        try {
+            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            StringBuilder sb = new StringBuilder();
+            sb.append("[").append(time).append("] [AI_RESPONSE] \n");
+            sb.append(responseContent);
+            sb.append("\n");
+            sb.append("─".repeat(80)).append("\n");
+            
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // 忽略日志写入错误
         }
     }
 

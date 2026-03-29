@@ -27,23 +27,21 @@ public class ColorUtil {
             return message;
         }
 
-        // 1. 先将 & 转换为 § (处理 &x, &z, &1, &a 等)
-        message = ChatColor.translateAlternateColorCodes('&', message);
-
-        // 2. 将自定义的 §x 和 §z 替换为实际的颜色对象
-        // BungeeCord ChatColor.of(...).toString() 返回的是形如 §x§1§1§A§A§B§B 的格式
-        
-        // 我们直接将字符串中的 §x 和 §z 替换为对应的颜色序列
+        // 1. 先将自定义的 §x 和 §z 替换为实际的颜色序列
+        // 这样可以避免它们被当作标准颜色代码处理
         String colorX = COLOR_X.toString();
         String colorZ = COLOR_Z.toString();
         
-        // 处理被 translateAlternateColorCodes 转换过的 §x 和 §z
+        // 处理 §x 和 §z
         message = message.replace("§x", colorX);
         message = message.replace("§z", colorZ);
         
-        // 处理可能残留的 &x 和 &z (防止用户输入 &x 或 &z 被漏掉)
+        // 处理 &x 和 &z
         message = message.replace("&x", colorX);
         message = message.replace("&z", colorZ);
+        
+        // 2. 然后将 & 转换为 § (处理 &1, &a 等标准颜色代码)
+        message = ChatColor.translateAlternateColorCodes('&', message);
         
         return message;
     }

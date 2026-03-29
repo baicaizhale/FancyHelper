@@ -101,7 +101,7 @@ public class GuiManager implements Listener {
         ItemStack toolsItem = createItem(Material.CHEST, ColorUtil.translateCustomColors("&6&l工具权限"), 
                 ColorUtil.translateCustomColors("&8&m------------------------"),
                 ColorUtil.translateCustomColors("&7管理文件操作相关权限"),
-                ColorUtil.translateCustomColors("&7包括: &fls, read, diff"),
+                ColorUtil.translateCustomColors("&7包括: &fls, read, edit"),
                 "",
                 ColorUtil.translateCustomColors("&e▸ 点击管理"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));

@@ -15,9 +15,13 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,12 +77,9 @@ public class CLIManager {
     private static class PendingSmartAction {
         final String actionType;
         final String actionContent;
-        final RiskAssessmentManager.RiskAssessment assessment;
-
         PendingSmartAction(String actionType, String actionContent, RiskAssessmentManager.RiskAssessment assessment) {
             this.actionType = actionType;
             this.actionContent = actionContent;
-            this.assessment = assessment;
         }
     }
 
@@ -109,6 +110,7 @@ public class CLIManager {
         startTimeoutTask();
         startThinkingTask();
         startLogCleanupTask();
+        loadAvailableSessionHistories();
     }
 
     public void loadAgreedPlayers() {
@@ -244,7 +246,9 @@ public class CLIManager {
             for (UUID uuid : smartModePlayers) {
                 lines.add(uuid.toString());
             }
-            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines);
+            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines, 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 SMART 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -317,6 +321,123 @@ public class CLIManager {
                 }
             }
         }.runTaskTimerAsynchronously(plugin, 0L, 20L * 60 * 60); // 每小时检查一次
+    }
+
+    /**
+     * 加载所有可用的会话历史
+     * 在插件启动时自动检测并加载有效的会话历史文件
+     */
+    private void loadAvailableSessionHistories() {
+        try {
+            Path historyDir = plugin.getDataFolder().toPath().resolve("temp").resolve("history");
+            if (!Files.exists(historyDir)) {
+                return;
+            }
+
+            long now = System.currentTimeMillis();
+            long thirtyMinutesMs = 30 * 60 * 1000;
+
+            Files.list(historyDir)
+                .filter(path -> path.toString().endsWith(".json"))
+                .forEach(path -> {
+                    try {
+                        String fileName = path.getFileName().toString();
+                        String uuidStr = fileName.substring(0, fileName.length() - 5); // 去掉.json后缀
+                        
+                        try {
+                            UUID uuid = UUID.fromString(uuidStr);
+                            
+                            // 读取并解析JSON
+                            Gson gson = new Gson();
+                            String json = Files.readString(path, StandardCharsets.UTF_8);
+                            Map<String, Object> sessionData = gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
+                            
+                            // 检查时间戳
+                            Object timestampObj = sessionData.getOrDefault("timestamp", 0);
+                            long timestamp;
+                            if (timestampObj instanceof Double) {
+                                timestamp = ((Double) timestampObj).longValue();
+                            } else if (timestampObj instanceof Long) {
+                                timestamp = (Long) timestampObj;
+                            } else if (timestampObj instanceof Integer) {
+                                timestamp = (Integer) timestampObj;
+                            } else {
+                                timestamp = 0;
+                            }
+                            
+                            // 检查是否在30分钟内
+                            if (now - timestamp <= thirtyMinutesMs) {
+                                // 创建新会话并恢复数据
+                                DialogueSession session = new DialogueSession();
+                                
+                                // 恢复对话模式
+                                String modeStr = (String) sessionData.getOrDefault("mode", "NORMAL");
+                                try {
+                                    DialogueSession.Mode mode = DialogueSession.Mode.valueOf(modeStr);
+                                    session.setMode(mode);
+                                } catch (IllegalArgumentException e) {
+                                    session.setMode(DialogueSession.Mode.NORMAL);
+                                }
+                                
+                                // 恢复对话历史
+                                Object messagesObj = sessionData.getOrDefault("messages", new ArrayList<>());
+                                if (messagesObj instanceof List<?>) {
+                                    List<?> messagesList = (List<?>) messagesObj;
+                                    for (Object msgObj : messagesList) {
+                                        if (msgObj instanceof Map<?, ?>) {
+                                            Map<?, ?> msgMap = (Map<?, ?>) msgObj;
+                                            Object roleObj = msgMap.get("role");
+                                            String role = roleObj != null ? roleObj.toString() : "user";
+                                            Object contentObj = msgMap.get("content");
+                                            String content = contentObj != null ? contentObj.toString() : "";
+                                            Object thoughtObj = msgMap.get("thought");
+                                            String thought = thoughtObj != null ? thoughtObj.toString() : null;
+                                            session.addMessage(role, content, thought);
+                                        }
+                                    }
+                                }
+                                
+                                // 恢复工具调用历史
+                                Object toolCallsObj = sessionData.getOrDefault("toolCalls", new ArrayList<>());
+                                if (toolCallsObj instanceof List<?>) {
+                                    List<?> toolCallsList = (List<?>) toolCallsObj;
+                                    for (Object toolCallObj : toolCallsList) {
+                                        if (toolCallObj instanceof String) {
+                                            session.addToolCall((String) toolCallObj);
+                                        }
+                                    }
+                                }
+                                
+                                // 将会话存储到内存中，等待玩家上线时恢复
+                                sessions.put(uuid, session);
+                                
+                                if (plugin.getConfigManager().isDebug()) {
+                                    plugin.getLogger().info("[CLI] 已预加载会话历史: " + path.getFileName());
+                                }
+                                
+                                // 加载完成后删除历史文件
+                                Files.deleteIfExists(path);
+                                if (plugin.getConfigManager().isDebug()) {
+                                    plugin.getLogger().info("[CLI] 已删除会话历史文件: " + path.getFileName());
+                                }
+                            } else {
+                                // 超过30分钟，删除过期文件
+                                Files.deleteIfExists(path);
+                            }
+                        } catch (IllegalArgumentException e) {
+                            // UUID解析失败，删除无效文件
+                            if (plugin.getConfigManager().isDebug()) {
+                                plugin.getLogger().warning("[CLI] 无效的历史文件名: " + fileName);
+                            }
+                            Files.deleteIfExists(path);
+                        }
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("[CLI] 加载会话历史失败: " + path.getFileName() + " - " + e.getMessage());
+                    }
+                });
+        } catch (IOException e) {
+            plugin.getLogger().warning("[CLI] 扫描会话历史目录失败: " + e.getMessage());
+        }
     }
 
     /**
@@ -449,6 +570,15 @@ public class CLIManager {
     }
 
     /**
+     * 检查玩家是否有预加载的会话
+     * @param uuid 玩家UUID
+     * @return 是否有预加载的会话
+     */
+    public boolean hasPreloadedSession(UUID uuid) {
+        return sessions.containsKey(uuid);
+    }
+
+    /**
      * 切换玩家的 CLI 模式
      */
     public void toggleCLI(Player player) {
@@ -461,6 +591,190 @@ public class CLIManager {
     }
 
     /**
+     * 保存会话历史到文件
+     * @param uuid 玩家UUID
+     * @param session 对话会话
+     */
+    public void saveSessionHistory(UUID uuid, DialogueSession session) {
+        try {
+            // 创建历史记录目录
+            Path historyDir = plugin.getDataFolder().toPath().resolve("temp").resolve("history");
+            Files.createDirectories(historyDir);
+            
+            // 创建保存文件
+            Path historyFile = historyDir.resolve(uuid.toString() + ".json");
+            
+            // 构建会话数据
+            Map<String, Object> sessionData = new HashMap<>();
+            sessionData.put("timestamp", System.currentTimeMillis());
+            sessionData.put("mode", session.getMode().name());
+            
+            // 保存对话历史
+            List<Map<String, Object>> messages = new ArrayList<>();
+            for (DialogueSession.Message message : session.getHistory()) {
+                Map<String, Object> msgData = new HashMap<>();
+                msgData.put("role", message.getRole());
+                msgData.put("content", message.getContent());
+                if (message.getThought() != null) {
+                    msgData.put("thought", message.getThought());
+                }
+                messages.add(msgData);
+            }
+            sessionData.put("messages", messages);
+            
+            // 保存工具调用历史
+            sessionData.put("toolCalls", session.getToolCallHistory());
+            
+            // 序列化为JSON并保存
+            Gson gson = new Gson();
+            String json = gson.toJson(sessionData);
+            Files.write(historyFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 已保存会话历史: " + historyFile.getFileName());
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("[CLI] 保存会话历史失败: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    /**
+     * 加载会话历史
+     * @param uuid 玩家UUID
+     * @return 恢复的对话会话，null如果没有有效的历史记录
+     */
+    public DialogueSession loadSessionHistory(UUID uuid) {
+        Path historyFile = null;
+        try {
+            // 检查历史记录目录
+            Path historyDir = plugin.getDataFolder().toPath().resolve("temp").resolve("history");
+            if (!Files.exists(historyDir)) {
+                return null;
+            }
+
+            // 检查历史文件
+            historyFile = historyDir.resolve(uuid.toString() + ".json");
+            if (!Files.exists(historyFile)) {
+                return null;
+            }
+
+            // 读取并解析JSON
+            Gson gson = new Gson();
+            String json = Files.readString(historyFile, StandardCharsets.UTF_8);
+            Map<String, Object> sessionData = gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
+
+            // 检查时间戳
+            Object timestampObj = sessionData.getOrDefault("timestamp", 0);
+            long timestamp;
+            if (timestampObj instanceof Double) {
+                timestamp = ((Double) timestampObj).longValue();
+            } else if (timestampObj instanceof Long) {
+                timestamp = (Long) timestampObj;
+            } else if (timestampObj instanceof Integer) {
+                timestamp = (Integer) timestampObj;
+            } else {
+                timestamp = 0;
+            }
+            long now = System.currentTimeMillis();
+            long thirtyMinutesMs = 30 * 60 * 1000;
+
+            if (now - timestamp > thirtyMinutesMs) {
+                // 超过30分钟，删除过期文件
+                Files.deleteIfExists(historyFile);
+                return null;
+            }
+
+            // 创建新会话并恢复数据
+            DialogueSession session = new DialogueSession();
+
+            // 恢复对话模式
+            String modeStr = (String) sessionData.getOrDefault("mode", "NORMAL");
+            try {
+                DialogueSession.Mode mode = DialogueSession.Mode.valueOf(modeStr);
+                session.setMode(mode);
+            } catch (IllegalArgumentException e) {
+                // 模式解析失败，使用默认模式
+                session.setMode(DialogueSession.Mode.NORMAL);
+            }
+
+            // 恢复对话历史
+            Object messagesObj = sessionData.getOrDefault("messages", new ArrayList<>());
+            if (messagesObj instanceof List<?>) {
+                List<?> messagesList = (List<?>) messagesObj;
+                for (Object msgObj : messagesList) {
+                    if (msgObj instanceof Map<?, ?>) {
+                        Map<?, ?> msgMap = (Map<?, ?>) msgObj;
+                        Object roleObj = msgMap.get("role");
+                        String role = roleObj != null ? roleObj.toString() : "user";
+                        Object contentObj = msgMap.get("content");
+                        String content = contentObj != null ? contentObj.toString() : "";
+                        Object thoughtObj = msgMap.get("thought");
+                        String thought = thoughtObj != null ? thoughtObj.toString() : null;
+                        session.addMessage(role, content, thought);
+                    }
+                }
+            }
+
+            // 恢复工具调用历史
+            Object toolCallsObj = sessionData.getOrDefault("toolCalls", new ArrayList<>());
+            if (toolCallsObj instanceof List<?>) {
+                List<?> toolCallsList = (List<?>) toolCallsObj;
+                for (Object toolCallObj : toolCallsList) {
+                    if (toolCallObj instanceof String) {
+                        session.addToolCall((String) toolCallObj);
+                    }
+                }
+            }
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 已加载会话历史: " + historyFile.getFileName());
+            }
+
+            return session;
+        } catch (Exception e) {
+            plugin.getLogger().warning("[CLI] 加载会话历史失败: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+            return null;
+        } finally {
+            // 确保历史文件被删除
+            if (historyFile != null) {
+                try {
+                    Files.deleteIfExists(historyFile);
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[CLI] 已删除历史文件: " + historyFile.getFileName());
+                    }
+                } catch (IOException e) {
+                    plugin.getLogger().warning("[CLI] 删除历史文件失败: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * 发送插件卸载提示
+     * @param player 玩家
+     */
+    public void sendUnloadMessage(Player player) {
+        // 创建主消息 - 使用自定义颜色
+        @SuppressWarnings("deprecation")
+        net.md_5.bungee.api.chat.BaseComponent[] components = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
+            ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f与Fancy的会话已被挂起 ")
+        );
+        TextComponent message = new TextComponent(components);
+
+        // 创建了解更多按钮
+        TextComponent learnMoreBtn = new TextComponent("[了解更多]");
+        learnMoreBtn.setColor(net.md_5.bungee.api.ChatColor.BLUE);
+        learnMoreBtn.setUnderlined(true);
+        learnMoreBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://deepwiki.com/baicaizhale/Fancyhelper"));
+        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打开 FancyHelper 帮助页面")));
+
+        message.addExtra(learnMoreBtn);
+        player.spigot().sendMessage(message);
+    }
+
+    /**
      * 关闭管理器，清理资源
      */
     public void shutdown() {
@@ -470,6 +784,14 @@ public class CLIManager {
         
         // 移除所有活跃的CLI玩家
         for (UUID uuid : new ArrayList<>(activeCLIPayers)) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                sendUnloadMessage(player);
+            }
+            DialogueSession session = sessions.get(uuid);
+            if (session != null) {
+                saveSessionHistory(uuid, session);
+            }
             sessions.remove(uuid);
         }
         activeCLIPayers.clear();
@@ -517,37 +839,60 @@ public class CLIManager {
             return;
         }
         
-        activeCLIPayers.add(uuid);
-        DialogueSession session = new DialogueSession();
-        // 恢复上次的模式
-        if (yoloModePlayers.contains(uuid)) {
-            session.setMode(DialogueSession.Mode.YOLO);
-        } else if (smartModePlayers.contains(uuid)) {
-            session.setMode(DialogueSession.Mode.SMART);
+        // 检查是否已经有预加载的会话
+        DialogueSession session = sessions.get(uuid);
+        // 如果没有预加载的会话，尝试加载历史会话
+        if (session == null) {
+            session = loadSessionHistory(uuid);
         }
-
-        // 创建日志文件
-        try {
-            Path logDir = plugin.getDataFolder().toPath().resolve("logs");
-            Files.createDirectories(logDir);
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
-            String logFileName = timestamp + ".log";
-            Path logFilePath = logDir.resolve(logFileName);
-            session.setLogFilePath(logFilePath.toString());
-            // 根据调试模式设置详细日志级别
-            session.setVerboseLogging(plugin.getConfigManager().isDebug());
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+        
+        // 如果仍然没有会话，创建新会话
+        if (session == null) {
+            session = new DialogueSession();
+            // 恢复上次的模式
+            if (yoloModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.YOLO);
+            } else if (smartModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.SMART);
             }
-        } catch (IOException e) {
-            plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
+            
+            // 先将会话放入 Map，确保后续操作能获取到正确的模式
+            sessions.put(uuid, session);
+            
+            // 创建日志文件
+            try {
+                Path logDir = plugin.getDataFolder().toPath().resolve("logs");
+                Files.createDirectories(logDir);
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+                String logFileName = timestamp + ".log";
+                Path logFilePath = logDir.resolve(logFileName);
+                session.setLogFilePath(logFilePath.toString());
+                // 根据调试模式设置详细日志级别
+                session.setVerboseLogging(plugin.getConfigManager().isDebug());
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+                }
+            } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
+            }
+            
+            // 发送进入消息和问候
+            sendEnterMessage(player);
+            triggerGreeting(player);
+        } else {
+            // 有预加载的会话，静默进入CLI模式
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 静默进入CLI模式，会话已恢复");
+            }
+            // 显示恢复提示
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"));
         }
-
-        sessions.put(uuid, session);
-        sendEnterMessage(player);
-
-        // 触发 AI 问候
-        triggerGreeting(player);
+        
+        activeCLIPayers.add(uuid);
+        // 注意：新会话已经在上面放入 Map，这里只处理恢复会话的情况
+        if (session != null) {
+            sessions.put(uuid, session);
+        }
     }
 
     /**
@@ -641,6 +986,13 @@ public class CLIManager {
 
         recordThinkingTime(uuid);
         sendExitMessage(player);
+        
+        // 保存会话历史 - 仅在插件卸载时保存
+        // DialogueSession session = sessions.get(uuid);
+        // if (session != null) {
+        //     saveSessionHistory(uuid, session);
+        // }
+        
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
         pendingYoloAgreementPlayers.remove(uuid);
@@ -780,11 +1132,13 @@ public class CLIManager {
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
                 generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
-                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:")) {
+                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:") || cmd.startsWith("EDIT:")) {
                     String[] parts = cmd.split(":", 2);
                     String type = parts[0].toLowerCase();
                     String args = parts[1];
-                    checkVerificationAndExecute(player, type, args);
+                    // 将内部类型映射到配置中的工具名称
+                    String toolName = mapTypeToToolName(type);
+                    checkVerificationAndExecute(player, type, toolName, args);
                 } else {
                     toolExecutor.executeCommand(player, cmd);
                 }
@@ -792,23 +1146,37 @@ public class CLIManager {
         }
     }
 
-    private void checkVerificationAndExecute(Player player, String type, String args) {
+    private void checkVerificationAndExecute(Player player, String type, String toolName, String args) {
         // 检查是否被冻结
         long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
         if (freezeRemaining > 0) {
             player.sendMessage(ChatColor.RED + "验证已冻结，请在 " + freezeRemaining + " 秒后重试。");
             return;
         }
-        
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, type)) {
+
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, toolName)) {
             toolExecutor.executeFileOperation(player, type, args);
         } else {
-            player.sendMessage(ChatColor.YELLOW + "首次使用 " + type + " 工具需要完成安全验证。");
-            plugin.getVerificationManager().startVerification(player, type, () -> {
-                plugin.getConfigManager().setPlayerToolEnabled(player, type, true);
+            player.sendMessage(ChatColor.YELLOW + "首次使用 " + toolName + " 工具需要完成安全验证。");
+            plugin.getVerificationManager().startVerification(player, toolName, () -> {
+                plugin.getConfigManager().setPlayerToolEnabled(player, toolName, true);
                 toolExecutor.executeFileOperation(player, type, args);
             });
         }
+    }
+
+    /**
+     * 将内部类型映射到配置中的工具名称
+     * @param type 内部类型（ls, read, edit, diff）
+     * @return 配置中的工具名称（ls, read, edit）
+     */
+    private String mapTypeToToolName(String type) {
+        return switch (type.toLowerCase()) {
+            case "ls" -> "ls";
+            case "read" -> "read";
+            case "edit", "diff" -> "edit";
+            default -> type;
+        };
     }
 
     public void handleCancel(Player player) {
@@ -1313,7 +1681,7 @@ public class CLIManager {
         }
         
         // 增强的工具调用提取逻辑：寻找第一个处于行首的工具调用
-        // 这样可以避免 AI 在回复末尾多加一个 #over 导致前面的主要工具（如 #diff）被忽略
+        // 这样可以避免 AI 在回复末尾多加一个 #over 导致前面的主要工具（如 #edit）被忽略
         String content = cleanResponse;
         String toolCall = "";
 
@@ -1535,7 +1903,11 @@ public class CLIManager {
                     // 仍然显示本次工具调用
                     String toolName = toolCall.split(":", 2)[0];
                     String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
-                    player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+                    if ("#webread".equals(toolName)) {
+                        player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + args.trim());
+                    } else {
+                        player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+                    }
 
                     player.sendMessage(ChatColor.RED + "⨀ 检测到 Fancy 可能陷入了重复操作的死循环。");
                     
@@ -1563,7 +1935,11 @@ public class CLIManager {
                 // 仍然显示本次工具调用
                 String toolName = toolCall.split(":", 2)[0];
                 String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
-                player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+                if ("#webread".equals(toolName)) {
+                    player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + args.trim());
+                } else {
+                    player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+                }
 
                 player.sendMessage(ChatColor.YELLOW + "⨀ 识别到Fancy重复调用" + maxChainCount + "次相似操作，请优化提示词。");
                 
