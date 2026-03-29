@@ -585,6 +585,7 @@ public class ToolExecutor {
 
     /**
      * 执行 edit 操作
+     * 在给定行号范围内查找旧内容，如果找到多个匹配则拒绝操作
      */
     private String executeDiffOperation(File root, String pathArg) throws IOException {
         String[] editParts = pathArg.split("\\|", 4);
@@ -644,26 +645,80 @@ public class ToolExecutor {
             return "错误: 起始行号不能大于结束行号";
         }
         
-        // 检查指定行号范围的内容是否匹配原始内容
-        StringBuilder rangeContent = new StringBuilder();
-        for (int i = startLine - 1; i < endLine; i++) {
-            String line = lines.get(i);
-            rangeContent.append(line);
-            if (i < endLine - 1) {
-                rangeContent.append("\n");
+        // 将 original 按行分割
+        String[] originalLines = original.split("\n");
+        int originalLineCount = originalLines.length;
+        
+        // 在给定行号范围内查找所有匹配位置
+        List<Integer> matchPositions = new java.util.ArrayList<>();
+        
+        // 计算搜索范围：从 startLine 到 endLine - originalLineCount + 1
+        int searchEndLine = endLine - originalLineCount + 1;
+        if (searchEndLine < startLine) {
+            searchEndLine = startLine;
+        }
+        
+        for (int i = startLine - 1; i <= searchEndLine - 1 && i < lines.size(); i++) {
+            boolean match = true;
+            for (int j = 0; j < originalLineCount; j++) {
+                int fileLineIndex = i + j;
+                if (fileLineIndex >= lines.size()) {
+                    match = false;
+                    break;
+                }
+                if (!lines.get(fileLineIndex).equals(originalLines[j])) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                matchPositions.add(i); // 记录匹配的起始行索引（0-based）
             }
         }
         
-        String rangeContentStr = rangeContent.toString();
-        if (!rangeContentStr.equals(original)) {
-            return "错误: 指定行号范围的内容与原始内容不匹配\n原始内容:\n" + original + "\n实际内容:\n" + rangeContentStr;
+        // 根据匹配结果处理
+        if (matchPositions.isEmpty()) {
+            // 没有找到匹配
+            // 构建实际内容用于显示
+            StringBuilder rangeContent = new StringBuilder();
+            for (int i = startLine - 1; i < endLine; i++) {
+                rangeContent.append(lines.get(i));
+                if (i < endLine - 1) {
+                    rangeContent.append("\n");
+                }
+            }
+            return "错误: 在给定行号范围 " + rangeStr + " 内未找到匹配的原始内容\n" +
+                   "原始内容:\n" + original + "\n" +
+                   "行号范围内的实际内容:\n" + rangeContent.toString();
+        } else if (matchPositions.size() > 1) {
+            // 找到多个匹配
+            StringBuilder sb = new StringBuilder();
+            sb.append("错误: 在给定行号范围 ").append(rangeStr).append(" 内找到 ")
+              .append(matchPositions.size()).append(" 处匹配的原始内容，无法确定要替换哪一处\n");
+            sb.append("匹配位置: ");
+            for (int i = 0; i < matchPositions.size(); i++) {
+                if (i > 0) sb.append(", ");
+                int matchStartLine = matchPositions.get(i) + 1; // 转换为 1-based
+                int matchEndLine = matchStartLine + originalLineCount - 1;
+                if (matchStartLine == matchEndLine) {
+                    sb.append("第 ").append(matchStartLine).append(" 行");
+                } else {
+                    sb.append("第 ").append(matchStartLine).append("-").append(matchEndLine).append(" 行");
+                }
+            }
+            sb.append("\n请缩小行号范围或使用更具体的原始内容来唯一确定要替换的位置。");
+            return sb.toString();
         }
+        
+        // 只有一个匹配，执行替换
+        int matchStartIndex = matchPositions.get(0);
+        int matchEndIndex = matchStartIndex + originalLineCount;
         
         // 替换内容
         List<String> newLines = new java.util.ArrayList<>();
         
-        // 复制前面的行
-        for (int i = 0; i < startLine - 1; i++) {
+        // 复制匹配位置之前的行
+        for (int i = 0; i < matchStartIndex; i++) {
             newLines.add(lines.get(i));
         }
         
@@ -673,8 +728,8 @@ public class ToolExecutor {
             newLines.add(rLine);
         }
         
-        // 复制后面的行
-        for (int i = endLine; i < lines.size(); i++) {
+        // 复制匹配位置之后的行
+        for (int i = matchEndIndex; i < lines.size(); i++) {
             newLines.add(lines.get(i));
         }
         
@@ -682,9 +737,11 @@ public class ToolExecutor {
         Files.write(file.toPath(), newLines, StandardCharsets.UTF_8);
         
         // 返回修改前后的对比
+        int actualStartLine = matchStartIndex + 1;
+        int actualEndLine = matchEndIndex;
         StringBuilder result = new StringBuilder();
         result.append("成功修改文件: ").append(path).append("\n");
-        result.append("行号范围: ").append(startLine).append("-").append(endLine).append("\n");
+        result.append("行号范围: ").append(actualStartLine).append("-").append(actualEndLine).append("\n");
         result.append("修改前:\n").append(original).append("\n");
         result.append("修改后:\n").append(replacement);
         
