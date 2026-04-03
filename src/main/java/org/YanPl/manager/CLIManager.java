@@ -767,8 +767,8 @@ public class CLIManager {
         TextComponent learnMoreBtn = new TextComponent("[了解更多]");
         learnMoreBtn.setColor(net.md_5.bungee.api.ChatColor.BLUE);
         learnMoreBtn.setUnderlined(true);
-        learnMoreBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://deepwiki.com/baicaizhale/Fancyhelper"));
-        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打开 FancyHelper 帮助页面")));
+        learnMoreBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/whyusee1"));
+        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("为什么FancyHelper会话会被挂起")));
 
         message.addExtra(learnMoreBtn);
         player.spigot().sendMessage(message);
