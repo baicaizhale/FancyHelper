@@ -1187,25 +1187,43 @@ public class ToolExecutor {
 
     /**
      * 处理 #choose 工具
+     * 格式: #choose: 选项1,选项2,选项3,...|自定义提示
+     * 例如: #choose: 生存模式,创造模式,冒险模式|请直接发送你的要求
      */
     private void handleChooseTool(Player player, String optionsStr) {
-        String[] options = optionsStr.split(",");
-        TextComponent message = new TextComponent(ChatColor.GRAY + "⨀ [ ");
+        // 解析自定义提示（如果有）
+        String customHint = "请直接发送你的要求";
+        String actualOptions = optionsStr;
+        if (optionsStr.contains("|")) {
+            String[] parts = optionsStr.split("\\|", 2);
+            actualOptions = parts[0];
+            customHint = parts[1];
+        }
 
+        String[] options = actualOptions.split(",");
+
+        // 显示标题
+        player.sendMessage(ChatColor.YELLOW + "❓ " + ChatColor.WHITE + "正在征求您的意见..");
+
+        // 显示选项
         for (int i = 0; i < options.length; i++) {
             String opt = options[i].trim();
-            TextComponent optBtn = new TextComponent(ChatColor.AQUA + opt);
+            TextComponent optionLine = new TextComponent(ChatColor.YELLOW + "◌ " + ChatColor.WHITE);
+            TextComponent optBtn = new TextComponent(opt);
             optBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli select " + opt));
             optBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击选择: " + ChatColor.AQUA + opt)));
-
-            message.addExtra(optBtn);
-            if (i < options.length - 1) {
-                message.addExtra(ChatColor.GRAY + " | ");
-            }
+            optionLine.addExtra(optBtn);
+            player.spigot().sendMessage(optionLine);
         }
-        message.addExtra(ChatColor.GRAY + " ]");
 
-        player.spigot().sendMessage(message);
+        // 显示自定义选项
+        TextComponent customLine = new TextComponent(ChatColor.YELLOW + "◌ " + ChatColor.WHITE);
+        TextComponent customBtn = new TextComponent("自定义");
+        customBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, ""));
+        customBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.YELLOW + "" + ChatColor.BOLD + customHint)));
+        customLine.addExtra(customBtn);
+        player.spigot().sendMessage(customLine);
+
         cliManager.setPendingCommand(player.getUniqueId(), "CHOOSING");
         cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.WAITING_CHOICE);
     }

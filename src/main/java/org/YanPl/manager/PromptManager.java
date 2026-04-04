@@ -137,7 +137,11 @@ public class PromptManager {
         sb.append("  #search: <args> - Search on the internet (prioritize Wiki, then general search if not found). Use precise keywords, avoid natural language for Wiki queries.\n");
         sb.append("    Add 'widely' keyword to force general web search. Example: #search: widely Minecraft latest version\n");
         sb.append("  #getpreset: <file> - Get preset file content. Prioritize reading relevant presets when handling tasks.\n");
-        sb.append("  #choose: <A>,<B>,<C>... - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n");
+        sb.append("  #choose: <A>,<B>,<C>...|<custom_hint> - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n");
+sb.append("    Format: #choose: option1,option2,option3 OR #choose: option1,option2|your custom hint\n");
+sb.append("    The last option is always 'Custom' which allows user to input their own choice.\n");
+sb.append("    Use | to specify custom hover hint for the 'Custom' option (optional, default: 'Please send your request directly').\n");
+sb.append("    Example: #choose: survival,creative,adventure|Please tell me your preferred game mode\n");
         sb.append("  #webread: <url> - Read web page content. Constructs real user-like requests to fetch and parse web pages.\n");
         sb.append("    Example: #webread: https://example.com\n\n");
         
