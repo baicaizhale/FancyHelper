@@ -1484,7 +1484,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ AI 调用失败（重试）: " + errorMsg);
                     }
-                    plugin.getLogger().warning(errorMsg);
+                    // 控制台日志已在 CloudFlareAI.java 中输出
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");
@@ -1600,7 +1600,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + errorMsg);
                     }
-                    plugin.getLogger().warning(errorMsg);
+                    // 控制台日志已在 CloudFlareAI.java 中输出
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");
@@ -1629,7 +1629,7 @@ public class CLIManager {
                     retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
 
                     player.sendMessage(ChatColor.RED + "⨀ 系统内部错误: " + t.getMessage());
-                    plugin.getLogger().warning(t.getMessage());
+                    plugin.getLogger().warning("系统内部错误: " + t.getMessage());
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");
@@ -1917,7 +1917,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ 继续生成失败: " + errorMsg);
                     }
-                    plugin.getLogger().warning(errorMsg);
+                    // 控制台日志已在 CloudFlareAI.java 中输出
                     isGenerating.put(uuid, false);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
@@ -2137,7 +2137,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + errorMsg);
                     }
-                    plugin.getLogger().warning(errorMsg);
+                    // 控制台日志已在 CloudFlareAI.java 中输出
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");
@@ -2166,6 +2166,7 @@ public class CLIManager {
                     retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, feedback, false));
 
                     player.sendMessage(ChatColor.RED + "⨀ 系统内部错误: " + t.getMessage());
+                    plugin.getLogger().warning("系统内部错误: " + t.getMessage());
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");

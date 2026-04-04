@@ -485,13 +485,15 @@ public class CloudFlareAI {
 
             if (statusCode != 200) {
                 String errorPrompt = getErrorPrompt(statusCode);
+                String errorLogMsg = getErrorLogMessage(statusCode);
                 String errorMsg;
                 if (errorPrompt != null) {
                     errorMsg = errorPrompt;
+                    plugin.getLogger().warning(errorLogMsg);
                 } else {
                     errorMsg = "§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台";
-                    plugin.getLogger().warning("[AI 错误] 状态码: " + statusCode);
-                    plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
+                    plugin.getLogger().warning("状态码: " + statusCode);
+                    plugin.getLogger().warning("响应体: " + responseBody);
                 }
                 throw new IOException(errorMsg);
             }
@@ -583,7 +585,7 @@ public class CloudFlareAI {
     }
 
     /**
-     * 获取错误的详细提示消息
+     * 获取错误的详细提示消息（带颜色，用于玩家显示）
      * @param statusCode HTTP 状态码
      * @return 错误提示消息
      */
@@ -605,6 +607,32 @@ public class CloudFlareAI {
                 return "§zFancyHelper§b§r §7> §f开放平台出现问题，请等待恢复";
             default:
                 return null;
+        }
+    }
+
+    /**
+     * 获取错误的控制台日志消息（纯文本，无颜色）
+     * @param statusCode HTTP 状态码
+     * @return 错误日志消息
+     */
+    private String getErrorLogMessage(int statusCode) {
+        switch (statusCode) {
+            case 400:
+                return "构造的请求体有问题，请向开发者报告此错误";
+            case 401:
+                return "API-key填写不正确，请检查config.yml";
+            case 402:
+                return "开放平台显示您的余额不足，请检查您的开放平台余额";
+            case 422:
+                return "构造的请求体有问题，请向开发者报告此错误";
+            case 429:
+                return "请求速率达到上限";
+            case 500:
+                return "开放平台出现问题，请等待恢复";
+            case 503:
+                return "开放平台出现问题，请等待恢复";
+            default:
+                return "API调用发生未知错误";
         }
     }
 
