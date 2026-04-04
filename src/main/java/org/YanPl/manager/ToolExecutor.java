@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -1187,10 +1188,121 @@ public class ToolExecutor {
 
     /**
      * 处理 #choose 工具
-     * 格式: #choose: 选项1,选项2,选项3,...|自定义提示
-     * 例如: #choose: 生存模式,创造模式,冒险模式|请直接发送你的要求
+     * 新格式: #choose: <question>?|<header>=<label>(<desc>),...
+     * 例如: #choose: Which auth method?|Method=OAuth 2.0(Standard protocol),Method=JWT(Simple)
+     * 旧格式(兼容): #choose: 选项1,选项2,选项3
      */
     private void handleChooseTool(Player player, String optionsStr) {
+        // 判断是新格式还是旧格式
+        boolean isNewFormat = optionsStr.contains("?|") || (optionsStr.contains("?") && optionsStr.contains("|") && optionsStr.contains("="));
+
+        if (isNewFormat) {
+            handleStructuredChooseTool(player, optionsStr);
+        } else {
+            handleLegacyChooseTool(player, optionsStr);
+        }
+    }
+
+    /**
+     * 处理新格式的结构化 #choose 工具
+     * 格式: question?|header1=label1(desc1),header2=label2(desc2)
+     */
+    private void handleStructuredChooseTool(Player player, String input) {
+        // 分离问题和选项
+        int questionEnd = input.indexOf('?');
+        int optionsStart = input.indexOf('|', questionEnd);
+
+        String question = input.substring(0, questionEnd).trim();
+        String optionsStr = input.substring(optionsStart + 1).trim();
+
+        // 解析选项: header=label(desc) 用逗号分隔
+        List<String[]> options = new ArrayList<>();
+        int i = 0;
+        while (i < optionsStr.length()) {
+            // 查找下一个 header=label(desc) 单元
+            int eqIdx = optionsStr.indexOf('=', i);
+            if (eqIdx == -1) break;
+
+            String header = optionsStr.substring(i, eqIdx).trim();
+
+            int parenStart = optionsStr.indexOf('(', eqIdx);
+            int parenEnd = optionsStr.indexOf(')', parenStart);
+
+            String label;
+            String desc = "";
+
+            if (parenStart != -1 && parenEnd != -1) {
+                label = optionsStr.substring(eqIdx + 1, parenStart).trim();
+                desc = optionsStr.substring(parenStart + 1, parenEnd).trim();
+                // 跳到下一个选项（跳过逗号和空格）
+                i = parenEnd + 1;
+                if (i < optionsStr.length() && optionsStr.charAt(i) == ',') {
+                    i++;
+                }
+            } else {
+                // 没有 description 的情况
+                int nextComma = optionsStr.indexOf(',', eqIdx + 1);
+                if (nextComma == -1) {
+                    label = optionsStr.substring(eqIdx + 1).trim();
+                    i = optionsStr.length();
+                } else {
+                    label = optionsStr.substring(eqIdx + 1, nextComma).trim();
+                    i = nextComma + 1;
+                }
+            }
+
+            options.add(new String[]{header, label, desc});
+        }
+
+        // 显示标题和问题
+        player.sendMessage(ChatColor.YELLOW + "❓ " + ChatColor.WHITE + ChatColor.BOLD + "请选择：");
+
+        // 显示问题（hover 显示完整问题）
+        TextComponent questionLine = new TextComponent(ChatColor.GRAY + "  " + question);
+        questionLine.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.AQUA + question)));
+        player.spigot().sendMessage(questionLine);
+
+        // 显示每个选项（带 header chip、label 和 description）
+        for (String[] opt : options) {
+            String header = opt[0];
+            String label = opt[1];
+            String desc = opt[2];
+
+            TextComponent optionLine = new TextComponent();
+
+            // Header chip
+            TextComponent headerChip = new TextComponent(ChatColor.YELLOW + " [" + header + "] ");
+            headerChip.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                new Text(ChatColor.AQUA + label + "\n" + ChatColor.GRAY + (desc.isEmpty() ? "" : desc))));
+            optionLine.addExtra(headerChip);
+
+            // Label
+            TextComponent labelBtn = new TextComponent(ChatColor.WHITE + label);
+            labelBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli select " + label));
+            labelBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                new Text(ChatColor.YELLOW + "点击选择: " + ChatColor.AQUA + label + "\n" + ChatColor.GRAY + (desc.isEmpty() ? "无额外说明" : desc))));
+            optionLine.addExtra(labelBtn);
+
+            player.spigot().sendMessage(optionLine);
+        }
+
+        // 显示自定义选项
+        TextComponent customLine = new TextComponent(ChatColor.YELLOW + " [自定义] ");
+        TextComponent customBtn = new TextComponent(ChatColor.WHITE + "自定义");
+        customBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, ""));
+        customBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.YELLOW + "" + ChatColor.BOLD + "输入您自己的想法")));
+        customLine.addExtra(customBtn);
+        player.spigot().sendMessage(customLine);
+
+        cliManager.setPendingCommand(player.getUniqueId(), "CHOOSING");
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.WAITING_CHOICE);
+    }
+
+    /**
+     * 处理旧格式的 #choose 工具（向后兼容）
+     * 格式: 选项1,选项2,选项3,...|自定义提示
+     */
+    private void handleLegacyChooseTool(Player player, String optionsStr) {
         // 解析自定义提示（如果有）
         String customHint = "请直接发送你的要求";
         String actualOptions = optionsStr;
