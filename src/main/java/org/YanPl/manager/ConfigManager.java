@@ -179,6 +179,46 @@ public class ConfigManager {
     }
 
     /**
+     * 获取压缩模型提供商
+     * @return 压缩模型提供商 (cloudflare 或 openai)
+     */
+    public String getCompressionModelProvider() {
+        return config.getString("co-model.provider", "cloudflare");
+    }
+
+    /**
+     * 获取 CloudFlare 压缩模型名称
+     * @return CloudFlare 压缩模型名称
+     */
+    public String getCompressionCloudflareModel() {
+        return config.getString("co-model.cloudflare.model", "@cf/google/gemma-4b-it");
+    }
+
+    /**
+     * 获取 OpenAI 压缩模型 API URL
+     * @return OpenAI 压缩模型 API URL
+     */
+    public String getCompressionOpenAiApiUrl() {
+        return config.getString("co-model.openai.api_url", "https://api.openai.com/v1/chat/completions");
+    }
+
+    /**
+     * 获取 OpenAI 压缩模型 API 密钥
+     * @return OpenAI 压缩模型 API 密钥
+     */
+    public String getCompressionOpenAiApiKey() {
+        return config.getString("co-model.openai.api_key", "");
+    }
+
+    /**
+     * 获取 OpenAI 压缩模型名称
+     * @return OpenAI 压缩模型名称
+     */
+    public String getCompressionOpenAiModel() {
+        return config.getString("co-model.openai.model", "gpt-4o-mini");
+    }
+
+    /**
      * 获取是否启用 OpenAI 模式
      * @return 是否启用 OpenAI 模式
      */

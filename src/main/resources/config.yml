@@ -66,6 +66,23 @@ notice:
   # 每隔多久从服务器拉取公告（单位：分钟），默认 5 分钟
   refresh_interval: 5
 
+# 上下文压缩模型配置（用于压缩长上下文，与主模型隔离以节省成本）
+co-model:
+  # 压缩模型提供商: cloudflare 或 openai
+  provider: cloudflare
+  # CloudFlare 压缩模型配置
+  cloudflare:
+    # 使用的模型名称，推荐使用轻量级模型以节省成本和提升速度
+    model: "@cf/google/gemma-4b-it"
+  # OpenAI 兼容 API 压缩模型配置
+  openai:
+    # API 地址
+    api_url: https://api.openai.com/v1/chat/completions
+    # API 密钥
+    api_key: your-openai-api-key
+    # 使用的模型名称，推荐使用轻量级模型
+    model: gpt-4o-mini
+
 # CloudFlare Workers AI 配置
 cloudflare:
   # CloudFlare Workers AI API 密钥，FancyHelper会自动根据密钥来获取对应的account-id

@@ -423,6 +423,67 @@ public class DialogueSession {
         }
     }
 
+    /**
+     * 压缩上下文，保留最近的消息并将较早的消息压缩成摘要
+     * @param keepRecent 保留最近的消息数量
+     */
+    public void compressContext(int keepRecent) {
+        if (history.size() <= keepRecent * 2) {
+            return; // 消息数量不足，不需要压缩
+        }
+
+        // 保留最近的消息
+        List<Message> recentMessages = new ArrayList<>(history.subList(history.size() - keepRecent, history.size()));
+
+        // 压缩较早的消息
+        List<Message> oldMessages = history.subList(0, history.size() - keepRecent);
+        StringBuilder summaryBuilder = new StringBuilder();
+        summaryBuilder.append("[上下文摘要]: ");
+
+        for (Message msg : oldMessages) {
+            if (msg.getRole().equals("user")) {
+                summaryBuilder.append("用户: ").append(msg.getContent()).append("; ");
+            } else if (msg.getRole().equals("assistant")) {
+                summaryBuilder.append("助手: ").append(msg.getContent()).append("; ");
+            }
+        }
+
+        // 创建摘要消息
+        String summary = summaryBuilder.toString();
+        if (summary.length() > 500) {
+            summary = summary.substring(0, 500) + "...";
+        }
+
+        // 清空历史并添加摘要和最近的消息
+        history.clear();
+        history.add(new Message("system", summary));
+        history.addAll(recentMessages);
+    }
+
+    /**
+     * 使用AI生成的摘要压缩上下文
+     * @param keepRecent 保留最近的消息数量
+     * @param aiSummary AI生成的摘要
+     */
+    public void compressContextWithSummary(int keepRecent, String aiSummary) {
+        if (history.size() <= keepRecent * 2) {
+            return; // 消息数量不足，不需要压缩
+        }
+
+        // 保留最近的消息
+        List<Message> recentMessages = new ArrayList<>(history.subList(history.size() - keepRecent, history.size()));
+
+        // 清空历史并添加AI摘要和最近的消息
+        history.clear();
+        
+        // 添加AI生成的摘要作为system消息
+        String summary = "[上下文摘要]: " + aiSummary;
+        history.add(new Message("system", summary));
+        
+        // 添加保留的最近消息
+        history.addAll(recentMessages);
+    }
+
     public Mode getMode() {
         return mode;
     }

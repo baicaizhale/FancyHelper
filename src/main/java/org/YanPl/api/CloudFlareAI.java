@@ -864,4 +864,323 @@ public class CloudFlareAI {
         tempSession.addMessage("user", prompt);
         return chat(tempSession, "你是一个得力的助手。");
     }
+
+    /**
+     * 使用 co-model 进行简单的单轮对话
+     * @param systemPrompt 系统提示
+     * @param userPrompt 用户提示
+     * @return AI响应内容
+     * @throws IOException 当 API 调用失败时
+     */
+    public String chatWithCompressionModel(String systemPrompt, String userPrompt) throws IOException {
+        String provider = plugin.getConfigManager().getCompressionModelProvider();
+        
+        if ("openai".equalsIgnoreCase(provider)) {
+            return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
+        } else {
+            return chatWithCloudFlareCompressionModel(systemPrompt, userPrompt);
+        }
+    }
+
+    /**
+     * 使用 CloudFlare co-model 进行对话
+     */
+    private String chatWithCloudFlareCompressionModel(String systemPrompt, String userPrompt) throws IOException {
+        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
+        String model = plugin.getConfigManager().getCompressionCloudflareModel();
+        String accountId = fetchAccountId();
+
+        if (cfKey == null || cfKey.isEmpty()) {
+            throw new IOException("未配置 CloudFlare API Key");
+        }
+
+        String url = String.format(API_COMPLETIONS_URL, accountId);
+
+        // 构建消息数组
+        JsonArray messagesArray = new JsonArray();
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", systemPrompt);
+        messagesArray.add(systemMsg);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 500);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + cfKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[co-model] CloudFlare API 错误: " + response.statusCode());
+                throw new IOException("API调用失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+            
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                return aiResponse.getContent().trim();
+            }
+
+            throw new IOException("无法解析API响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("API调用被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 OpenAI 兼容 co-model 进行对话
+     */
+    private String chatWithOpenAICompressionModel(String systemPrompt, String userPrompt) throws IOException {
+        String apiUrl = plugin.getConfigManager().getCompressionOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getCompressionOpenAiApiKey();
+        String model = plugin.getConfigManager().getCompressionOpenAiModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未配置 OpenAI API Key");
+        }
+
+        // 自动补全 API 路径
+        if (!apiUrl.contains("/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "chat/completions";
+            } else {
+                apiUrl += "/chat/completions";
+            }
+        }
+
+        // 构建消息数组
+        JsonArray messagesArray = new JsonArray();
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", systemPrompt);
+        messagesArray.add(systemMsg);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 500);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[co-model] OpenAI API 错误: " + response.statusCode());
+                throw new IOException("API调用失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+            
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                return aiResponse.getContent().trim();
+            }
+
+            throw new IOException("无法解析API响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("API调用被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用压缩模型对上下文进行智能压缩
+     * @param context 需要压缩的上下文内容
+     * @return 压缩后的摘要
+     * @throws IOException 当 API 调用失败时
+     */
+    public String compressContext(String context) throws IOException {
+        String provider = plugin.getConfigManager().getCompressionModelProvider();
+        
+        if ("openai".equalsIgnoreCase(provider)) {
+            return compressWithOpenAI(context);
+        } else {
+            return compressWithCloudFlare(context);
+        }
+    }
+
+    /**
+     * 使用 CloudFlare 压缩模型进行上下文压缩
+     */
+    private String compressWithCloudFlare(String context) throws IOException {
+        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
+        String model = plugin.getConfigManager().getCompressionCloudflareModel();
+        String accountId = fetchAccountId();
+
+        if (cfKey == null || cfKey.isEmpty()) {
+            throw new IOException("未配置 CloudFlare API Key");
+        }
+
+        String url = String.format(API_COMPLETIONS_URL, accountId);
+
+        // 构建压缩提示
+        String systemPrompt = "你是一个上下文压缩助手。请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。摘要应该简明扼要，不超过200字。";
+        String userPrompt = "请压缩以下对话历史：\n\n" + context;
+
+        // 构建消息数组
+        JsonArray messagesArray = new JsonArray();
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", systemPrompt);
+        messagesArray.add(systemMsg);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 300);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + cfKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[压缩] CloudFlare API 错误: " + response.statusCode());
+                throw new IOException("压缩失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+            
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                return aiResponse.getContent().trim();
+            }
+
+            throw new IOException("无法解析压缩响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("压缩被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 OpenAI 兼容 API 进行上下文压缩
+     */
+    private String compressWithOpenAI(String context) throws IOException {
+        String apiUrl = plugin.getConfigManager().getCompressionOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getCompressionOpenAiApiKey();
+        String model = plugin.getConfigManager().getCompressionOpenAiModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未配置 OpenAI API Key");
+        }
+
+        // 自动补全 API 路径
+        if (!apiUrl.contains("/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "chat/completions";
+            } else {
+                apiUrl += "/chat/completions";
+            }
+        }
+
+        // 构建压缩提示
+        String systemPrompt = "你是一个上下文压缩助手。请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。摘要应该简明扼要，不超过200字。";
+        String userPrompt = "请压缩以下对话历史：\n\n" + context;
+
+        // 构建消息数组
+        JsonArray messagesArray = new JsonArray();
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", systemPrompt);
+        messagesArray.add(systemMsg);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 300);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[压缩] OpenAI API 错误: " + response.statusCode());
+                throw new IOException("压缩失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+            
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                return aiResponse.getContent().trim();
+            }
+
+            throw new IOException("无法解析压缩响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("压缩被中断: " + e.getMessage(), e);
+        }
+    }
 }

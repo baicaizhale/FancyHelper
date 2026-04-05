@@ -35,14 +35,23 @@ public class RiskAssessmentManager {
      * @return 风险评估结果
      */
     public RiskAssessment assessRisk(String actionType, String actionContent) {
-        String prompt = buildRiskAssessmentPrompt(actionType, actionContent);
+        String systemPrompt = "你是一个专门用于评估操作风险的AI助手。请评估Minecraft服务器操作的风险等级。";
+        String userPrompt = buildRiskAssessmentPrompt(actionType, actionContent);
         
         try {
-            AIResponse response = ai.chatSimple(prompt);
-            return parseRiskAssessment(response.getContent());
+            // 使用 co-model 进行风险评估
+            String response = ai.chatWithCompressionModel(systemPrompt, userPrompt);
+            return parseRiskAssessment(response);
         } catch (IOException e) {
-            plugin.getLogger().warning("风险评估失败: " + e.getMessage());
-            return new RiskAssessment(100, "评估失败，默认高风险");
+            plugin.getLogger().warning("[Smart] 风险评估失败: " + e.getMessage());
+            // 回退到主模型
+            try {
+                AIResponse fallbackResponse = ai.chatSimple(userPrompt);
+                return parseRiskAssessment(fallbackResponse.getContent());
+            } catch (IOException fallbackError) {
+                plugin.getLogger().warning("[Smart] 主模型风险评估也失败: " + fallbackError.getMessage());
+                return new RiskAssessment(100, "评估失败，默认高风险");
+            }
         }
     }
 

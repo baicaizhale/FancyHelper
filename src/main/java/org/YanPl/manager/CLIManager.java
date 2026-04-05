@@ -1545,6 +1545,59 @@ public class CLIManager {
         });
     }
 
+    /**
+     * 使用AI智能压缩上下文
+     * @param player 玩家
+     * @param session 对话会话
+     */
+    private void compressContextWithAI(Player player, DialogueSession session) {
+        UUID uuid = player.getUniqueId();
+        
+        try {
+            // 准备要压缩的上下文
+            List<DialogueSession.Message> history = session.getHistory();
+            int keepRecent = 10;
+            
+            if (history.size() <= keepRecent * 2) {
+                return; // 消息数量不足，不需要压缩
+            }
+            
+            // 提取要压缩的旧消息
+            List<DialogueSession.Message> oldMessages = new ArrayList<>(history.subList(0, history.size() - keepRecent));
+            
+            // 构建压缩输入
+            StringBuilder contextBuilder = new StringBuilder();
+            for (DialogueSession.Message msg : oldMessages) {
+                if (msg.getRole().equals("user")) {
+                    contextBuilder.append("用户: ").append(msg.getContent()).append("\n");
+                } else if (msg.getRole().equals("assistant")) {
+                    contextBuilder.append("助手: ").append(msg.getContent()).append("\n");
+                }
+            }
+            
+            String contextToCompress = contextBuilder.toString();
+            
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 正在使用AI压缩上下文，原始长度: " + contextToCompress.length() + " 字符");
+            }
+            
+            // 调用AI进行压缩
+            String compressedSummary = ai.compressContext(contextToCompress);
+            
+            // 执行压缩
+            session.compressContextWithSummary(keepRecent, compressedSummary);
+            
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 已使用AI压缩上下文，摘要长度: " + compressedSummary.length() + " 字符，新的历史记录大小: " + session.getHistory().size());
+            }
+            
+        } catch (Exception e) {
+            // 压缩失败时回退到简单压缩
+            plugin.getLogger().warning("[CLI] AI压缩失败，使用简单压缩: " + e.getMessage());
+            session.compressContext(10);
+        }
+    }
+
     private void processAIMessage(Player player, String message) {
         UUID uuid = player.getUniqueId();
         interruptedToolCalls.remove(uuid);
@@ -1566,6 +1619,11 @@ public class CLIManager {
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + calculateTotalEstimatedTokens(player, session));
+        }
+
+        // 检查并压缩上下文
+        if (session.getHistory().size() > 15) {
+            compressContextWithAI(player, session);
         }
 
         if (!plugin.isEnabled()) return;
