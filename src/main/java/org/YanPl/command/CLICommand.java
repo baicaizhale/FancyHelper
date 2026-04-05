@@ -120,6 +120,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "smart_allow":
             case "smart_deny":
             case "smart_never":
+            case "compress":
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
                     return true;
@@ -161,6 +162,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli normal §f: 切换到普通模式（需要确认）");
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
         sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
+        sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
     }
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
@@ -269,6 +271,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "memory":
             case "mem":
                 handleMemory(player, args);
+                return true;
+            case "compress":
+                plugin.getCliManager().compressContext(player, args.length > 1 ? args[1] : null);
                 return true;
         }
         return true;
@@ -804,11 +809,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "reload", "status", "yolo", "normal", "smart", "checkupdate", "upgrade", 
-                "read", "set", "settings", "tools", "display", "toggle", 
-                "notice", "retry", "todo", "memory", "mem", "confirm", 
-                "cancel", "agree", "thought", "select", "exempt_anti_loop", 
-                "stop", "download", "help", "lib"
+                "reload", "status", "yolo", "normal", "smart", "checkupdate", "upgrade",
+                "read", "set", "settings", "tools", "display", "toggle",
+                "notice", "retry", "todo", "memory", "mem", "confirm",
+                "cancel", "agree", "thought", "select", "exempt_anti_loop",
+                "stop", "download", "help", "lib", "compress"
             ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))

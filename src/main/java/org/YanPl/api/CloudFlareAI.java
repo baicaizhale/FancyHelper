@@ -896,13 +896,8 @@ public class CloudFlareAI {
 
         String url = String.format(API_COMPLETIONS_URL, accountId);
 
-        // 构建消息数组
+        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
         JsonArray messagesArray = new JsonArray();
-        JsonObject systemMsg = new JsonObject();
-        systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", systemPrompt);
-        messagesArray.add(systemMsg);
-
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
         userMsg.addProperty("content", userPrompt);
@@ -1051,17 +1046,11 @@ public class CloudFlareAI {
 
         String url = String.format(API_COMPLETIONS_URL, accountId);
 
-        // 构建压缩提示
-        String systemPrompt = "你是一个上下文压缩助手。请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。摘要应该简明扼要，不超过200字。";
-        String userPrompt = "请压缩以下对话历史：\n\n" + context;
+        // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
+        String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
 
-        // 构建消息数组
+        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
         JsonArray messagesArray = new JsonArray();
-        JsonObject systemMsg = new JsonObject();
-        systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", systemPrompt);
-        messagesArray.add(systemMsg);
-
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
         userMsg.addProperty("content", userPrompt);
@@ -1109,10 +1098,11 @@ public class CloudFlareAI {
 
     /**
      * 使用 OpenAI 兼容 API 进行上下文压缩
+     * 使用主模型的 API URL 和 API Key，仅使用副模型的模型名称
      */
     private String compressWithOpenAI(String context) throws IOException {
-        String apiUrl = plugin.getConfigManager().getCompressionOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getCompressionOpenAiApiKey();
+        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getCompressionOpenAiModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
@@ -1128,17 +1118,11 @@ public class CloudFlareAI {
             }
         }
 
-        // 构建压缩提示
-        String systemPrompt = "你是一个上下文压缩助手。请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。摘要应该简明扼要，不超过200字。";
-        String userPrompt = "请压缩以下对话历史：\n\n" + context;
+        // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
+        String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
 
-        // 构建消息数组
+        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
         JsonArray messagesArray = new JsonArray();
-        JsonObject systemMsg = new JsonObject();
-        systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", systemPrompt);
-        messagesArray.add(systemMsg);
-
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
         userMsg.addProperty("content", userPrompt);

@@ -1551,20 +1551,34 @@ public class CLIManager {
      * @param session 对话会话
      */
     private void compressContextWithAI(Player player, DialogueSession session) {
-        UUID uuid = player.getUniqueId();
-        
+        compressContextWithAI(player, session, false);
+    }
+
+    private void compressContextWithAI(Player player, DialogueSession session, boolean force) {
         try {
             // 准备要压缩的上下文
             List<DialogueSession.Message> history = session.getHistory();
             int keepRecent = 10;
-            
-            if (history.size() <= keepRecent * 2) {
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 开始压缩上下文 - 总消息数: " + history.size() + ", 保留最近: " + keepRecent + ", 强制模式: " + force);
+            }
+
+            if (!force && history.size() <= keepRecent * 2) {
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 消息数量不足，跳过压缩 (需要 > " + (keepRecent * 2) + ")");
+                }
                 return; // 消息数量不足，不需要压缩
             }
-            
+
             // 提取要压缩的旧消息
             List<DialogueSession.Message> oldMessages = new ArrayList<>(history.subList(0, history.size() - keepRecent));
-            
+            List<DialogueSession.Message> recentMessages = new ArrayList<>(history.subList(history.size() - keepRecent, history.size()));
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 待压缩消息数: " + oldMessages.size() + ", 保留消息数: " + recentMessages.size());
+            }
+
             // 构建压缩输入
             StringBuilder contextBuilder = new StringBuilder();
             for (DialogueSession.Message msg : oldMessages) {
@@ -1574,28 +1588,81 @@ public class CLIManager {
                     contextBuilder.append("助手: ").append(msg.getContent()).append("\n");
                 }
             }
-            
+
             String contextToCompress = contextBuilder.toString();
-            
+
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 正在使用AI压缩上下文，原始长度: " + contextToCompress.length() + " 字符");
+                plugin.getLogger().info("[CLI] 压缩输入预览: " + (contextToCompress.length() > 200 ? contextToCompress.substring(0, 200) + "..." : contextToCompress));
             }
-            
+
             // 调用AI进行压缩
             String compressedSummary = ai.compressContext(contextToCompress);
-            
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] AI返回摘要长度: " + compressedSummary.length() + " 字符");
+                plugin.getLogger().info("[CLI] 摘要内容: " + (compressedSummary.length() > 200 ? compressedSummary.substring(0, 200) + "..." : compressedSummary));
+            }
+
             // 执行压缩
             session.compressContextWithSummary(keepRecent, compressedSummary);
-            
+
             if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 已使用AI压缩上下文，摘要长度: " + compressedSummary.length() + " 字符，新的历史记录大小: " + session.getHistory().size());
+                plugin.getLogger().info("[CLI] 已使用AI压缩上下文，新的历史记录大小: " + session.getHistory().size());
+                // 显示压缩后的历史记录结构
+                List<DialogueSession.Message> newHistory = session.getHistory();
+                for (int i = 0; i < newHistory.size(); i++) {
+                    DialogueSession.Message msg = newHistory.get(i);
+                    String content = msg.getContent();
+                    if (content.length() > 100) {
+                        content = content.substring(0, 100) + "...";
+                    }
+                    plugin.getLogger().info("[CLI] 历史记录[" + i + "] role=" + msg.getRole() + ": " + content);
+                }
             }
-            
-        } catch (Exception e) {
-            // 压缩失败时回退到简单压缩
-            plugin.getLogger().warning("[CLI] AI压缩失败，使用简单压缩: " + e.getMessage());
-            session.compressContext(10);
+
+        } catch (IOException e) {
+            // 压缩失败时记录日志并抛出运行时异常
+            plugin.getLogger().warning("[CLI] AI压缩失败: " + e.getMessage());
+            throw new RuntimeException("AI压缩失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 手动压缩上下文（供玩家通过命令调用）
+     * @param player 玩家
+     * @param mode 压缩模式（保留参数但不再使用）
+     */
+    public void compressContext(Player player, String mode) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+
+        if (session == null) {
+            player.sendMessage(ChatColor.RED + "你没有活跃的CLI会话，无法压缩上下文。");
+            return;
+        }
+
+        int historySize = session.getHistory().size();
+        if (historySize <= 10) {
+            player.sendMessage(ChatColor.YELLOW + "当前会话消息数量较少（" + historySize + "条），无需压缩。");
+            return;
+        }
+
+        player.sendMessage(ChatColor.AQUA + "正在使用AI压缩上下文，当前历史记录: " + historySize + " 条消息...");
+
+        // 使用AI智能压缩（强制模式）
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                compressContextWithAI(player, session, true);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.GREEN + "✓ AI智能压缩完成！新的历史记录大小: " + session.getHistory().size() + " 条消息");
+                });
+            } catch (Exception e) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "✗ AI压缩失败: " + e.getMessage());
+                });
+            }
+        });
     }
 
     private void processAIMessage(Player player, String message) {
