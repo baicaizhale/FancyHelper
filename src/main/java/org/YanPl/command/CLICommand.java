@@ -108,6 +108,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "tools":
             case "display":
             case "select":
+            case "other":
             case "exempt_anti_loop":
             case "todo":
             case "gui":
@@ -233,6 +234,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     String selection = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
                     plugin.getCliManager().handleChat(player, selection);
                 }
+                return true;
+            case "other":
+                player.sendMessage(ChatColor.GRAY + "> 请发送到聊天栏");
                 return true;
             case "exempt_anti_loop":
                 plugin.getCliManager().handleChat(player, "/cli exempt_anti_loop");

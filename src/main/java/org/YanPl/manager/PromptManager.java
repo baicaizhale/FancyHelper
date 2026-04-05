@@ -137,7 +137,11 @@ public class PromptManager {
         sb.append("  #search: <args> - Search on the internet (prioritize Wiki, then general search if not found). Use precise keywords, avoid natural language for Wiki queries.\n");
         sb.append("    Add 'widely' keyword to force general web search. Example: #search: widely Minecraft latest version\n");
         sb.append("  #getpreset: <file> - Get preset file content. Prioritize reading relevant presets when handling tasks.\n");
-        sb.append("  #choose: <A>,<B>,<C>... - Present multiple options for user to choose. Suitable for scenarios with multiple implementation approaches.\n");
+        sb.append("  #ask: <json> - Ask user to choose. Use when collecting preferences, clarifying requirements, or choosing between options.\n");
+        sb.append("    JSON params: question (string, required), header (max 12 chars), options[] (2-4, each has label & description).\n");
+        sb.append("    Optional: otherLabel (string) - if set, shows an extra option with this label for custom input.\n");
+        sb.append("    Note: Only ONE question per call. For multiple questions, wait for user's answer before asking the next.\n");
+        sb.append("    Example: #ask: {\"question\":\"Which database?\",\"header\":\"Database\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational, mature\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL, flexible\"}],\"otherLabel\":\"Other...\"}\n");
         sb.append("  #webread: <url> - Read web page content. Constructs real user-like requests to fetch and parse web pages.\n");
         sb.append("    Example: #webread: https://example.com\n\n");
         
@@ -201,51 +205,34 @@ public class PromptManager {
         }
         sb.append("  Prohibition: Do NOT use #read to access preset files under plugins/FancyHelper/preset. Use #getpreset: <file> instead.\n\n");
         
-        // 【记忆管理工具】
-        // #remember: <content> - 记住玩家的偏好或指令，下次对话时会自动注入到系统提示中
-        //    格式：#remember: 内容 或 #remember: 分类|内容
-        //    分类示例：language（语言偏好）、style（对话风格）、command（常用命令模板）
-        //    例如：#remember: language|回复时使用英文
-        //    限制：每个玩家最多存储 50 条记忆
-        //    **重要**：记忆必须简洁明了，每条不超过50字，提炼关键信息
-        //    **禁止**：不要记录临时状态或正在进行的任务（如“正在分析日志”），任务请使用 #todo
-        //    正确：#remember: style|用简洁的中文回复
-        //    错误：#remember: style|我希望你在回复我的时候能够使用简洁明了的中文，不要太啰嗦
-        //    错误：#remember: task|正在修复登录bug
-        // #forget: <index|all> - 删除指定序号的记忆或清空所有记忆
-        //    例如：#forget: 1 删除第一条记忆，#forget: all 清空所有
-        // #edit_memory: <index>|<content> - 修改指定序号的记忆
-        //    格式：#edit_memory: 序号|新内容 或 #edit_memory: 序号|分类|新内容
-        //    例如：#edit_memory: 1|回复时使用英文 
-        sb.append("[Memory Tools]\n");
-        sb.append("  #remember: <content> - Remember player preferences or instructions for future conversations.\n");
-        sb.append("    Format: #remember: content OR #remember: category|content\n");
-        sb.append("    Categories: language (language preference), style (conversation style), command (common command templates)\n");
-        sb.append("    Example: #remember: language|Reply in English\n");
-        sb.append("    Limit: Max 50 memories per player.\n");
-        sb.append("    **IMPORTANT**: Keep memories concise. Each memory MUST NOT exceed 50 characters. Extract key information only.\n");
-        sb.append("    **DO NOT** remember temporary states or in-progress tasks (e.g., 'Analyzing logs', 'Fixing bug'). Use #todo for tasks.\n");
-        sb.append("    **Use objective phrasing**: Avoid pronouns like 'I', 'you', 'me'. Use 'player' or imperative mood instead.\n");
-        sb.append("    Correct: #remember: style|Reply in concise Chinese\n");
-        sb.append("    Wrong: #remember: style|I want you to use concise and clear Chinese when replying to me\n");
-        sb.append("    Wrong: #remember: task|Currently fixing the login bug\n");
-        sb.append("  #forget: <index|all> - Delete a specific memory by index or clear all memories.\n");
-        sb.append("    Example: #forget: 1 (delete first memory), #forget: all (clear all)\n");
-        sb.append("  #edit_memory: <index>|<content> - Modify a specific memory by index.\n");
-        sb.append("    Format: #edit_memory: index|content OR #edit_memory: index|category|content\n");
-        sb.append("    Example: #edit_memory: 1|Reply in Chinese\n\n");
+        // [Memory Tools]
+        // 指令：#remember
+        // 用途：记住玩家的偏好或固定指令
+        // 输入格式：分类名+分隔符+具体内容。例如：language|中文
+        // 必须客观：禁止用“我、你、请”。（正确示例：style|简洁；错误示例：我想请你简洁点）
+        // 极简：严禁超过50字，只提炼核心偏好。
+        // 严禁记录：禁止记录“正在执行的任务”或临时进度。
+        // 分类参考：language, style, command。 
+        // 指令：#forget:
+        // 用途：删除记忆
+        // 输入格式：输入序号（如 1）或输入 all 清空。
+        // 指令：#edit_memory:
+        // 用途：修改现有记忆
+        // 输入格式：序号+分隔符+新内容。例如：1|sty    le|严肃
+        sb.append("[Memory Management System]\n");
+        sb.append("Commands:\n");
+        sb.append("1. #remember: category|content (Save preference. Max 50 items. Use objective notes, no 'I/You'.)\n");
+        sb.append("   - Example: #remember: style|concise\n");
+        sb.append("2. #forget: index_number (Delete one) OR #forget: all (Clear all)\n");
+        sb.append("3. #edit_memory: index_number|new_content (Update existing)\n");
+        sb.append("Constraint: Do not use #remember for ongoing tasks; use #todo instead.\n");
         
-        // 长期记忆与过滤准则
-        sb.append("[Memory Guidelines]\n");
-        sb.append("Purpose: Maintain long-term memory. Identify and extract information with long-term value from conversations.\n");
-        sb.append("Recording Criteria:\n");
-        sb.append("  1) Explicit Preferences: Record user's explicit requirements for language, style, format, or taboos (e.g., 'Always answer in Simplified Chinese').\n");
-        sb.append("  2) Factual Information: Record user's profession, tech stack, current project, or geographic location.\n");
-        sb.append("  3) Decision Patterns: Record user's tendency towards brevity vs. detail, rigor vs. humor.\n");
-        sb.append("Filtering Criteria:\n");
-        sb.append("  - Do NOT record trivial, one-off, or time-sensitive information (e.g., 'I ate a sandwich for lunch today').\n");
-        sb.append("  - Do NOT record repeated instructions unless they form a stable pattern.\n");
-        sb.append("Conciseness Requirement: Even when recording the above, keep each memory concise and within the 50-character limit.\n\n");
+// ==================== Memory Guidelines / 记忆准则 ====================
+        sb.append("=== MEMORY RULES (#remember) ===\n");
+        sb.append("1. ONLY record PERMANENT facts/prefs (e.g., 'Reply in Chinese', 'Uses Java').\n");
+        sb.append("2. NEVER record temporary actions/chat (e.g., 'Fixing bug', 'Hello').\n");
+        sb.append("3. MUST keep under 50 chars.\n");
+        sb.append("================================\n\n");
         
         
         // 【任务管理工具】

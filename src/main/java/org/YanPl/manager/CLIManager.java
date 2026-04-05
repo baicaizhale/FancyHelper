@@ -1379,7 +1379,7 @@ public class CLIManager {
                 if (pending.equals("CHOOSING")) {
                     pendingCommands.remove(uuid);
                     player.sendMessage(ChatColor.GRAY + "◇ " + message);
-                    feedbackToAI(player, "#choose_result: " + message);
+                    feedbackToAI(player, "#ask_result: " + message);
                     return true;
                 }
                 
@@ -1747,7 +1747,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#choose", "#search", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
+        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
 
         int currentPos = 0;
         boolean foundTool = false;
