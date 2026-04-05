@@ -156,63 +156,6 @@ public class CloudErrorReport {
     }
 
     /**
-     * 收集最近活跃的会话日志
-     *
-     * @param tempDir 临时目录
-     * @return 会话日志文件
-     * @throws IOException IO异常
-     */
-    private File collectSessionLog(File tempDir) throws IOException {
-        // 检查最近活跃的会话
-        if (plugin instanceof FancyHelper) {
-            FancyHelper fancyHelper = (FancyHelper) plugin;
-            org.YanPl.manager.CLIManager cliManager = fancyHelper.getCliManager();
-            
-            // 获取所有活跃的会话
-            java.util.Map<java.util.UUID, org.YanPl.model.DialogueSession> sessions = cliManager.getSessions();
-            if (!sessions.isEmpty()) {
-                // 找到最近活跃的会话
-                org.YanPl.model.DialogueSession mostRecentSession = null;
-                long mostRecentTime = 0;
-                
-                for (org.YanPl.model.DialogueSession session : sessions.values()) {
-                    long lastActivityTime = session.getLastActivityTime();
-                    if (lastActivityTime > mostRecentTime) {
-                        mostRecentTime = lastActivityTime;
-                        mostRecentSession = session;
-                    }
-                }
-                
-                // 如果找到最近活跃的会话，读取其日志文件
-                if (mostRecentSession != null) {
-                    String logFilePath = mostRecentSession.getLogFilePath();
-                    if (logFilePath != null) {
-                        java.io.File logFile = new java.io.File(logFilePath);
-                        if (logFile.exists() && logFile.isFile()) {
-                            // 创建临时文件
-                            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-                            java.io.File sessionLog = new java.io.File(tempDir, timestamp + ".log");
-                            
-                            // 复制日志文件内容
-                            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(logFile, java.nio.charset.StandardCharsets.UTF_8));
-                                 java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.FileWriter(sessionLog, java.nio.charset.StandardCharsets.UTF_8))) {
-                                String line;
-                                while ((line = reader.readLine()) != null) {
-                                    writer.write(line);
-                                    writer.newLine();
-                                }
-                            }
-                            
-                            return sessionLog;
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
      * 收集CLI会话日志（智能收集）
      * 根据当前处于CLI模式的人数，收集对应数量的最新日志文件
      *
