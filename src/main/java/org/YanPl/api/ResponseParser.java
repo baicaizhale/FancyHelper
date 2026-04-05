@@ -120,8 +120,22 @@ public class ResponseParser {
             content.text = message.get("content").getAsString();
         }
 
+        // 处理 reasoning_content 字段（OpenAI 格式）
         if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
             content.thought = message.get("reasoning_content").getAsString();
+        }
+
+        // 处理 reasoning 字段（Kimi K2.5 等模型格式）
+        if (message.has("reasoning") && !message.get("reasoning").isJsonNull()) {
+            String reasoning = message.get("reasoning").getAsString();
+            // 如果 content 为空，将 reasoning 作为 content（包含思考过程和工具调用）
+            if (content.text == null || content.text.isEmpty()) {
+                content.text = reasoning;
+            }
+            // 同时保存到 thought 字段
+            if (content.thought == null) {
+                content.thought = reasoning;
+            }
         }
 
         return content;
