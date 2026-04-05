@@ -775,6 +775,14 @@ public class CLIManager {
     }
 
     /**
+     * 获取所有会话
+     * @return 会话映射
+     */
+    public Map<UUID, DialogueSession> getSessions() {
+        return sessions;
+    }
+
+    /**
      * 关闭管理器，清理资源
      */
     public void shutdown() {

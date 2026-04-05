@@ -10,6 +10,9 @@
 AGENT.md
 AGENTS.md
 .classpath
+worker/
+frontend/
+node_modules/
 
 # IntelliJ
 out/

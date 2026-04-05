@@ -132,6 +132,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "lib":
                 handleLibCommand(sender, args);
                 break;
+            case "testerror":
+                if (!sender.hasPermission("fancyhelper.reload")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限执行此命令。"));
+                    return true;
+                }
+                handleTestError(sender);
+                break;
             default:
                 sendHelp(sender);
                 break;
@@ -796,6 +803,31 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c安装失败: " + e.getMessage()));
                 });
                 e.printStackTrace();
+            }
+        });
+    }
+
+    /**
+     * 处理测试错误上报命令
+     * @param sender 命令发送者
+     */
+    private void handleTestError(CommandSender sender) {
+        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在生成测试错误并上报..."));
+        
+        // 异步执行测试错误上报
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                // 生成一个测试错误
+                throw new NullPointerException("这是一个测试错误，用于测试错误上报功能");
+            } catch (Exception e) {
+                // 上报错误
+                plugin.getCloudErrorReport().report(e);
+                
+                // 向发送者发送反馈
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a测试错误已生成并上报成功！"));
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请在前端管理界面查看上报的错误报告。"));
+                });
             }
         });
     }
