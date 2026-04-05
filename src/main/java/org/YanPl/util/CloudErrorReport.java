@@ -19,7 +19,6 @@ public class CloudErrorReport {
 
     private final JavaPlugin plugin;
     private final String workerUrl = "https://report-fancy.baicaizhale.top/";
-    private final Set<Integer> reportedHashes = ConcurrentHashMap.newKeySet();
 
     /**
      * 构造函数
@@ -50,14 +49,7 @@ public class CloudErrorReport {
             return;
         }
 
-        // 1. 获取堆栈第一行计算哈希，防止重复上报
-        int errorHash = throwable.getStackTrace().length > 0
-                ? throwable.getStackTrace()[0].hashCode() + throwable.toString().hashCode()
-                : throwable.toString().hashCode();
-
-        if (!reportedHashes.add(errorHash)) return;
-
-        // 2. 异步执行请求
+        // 异步执行请求
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 // 创建临时目录
