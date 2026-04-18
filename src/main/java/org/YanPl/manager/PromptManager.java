@@ -213,27 +213,42 @@ public class PromptManager {
 
         // ==================== Loaded Skills / 已加载的 Skills ====================
         // 【已加载 Skills】注入到系统提示，可被 prompt cache 命中
+        // 格式设计：简洁的头部 + 清晰的 Skill 分隔
         if (loadedSkills != null && !loadedSkills.isEmpty()) {
             sb.append("<system-reminder>\n");
-            sb.append("The following skills are loaded for this request:\n\n");
             
+            // 简洁的头部：显示已加载的 Skill 名称列表
+            String skillNames = loadedSkills.stream()
+                .limit(MAX_LOADED_SKILLS)
+                .map(s -> s.getMetadata().getName())
+                .collect(Collectors.joining(" | "));
+            sb.append("Loaded Skills: ").append(skillNames);
+            if (loadedSkills.size() > MAX_LOADED_SKILLS) {
+                sb.append(" | ... (").append(loadedSkills.size() - MAX_LOADED_SKILLS).append(" more)");
+            }
+            sb.append("\n\n");
+            
+            // 每个 Skill 的详细内容
             int count = 0;
             for (Skill skill : loadedSkills) {
-                if (count >= MAX_LOADED_SKILLS) {
-                    sb.append("... (and ").append(loadedSkills.size() - MAX_LOADED_SKILLS).append(" more skills)\n");
-                    break;
-                }
-                sb.append("- ").append(skill.getId()).append(": ").append(skill.getMetadata().getName());
-                if (!skill.getMetadata().getDescription().isEmpty()) {
-                    sb.append(" - ").append(skill.getMetadata().getDescription());
-                }
-                sb.append("\n");
+                if (count >= MAX_LOADED_SKILLS) break;
+                
+                // Skill 分隔线：--[ skill-id: Skill Name ]--
+                sb.append("--[ ").append(skill.getId()).append(": ").append(skill.getMetadata().getName()).append(" ]--\n");
+                
+                // Use when（如果有）
                 if (!skill.getMetadata().getTriggers().isEmpty()) {
-                    sb.append("  Use when: ").append(String.join(", ", skill.getMetadata().getTriggers())).append("\n");
+                    sb.append("Applicable: ").append(String.join(", ", skill.getMetadata().getTriggers())).append("\n");
+                }
+                
+                // Skill 内容（去除前后空白）
+                String content = skill.getContent().trim();
+                if (!content.isEmpty()) {
+                    sb.append("---\n");
+                    sb.append(content);
+                    sb.append("\n---\n");
                 }
                 sb.append("\n");
-                sb.append(skill.getContent());
-                sb.append("\n\n");
                 count++;
             }
             sb.append("</system-reminder>\n\n");
@@ -246,8 +261,7 @@ public class PromptManager {
         sb.append("Player: ").append(player.getName()).append("\n");
         sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
 
-        // Available Skills - 根据是否已加载 Skills 调整显示
-        // 如果已自动加载 Skills，只显示未加载的 Other Skills
+        // Available Skills - 统一格式显示
         sb.append("Available Skills:\n");
         List<String> skillSummaries = plugin.getSkillManager().getSkillSummariesForPrompt();
         List<String> triggers = plugin.getSkillManager().getAllTriggers();
@@ -259,45 +273,26 @@ public class PromptManager {
         
         if (skillSummaries.isEmpty()) {
             sb.append("  (none)\n");
-        } else if (!loadedSkillIds.isEmpty()) {
-            // 已加载 Skills，显示未加载的 Other Skills
-            List<String> otherSkills = skillSummaries.stream()
-                .filter(s -> {
-                    // 提取 skill ID（格式：id: name - description）
-                    String id = s.split(":")[0].trim().toLowerCase();
-                    return !loadedSkillIds.contains(id);
-                })
-                .collect(Collectors.toList());
-            
-            if (otherSkills.isEmpty()) {
-                sb.append("  (all relevant skills loaded)\n");
-            } else {
-                sb.append("  (loaded: ").append(String.join(", ", loadedSkillIds)).append(")\n");
-                sb.append("  Other: ").append(String.join(", ", 
-                    otherSkills.stream().limit(10).collect(Collectors.toList())));
-                if (otherSkills.size() > 10) {
-                    sb.append("... (").append(otherSkills.size() - 10).append(" more)");
-                }
-                sb.append("\n");
-            }
-        } else if (skillSummaries.size() <= 15) {
-            // 少于此数量使用详细格式
-            for (String summary : skillSummaries) {
-                sb.append("  - ").append(summary).append("\n");
-            }
         } else {
-            // 超过则使用精简格式 + 触发词列表
-            List<String> briefList = plugin.getSkillManager().getSkillBriefList();
-            for (String brief : briefList) {
-                sb.append("  - ").append(brief).append("\n");
+            // 统一格式：显示所有 Skills，已加载的标记为 [active]
+            for (String summary : skillSummaries) {
+                String skillId = summary.split(":")[0].trim().toLowerCase();
+                if (loadedSkillIds.contains(skillId)) {
+                    // 已加载的 Skill 标记为 [active]
+                    sb.append("  * ").append(summary).append(" [active]\n");
+                } else {
+                    sb.append("  - ").append(summary).append("\n");
+                }
             }
-            if (!triggers.isEmpty()) {
-                sb.append("  (更多触发词: ")
-                        .append(String.join(", ", triggers.stream().limit(30).collect(Collectors.toList())));
-                if (triggers.size() > 30) {
+            
+            // 如果 Skill 数量过多，显示触发词参考
+            if (skillSummaries.size() > 15 && !triggers.isEmpty()) {
+                sb.append("  -- Triggers: ")
+                        .append(String.join(", ", triggers.stream().limit(20).collect(Collectors.toList())));
+                if (triggers.size() > 20) {
                     sb.append("...");
                 }
-                sb.append(")\n");
+                sb.append("\n");
             }
         }
 
