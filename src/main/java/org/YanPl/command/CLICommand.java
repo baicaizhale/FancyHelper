@@ -374,12 +374,75 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleStatus(CommandSender sender) {
-        sender.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
-        sender.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
-        sender.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
-        sender.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
-        sender.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
-        sender.sendMessage(ChatColor.AQUA + "=======================");
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
+            sender.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
+            sender.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
+            sender.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
+            sender.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
+            sender.sendMessage(ChatColor.AQUA + "=======================");
+            return;
+        }
+
+        Player player = (Player) sender;
+
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Status"));
+        player.sendMessage("");
+
+        // Version
+        TextComponent versionLine = new TextComponent(ColorUtil.translateCustomColors("&7  Version: "));
+        TextComponent versionVal = new TextComponent(ColorUtil.translateCustomColors("&f" + plugin.getDescription().getVersion()));
+        versionVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "插件当前版本")));
+        versionLine.addExtra(versionVal);
+        player.spigot().sendMessage(versionLine);
+
+        // Indexed Commands
+        TextComponent cmdLine = new TextComponent(ColorUtil.translateCustomColors("&7  Indexed Commands: "));
+        TextComponent cmdVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getWorkspaceIndexer().getIndexedCommands().size()));
+        cmdVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "已索引的原版/插件命令数量")));
+        cmdLine.addExtra(cmdVal);
+        player.spigot().sendMessage(cmdLine);
+
+        // Indexed Skills
+        TextComponent skillLine = new TextComponent(ColorUtil.translateCustomColors("&7  Loaded Skills: "));
+        TextComponent skillVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getWorkspaceIndexer().getIndexedPresets().size()));
+        skillVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "已加载的 Skill 数量")));
+        skillLine.addExtra(skillVal);
+        player.spigot().sendMessage(skillLine);
+
+        // Active Players
+        TextComponent playerLine = new TextComponent(ColorUtil.translateCustomColors("&7  Active CLI Players: "));
+        TextComponent playerVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getCliManager().getActivePlayersCount()));
+        playerVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "当前处于 CLI 模式的玩家数量")));
+        playerLine.addExtra(playerVal);
+        player.spigot().sendMessage(playerLine);
+
+        player.sendMessage("");
+
+        // Action Buttons
+        TextComponent actionLine = new TextComponent("  ");
+
+        TextComponent refreshBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aRefresh &8]"));
+        refreshBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli status"));
+        refreshBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击刷新状态")));
+
+        TextComponent reloadBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &bReload &8]"));
+        reloadBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli reload"));
+        reloadBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击重载配置与工作区")));
+
+        TextComponent settingsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Settings &8]"));
+        settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
+        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "打开个人设置界面")));
+
+        actionLine.addExtra(refreshBtn);
+        actionLine.addExtra(new TextComponent(" "));
+        actionLine.addExtra(reloadBtn);
+        actionLine.addExtra(new TextComponent(" "));
+        actionLine.addExtra(settingsBtn);
+        player.spigot().sendMessage(actionLine);
+
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
     }
 
     private void handleSettings(Player player) {

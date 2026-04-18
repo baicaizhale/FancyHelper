@@ -1,22 +1,21 @@
 ---
-name: "PlaceholderAPI 变量占位符"
-description: "PlaceholderAPI (PAPI) 变量占位符插件的完整使用指南，包含变量解析、扩展下载等"
+name: "PlaceholderAPI 变量"
+description: "PlaceholderAPI 变量系统的完整使用指南"
 triggers:
   - "placeholderapi"
   - "papi"
-  - "占位符"
   - "变量"
-  - "placeholder"
+  - "占位符"
 auto_trigger: true
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:
   - "plugin"
   - "placeholder"
-  - "utility"
+  - "api"
 ---
 
-# PlaceholderAPI (PAPI) 插件
+# PAPI (PlaceholderAPI)
 
 ## 插件检查
 
@@ -24,28 +23,33 @@ categories:
 
 检查方法：尝试执行 `/papi version` 命令，如果返回版本信息则说明插件已安装。
 
-如果插件未安装，请告知玩家无法使用变量占位符功能。
+如果插件未安装，请告知玩家无法使用变量替换功能。
 
 ## 常用命令
 
-### 基础命令
+- `/papi version` - 查看插件版本
 - `/papi list` - 列出所有已注册的变量扩展
-- `/papi parse <玩家|me> <带变量的文本>` - 解析并显示变量结果（调试用）
-- `/papi reload` - 重新加载配置和已下载的扩展
-- `/papi help` - 查看完整帮助
+- `/papi ecloud list [all]` - 列出云端可用的扩展
+- `/papi ecloud download <扩展名>` - 下载扩展
+- `/papi ecloud update <扩展名>` - 更新扩展
+- `/papi ecloud status <扩展名>` - 查看扩展状态
+- `/papi reload` - 重新加载插件配置
+- `/papi parse <player> <placeholder>` - 测试解析变量
+- `/papi info <扩展名>` - 查看扩展详细信息
 
-### 云端扩展
-- `/papi ecloud list <all|installed>` - 列出云端/已安装的扩展
-- `/papi ecloud download <扩展名>` - 从云端下载扩展
-- `/papi ecloud info <扩展名>` - 查看云端扩展信息
-- `/papi ecloud placeholders <扩展名>` - 列出该扩展提供的所有变量
+## 常用变量
 
-## 常用变量示例
+- `%player_name%` - 玩家名称
+- `%player_displayname%` - 玩家显示名称
+- `%player_health%` - 玩家生命值
+- `%player_level%` - 玩家等级
+- `%player_exp%` - 玩家经验值
+- `%player_world%` - 玩家所在世界
+- `%player_x%` / `%player_y%` / `%player_z%` - 玩家坐标
+- `%server_online%` - 在线玩家数
+- `%server_tps%` - 服务器TPS
+- `%server_uptime%` - 服务器运行时间
 
-- `%player_name%` - 玩家名
-- `%vault_echo_balance%` - 余额 (需 Vault 扩展)
-- `%essentials_nickname%` - 昵称 (需 Essentials 扩展)
+## 注意
 
-## 注意事项
-
-下载新扩展后通常需要执行 `/papi reload` 才能生效。
+PlaceholderAPI 是许多插件的依赖，用于在聊天、记分板、TAB列表等地方显示动态变量。

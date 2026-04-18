@@ -1,12 +1,12 @@
 ---
-name: "Vault 经济API"
-description: "Vault 经济、权限和聊天 API 插件的说明，作为经济/权限插件的桥梁"
+name: "Vault 经济插件"
+description: "Vault 经济系统插件的使用指南"
 triggers:
   - "vault"
   - "经济"
-  - "api"
-  - "前置"
-  - "economy"
+  - "money"
+  - "balance"
+  - "支付"
 auto_trigger: true
 author: "FancyHelper Team"
 version: "1.0.0"
@@ -14,10 +14,9 @@ categories:
   - "plugin"
   - "economy"
   - "api"
-  - "dependency"
 ---
 
-# Vault 插件
+# Vault 经济插件
 
 ## 插件检查
 
@@ -25,18 +24,21 @@ categories:
 
 检查方法：尝试执行 `/vault version` 命令，如果返回版本信息则说明插件已安装。
 
-如果插件未安装，请告知玩家无法使用经济和权限 API 功能。
+如果插件未安装，请告知玩家无法使用经济系统功能。
 
 ## 说明
 
-Vault 是一个权限、经济和聊天 API 插件。它本身不提供具体功能，而是作为其他经济/权限插件的桥梁。
+Vault 本身是一个经济API插件，不直接提供经济命令。它需要配合其他经济插件使用，如 EssentialsX Economy、iConomy、BOSEconomy 等。
 
-## 常用命令（通常由具体经济/权限插件提供）
+## 常用经济命令（通过其他插件提供）
 
-- `/money` - 查看余额
-- `/money pay <player> <amount>` - 转账
-- `/lp` (LuckPerms) - 常用权限管理
+- `/balance` 或 `/money` - 查看余额
+- `/pay <玩家> <金额>` - 转账给其他玩家
+- `/baltop` - 查看财富排行榜
+- `/eco give <玩家> <金额>` - 给予金钱（管理员）
+- `/eco take <玩家> <金额>` - 扣除金钱（管理员）
+- `/eco set <玩家> <金额>` - 设置金钱（管理员）
 
-## 依赖关系
+## 注意
 
-Vault 需要配合具体的经济插件（如 EssentialsX）和权限插件（如 LuckPerms）使用才能发挥作用。
+Vault 是许多插件的经济依赖，提供统一的API接口。

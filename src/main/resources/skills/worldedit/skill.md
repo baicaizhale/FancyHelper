@@ -1,12 +1,12 @@
 ---
-name: "WorldEdit 创世神"
-description: "WorldEdit 创世神插件的完整使用指南，包含选区、复制粘贴、笔刷工具等"
+name: "WorldEdit 世界编辑"
+description: "WorldEdit 世界编辑插件的使用指南"
 triggers:
   - "worldedit"
   - "we"
   - "创世神"
-  - "建筑"
-  - "edit"
+  - "选区"
+  - "快速建筑"
 auto_trigger: true
 author: "FancyHelper Team"
 version: "1.0.0"
@@ -16,7 +16,7 @@ categories:
   - "admin"
 ---
 
-# WorldEdit (创世神) 插件
+# WorldEdit (通常不用)
 
 ## 插件检查
 
@@ -24,31 +24,35 @@ categories:
 
 检查方法：尝试执行 `//version` 命令，如果返回版本信息则说明插件已安装。
 
-如果插件未安装，请告知玩家使用 Minecraft 原版命令（如 `/fill` 和 `/setblock`）来替代。
-
-如果任务不是很复杂，更推荐使用原版命令。
+如果插件未安装，请告知玩家无法使用快速建筑功能。
 
 ## 常用命令
 
-### 选区工具
-- `//wand` - 获取选择工具（默认木斧）
-- `//pos1` / `//pos2` - 设置选择区域的两个点
-
-### 基础操作
-- `//set <block>` - 将选择区域填充为某种方块
-- `//replace <from_block> <to_block>` - 替换区域内的特定方块
-- `//copy` - 复制当前选择区域（相对于你的位置）
-- `//paste` - 粘贴已复制的区域（相对于你的位置）
+- `//wand` - 获取选区工具（木斧）
+- `//pos1` - 设置选区第一个点
+- `//pos2` - 设置选区第二个点
+- `//set <方块>` - 将选区设置为指定方块
+- `//replace [旧方块] <新方块>` - 替换选区内的方块
+- `//copy` - 复制选区
+- `//paste` - 粘贴复制的内容
+- `//cut` - 剪切选区
 - `//undo` - 撤销上一步操作
-- `//redo` - 重做被撤销的操作
-- `//rotate <degrees>` - 旋转已复制的内容
+- `//redo` - 重做上一步操作
+- `//rotate <角度>` - 旋转复制的内容
+- `//flip [方向]` - 翻转复制的内容
+- `//walls <方块>` - 生成选区的墙壁
+- `//outline <方块>` - 生成选区的轮廓
+- `//smooth [迭代次数]` - 平滑地形
+- `//regen` - 重新生成选区地形
+- `//count <方块>` - 统计选区内方块数量
+- `//size` - 查看选区大小
 
-### 高级功能
-- `//schem load/save <name>` - 加载或保存结构文件
-- `//br sphere <block> [radius]` - 笔刷工具：生成球体
-- `//smooth` - 平滑选择区域的地形
-- `//stack <count> [direction]` - 沿某个方向堆叠选区
+## 选择工具
 
-## 注意事项
+默认使用木斧（Wooden Axe）作为选择工具：
+- 左键点击 = 选择第一个点
+- 右键点击 = 选择第二个点
 
-WorldEdit 大多数命令以双斜杠 `//` 开头，范围操作前请务必确认选区大小。
+## 注意
+
+WorldEdit 是强大的世界编辑工具，通常用于大型建筑、地形修改等。由于功能强大，请谨慎使用，避免误操作。

@@ -1,6 +1,6 @@
 ---
 name: "LuckPerms 权限管理"
-description: "LuckPerms 权限管理插件的完整使用指南，包含用户管理、权限组、网页编辑器等"
+description: "LuckPerms 权限管理插件的完整使用指南"
 triggers:
   - "luckperms"
   - "lp"
@@ -16,7 +16,7 @@ categories:
   - "admin"
 ---
 
-# LuckPerms 权限管理插件
+# LuckPerms 权限管理使用方法
 
 ## 插件检查
 
@@ -45,6 +45,6 @@ categories:
 - `/lp search <permission>` - 搜索谁拥有某个权限
 - `/lp reload` - 重新加载插件配置
 
-## 注意事项
+## 注意
 
 LuckPerms 是目前最主流的权限插件，强烈建议使用 `/lp editor` 进行可视化编辑。

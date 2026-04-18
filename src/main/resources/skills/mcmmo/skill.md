@@ -1,22 +1,22 @@
 ---
-name: "mcMMO 技能系统"
-description: "mcMMO 技能系统插件的完整使用指南，包含技能查看、组队、管理员命令等"
+name: "mcMMO 技能树"
+description: "mcMMO 技能系统的完整使用指南"
 triggers:
   - "mcmmo"
   - "技能"
-  - "skill"
   - "等级"
-  - "rpg"
+  - "经验"
+  - "mcmmo技能"
 auto_trigger: true
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:
   - "plugin"
-  - "rpg"
   - "skill"
+  - "rpg"
 ---
 
-# mcMMO 插件
+# mcMMO 技能树使用
 
 ## 插件检查
 
@@ -28,33 +28,16 @@ categories:
 
 ## 常用命令
 
-### 基础命令
 - `/mcmmo help` - 查看 mcMMO 帮助菜单
 - `/mcstats` - 查看自己的技能统计和等级
 - `/mctop [技能名]` - 查看技能排行榜
 - `/inspect <玩家>` - 查看其他玩家的 mcMMO 统计
 - `/mcability` - 切换右键触发技能的开启/关闭
-
-### 组队系统
-- `/party` - 组队系统相关命令
-- `/party create <名称>` - 创建队伍
-- `/party join <队伍>` - 加入队伍
-- `/party leave` - 离开队伍
-- `/party chat` - 队伍聊天
-
-## 管理员命令
-
-- `/mmoedit <玩家> <技能> <等级>` - 修改玩家技能等级
-- `/addxp <玩家> <技能> <数值>` - 给玩家增加技能经验
-- `/skillreset <玩家> <技能>` - 重置玩家技能等级
+- `/party [创建|加入|离开|聊天]` - 组队系统相关命令
+- `/mmoedit <玩家> <技能> <等级>` - 修改玩家技能等级 (管理员)
+- `/addxp <玩家> <技能> <数值>` - 给玩家增加技能经验 (管理员)
+- `/skillreset <玩家> <技能>` - 重置玩家技能等级 (管理员)
 
 ## 主要技能
 
-- **挖掘** (Excavation)
-- **采矿** (Mining)
-- **伐木** (Woodcutting)
-- **修复** (Repair)
-- **杂技** (Acrobatics)
-- **剑术** (Swords)
-- **弓箭** (Archery)
-- **驯兽** (Taming)
+挖掘 (Excavation), 采矿 (Mining), 伐木 (Woodcutting), 修复 (Repair), 杂技 (Acrobatics), 剑术 (Swords), 弓箭 (Archery), 驯兽 (Taming) 等。

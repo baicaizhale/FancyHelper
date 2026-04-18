@@ -1,23 +1,21 @@
 ---
-name: "PlugManX 插件管理"
-description: "PlugManX 热重载插件管理工具的完整使用指南，包含插件加载、卸载、重载等"
+name: "PlugManX 热重载插件"
+description: "PlugManX 插件管理工具，用于热重载、加载、卸载插件"
 triggers:
   - "plugmanx"
   - "plugman"
-  - "插件管理"
   - "热重载"
-  - "reload"
+  - "插件管理"
+  - "重载插件"
 auto_trigger: true
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:
   - "plugin"
-  - "management"
   - "admin"
-  - "dev"
 ---
 
-# PlugManX 插件
+# PlugManX 热重载插件
 
 ## 插件检查
 
@@ -29,13 +27,10 @@ categories:
 
 ## 常用命令
 
-### 插件列表与信息
 - `/plugman list [-v]` - 列出所有已加载的插件
 - `/plugman info <插件名>` - 查看插件详细信息（作者、版本、命令等）
 - `/plugman usage <插件名>` - 列出插件注册的所有命令
 - `/plugman lookup <命令>` - 查找某个命令属于哪个插件
-
-### 插件管理
 - `/plugman load <插件名>` - 加载一个新插件
 - `/plugman unload <插件名>` - 卸载一个插件
 - `/plugman reload <插件名|all>` - 重新加载插件
@@ -43,6 +38,6 @@ categories:
 - `/plugman disable <插件名>` - 禁用插件
 - `/plugman restart <插件名>` - 重启插件
 
-## 注意事项
+## 注意
 
 PlugManX 是热重载工具，建议仅在开发/调试环境使用。

@@ -1,6 +1,6 @@
 ---
 name: "NBT与数据组件格式"
-description: "Minecraft NBT 和数据组件格式的完整指南，基于官方 Wiki 编写，适用于 1.20.5+ 版本"
+description: "Minecraft NBT 和数据组件格式的完整指南，基于官方 Wiki 编写"
 triggers:
   - "nbt"
   - "组件"
@@ -17,9 +17,7 @@ categories:
   - "item"
 ---
 
-# NBT 与数据组件格式指南
-
-基于 Minecraft 官方 Wiki 编写
+# 用 NBT 格式看我
 
 ## 基本概念
 
@@ -255,7 +253,7 @@ item_id[component1=value,component2=value]
 #### can_break - 可破坏（冒险模式）
 - 格式：`[can_break={blocks:['black_concrete','coal_ore']}]`
 - 说明：在冒险模式中，持有此物品的玩家可以破坏指定的方块
-- 示例：`/give @s netherite_pickaxe[can_break={blocks:['black_concrete','coal_ore','iron_ore','gold_ore','diamond_ore','emerald_ore']}]]`
+- 示例：`/give @s netherite_pickaxe[can_break={blocks:['black_concrete','coal_ore','iron_ore','gold_ore','diamond_ore','emerald_ore']}]`
 
 #### can_place_on - 可放置在（冒险模式）
 - 格式：`[can_place_on={blocks:'sandstone'}]`
