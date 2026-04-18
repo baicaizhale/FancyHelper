@@ -1179,7 +1179,7 @@ public class ToolExecutor {
             return;
         }
         
-        player.sendMessage(ChatColor.GRAY + "〇 正在加载 Skill: " + ChatColor.WHITE + skillId);
+        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7正在加载 Skill: §f" + skillId));
         cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
         
         org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
@@ -1209,7 +1209,7 @@ public class ToolExecutor {
                 + skill.getFormattedContent();
         cliManager.feedbackToAI(player, result);
         
-        player.sendMessage(ChatColor.GREEN + "✓ 已加载 Skill: " + ChatColor.WHITE + skill.getMetadata().getName());
+        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已加载 Skill: §f" + skill.getMetadata().getName()));
     }
 
     /**
@@ -1663,12 +1663,12 @@ public class ToolExecutor {
                 .uri(java.net.URI.create(url))
                 .timeout(java.time.Duration.ofSeconds(45))
                 // 基础头信息
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
                 .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-                .header("Accept-Encoding", "gzip, deflate, br")
+                .header("Accept-Encoding", "gzip, deflate")
                 // 安全相关头
-                .header("Sec-Ch-Ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
+                .header("Sec-Ch-Ua", "\"Google Chrome\";v=\"135\", \"Not:A-Brand\";v=\"99\", \"Chromium\";v=\"135\"")
                 .header("Sec-Ch-Ua-Mobile", "?0")
                 .header("Sec-Ch-Ua-Platform", "\"Windows\"")
                 // 浏览行为头

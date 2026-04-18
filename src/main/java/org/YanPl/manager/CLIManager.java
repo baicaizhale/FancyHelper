@@ -1706,12 +1706,21 @@ public class CLIManager {
         // 最多匹配 3 个 Skills，最小匹配分数 30
         List<org.YanPl.model.Skill> matchedSkills = plugin.getSkillManager()
                 .findMatchingSkills(message, 3, 30);
-        
-        if (plugin.getConfigManager().isDebug() && !matchedSkills.isEmpty()) {
+
+        // 向玩家显示已自动加载的 Skills
+        if (!matchedSkills.isEmpty()) {
             String skillNames = matchedSkills.stream()
-                    .map(s -> s.getId())
-                    .collect(Collectors.joining(", "));
-            plugin.getLogger().info("[Skill] 匹配到 " + matchedSkills.size() + " 个 Skill: " + skillNames);
+                    .map(s -> s.getMetadata().getName())
+                    .collect(Collectors.joining("§7, §f"));
+            player.sendMessage(ColorUtil.translateCustomColors(
+                "§zFancyHelper§b§r §7> §7已激活 Skills: §f" + skillNames));
+
+            if (plugin.getConfigManager().isDebug()) {
+                String skillIds = matchedSkills.stream()
+                        .map(s -> s.getId())
+                        .collect(Collectors.joining(", "));
+                plugin.getLogger().info("[Skill] 匹配到 " + matchedSkills.size() + " 个 Skill: " + skillIds);
+            }
         }
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
