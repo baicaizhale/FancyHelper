@@ -1707,19 +1707,11 @@ public class CLIManager {
         List<org.YanPl.model.Skill> matchedSkills = plugin.getSkillManager()
                 .findMatchingSkills(message, 3, 30);
 
-        // 向玩家显示已自动加载的 Skills
-        if (!matchedSkills.isEmpty()) {
-            for (org.YanPl.model.Skill skill : matchedSkills) {
-                player.sendMessage(ColorUtil.translateCustomColors(
-                    "§aSkill §7> §f" + skill.getMetadata().getName()));
-            }
-
-            if (plugin.getConfigManager().isDebug()) {
-                String skillIds = matchedSkills.stream()
-                        .map(s -> s.getId())
-                        .collect(Collectors.joining(", "));
-                plugin.getLogger().info("[Skill] 匹配到 " + matchedSkills.size() + " 个 Skill: " + skillIds);
-            }
+        if (plugin.getConfigManager().isDebug() && !matchedSkills.isEmpty()) {
+            String skillIds = matchedSkills.stream()
+                    .map(s -> s.getId())
+                    .collect(Collectors.joining(", "));
+            plugin.getLogger().info("[Skill] 匹配到 " + matchedSkills.size() + " 个 Skill: " + skillIds);
         }
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
