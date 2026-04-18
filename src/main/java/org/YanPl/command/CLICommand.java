@@ -808,11 +808,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             added = session.addSkillContext(skill);
         }
 
-        if (added) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已加载 Skill: §f" + skill.getMetadata().getName()));
-        } else {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §eSkill 已加载: §f" + skill.getMetadata().getName()));
-        }
+        player.sendMessage(ColorUtil.translateCustomColors("§aSkill §7> §f" + skill.getMetadata().getName()));
     }
 
     private void handleNotice(CommandSender sender) {

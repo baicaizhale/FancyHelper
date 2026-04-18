@@ -1709,11 +1709,10 @@ public class CLIManager {
 
         // 向玩家显示已自动加载的 Skills
         if (!matchedSkills.isEmpty()) {
-            String skillNames = matchedSkills.stream()
-                    .map(s -> s.getMetadata().getName())
-                    .collect(Collectors.joining("§7, §f"));
-            player.sendMessage(ColorUtil.translateCustomColors(
-                "§zFancyHelper§b§r §7> §7已激活 Skills: §f" + skillNames));
+            for (org.YanPl.model.Skill skill : matchedSkills) {
+                player.sendMessage(ColorUtil.translateCustomColors(
+                    "§aSkill §7> §f" + skill.getMetadata().getName()));
+            }
 
             if (plugin.getConfigManager().isDebug()) {
                 String skillIds = matchedSkills.stream()

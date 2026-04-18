@@ -1179,7 +1179,7 @@ public class ToolExecutor {
             return;
         }
         
-        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7正在加载 Skill: §f" + skillId));
+        player.sendMessage(ColorUtil.translateCustomColors("§aSkill §7> §f" + skillId));
         cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
         
         org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
@@ -1209,7 +1209,7 @@ public class ToolExecutor {
                 + skill.getFormattedContent();
         cliManager.feedbackToAI(player, result);
         
-        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已加载 Skill: §f" + skill.getMetadata().getName()));
+        player.sendMessage(ColorUtil.translateCustomColors("§aSkill §7> §f" + skill.getMetadata().getName()));
     }
 
     /**

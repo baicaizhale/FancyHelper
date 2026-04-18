@@ -13,7 +13,7 @@ AGENTS.md
 worker/
 frontend/
 node_modules/
-
+.claude/
 # IntelliJ
 out/
 
