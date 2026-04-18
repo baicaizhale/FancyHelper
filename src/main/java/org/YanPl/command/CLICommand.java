@@ -866,9 +866,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         // 将 Skill 内容添加到对话上下文
         org.YanPl.model.DialogueSession session = plugin.getCliManager().getSession(player.getUniqueId());
-        boolean added = false;
         if (session != null) {
-            added = session.addSkillContext(skill);
         }
 
         player.sendMessage(ColorUtil.translateCustomColors("§aSkill §7> §f" + skill.getMetadata().getName()));
