@@ -127,6 +127,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 Player player = (Player) sender;
                 return handlePlayerSubCommand(player, subCommand, args);
+            case "skill":
+                if (!sender.hasPermission("fancyhelper.skill.use")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限使用 Skill 命令。"));
+                    return true;
+                }
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    return true;
+                }
+                return handleSkillCommand((Player) sender, args);
             case "help":
                 sendHelp(sender);
                 return true;
@@ -163,6 +173,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
         sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
         sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
+        sender.sendMessage(" §7- §b/cli skill §f: Skill 管理命令");
+        sender.sendMessage(" §7  §b/cli skill list §f: 列出所有 Skill");
+        sender.sendMessage(" §7  §b/cli skill info <id> §f: 查看 Skill 详情");
+        sender.sendMessage(" §7  §b/cli skill load <id> §f: 加载 Skill 到当前对话");
     }
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
@@ -675,7 +689,131 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         showMemoryList(player);
     }
 
+    /**
+     * 处理 Skill 子命令
+     */
+    private boolean handleSkillCommand(Player player, String[] args) {
+        if (args.length < 2) {
+            // 显示 Skill 帮助
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fSkill 管理命令:"));
+            player.sendMessage(" §7- §b/cli skill list §f: 列出所有 Skill");
+            player.sendMessage(" §7- §b/cli skill info <id> §f: 查看 Skill 详情");
+            player.sendMessage(" §7- §b/cli skill load <id> §f: 加载 Skill 到当前对话");
+            if (player.hasPermission("fancyhelper.skill.admin")) {
+                player.sendMessage(" §7- §b/cli skill reload §f: 重新加载所有 Skill");
+            }
+            return true;
+        }
 
+        String subCommand = args[1].toLowerCase();
+
+        switch (subCommand) {
+            case "list":
+                handleSkillList(player);
+                break;
+            case "info":
+                if (args.length < 3) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
+                    player.sendMessage("§7用法: /cli skill info <id>");
+                } else {
+                    handleSkillInfo(player, args[2]);
+                }
+                break;
+            case "load":
+                if (args.length < 3) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
+                    player.sendMessage("§7用法: /cli skill load <id>");
+                } else {
+                    handleSkillLoad(player, args[2]);
+                }
+                break;
+            case "reload":
+                if (!player.hasPermission("fancyhelper.skill.admin")) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    return true;
+                }
+                plugin.getSkillManager().reloadSkills();
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已重新加载所有 Skill"));
+                player.sendMessage("§7共加载 " + plugin.getSkillManager().getSkillCount() + " 个 Skill");
+                break;
+            default:
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知子命令: " + subCommand));
+                break;
+        }
+
+        return true;
+    }
+
+    /**
+     * 处理 Skill 列表
+     */
+    private void handleSkillList(Player player) {
+        List<String> lines = plugin.getSkillManager().getFormattedSkillList();
+        for (String line : lines) {
+            player.sendMessage(ColorUtil.translateCustomColors(line));
+        }
+    }
+
+    /**
+     * 处理 Skill 详情
+     */
+    private void handleSkillInfo(Player player, String skillId) {
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+
+        if (skill == null) {
+            // 尝试搜索
+            List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
+            if (matches.isEmpty()) {
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 Skill: " + skillId));
+                return;
+            }
+            skill = matches.get(0);
+        }
+
+        List<String> infoLines = skill.getDetailedInfo();
+        for (String line : infoLines) {
+            player.sendMessage(ColorUtil.translateCustomColors(line));
+        }
+    }
+
+    /**
+     * 处理加载 Skill
+     */
+    private void handleSkillLoad(Player player, String skillId) {
+        // 检查是否在 CLI 模式
+        if (!plugin.getCliManager().isInCLI(player)) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请先进入 CLI 模式 (/cli)"));
+            return;
+        }
+
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+
+        if (skill == null) {
+            // 尝试搜索
+            List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
+            if (matches.isEmpty()) {
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 Skill: " + skillId));
+                return;
+            }
+            skill = matches.get(0);
+        }
+
+        // 加载 Skill 到当前对话
+        plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
+
+        // 将 Skill 内容添加到对话上下文
+        org.YanPl.model.DialogueSession session = plugin.getCliManager().getSession(player.getUniqueId());
+        boolean added = false;
+        if (session != null) {
+            added = session.addSkillContext(skill);
+        }
+
+        if (added) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已加载 Skill: §f" + skill.getMetadata().getName()));
+        } else {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §eSkill 已加载: §f" + skill.getMetadata().getName()));
+        }
+    }
 
     private void handleNotice(CommandSender sender) {
         sender.sendMessage("§zFancyHelper§b§r §7> §f正在获取公告...");
@@ -813,7 +951,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "read", "set", "settings", "tools", "display", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
-                "stop", "download", "help", "lib", "compress"
+                "stop", "download", "help", "lib", "compress", "skill"
             ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
@@ -842,6 +980,21 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             return Arrays.asList("protocolib").stream()
                     .filter(s -> s.startsWith(args[2].toLowerCase()))
                     .collect(Collectors.toList());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("skill")) {
+            List<String> skillSubCommands = new ArrayList<>(Arrays.asList("list", "info", "load"));
+            if (sender.hasPermission("fancyhelper.skill.admin")) {
+                skillSubCommands.add("reload");
+            }
+            return skillSubCommands.stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("skill")) {
+            if (args[1].equalsIgnoreCase("info") || args[1].equalsIgnoreCase("load")) {
+                // 返回所有 Skill ID
+                return plugin.getSkillManager().getSkillIdsForPrompt().stream()
+                        .filter(s -> s.startsWith(args[2].toLowerCase()))
+                        .collect(Collectors.toList());
+            }
         }
         return new ArrayList<>();
     }

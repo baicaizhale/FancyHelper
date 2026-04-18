@@ -1,0 +1,51 @@
+---
+name: "PlaceholderAPI 变量占位符"
+description: "PlaceholderAPI (PAPI) 变量占位符插件的完整使用指南，包含变量解析、扩展下载等"
+triggers:
+  - "placeholderapi"
+  - "papi"
+  - "占位符"
+  - "变量"
+  - "placeholder"
+auto_trigger: true
+author: "FancyHelper Team"
+version: "1.0.0"
+categories:
+  - "plugin"
+  - "placeholder"
+  - "utility"
+---
+
+# PlaceholderAPI (PAPI) 插件
+
+## 插件检查
+
+在使用以下命令前，请先检查服务器是否已安装 PlaceholderAPI 插件。
+
+检查方法：尝试执行 `/papi version` 命令，如果返回版本信息则说明插件已安装。
+
+如果插件未安装，请告知玩家无法使用变量占位符功能。
+
+## 常用命令
+
+### 基础命令
+- `/papi list` - 列出所有已注册的变量扩展
+- `/papi parse <玩家|me> <带变量的文本>` - 解析并显示变量结果（调试用）
+- `/papi reload` - 重新加载配置和已下载的扩展
+- `/papi help` - 查看完整帮助
+
+### 云端扩展
+- `/papi ecloud list <all|installed>` - 列出云端/已安装的扩展
+- `/papi ecloud download <扩展名>` - 从云端下载扩展
+- `/papi ecloud info <扩展名>` - 查看云端扩展信息
+- `/papi ecloud placeholders <扩展名>` - 列出该扩展提供的所有变量
+
+## 常用变量示例
+
+- `%player_name%` - 玩家名
+- `%vault_echo_balance%` - 余额 (需 Vault 扩展)
+- `%essentials_nickname%` - 昵称 (需 Essentials 扩展)
+
+## 注意事项
+
+下载新扩展后通常需要执行 `/papi reload` 才能生效。

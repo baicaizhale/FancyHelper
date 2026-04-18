@@ -1,0 +1,40 @@
+---
+name: "ProtocolLib 协议库"
+description: "ProtocolLib 协议库插件的说明，作为许多高级插件的前置依赖"
+triggers:
+  - "protocollib"
+  - "protocol"
+  - "前置"
+  - "依赖"
+  - "library"
+auto_trigger: true
+author: "FancyHelper Team"
+version: "1.0.0"
+categories:
+  - "plugin"
+  - "library"
+  - "dependency"
+---
+
+# ProtocolLib 插件
+
+## 插件检查
+
+在使用以下命令前，请先检查服务器是否已安装 ProtocolLib 插件。
+
+检查方法：尝试执行 `/protocol version` 命令，如果返回版本信息则说明插件已安装。
+
+如果插件未安装，请告知玩家无法使用依赖 ProtocolLib 的高级插件功能。
+
+## 常用命令（主要用于调试）
+
+- `/protocol config` - 重新加载配置
+- `/protocol check` - 检查是否有新版本
+- `/protocol update` - 执行更新
+- `/protocol dump` - 导出数据包调试信息（开发者使用）
+
+## 说明
+
+ProtocolLib 本身主要提供底层 API 支持，普通玩家和管理员很少直接执行其命令。
+
+它是许多高级插件（如 HolographicDisplays, Citizens, TabList 等）的必需前置，如果没有它，这些插件将无法运行。

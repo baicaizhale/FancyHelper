@@ -96,6 +96,9 @@ public class ToolExecutor {
             case "#getpreset":
                 handleGetTool(player, args);
                 break;
+            case "#skill":
+                handleSkillTool(player, args, session);
+                break;
             
             // 交互工具
             case "#ask":
@@ -1163,6 +1166,50 @@ public class ToolExecutor {
         } catch (IOException e) {
             cliManager.feedbackToAI(player, "#get_result: 读取文件失败 - " + e.getMessage());
         }
+    }
+
+    /**
+     * 处理 #skill 工具
+     */
+    private void handleSkillTool(Player player, String args, DialogueSession session) {
+        String skillId = args.trim().toLowerCase();
+        
+        if (skillId.isEmpty()) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 请提供 Skill ID");
+            return;
+        }
+        
+        player.sendMessage(ChatColor.GRAY + "〇 正在加载 Skill: " + ChatColor.WHITE + skillId);
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+        
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+        
+        if (skill == null) {
+            // 尝试搜索
+            List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
+            if (matches.isEmpty()) {
+                cliManager.feedbackToAI(player, "#skill_result: 错误 - 未找到 Skill: " + skillId);
+                return;
+            }
+            skill = matches.get(0);
+        }
+        
+        // 记录玩家已加载此 Skill
+        plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
+
+        // 将 Skill 内容加入对话上下文
+        boolean added = false;
+        if (session != null) {
+            added = session.addSkillContext(skill);
+        }
+        
+        // 反馈给 AI
+        String suffix = added ? "" : " (已存在)";
+        String result = "#skill_result: 已加载 Skill [" + skill.getMetadata().getName() + "]" + suffix + "\n\n"
+                + skill.getFormattedContent();
+        cliManager.feedbackToAI(player, result);
+        
+        player.sendMessage(ChatColor.GREEN + "✓ 已加载 Skill: " + ChatColor.WHITE + skill.getMetadata().getName());
     }
 
     /**

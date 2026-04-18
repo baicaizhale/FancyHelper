@@ -8,6 +8,7 @@ import org.YanPl.FancyHelper;
 import org.YanPl.api.CloudFlareAI;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.Skill;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -25,6 +26,7 @@ import com.google.gson.reflect.TypeToken;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * CLI 模式管理器，负责管理玩家的 CLI 状态和对话流
@@ -59,15 +61,15 @@ public class CLIManager {
      */
     private static class RetryInfo {
         final DialogueSession session;
-        final String systemPrompt;
         final String lastMessage;
         final boolean isUserMessage;
+        final List<Skill> matchedSkills;
 
-        RetryInfo(DialogueSession session, String systemPrompt, String lastMessage, boolean isUserMessage) {
+        RetryInfo(DialogueSession session, String lastMessage, boolean isUserMessage, List<Skill> matchedSkills) {
             this.session = session;
-            this.systemPrompt = systemPrompt;
             this.lastMessage = lastMessage;
             this.isUserMessage = isUserMessage;
+            this.matchedSkills = matchedSkills != null ? matchedSkills : Collections.emptyList();
         }
     }
 
@@ -989,6 +991,9 @@ public class CLIManager {
         // 清空玩家的待办列表
         plugin.getTodoManager().clearTodos(uuid);
 
+        // 清空玩家已加载的 Skill
+        plugin.getSkillManager().clearPlayerSkills(player);
+
         // 清空重试信息
         retryInfoMap.remove(uuid);
 
@@ -1468,7 +1473,9 @@ public class CLIManager {
                     retryInfo.session.addMessage("user", retryInfo.lastMessage);
                 }
 
-                AIResponse response = ai.chat(retryInfo.session, retryInfo.systemPrompt);
+                // 重试时使用存储的 matchedSkills 重新构建系统提示
+                String retrySystemPrompt = promptManager.getBaseSystemPrompt(player, retryInfo.matchedSkills);
+                AIResponse response = ai.chat(retryInfo.session, retrySystemPrompt);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -1481,7 +1488,7 @@ public class CLIManager {
                     if (retryInfo.lastMessage != null) {
                         retryInfo.session.removeLastMessage();
                     }
-                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt, retryInfo.lastMessage, retryInfo.isUserMessage));
+                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.lastMessage, retryInfo.isUserMessage, retryInfo.matchedSkills));
 
                     String errorMsg = e.getMessage();
                     // 只显示友好的提示消息（FancyHelper > 开头的）
@@ -1518,7 +1525,7 @@ public class CLIManager {
                     if (retryInfo.lastMessage != null) {
                         retryInfo.session.removeLastMessage();
                     }
-                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.systemPrompt, retryInfo.lastMessage, retryInfo.isUserMessage));
+                    retryInfoMap.put(uuid, new RetryInfo(retryInfo.session, retryInfo.lastMessage, retryInfo.isUserMessage, retryInfo.matchedSkills));
 
                     player.sendMessage(ChatColor.RED + "⨀ 系统内部错误（重试）: " + t.getMessage());
 
@@ -1694,6 +1701,19 @@ public class CLIManager {
         }
 
         if (!plugin.isEnabled()) return;
+        
+        // 【Skill 自动注入】根据用户输入匹配相关 Skills
+        // 最多匹配 3 个 Skills，最小匹配分数 30
+        List<org.YanPl.model.Skill> matchedSkills = plugin.getSkillManager()
+                .findMatchingSkills(message, 3, 30);
+        
+        if (plugin.getConfigManager().isDebug() && !matchedSkills.isEmpty()) {
+            String skillNames = matchedSkills.stream()
+                    .map(s -> s.getId())
+                    .collect(Collectors.joining(", "));
+            plugin.getLogger().info("[Skill] 匹配到 " + matchedSkills.size() + " 个 Skill: " + skillNames);
+        }
+        
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             // 设置重试回调，向玩家显示重试提示
             ai.setRetryCallback((statusCode, retryMessage) -> {
@@ -1714,15 +1734,16 @@ public class CLIManager {
             });
             
             try {
-                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player));
+                // 【Skill 自动注入】将匹配的 Skills 传入系统提示构建
+                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player, matchedSkills));
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response));
             } catch (IOException e) {
                 plugin.getCloudErrorReport().report(e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
+                    // 保存重试信息（存储 matchedSkills，重试时重新构建系统提示）
+                    retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
 
                     String errorMsg = e.getMessage();
                     // 只显示友好的提示消息（FancyHelper > 开头的）
@@ -1759,7 +1780,7 @@ public class CLIManager {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, promptManager.getBaseSystemPrompt(player), message, true));
+                    retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
 
                     player.sendMessage(ChatColor.RED + "⨀ 系统内部错误: " + t.getMessage());
                     plugin.getLogger().warning("系统内部错误: " + t.getMessage());
@@ -1880,7 +1901,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
+        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#skill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -2032,7 +2053,8 @@ public class CLIManager {
             });
             
             try {
-                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player));
+                // continueGeneration 不需要匹配新 Skills，使用空列表
+                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player, Collections.emptyList()));
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -2078,8 +2100,8 @@ public class CLIManager {
     private int calculateTotalEstimatedTokens(Player player, DialogueSession session) {
         String modelName = plugin.getConfigManager().getCloudflareModel();
 
-        // 1. 计算 System Prompt Token
-        String systemPrompt = promptManager.getBaseSystemPrompt(player);
+        // 1. 计算 System Prompt Token（使用空列表，估算最大 Token 数）
+        String systemPrompt = promptManager.getBaseSystemPrompt(player, Collections.emptyList());
         // System Prompt 是一条完整的消息: <|im_start|>system\n{content}<|im_end|>\n
         int systemPromptTokens = DialogueSession.calculateTokens(systemPrompt, modelName);
         systemPromptTokens += DialogueSession.calculateTokens("system", modelName);
@@ -2228,7 +2250,8 @@ public class CLIManager {
         // 异步调用 AI，不显示 "Thought..." 提示，因为这是后台自动反馈
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            final String systemPrompt = promptManager.getBaseSystemPrompt(player); // 在 try 块外部定义
+            // feedbackToAI 不需要匹配新 Skills，使用空列表
+            final String systemPrompt = promptManager.getBaseSystemPrompt(player, Collections.emptyList()); // 在 try 块外部定义
             
             // 设置重试回调，向玩家显示重试提示
             ai.setRetryCallback((statusCode, retryMessage) -> {
@@ -2258,8 +2281,8 @@ public class CLIManager {
             } catch (IOException e) {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, feedback, false));
+                    // 保存重试信息（feedbackToAI 不需要 Skills）
+                    retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
 
                     String errorMsg = e.getMessage();
                     // 只显示友好的提示消息（FancyHelper > 开头的）
@@ -2296,7 +2319,7 @@ public class CLIManager {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, systemPrompt, feedback, false));
+                    retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
 
                     player.sendMessage(ChatColor.RED + "⨀ 系统内部错误: " + t.getMessage());
                     plugin.getLogger().warning("系统内部错误: " + t.getMessage());

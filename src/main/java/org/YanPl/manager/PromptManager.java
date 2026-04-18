@@ -1,22 +1,44 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
+import org.YanPl.model.Skill;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.stream.Collectors;
 
+/**
+ * Prompt 管理器
+ * 构建发给 AI 的基础系统提示，包含玩家与索引信息
+ * 支持 Skills 自动注入
+ */
 public class PromptManager {
-    /**
-     * Prompt Manager: Constructs the base system prompt for AI, including player and index information.
-     * Prompt 管理器：构建发给 AI 的基础系统提示，包含玩家与索引信息。
-     */
+    
     private final FancyHelper plugin;
+    
+    /** 最多同时加载的 Skill 数量 */
+    private static final int MAX_LOADED_SKILLS = 5;
 
     public PromptManager(FancyHelper plugin) {
         this.plugin = plugin;
     }
 
+    /**
+     * 获取基础系统提示（不包含动态加载的 Skills）
+     */
     public String getBaseSystemPrompt(org.bukkit.entity.Player player) {
+        return getBaseSystemPrompt(player, java.util.Collections.emptyList());
+    }
+
+    /**
+     * 获取基础系统提示（包含动态加载的 Skills）
+     * 
+     * @param player 玩家
+     * @param loadedSkills 已匹配的 Skill 列表（最多 MAX_LOADED_SKILLS 个）
+     * @return 完整的系统提示
+     */
+    public String getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills) {
         // 构建包含上下文（Minecraft 版本、玩家、命令索引与预设文件）的系统提示
         StringBuilder sb = new StringBuilder();
 
@@ -110,12 +132,12 @@ public class PromptManager {
 
         // 【查询类工具】
         // #search: 在互联网搜索（优先 Wiki，若无则全网搜索）。添加 widely 关键词强制全网搜索
-        // #getpreset: 获取预设文件内容。处理任务时优先查看相关预设（使用前先检查列表）
+        // #skill: 加载 Skill 知识模块。处理任务时优先检查相关 Skill（使用前先检查列表）
         // #ask: 让玩家做选择，每次只能问一个问题
         // #webread: 读取网页内容
         sb.append("[Query]\n");
         sb.append("  #search: <args>      - Internet search (Wiki priority). Add 'widely' to force general web search.\n");
-        sb.append("  #getpreset: <file>   - Read preset file. Always check Available Presets list first.\n");
+        sb.append("  #skill: <id>         - Load Skill knowledge module. Always check Available Skills list first.\n");
         sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
         sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
         sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
@@ -150,8 +172,8 @@ public class PromptManager {
             sb.append("    Example: #edit: config.yml|10-10|enabled: true|enabled: false\n");
             sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
         }
-        // 禁止用 #read 访问预设文件，必须用 #getpreset
-        sb.append("  Note: Use #getpreset for preset files, NOT #read.\n\n");
+        // 禁止用 #read 访问 Skill 文件，必须用 #skill
+        sb.append("  Note: Use #skill for Skill modules, NOT #read.\n\n");
 
         // 【记忆管理工具】
         // #remember: 记住玩家的永久偏好，禁止记录临时任务进度
@@ -180,8 +202,8 @@ public class PromptManager {
         // ==================== Usage Guide / 使用指南 ====================
         // 【使用指南】核心操作流程，精简为 3 条原则
         sb.append("[Usage Guide]\n");
-        // 1. 预设检查：先查列表，有则 #getpreset，无则 #search
-        sb.append("1. Preset check: See Available Presets below. If found → #getpreset. If not → #search.\n");
+        // 1. Skill 使用规则：只有需要执行特定插件任务时才调用 #skill 加载知识；
+        sb.append("1. Skill usage: Only call #skill when you need knowledge to complete a specific task. ");
         // 2. 兜底策略：搜索无果时尝试 #run: pluginname help 探索用法
         sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
         // 3. 复杂任务（3步以上）：先建 #todo 展示进度，再逐步执行；每步完成后立即更新状态
@@ -189,14 +211,96 @@ public class PromptManager {
         sb.append("   - After #todo: do NOT call any other tool in the same response.\n");
         sb.append("   - Update task status to completed after each step.\n\n");
 
+        // ==================== Loaded Skills / 已加载的 Skills ====================
+        // 【已加载 Skills】注入到系统提示，可被 prompt cache 命中
+        if (loadedSkills != null && !loadedSkills.isEmpty()) {
+            sb.append("<system-reminder>\n");
+            sb.append("The following skills are loaded for this request:\n\n");
+            
+            int count = 0;
+            for (Skill skill : loadedSkills) {
+                if (count >= MAX_LOADED_SKILLS) {
+                    sb.append("... (and ").append(loadedSkills.size() - MAX_LOADED_SKILLS).append(" more skills)\n");
+                    break;
+                }
+                sb.append("- ").append(skill.getId()).append(": ").append(skill.getMetadata().getName());
+                if (!skill.getMetadata().getDescription().isEmpty()) {
+                    sb.append(" - ").append(skill.getMetadata().getDescription());
+                }
+                sb.append("\n");
+                if (!skill.getMetadata().getTriggers().isEmpty()) {
+                    sb.append("  Use when: ").append(String.join(", ", skill.getMetadata().getTriggers())).append("\n");
+                }
+                sb.append("\n");
+                sb.append(skill.getContent());
+                sb.append("\n\n");
+                count++;
+            }
+            sb.append("</system-reminder>\n\n");
+        }
+
         // ==================== Environment Info / 环境信息 ====================
         // 【环境信息】放在最后：动态内容（玩家名、时间）每次变化，
-        // 放最后可确保前面的静态内容命中 prompt cache，避免缓存因开头变动而整体失效
         sb.append("[Environment]\n");
         sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
         sb.append("Player: ").append(player.getName()).append("\n");
         sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
-        sb.append("Available Presets: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedPresets())).append("\n");
+
+        // Available Skills - 根据是否已加载 Skills 调整显示
+        // 如果已自动加载 Skills，只显示未加载的 Other Skills
+        sb.append("Available Skills:\n");
+        List<String> skillSummaries = plugin.getSkillManager().getSkillSummariesForPrompt();
+        List<String> triggers = plugin.getSkillManager().getAllTriggers();
+        
+        // 获取已加载的 Skill IDs
+        java.util.Set<String> loadedSkillIds = loadedSkills != null 
+            ? loadedSkills.stream().map(Skill::getId).map(String::toLowerCase).collect(java.util.stream.Collectors.toSet())
+            : java.util.Collections.emptySet();
+        
+        if (skillSummaries.isEmpty()) {
+            sb.append("  (none)\n");
+        } else if (!loadedSkillIds.isEmpty()) {
+            // 已加载 Skills，显示未加载的 Other Skills
+            List<String> otherSkills = skillSummaries.stream()
+                .filter(s -> {
+                    // 提取 skill ID（格式：id: name - description）
+                    String id = s.split(":")[0].trim().toLowerCase();
+                    return !loadedSkillIds.contains(id);
+                })
+                .collect(Collectors.toList());
+            
+            if (otherSkills.isEmpty()) {
+                sb.append("  (all relevant skills loaded)\n");
+            } else {
+                sb.append("  (loaded: ").append(String.join(", ", loadedSkillIds)).append(")\n");
+                sb.append("  Other: ").append(String.join(", ", 
+                    otherSkills.stream().limit(10).collect(Collectors.toList())));
+                if (otherSkills.size() > 10) {
+                    sb.append("... (").append(otherSkills.size() - 10).append(" more)");
+                }
+                sb.append("\n");
+            }
+        } else if (skillSummaries.size() <= 15) {
+            // 少于此数量使用详细格式
+            for (String summary : skillSummaries) {
+                sb.append("  - ").append(summary).append("\n");
+            }
+        } else {
+            // 超过则使用精简格式 + 触发词列表
+            List<String> briefList = plugin.getSkillManager().getSkillBriefList();
+            for (String brief : briefList) {
+                sb.append("  - ").append(brief).append("\n");
+            }
+            if (!triggers.isEmpty()) {
+                sb.append("  (更多触发词: ")
+                        .append(String.join(", ", triggers.stream().limit(30).collect(Collectors.toList())));
+                if (triggers.size() > 30) {
+                    sb.append("...");
+                }
+                sb.append(")\n");
+            }
+        }
+
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
         sb.append("Current Time: ").append(now.format(formatter)).append("\n");

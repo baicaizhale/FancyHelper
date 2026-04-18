@@ -61,9 +61,16 @@ public class ResponseParser {
             if (thoughtContent == null) thoughtContent = cfResultContent.thought;
         }
 
-        // 检查 finish_reason 是否为 length（表示输出被截断）
+        // 检查 finish_reason 字段
         String finishReason = extractFinishReason(responseJson);
         boolean isTruncated = "length".equals(finishReason);
+
+        // 处理 finish_reason 为 stop 但 content 为空的情况（可能是模型错误或内容过滤）
+        if ("stop".equals(finishReason) && textContent == null) {
+            // API 返回了 stop 但没有内容，返回空字符串而不是 null
+            return new AIResponse("", thoughtContent, promptTokens, completionTokens, false);
+        }
+
         if (isTruncated && textContent == null) {
             // 当 finish_reason 为 length 且 content 为 null 时，返回空内容但标记为截断
             return new AIResponse("", thoughtContent, promptTokens, completionTokens, true);
