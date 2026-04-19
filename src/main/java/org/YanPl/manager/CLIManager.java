@@ -1683,6 +1683,235 @@ public class CLIManager {
         });
     }
 
+    private void processStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        
+        StreamingHandler streamingHandler = new StreamingHandler(plugin, player);
+        activeStreamingHandlers.put(uuid, streamingHandler);
+        
+        final StringBuilder fullResponseText = new StringBuilder();
+        final StringBuilder accumulatedText = new StringBuilder();
+        final String[] lastFormatted = {""};
+        final boolean[] responseHandled = {false};
+        final boolean[] isFirstLine = {true};
+        
+        streamingHandler.setOnChunkCallback((chunk) -> {
+            if (!plugin.isEnabled() || !player.isOnline()) return;
+            
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
+                
+                accumulatedText.append(chunk);
+                
+                String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                formatted = ColorUtil.translateCustomColors(formatted);
+                
+                int commonPrefix = 0;
+                int minLen = Math.min(lastFormatted[0].length(), formatted.length());
+                while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
+                    commonPrefix++;
+                }
+                
+                String newContent = formatted.substring(commonPrefix);
+                lastFormatted[0] = formatted;
+                
+                if (newContent.isEmpty()) return;
+                
+                String[] lines = newContent.split("\n", -1);
+                for (int i = 0; i < lines.length; i++) {
+                    String line = lines[i];
+                    boolean isLastLine = (i == lines.length - 1);
+                    
+                    if (isFirstLine[0]) {
+                        if (!line.isEmpty() || !isLastLine) {
+                            player.sendMessage(ChatColor.WHITE + "◆" + line);
+                            isFirstLine[0] = false;
+                        }
+                    } else {
+                        if (!line.isEmpty() || !isLastLine) {
+                            player.sendMessage(ChatColor.WHITE + "  " + line);
+                        }
+                    }
+                }
+            });
+        });
+        
+        streamingHandler.setOnCompleteCallback((completeText) -> {
+            if (responseHandled[0]) return;
+            responseHandled[0] = true;
+            
+            fullResponseText.append(completeText);
+            activeStreamingHandlers.remove(uuid);
+            
+            if (!plugin.isEnabled()) return;
+            
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) return;
+                
+                String response = completeText;
+                String thoughtContent = "";
+                
+                java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(response);
+                if (thoughtMatcher.find()) {
+                    thoughtContent = thoughtMatcher.group(2);
+                    response = response.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
+                } else {
+                    java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(response);
+                    if (thinkTagMatcher.find()) {
+                        thoughtContent = thinkTagMatcher.group(1);
+                        response = response.replaceAll("(?s)<think>.*?</think>", "");
+                    } else {
+                        java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(response);
+                        if (mdThoughtMatcher.find()) {
+                            thoughtContent = mdThoughtMatcher.group(1);
+                            response = response.replaceAll("(?s)```thought\n?.*?\n?```", "");
+                        }
+                    }
+                }
+                
+                response = response.replaceAll("(?i)^Thought:.*?\n", "");
+                response = response.replaceAll("(?i)^思考过程:.*?\n", "");
+                response = response.trim();
+                
+                String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
+                session.setLastThought(finalThought);
+                
+                String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                formatted = ColorUtil.translateCustomColors(formatted);
+                
+                int commonPrefix = 0;
+                int minLen = Math.min(lastFormatted[0].length(), formatted.length());
+                while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
+                    commonPrefix++;
+                }
+                
+                String remaining = formatted.substring(commonPrefix);
+                lastFormatted[0] = formatted;
+                
+                if (!remaining.isEmpty()) {
+                    String[] lines = remaining.split("\n", -1);
+                    for (int i = 0; i < lines.length; i++) {
+                        String line = lines[i];
+                        boolean isLastLine = (i == lines.length - 1);
+                        
+                        if (isFirstLine[0]) {
+                            if (!line.isEmpty() || !isLastLine) {
+                                player.sendMessage(ChatColor.WHITE + "◆" + line);
+                                isFirstLine[0] = false;
+                            }
+                        } else {
+                            if (!line.isEmpty() || !isLastLine) {
+                                player.sendMessage(ChatColor.WHITE + "  " + line);
+                            }
+                        }
+                    }
+                }
+                
+                session.addMessage("assistant", response, finalThought);
+                
+                if (!thoughtContent.isEmpty()) {
+                    String modelName = plugin.getConfigManager().getCloudflareModel();
+                    int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
+                    session.addThoughtTokens(thoughtTokens);
+                }
+                
+                isGenerating.put(uuid, false);
+                generationStates.put(uuid, GenerationStatus.COMPLETED);
+                generationStartTimes.remove(uuid);
+                
+                String toolCall = extractToolCall(response);
+                if (!toolCall.isEmpty()) {
+                    executeTool(player, toolCall);
+                } else {
+                    checkTokenWarning(player, session);
+                }
+            });
+        });
+        
+        streamingHandler.setOnErrorCallback((error) -> {
+            if (responseHandled[0]) return;
+            responseHandled[0] = true;
+            
+            activeStreamingHandlers.remove(uuid);
+            plugin.getCloudErrorReport().report(error);
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
+                player.sendMessage(ChatColor.RED + "⨀ 流式输出错误: " + error.getMessage());
+                isGenerating.put(uuid, false);
+                generationStates.put(uuid, GenerationStatus.ERROR);
+                generationStartTimes.remove(uuid);
+            });
+        });
+        
+        String completeText = ai.chatStreaming(session, promptManager.getBaseSystemPrompt(player, matchedSkills), streamingHandler);
+        
+        if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
+            responseHandled[0] = true;
+            
+            String response = completeText;
+            String thoughtContent = "";
+            
+            java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(response);
+            if (thoughtMatcher.find()) {
+                thoughtContent = thoughtMatcher.group(2);
+                response = response.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
+            } else {
+                java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(response);
+                if (thinkTagMatcher.find()) {
+                    thoughtContent = thinkTagMatcher.group(1);
+                    response = response.replaceAll("(?s)<think>.*?</think>", "");
+                } else {
+                    java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(response);
+                    if (mdThoughtMatcher.find()) {
+                        thoughtContent = mdThoughtMatcher.group(1);
+                        response = response.replaceAll("(?s)```thought\n?.*?\n?```", "");
+                    }
+                }
+            }
+            
+            response = response.replaceAll("(?i)^Thought:.*?\n", "");
+            response = response.replaceAll("(?i)^思考过程:.*?\n", "");
+            response = response.trim();
+            
+            final String finalResponse = response;
+            String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
+            session.setLastThought(finalThought);
+            session.addMessage("assistant", finalResponse, finalThought);
+            
+            if (!thoughtContent.isEmpty()) {
+                String modelName = plugin.getConfigManager().getCloudflareModel();
+                int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
+                session.addThoughtTokens(thoughtTokens);
+            }
+            
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                isGenerating.put(uuid, false);
+                generationStates.put(uuid, GenerationStatus.COMPLETED);
+                generationStartTimes.remove(uuid);
+                
+                String toolCall = extractToolCall(finalResponse);
+                if (!toolCall.isEmpty()) {
+                    executeTool(player, toolCall);
+                } else {
+                    checkTokenWarning(player, session);
+                }
+            });
+        }
+    }
+
+    private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
+        String systemPrompt = promptManager.getBaseSystemPrompt(player, matchedSkills);
+        AIResponse response = ai.chat(sessions.get(player.getUniqueId()), systemPrompt);
+        
+        if (!plugin.isEnabled()) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            handleAIResponse(player, response);
+        });
+    }
+
     private void processAIMessage(Player player, String message) {
         UUID uuid = player.getUniqueId();
         interruptedToolCalls.remove(uuid);
@@ -1742,147 +1971,10 @@ public class CLIManager {
             });
             
             try {
-                StreamingHandler streamingHandler = new StreamingHandler(plugin, player);
-                activeStreamingHandlers.put(uuid, streamingHandler);
-                
-                final StringBuilder fullResponseText = new StringBuilder();
-                final StringBuilder accumulatedText = new StringBuilder();
-                final String[] lastFormatted = {""};
-                final boolean[] responseHandled = {false};
-                final boolean[] isFirstLine = {true};
-                
-                streamingHandler.setOnChunkCallback((chunk) -> {
-                    if (!plugin.isEnabled() || !player.isOnline()) return;
-                    
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
-                        
-                        accumulatedText.append(chunk);
-                        
-                        String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
-                        formatted = ColorUtil.translateCustomColors(formatted);
-                        
-                        int commonPrefix = 0;
-                        int minLen = Math.min(lastFormatted[0].length(), formatted.length());
-                        while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
-                            commonPrefix++;
-                        }
-                        
-                        String newContent = formatted.substring(commonPrefix);
-                        lastFormatted[0] = formatted;
-                        
-                        if (newContent.isEmpty()) return;
-                        
-                        String[] lines = newContent.split("\n", -1);
-                        for (int i = 0; i < lines.length; i++) {
-                            String line = lines[i];
-                            boolean isLastLine = (i == lines.length - 1);
-                            
-                            if (isFirstLine[0]) {
-                                if (!line.isEmpty() || !isLastLine) {
-                                    player.sendMessage(ChatColor.WHITE + "◆" + line);
-                                    isFirstLine[0] = false;
-                                }
-                            } else {
-                                if (!line.isEmpty() || !isLastLine) {
-                                    player.sendMessage(ChatColor.WHITE + "  " + line);
-                                }
-                            }
-                        }
-                    });
-                });
-                
-                streamingHandler.setOnCompleteCallback((completeText) -> {
-                    if (responseHandled[0]) return;
-                    responseHandled[0] = true;
-                    
-                    fullResponseText.append(completeText);
-                    activeStreamingHandlers.remove(uuid);
-                    
-                    if (!plugin.isEnabled() || !player.isOnline()) return;
-                    
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        if (!player.isOnline()) return;
-                        
-                        String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
-                        formatted = ColorUtil.translateCustomColors(formatted);
-                        
-                        int commonPrefix = 0;
-                        int minLen = Math.min(lastFormatted[0].length(), formatted.length());
-                        while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
-                            commonPrefix++;
-                        }
-                        
-                        String remaining = formatted.substring(commonPrefix);
-                        lastFormatted[0] = formatted;
-                        
-                        if (!remaining.isEmpty()) {
-                            String[] lines = remaining.split("\n", -1);
-                            for (int i = 0; i < lines.length; i++) {
-                                String line = lines[i];
-                                boolean isLastLine = (i == lines.length - 1);
-                                
-                                if (isFirstLine[0]) {
-                                    if (!line.isEmpty() || !isLastLine) {
-                                        player.sendMessage(ChatColor.WHITE + "◆" + line);
-                                        isFirstLine[0] = false;
-                                    }
-                                } else {
-                                    if (!line.isEmpty() || !isLastLine) {
-                                        player.sendMessage(ChatColor.WHITE + "  " + line);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        session.addMessage("assistant", completeText);
-                        isGenerating.put(uuid, false);
-                        generationStates.put(uuid, GenerationStatus.COMPLETED);
-                        generationStartTimes.remove(uuid);
-                        
-                        String toolCall = extractToolCall(completeText);
-                        if (!toolCall.isEmpty()) {
-                            executeTool(player, toolCall);
-                        } else {
-                            checkTokenWarning(player, session);
-                        }
-                    });
-                });
-                
-                streamingHandler.setOnErrorCallback((error) -> {
-                    if (responseHandled[0]) return;
-                    responseHandled[0] = true;
-                    
-                    activeStreamingHandlers.remove(uuid);
-                    plugin.getCloudErrorReport().report(error);
-                    if (!plugin.isEnabled()) return;
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
-                        player.sendMessage(ChatColor.RED + "⨀ 流式输出错误: " + error.getMessage());
-                        isGenerating.put(uuid, false);
-                        generationStates.put(uuid, GenerationStatus.ERROR);
-                        generationStartTimes.remove(uuid);
-                    });
-                });
-                
-                String completeText = ai.chatStreaming(session, promptManager.getBaseSystemPrompt(player, matchedSkills), streamingHandler);
-                
-                if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
-                    responseHandled[0] = true;
-                    session.addMessage("assistant", completeText);
-                    if (!plugin.isEnabled()) return;
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        isGenerating.put(uuid, false);
-                        generationStates.put(uuid, GenerationStatus.COMPLETED);
-                        generationStartTimes.remove(uuid);
-                        
-                        String toolCall = extractToolCall(completeText);
-                        if (!toolCall.isEmpty()) {
-                            executeTool(player, toolCall);
-                        } else {
-                            checkTokenWarning(player, session);
-                        }
-                    });
+                if (plugin.getConfigManager().isStreamingEnabled()) {
+                    processStreamingMessage(player, message, matchedSkills);
+                } else {
+                    processNonStreamingMessage(player, message, matchedSkills);
                 }
             } catch (IOException e) {
                 activeStreamingHandlers.remove(uuid);

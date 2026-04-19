@@ -443,6 +443,14 @@ public class ConfigManager {
     }
 
     /**
+     * 获取是否启用流式输出
+     * @return 是否启用流式输出
+     */
+    public boolean isStreamingEnabled() {
+        return config.getBoolean("settings.streaming", true);
+    }
+
+    /**
      * 获取 SMART 模式的风险阈值
      * @return 风险阈值（0-100）
      */
