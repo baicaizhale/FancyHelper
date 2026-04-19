@@ -13,12 +13,16 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DialogueSession {
+
+    private final Set<String> loadedSkillIds = new HashSet<>();
     /**
      * 对话模式
      */
@@ -456,6 +460,7 @@ public class DialogueSession {
 
         // 清空历史并添加摘要和最近的消息
         history.clear();
+        loadedSkillIds.clear();
         history.add(new Message("system", summary));
         history.addAll(recentMessages);
     }
@@ -475,6 +480,7 @@ public class DialogueSession {
 
         // 清空历史并添加AI摘要和最近的消息
         history.clear();
+        loadedSkillIds.clear();
         
         // 添加AI生成的摘要作为system消息
         String summary = "[上下文摘要]: " + aiSummary;
@@ -561,6 +567,46 @@ public class DialogueSession {
         public long getThinkingTimeMs() {
             return thinkingTimeMs;
         }
+    }
+
+    /**
+     * 添加 Skill 上下文到对话中（引用式）
+     * @param skill Skill 对象
+     */
+    public boolean addSkillContext(org.YanPl.model.Skill skill) {
+        if (skill == null) {
+            return false;
+        }
+        String skillId = skill.getId().toLowerCase();
+        if (loadedSkillIds.contains(skillId)) {
+            return false;
+        }
+
+        loadedSkillIds.add(skillId);
+
+        // 创建引用式消息，不污染历史
+        String skillRef = "[Skill Reference: " + skill.getMetadata().getName() + " v" + skill.getMetadata().getVersion() + "]";
+        Message skillMessage = new Message("system", skillRef);
+        history.add(skillMessage);
+
+        // 记录到日志
+        appendLog("SKILL_CONTEXT", "Loaded skill: " + skill.getId() + " (" + skill.getMetadata().getName() + ")");
+        return true;
+    }
+
+    /**
+     * 获取 Skill 内容（用于工具调用时动态获取）
+     * 需要外部传入 SkillManager
+     */
+    public String getSkillContent(String skillId, org.YanPl.manager.SkillManager skillManager) {
+        if (skillManager == null) {
+            return "";
+        }
+        org.YanPl.model.Skill skill = skillManager.getSkill(skillId);
+        if (skill == null) {
+            return "";
+        }
+        return skill.getFormattedContent();
     }
 
     public static class Message {

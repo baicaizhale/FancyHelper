@@ -1,8 +1,8 @@
 name: FancyHelper
-version: 3.7.1
+version: 3.7.2
 main: org.YanPl.FancyHelper
 api-version: '1.18'
-softdepend: [ProtocolLib]
+softdepend: [ ProtocolLib ]
 authors: [ baicaizhale , zip8919 ]
 commands:
   fancyhelper:
@@ -10,11 +10,17 @@ commands:
     aliases: [cli, fancy]
 permissions:
   fancyhelper.cli:
-    description: 允许使用 FancyHelper CLI 模式
+    description: 允许进入 FancyHelper CLI
     default: op
   fancyhelper.reload:
-    description: 允许重新加载 FancyHelper 配置
+    description: 允许重载 FancyHelper 配置
     default: op
   fancyhelper.notice:
     description: 允许查看 FancyHelper 公告
+    default: op
+  fancyhelper.skill.use:
+    description: 允许使用 Skill 命令
+    default: op
+  fancyhelper.skill.admin:
+    description: 允许管理 Skill
     default: op

@@ -1,0 +1,55 @@
+---
+name: "EssentialsX 基本命令"
+description: "EssentialsX 插件常用命令，包含传送、经济、游戏模式等"
+triggers:
+  - "essentials"
+  - "ess"
+  - "经济"
+  - "传送"
+  - "home"
+  - "warp"
+  - "spawn"
+auto_trigger: true
+author: "FancyHelper Team"
+version: "1.0.0"
+categories:
+  - "plugin"
+  - "economy"
+  - "teleport"
+---
+
+# EssentialsX 基本命令使用方法
+
+## 插件检查
+
+在使用以下命令前，请先检查服务器是否已安装 EssentialsX 插件。
+
+检查方法：尝试执行 `/essentials` 命令，如果返回版本信息则说明插件已安装。
+
+如果插件未安装，请告知玩家使用 Minecraft 原版命令来替代（如 `/gamemode`、`/tp`、`/give` 等）。
+
+## 常用命令
+
+- `/essentials` - 查看插件版本及基本信息
+- `/ess reload` - 重新加载 Essentials 配置文件
+- `/gc` - 查看服务器资源占用情况 (内存, TPS, 实体数)
+- `/help [页码|搜索词]` - 查看帮助信息
+- `/gamemode <mode> [player]` - 切换模式 (简写 `/gm`)
+- `/tp <player> [target]` - 传送玩家
+- `/setspawn [group]` - 设置出生点
+- `/setwarp <name>` - 设置地标
+- `/warp <name>` - 传送到地标
+- `/home [name]` - 回到家
+- `/sethome [name]` - 设置家
+- `/back` - 回到上一个位置
+- `/money [player]` - 查看余额
+- `/eco <give|take|set> <player> <amount>` - 经济管理 (管理员)
+- `/invsee <player>` - 查看玩家背包
+- `/socialspy` - 开启/关闭私聊监视 (管理员)
+- `/sudo <player> <command>` - 强制玩家执行命令
+- `/vanish` - 开启/关闭隐身模式
+- `/kit [name]` - 领取礼包
+
+## 注意
+
+EssentialsX 包含多个模块：Chat (聊天格式), Spawn (出生点控制), Protect (基础保护), AntiBuild (建筑权限) 等。

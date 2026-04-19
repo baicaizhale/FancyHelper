@@ -1,0 +1,43 @@
+---
+name: "mcMMO 技能树"
+description: "mcMMO 技能系统的完整使用指南"
+triggers:
+  - "mcmmo"
+  - "技能"
+  - "等级"
+  - "经验"
+  - "mcmmo技能"
+auto_trigger: true
+author: "FancyHelper Team"
+version: "1.0.0"
+categories:
+  - "plugin"
+  - "skill"
+  - "rpg"
+---
+
+# mcMMO 技能树使用
+
+## 插件检查
+
+在使用以下命令前，请先检查服务器是否已安装 mcMMO 插件。
+
+检查方法：尝试执行 `/mcmmo version` 命令，如果返回版本信息则说明插件已安装。
+
+如果插件未安装，请告知玩家无法使用技能系统和等级功能。
+
+## 常用命令
+
+- `/mcmmo help` - 查看 mcMMO 帮助菜单
+- `/mcstats` - 查看自己的技能统计和等级
+- `/mctop [技能名]` - 查看技能排行榜
+- `/inspect <玩家>` - 查看其他玩家的 mcMMO 统计
+- `/mcability` - 切换右键触发技能的开启/关闭
+- `/party [创建|加入|离开|聊天]` - 组队系统相关命令
+- `/mmoedit <玩家> <技能> <等级>` - 修改玩家技能等级 (管理员)
+- `/addxp <玩家> <技能> <数值>` - 给玩家增加技能经验 (管理员)
+- `/skillreset <玩家> <技能>` - 重置玩家技能等级 (管理员)
+
+## 主要技能
+
+挖掘 (Excavation), 采矿 (Mining), 伐木 (Woodcutting), 修复 (Repair), 杂技 (Acrobatics), 剑术 (Swords), 弓箭 (Archery), 驯兽 (Taming) 等。

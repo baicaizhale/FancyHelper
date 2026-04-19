@@ -1,0 +1,50 @@
+---
+name: "LuckPerms 权限管理"
+description: "LuckPerms 权限管理插件的完整使用指南"
+triggers:
+  - "luckperms"
+  - "lp"
+  - "权限"
+  - "permission"
+  - "权限组"
+auto_trigger: true
+author: "FancyHelper Team"
+version: "1.0.0"
+categories:
+  - "plugin"
+  - "permission"
+  - "admin"
+---
+
+# LuckPerms 权限管理使用方法
+
+## 插件检查
+
+在使用以下命令前，请先检查服务器是否已安装 LuckPerms 插件。
+
+检查方法：尝试执行 `/lp version` 命令，如果返回版本信息则说明插件已安装。
+
+如果插件未安装，请告知玩家使用 Minecraft 原版命令（如 `/op`、`/deop`）来管理权限。
+
+## 常用命令
+
+### 用户管理
+- `/lp user <player> permission set <permission> [true|false]` - 为玩家设置权限
+- `/lp user <player> parent add <group>` - 将玩家加入某个权限组
+- `/lp user <player> info` - 查看玩家的权限和组信息
+
+### 权限组管理
+- `/lp group <group> permission set <permission> [true|false]` - 为权限组设置权限
+- `/lp group <group> parent add <parent_group>` - 设置权限组继承关系
+- `/lp creategroup <name>` - 创建一个新的权限组
+- `/lp listgroups` - 列出所有权限组
+
+### 高级功能
+- `/lp editor` - 开启网页编辑器（最推荐的编辑方式，会生成一个链接）
+- `/lp verbose on/off` - 开启/关闭详细日志（用于调试某个操作需要什么权限）
+- `/lp search <permission>` - 搜索谁拥有某个权限
+- `/lp reload` - 重新加载插件配置
+
+## 注意
+
+LuckPerms 是目前最主流的权限插件，强烈建议使用 `/lp editor` 进行可视化编辑。

@@ -96,6 +96,9 @@ public class ToolExecutor {
             case "#getpreset":
                 handleGetTool(player, args);
                 break;
+            case "#skill":
+                handleSkillTool(player, args, session);
+                break;
             
             // 交互工具
             case "#ask":
@@ -1166,6 +1169,47 @@ public class ToolExecutor {
     }
 
     /**
+     * 处理 #skill 工具
+     */
+    private void handleSkillTool(Player player, String args, DialogueSession session) {
+        String skillId = args.trim().toLowerCase();
+        
+        if (skillId.isEmpty()) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 请提供 Skill ID");
+            return;
+        }
+        
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+        
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+        
+        if (skill == null) {
+            // 尝试搜索
+            List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
+            if (matches.isEmpty()) {
+                cliManager.feedbackToAI(player, "#skill_result: 错误 - 未找到 Skill: " + skillId);
+                return;
+            }
+            skill = matches.get(0);
+        }
+        
+        // 记录玩家已加载此 Skill
+        plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
+
+        // 将 Skill 内容加入对话上下文
+        boolean added = false;
+        if (session != null) {
+            added = session.addSkillContext(skill);
+        }
+        
+        // 反馈给 AI
+        String suffix = added ? "" : " (已存在)";
+        String result = "#skill_result: 已加载 Skill [" + skill.getMetadata().getName() + "]" + suffix + "\n\n"
+                + skill.getFormattedContent();
+        cliManager.feedbackToAI(player, result);
+    }
+
+    /**
      * AskUserQuestion - 请求数据类
      * 参考 Claude 的 AskUserQuestion 工具结构（单问题版本）
      */
@@ -1616,12 +1660,12 @@ public class ToolExecutor {
                 .uri(java.net.URI.create(url))
                 .timeout(java.time.Duration.ofSeconds(45))
                 // 基础头信息
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
                 .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-                .header("Accept-Encoding", "gzip, deflate, br")
+                .header("Accept-Encoding", "gzip, deflate")
                 // 安全相关头
-                .header("Sec-Ch-Ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
+                .header("Sec-Ch-Ua", "\"Google Chrome\";v=\"135\", \"Not:A-Brand\";v=\"99\", \"Chromium\";v=\"135\"")
                 .header("Sec-Ch-Ua-Mobile", "?0")
                 .header("Sec-Ch-Ua-Platform", "\"Windows\"")
                 // 浏览行为头
