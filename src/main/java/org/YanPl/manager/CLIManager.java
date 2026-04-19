@@ -6,6 +6,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.api.CloudFlareAI;
+import org.YanPl.api.StreamingHandler;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
 import org.YanPl.model.Skill;
@@ -55,6 +56,7 @@ public class CLIManager {
     private final Map<UUID, String> pendingCommands = new ConcurrentHashMap<>();
     private final Map<UUID, String> interruptedToolCalls = new ConcurrentHashMap<>();
     private final Map<UUID, RetryInfo> retryInfoMap = new ConcurrentHashMap<>();
+    private final Map<UUID, StreamingHandler> activeStreamingHandlers = new ConcurrentHashMap<>();
 
     /**
      * 重试信息类
@@ -1340,6 +1342,13 @@ public class CLIManager {
             if (message.equalsIgnoreCase("stop")) {
                 boolean interrupted = false;
                 interruptedToolCalls.remove(uuid);
+                
+                StreamingHandler activeHandler = activeStreamingHandlers.get(uuid);
+                if (activeHandler != null) {
+                    activeHandler.cancel();
+                    activeStreamingHandlers.remove(uuid);
+                }
+                
                 if (isGenerating.getOrDefault(uuid, false)) {
                     isGenerating.put(uuid, false);
                     recordThinkingTime(uuid);
@@ -1481,6 +1490,7 @@ public class CLIManager {
                     handleAIResponse(player, response);
                 });
             } catch (IOException e) {
+                activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -1518,6 +1528,7 @@ public class CLIManager {
                     player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                 });
             } catch (Throwable t) {
+                activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -1715,17 +1726,14 @@ public class CLIManager {
         }
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // 设置重试回调，向玩家显示重试提示
             ai.setRetryCallback((statusCode, retryMessage) -> {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (player.isOnline()) {
                         TextComponent retryMsg;
                         if (statusCode == 429) {
-                            // 429 错误使用黄色⁕ 白色
                             retryMsg = new TextComponent(ChatColor.YELLOW + "⁕ " + ChatColor.WHITE + retryMessage);
                         } else {
-                            // 其他错误使用灰色⁕
                             retryMsg = new TextComponent(ChatColor.GRAY + "⁕ " + retryMessage);
                         }
                         player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.CHAT, retryMsg);
@@ -1734,11 +1742,150 @@ public class CLIManager {
             });
             
             try {
-                // 【Skill 自动注入】将匹配的 Skills 传入系统提示构建
-                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player, matchedSkills));
-                if (!plugin.isEnabled()) return;
-                Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response));
+                StreamingHandler streamingHandler = new StreamingHandler(plugin, player);
+                activeStreamingHandlers.put(uuid, streamingHandler);
+                
+                final StringBuilder fullResponseText = new StringBuilder();
+                final StringBuilder accumulatedText = new StringBuilder();
+                final String[] lastFormatted = {""};
+                final boolean[] responseHandled = {false};
+                final boolean[] isFirstLine = {true};
+                
+                streamingHandler.setOnChunkCallback((chunk) -> {
+                    if (!plugin.isEnabled() || !player.isOnline()) return;
+                    
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
+                        
+                        accumulatedText.append(chunk);
+                        
+                        String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                        formatted = ColorUtil.translateCustomColors(formatted);
+                        
+                        int commonPrefix = 0;
+                        int minLen = Math.min(lastFormatted[0].length(), formatted.length());
+                        while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
+                            commonPrefix++;
+                        }
+                        
+                        String newContent = formatted.substring(commonPrefix);
+                        lastFormatted[0] = formatted;
+                        
+                        if (newContent.isEmpty()) return;
+                        
+                        String[] lines = newContent.split("\n", -1);
+                        for (int i = 0; i < lines.length; i++) {
+                            String line = lines[i];
+                            boolean isLastLine = (i == lines.length - 1);
+                            
+                            if (isFirstLine[0]) {
+                                if (!line.isEmpty() || !isLastLine) {
+                                    player.sendMessage(ChatColor.WHITE + "◆" + line);
+                                    isFirstLine[0] = false;
+                                }
+                            } else {
+                                if (!line.isEmpty() || !isLastLine) {
+                                    player.sendMessage(ChatColor.WHITE + "  " + line);
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                streamingHandler.setOnCompleteCallback((completeText) -> {
+                    if (responseHandled[0]) return;
+                    responseHandled[0] = true;
+                    
+                    fullResponseText.append(completeText);
+                    activeStreamingHandlers.remove(uuid);
+                    
+                    if (!plugin.isEnabled() || !player.isOnline()) return;
+                    
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (!player.isOnline()) return;
+                        
+                        String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                        formatted = ColorUtil.translateCustomColors(formatted);
+                        
+                        int commonPrefix = 0;
+                        int minLen = Math.min(lastFormatted[0].length(), formatted.length());
+                        while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
+                            commonPrefix++;
+                        }
+                        
+                        String remaining = formatted.substring(commonPrefix);
+                        lastFormatted[0] = formatted;
+                        
+                        if (!remaining.isEmpty()) {
+                            String[] lines = remaining.split("\n", -1);
+                            for (int i = 0; i < lines.length; i++) {
+                                String line = lines[i];
+                                boolean isLastLine = (i == lines.length - 1);
+                                
+                                if (isFirstLine[0]) {
+                                    if (!line.isEmpty() || !isLastLine) {
+                                        player.sendMessage(ChatColor.WHITE + "◆" + line);
+                                        isFirstLine[0] = false;
+                                    }
+                                } else {
+                                    if (!line.isEmpty() || !isLastLine) {
+                                        player.sendMessage(ChatColor.WHITE + "  " + line);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        session.addMessage("assistant", completeText);
+                        isGenerating.put(uuid, false);
+                        generationStates.put(uuid, GenerationStatus.COMPLETED);
+                        generationStartTimes.remove(uuid);
+                        
+                        String toolCall = extractToolCall(completeText);
+                        if (!toolCall.isEmpty()) {
+                            executeTool(player, toolCall);
+                        } else {
+                            checkTokenWarning(player, session);
+                        }
+                    });
+                });
+                
+                streamingHandler.setOnErrorCallback((error) -> {
+                    if (responseHandled[0]) return;
+                    responseHandled[0] = true;
+                    
+                    activeStreamingHandlers.remove(uuid);
+                    plugin.getCloudErrorReport().report(error);
+                    if (!plugin.isEnabled()) return;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
+                        player.sendMessage(ChatColor.RED + "⨀ 流式输出错误: " + error.getMessage());
+                        isGenerating.put(uuid, false);
+                        generationStates.put(uuid, GenerationStatus.ERROR);
+                        generationStartTimes.remove(uuid);
+                    });
+                });
+                
+                String completeText = ai.chatStreaming(session, promptManager.getBaseSystemPrompt(player, matchedSkills), streamingHandler);
+                
+                if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
+                    responseHandled[0] = true;
+                    session.addMessage("assistant", completeText);
+                    if (!plugin.isEnabled()) return;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        isGenerating.put(uuid, false);
+                        generationStates.put(uuid, GenerationStatus.COMPLETED);
+                        generationStartTimes.remove(uuid);
+                        
+                        String toolCall = extractToolCall(completeText);
+                        if (!toolCall.isEmpty()) {
+                            executeTool(player, toolCall);
+                        } else {
+                            checkTokenWarning(player, session);
+                        }
+                    });
+                }
             } catch (IOException e) {
+                activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -1776,6 +1923,7 @@ public class CLIManager {
                     session.removeLastMessage();
                 });
             } catch (Throwable t) {
+                activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -2015,6 +2163,114 @@ public class CLIManager {
                 checkTokenWarning(player, session);
             }
         }
+    }
+
+    /**
+     * 从AI响应中提取工具调用
+     * @param response AI响应文本
+     * @return 工具调用字符串，如果没有则返回空字符串
+     */
+    private String extractToolCall(String response) {
+        String cleanResponse = response;
+        
+        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(cleanResponse);
+        if (thoughtMatcher.find()) {
+            cleanResponse = cleanResponse.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
+        } else {
+            java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(cleanResponse);
+            if (thinkTagMatcher.find()) {
+                cleanResponse = cleanResponse.replaceAll("(?s)<think>.*?</think>", "");
+            } else {
+                java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(cleanResponse);
+                if (mdThoughtMatcher.find()) {
+                    cleanResponse = cleanResponse.replaceAll("(?s)```thought\n?.*?\n?```", "");
+                }
+            }
+        }
+        
+        cleanResponse = cleanResponse.replaceAll("(?i)^Thought:.*?\n", "");
+        cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
+        cleanResponse = cleanResponse.trim();
+        
+        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#skill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
+
+        int currentPos = 0;
+        while (currentPos < cleanResponse.length()) {
+            int hashIndex = cleanResponse.indexOf("#", currentPos);
+            if (hashIndex == -1) break;
+
+            boolean isValidStart = true;
+            if (hashIndex > 0) {
+                char prev = cleanResponse.charAt(hashIndex - 1);
+                if (Character.isLetterOrDigit(prev)) {
+                    isValidStart = false;
+                }
+            }
+
+            if (isValidStart) {
+                String potentialToolPart = cleanResponse.substring(hashIndex).trim();
+                for (String tool : knownTools) {
+                    if (potentialToolPart.toLowerCase().startsWith(tool)) {
+                        String remainingAfterTool = potentialToolPart.substring(tool.length()).trim();
+
+                        if (remainingAfterTool.startsWith(":") || remainingAfterTool.startsWith(" ")) {
+                            int splitIndex = remainingAfterTool.startsWith(":") ? 1 : 0;
+                            remainingAfterTool = remainingAfterTool.substring(splitIndex).trim();
+
+                            if (remainingAfterTool.startsWith("[")) {
+                                int bracketDepth = 0;
+                                int endIndex = -1;
+                                for (int i = 0; i < remainingAfterTool.length(); i++) {
+                                    char c = remainingAfterTool.charAt(i);
+                                    if (c == '[') bracketDepth++;
+                                    else if (c == ']') bracketDepth--;
+
+                                    if (bracketDepth == 0) {
+                                        endIndex = i + 1;
+                                        break;
+                                    }
+                                }
+                                if (endIndex != -1) {
+                                    return tool + ":" + remainingAfterTool.substring(0, endIndex);
+                                } else {
+                                    int lineEnd = remainingAfterTool.indexOf('\n');
+                                    if (lineEnd != -1) {
+                                        return tool + ":" + remainingAfterTool.substring(0, lineEnd);
+                                    } else {
+                                        return potentialToolPart;
+                                    }
+                                }
+                            } else {
+                                int lineEnd = remainingAfterTool.indexOf('\n');
+                                int nextToolPos = -1;
+                                for (String nextTool : knownTools) {
+                                    int pos = remainingAfterTool.toLowerCase().indexOf(nextTool);
+                                    if (pos != -1 && (nextToolPos == -1 || pos < nextToolPos)) {
+                                        nextToolPos = pos;
+                                    }
+                                }
+
+                                int paramEnd = lineEnd;
+                                if (nextToolPos != -1 && (paramEnd == -1 || nextToolPos < paramEnd)) {
+                                    paramEnd = nextToolPos;
+                                }
+
+                                if (paramEnd != -1) {
+                                    return tool + ":" + remainingAfterTool.substring(0, paramEnd).trim();
+                                } else {
+                                    return potentialToolPart;
+                                }
+                            }
+                        } else {
+                            return tool;
+                        }
+                    }
+                }
+            }
+            currentPos = hashIndex + 1;
+        }
+        
+        return "";
     }
 
     /**
@@ -2553,7 +2809,7 @@ public class CLIManager {
     }
 
     /**
-     * 将 Markdown 粗体语法 **文本** 转换为 Minecraft 颜色代码格式 §l文本§r
+     * 将 Markdown 粗体语法 **文本** 转换为 Minecraft 颜色代码格式 §z文本§r
      * @param text 原始文本
      * @return 转换后的文本
      */
@@ -2561,9 +2817,9 @@ public class CLIManager {
         if (text == null || text.isEmpty()) {
             return text;
         }
-        // 使用正则表达式匹配 **文本** 并替换为 §l文本§r
+        // 使用正则表达式匹配 **文本** 并替换为 §z文本§r
         // 使用非贪婪匹配避免跨多个粗体块的问题
-        return text.replaceAll("\\*\\*(.+?)\\*\\*", "§l$1§r");
+        return text.replaceAll("\\*\\*(.+?)\\*\\*", "§z$1§r");
     }
 
     private void sendAgreement(Player player) {

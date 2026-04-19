@@ -9,6 +9,7 @@ import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -1165,6 +1166,152 @@ public class CloudFlareAI {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("压缩被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用流式输出进行对话
+     * @param session 对话会话
+     * @param systemPrompt 系统提示
+     * @param streamingHandler 流式处理器
+     * @return 完整的响应文本
+     */
+    public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        if (plugin.getConfigManager().isOpenAiEnabled()) {
+            return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
+        }
+        return chatStreamingWithCloudFlare(session, systemPrompt, streamingHandler);
+    }
+
+    /**
+     * 使用 OpenAI 兼容 API 进行流式对话
+     */
+    private String chatStreamingWithOpenAI(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
+        String model = plugin.getConfigManager().getOpenAiModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("错误: 请先在配置文件中设置 openai.api_key。");
+        }
+
+        if (model == null || model.isEmpty()) {
+            model = "gpt-4o";
+        }
+
+        if (!apiUrl.contains("/chat/completions")) {
+            if (apiUrl.contains("aliyuncs.com")) {
+                apiUrl += apiUrl.endsWith("/") ? "compatible-mode/v1/chat/completions" : "/compatible-mode/v1/chat/completions";
+            } else {
+                apiUrl += apiUrl.endsWith("/") ? "chat/completions" : "/chat/completions";
+            }
+        }
+
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 4096);
+        bodyJson.addProperty("stream", true);
+
+        if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
+            bodyJson.addProperty("reasoning_effort", "medium");
+        }
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            
+            if (response.statusCode() != 200) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
+            }
+
+            return streamingHandler.processStream(response);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("流式调用被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 CloudFlare Workers AI 进行流式对话
+     */
+    private String chatStreamingWithCloudFlare(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
+        String model = plugin.getConfigManager().getCloudflareModel();
+
+        if (cfKey == null || cfKey.isEmpty()) {
+            throw new IOException("错误: 请先在配置文件中设置 CloudFlare cf_key。");
+        }
+
+        if (model == null || model.isEmpty()) {
+            model = "@cf/openai/gpt-oss-120b";
+        }
+
+        String accountId;
+        try {
+            accountId = fetchAccountId();
+        } catch (IOException e) {
+            plugin.getCloudErrorReport().report(e);
+            throw e;
+        }
+
+        boolean useResponsesApi = model.contains("gpt-oss");
+        String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
+
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.addProperty("max_tokens", 4096);
+        bodyJson.addProperty("stream", true);
+
+        if (useResponsesApi) {
+            bodyJson.add("input", messagesArray);
+            JsonObject reasoning = new JsonObject();
+            reasoning.addProperty("effort", "medium");
+            reasoning.addProperty("summary", "detailed");
+            bodyJson.add("reasoning", reasoning);
+        } else {
+            bodyJson.add("messages", messagesArray);
+            if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
+                bodyJson.addProperty("reasoning_effort", "medium");
+            }
+        }
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + cfKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            
+            if (response.statusCode() != 200) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
+            }
+
+            return streamingHandler.processStream(response);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("流式调用被中断: " + e.getMessage(), e);
         }
     }
 }
