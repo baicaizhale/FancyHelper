@@ -27,6 +27,7 @@ public class StreamingHandler {
 
     private final FancyHelper plugin;
     private final StringBuffer buffer;  // 线程安全的 StringBuffer 替代 StringBuilder
+    private final StringBuilder thoughtContent;  // 累积思考内容（reasoning_content）
     private final AtomicBoolean isCancelled;
     private final Gson gson;
     private volatile Consumer<String> onChunkCallback;
@@ -44,6 +45,7 @@ public class StreamingHandler {
     public StreamingHandler(FancyHelper plugin, Player player) {
         this.plugin = plugin;
         this.buffer = new StringBuffer();  // 线程安全的 StringBuffer
+        this.thoughtContent = new StringBuilder();
         this.isCancelled = new AtomicBoolean(false);
         this.errorOccurred = false;
         this.gson = new Gson();
@@ -88,6 +90,7 @@ public class StreamingHandler {
             onCompleteCallback = null;
             onErrorCallback = null;
             buffer.setLength(0);  // 清空缓冲
+            thoughtContent.setLength(0);  // 清空思考内容
             
             logger.info("[Stream] 流式输出已取消并清理资源");
         } catch (Exception e) {
@@ -109,6 +112,14 @@ public class StreamingHandler {
      */
     public boolean hasError() {
         return errorOccurred;
+    }
+
+    /**
+     * 获取累积的思考内容（来自 reasoning_content 字段）
+     * @return 思考内容字符串
+     */
+    public String getThoughtContent() {
+        return thoughtContent.toString();
     }
     
     /**
@@ -268,6 +279,10 @@ public class StreamingHandler {
                         if (delta.has("content") && !delta.get("content").isJsonNull()) {
                             return delta.get("content").getAsString();
                         }
+                        // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
+                        if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
+                            thoughtContent.append(delta.get("reasoning_content").getAsString());
+                        }
                     }
                     if (choice.has("text") && !choice.get("text").isJsonNull()) {
                         return choice.get("text").getAsString();
@@ -281,8 +296,20 @@ public class StreamingHandler {
             //   data: {"type":"response.output_text.delta","data":{"delta":"text"}}
             //   event: response.output_text.done
             //   data: {"type":"response.output_text.done","data":{"text":"text"}}
+            //   event: response.reasoning.delta
+            //   data: {"type":"response.reasoning.delta","data":{"delta":"thinking"}}
             if (json.has("type") && !json.get("type").isJsonNull()) {
                 String type = json.get("type").getAsString();
+                // 捕获思考模型的 reasoning 事件
+                if (type.startsWith("response.reasoning.")) {
+                    if (json.has("data") && json.get("data").isJsonObject()) {
+                        JsonObject innerData = json.getAsJsonObject("data");
+                        if (type.endsWith(".delta") && innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
+                            thoughtContent.append(innerData.get("delta").getAsString());
+                        }
+                    }
+                    return null;
+                }
                 if (type.startsWith("response.output_text.")) {
                     if (json.has("data") && json.get("data").isJsonObject()) {
                         JsonObject innerData = json.getAsJsonObject("data");

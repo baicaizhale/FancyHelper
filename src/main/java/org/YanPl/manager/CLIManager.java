@@ -1737,7 +1737,7 @@ public class CLIManager {
                     
                     if (isFirstLine[0]) {
                         if (!line.isEmpty() || !isLastLine) {
-                            player.sendMessage(ChatColor.WHITE + "◆" + line);
+                            player.sendMessage(ChatColor.WHITE + "◆ " + line);
                             isFirstLine[0] = false;
                         }
                     } else {
@@ -1763,20 +1763,33 @@ public class CLIManager {
                 
                 String response = completeText;
                 String thoughtContent = "";
-                
+
+                // 优先使用流式处理器中捕获的 reasoning_content（思考模型的 API 级字段）
+                String handlerThought = streamingHandler.getThoughtContent();
+                if (handlerThought != null && !handlerThought.isEmpty()) {
+                    thoughtContent = handlerThought;
+                }
+
+                // 同时尝试从文本中提取标签形式的思考内容（作为 fallback）
                 java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(response);
                 if (thoughtMatcher.find()) {
-                    thoughtContent = thoughtMatcher.group(2);
+                    if (thoughtContent.isEmpty()) {
+                        thoughtContent = thoughtMatcher.group(2);
+                    }
                     response = response.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
                 } else {
                     java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(response);
                     if (thinkTagMatcher.find()) {
-                        thoughtContent = thinkTagMatcher.group(1);
+                        if (thoughtContent.isEmpty()) {
+                            thoughtContent = thinkTagMatcher.group(1);
+                        }
                         response = response.replaceAll("(?s)<think>.*?</think>", "");
                     } else {
                         java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(response);
                         if (mdThoughtMatcher.find()) {
-                            thoughtContent = mdThoughtMatcher.group(1);
+                            if (thoughtContent.isEmpty()) {
+                                thoughtContent = mdThoughtMatcher.group(1);
+                            }
                             response = response.replaceAll("(?s)```thought\n?.*?\n?```", "");
                         }
                     }
@@ -1809,7 +1822,7 @@ public class CLIManager {
                         
                         if (isFirstLine[0]) {
                             if (!line.isEmpty() || !isLastLine) {
-                                player.sendMessage(ChatColor.WHITE + "◆" + line);
+                                player.sendMessage(ChatColor.WHITE + "◆ " + line);
                                 isFirstLine[0] = false;
                             }
                         } else {
@@ -1821,13 +1834,33 @@ public class CLIManager {
                 }
                 
                 session.addMessage("assistant", response, finalThought);
-                
+
                 if (!thoughtContent.isEmpty()) {
                     String modelName = plugin.getConfigManager().getCloudflareModel();
                     int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
                     session.addThoughtTokens(thoughtTokens);
                 }
-                
+
+                // 流式模式也显示思考按钮
+                if (finalThought != null && !responseHandled[0]) {
+                    long thoughtMessageId = -1;
+                    long thoughtThinkingTimeMs = session.getLastThinkingTimeMs();
+                    List<DialogueSession.Message> history = session.getHistory();
+                    if (!history.isEmpty()) {
+                        DialogueSession.Message last = history.get(history.size() - 1);
+                        thoughtMessageId = last.getId();
+                        thoughtThinkingTimeMs = last.getThinkingTimeMs();
+                    }
+                    TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
+                    String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
+                    thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
+                    thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                    double lastSec = thoughtThinkingTimeMs / 1000.0;
+                    TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
+                    thoughtBtn.addExtra(timeTag);
+                    player.spigot().sendMessage(thoughtBtn);
+                }
+
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
