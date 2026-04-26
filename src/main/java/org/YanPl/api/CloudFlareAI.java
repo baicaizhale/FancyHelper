@@ -646,7 +646,7 @@ public class CloudFlareAI {
         String model = plugin.getConfigManager().getCloudflareModel();
 
         if (cfKey == null || cfKey.isEmpty()) {
-            return new AIResponse("错误: 请先在配置文件中设置 CloudFlare cf_key。", null, 0, 0, false);
+            return new AIResponse("错误: 配置文件存在问题。", null, 0, 0, false);
         }
 
         if (model == null || model.isEmpty()) {

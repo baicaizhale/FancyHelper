@@ -17,12 +17,12 @@ import java.util.logging.Logger;
 
 /**
  * 流式输出处理器
- * 负责解析SSE格式的AI响应，并以32字为缓冲单位发送给玩家
+ * 负责解析SSE格式的AI响应，并以视觉宽度为缓冲单位发送给玩家
  *
  * 改进: 增强异常处理、线程安全性和流取消机制
  */
 public class StreamingHandler {
-    private static final int BUFFER_SIZE = 32;
+    private static final int MAX_LINE_WIDTH = 55;  // 视觉宽度阈值（中文字符=2，英文字符=1）
     private static final long READ_POLL_INTERVAL_MS = 100;  // 读取超时轮询间隔
 
     private final FancyHelper plugin;
@@ -424,11 +424,30 @@ public class StreamingHandler {
     }
     
     /**
-     * 如果缓冲区达到32字，则发送并清空
+     * 计算文本在Minecraft聊天框中的视觉宽度
+     * 中文字符/全角字符权重为2，ASCII/半角字符权重为1
+     * @param text 要计算的文本
+     * @return 视觉宽度值
+     */
+    private int getVisualWidth(CharSequence text) {
+        int width = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c >= '一' && c <= '鿿' || c >= '＀' && c <= '￯') {
+                width += 2;
+            } else {
+                width += 1;
+            }
+        }
+        return width;
+    }
+
+    /**
+     * 如果缓冲区的视觉宽度达到阈值，则发送并清空
      * 线程安全实现
      */
     private void flushBufferIfReady() {
-        if (buffer.length() >= BUFFER_SIZE) {
+        if (getVisualWidth(buffer) >= MAX_LINE_WIDTH) {
             String text = buffer.toString();
             buffer.setLength(0);
             
