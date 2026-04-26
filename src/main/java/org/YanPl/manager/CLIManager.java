@@ -1768,6 +1768,9 @@ public class CLIManager {
                 String handlerThought = streamingHandler.getThoughtContent();
                 if (handlerThought != null && !handlerThought.isEmpty()) {
                     thoughtContent = handlerThought;
+                    plugin.getLogger().info("[CLI] 流式回调获取到思考内容, 长度=" + thoughtContent.length() + ", 前50字=" + thoughtContent.substring(0, Math.min(50, thoughtContent.length())));
+                } else {
+                    plugin.getLogger().info("[CLI] 流式回调未获取到思考内容, handlerThought=" + (handlerThought == null ? "null" : "空字符串"));
                 }
 
                 // 同时尝试从文本中提取标签形式的思考内容（作为 fallback）
@@ -1842,7 +1845,7 @@ public class CLIManager {
                 }
 
                 // 流式模式也显示思考按钮
-                if (finalThought != null && !responseHandled[0]) {
+                if (finalThought != null) {
                     long thoughtMessageId = -1;
                     long thoughtThinkingTimeMs = session.getLastThinkingTimeMs();
                     List<DialogueSession.Message> history = session.getHistory();

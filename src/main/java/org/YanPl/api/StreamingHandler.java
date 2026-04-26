@@ -281,7 +281,11 @@ public class StreamingHandler {
                         }
                         // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
-                            thoughtContent.append(delta.get("reasoning_content").getAsString());
+                            String rc = delta.get("reasoning_content").getAsString();
+                            if (!rc.isEmpty()) {
+                                thoughtContent.append(rc);
+                                logger.info("[Stream] 捕获 reasoning_content: " + rc);
+                            }
                         }
                     }
                     if (choice.has("text") && !choice.get("text").isJsonNull()) {
