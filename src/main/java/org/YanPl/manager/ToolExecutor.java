@@ -18,7 +18,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -1250,6 +1252,8 @@ public class ToolExecutor {
             cliManager.feedbackToAI(player, "#unloadskill_result: Skill [" + skill.getMetadata().getName() + "] 未在加载列表中");
         }
     }
+
+    /**
      * 参考 Claude 的 AskUserQuestion 工具结构（单问题版本）
      */
     private static class AskUserQuestionRequest {

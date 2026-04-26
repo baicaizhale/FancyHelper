@@ -403,13 +403,11 @@ public class StreamingHandler {
      */
     private InputStream createTimeoutInputStream(InputStream in) {
         return new InputStream() {
-            private long lastDataTime = System.currentTimeMillis();
 
             @Override
             public int read() throws IOException {
                 waitForData();
                 int b = in.read();
-                if (b != -1) lastDataTime = System.currentTimeMillis();
                 return b;
             }
 
@@ -417,7 +415,6 @@ public class StreamingHandler {
             public int read(byte[] b, int off, int len) throws IOException {
                 waitForData();
                 int n = in.read(b, off, len);
-                if (n > 0) lastDataTime = System.currentTimeMillis();
                 return n;
             }
 
