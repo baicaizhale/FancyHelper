@@ -2039,7 +2039,7 @@ public class CLIManager {
             });
             
             try {
-                if (plugin.getConfigManager().isStreamingEnabled()) {
+                if (plugin.getConfigManager().isPlayerStreamingEnabled(player)) {
                     processStreamingMessage(player, message, matchedSkills);
                 } else {
                     processNonStreamingMessage(player, message, matchedSkills);
