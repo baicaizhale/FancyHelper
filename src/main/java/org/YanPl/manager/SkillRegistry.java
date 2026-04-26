@@ -5,6 +5,7 @@ import org.YanPl.model.Skill;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 /**
@@ -18,7 +19,7 @@ public class SkillRegistry {
     // Skill 存储
     private final Map<String, Skill> skillsById = new ConcurrentHashMap<>();
     private final Map<String, List<Skill>> skillsByTrigger = new ConcurrentHashMap<>();
-    private final List<Skill> allSkills = new ArrayList<>();
+    private final List<Skill> allSkills = new CopyOnWriteArrayList<>();
 
     public SkillRegistry(FancyHelper plugin) {
         this.plugin = plugin;

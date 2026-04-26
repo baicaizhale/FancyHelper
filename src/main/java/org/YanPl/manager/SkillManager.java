@@ -46,7 +46,6 @@ public class SkillManager {
      */
     public void reloadSkills() {
         registry.clear();
-        playerLoadedSkills.clear();
 
         List<Skill> skills = loader.loadAllSkills();
         for (Skill skill : skills) {
@@ -214,6 +213,22 @@ public class SkillManager {
         UUID uuid = player.getUniqueId();
         Set<String> loaded = playerLoadedSkills.computeIfAbsent(uuid, k -> new HashSet<>());
         return loaded.add(skill.getId().toLowerCase());
+    }
+
+    /**
+     * 从玩家的会话中卸载指定 Skill
+     *
+     * @param player  玩家
+     * @param skillId Skill ID
+     * @return 是否成功卸载
+     */
+    public boolean unloadSkillForPlayer(Player player, String skillId) {
+        UUID uuid = player.getUniqueId();
+        Set<String> loaded = playerLoadedSkills.get(uuid);
+        if (loaded == null) {
+            return false;
+        }
+        return loaded.remove(skillId.toLowerCase());
     }
 
     /**

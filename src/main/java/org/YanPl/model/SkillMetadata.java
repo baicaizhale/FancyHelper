@@ -21,6 +21,7 @@ public class SkillMetadata {
     private List<String> categories = new ArrayList<>();
     private Map<String, Object> extra = new HashMap<>();
     private int priority = 50;
+    private Map<String, String> variables = new HashMap<>();
 
     /**
      * 从 YAML 字符串解析元数据
@@ -53,6 +54,17 @@ public class SkillMetadata {
             metadata.source = getString(data, "source", "");
             metadata.categories = getStringList(data, "categories");
             metadata.priority = getInt(data, "priority", 50);
+
+            // 解析自定义模板变量
+            Object variablesObj = data.get("variables");
+            if (variablesObj instanceof Map) {
+                Map<?, ?> varsMap = (Map<?, ?>) variablesObj;
+                for (Map.Entry<?, ?> entry : varsMap.entrySet()) {
+                    if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+                        metadata.variables.put((String) entry.getKey(), (String) entry.getValue());
+                    }
+                }
+            }
 
             // 存储额外的未知字段
             for (Map.Entry<String, Object> entry : data.entrySet()) {
@@ -97,6 +109,9 @@ public class SkillMetadata {
         if (priority != 50) {
             data.put("priority", priority);
         }
+        if (!variables.isEmpty()) {
+            data.put("variables", variables);
+        }
 
         // 添加额外的字段
         data.putAll(extra);
@@ -111,7 +126,8 @@ public class SkillMetadata {
     private static boolean isStandardField(String key) {
         return key.equals("name") || key.equals("description") || key.equals("triggers")
                 || key.equals("auto_trigger") || key.equals("author") || key.equals("version")
-                || key.equals("source") || key.equals("categories");
+                || key.equals("source") || key.equals("categories") || key.equals("variables")
+                || key.equals("priority") || key.equals("trigger_weights");
     }
 
     /**
@@ -282,6 +298,10 @@ public class SkillMetadata {
 
     public Map<String, Object> getExtra() {
         return new HashMap<>(extra);
+    }
+
+    public Map<String, String> getVariables() {
+        return new HashMap<>(variables);
     }
 
     /**

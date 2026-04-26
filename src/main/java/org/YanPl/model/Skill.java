@@ -209,6 +209,50 @@ public class Skill {
     }
 
     /**
+     * 处理模板变量并获取内容
+     * 支持 {{variable}} 占位符替换
+     * 替换顺序：传入的 context → YAML 中定义的 variables
+     *
+     * @param context 变量上下文（变量名 -> 值）
+     * @return 处理后的内容
+     */
+    public String getProcessedContent(Map<String, String> context) {
+        String processed = content;
+
+        // 1. 替换 context 中的变量（内置变量如 player, server_name）
+        if (context != null) {
+            for (Map.Entry<String, String> entry : context.entrySet()) {
+                processed = processed.replace("{{" + entry.getKey() + "}}",
+                        entry.getValue() != null ? entry.getValue() : "");
+            }
+        }
+
+        // 2. 替换 YAML variables 中定义的自定义变量
+        Map<String, String> customVars = metadata.getVariables();
+        for (Map.Entry<String, String> entry : customVars.entrySet()) {
+            processed = processed.replace("{{" + entry.getKey() + "}}",
+                    entry.getValue() != null ? entry.getValue() : "");
+        }
+
+        return processed;
+    }
+
+    /**
+     * 获取格式化的、处理过模板变量的内容
+     */
+    public String getFormattedProcessedContent(Map<String, String> context) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[Skill: ").append(metadata.getName()).append("]\n");
+        sb.append("Version: ").append(metadata.getVersion()).append("\n");
+        if (!metadata.getAuthor().equals("Unknown")) {
+            sb.append("Author: ").append(metadata.getAuthor()).append("\n");
+        }
+        sb.append("\n");
+        sb.append(getProcessedContent(context));
+        return sb.toString();
+    }
+
+    /**
      * 获取简洁信息（用于列表显示）
      *
      * @return 简洁信息字符串

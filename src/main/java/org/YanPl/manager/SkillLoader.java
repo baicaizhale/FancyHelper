@@ -94,7 +94,7 @@ public class SkillLoader {
         }
 
         // 递归加载所有 .md 文件
-        loadFromDirectoryRecursive(directory, directory, isBuiltIn, isRemote, skills, Collections.emptySet());
+        loadFromDirectoryRecursive(directory, directory, isBuiltIn, isRemote, skills);
 
         return skills;
     }
@@ -108,7 +108,7 @@ public class SkillLoader {
      * @param isRemote  是否远程
      * @param skills    Skill 列表
      */
-    private void loadFromDirectoryRecursive(File baseDir, File currentDir, boolean isBuiltIn, boolean isRemote, List<Skill> skills, Set<File> excludedDirs) {
+    private void loadFromDirectoryRecursive(File baseDir, File currentDir, boolean isBuiltIn, boolean isRemote, List<Skill> skills) {
         File[] files = currentDir.listFiles();
         if (files == null) {
             return;
@@ -116,11 +116,8 @@ public class SkillLoader {
 
         for (File file : files) {
             if (file.isDirectory()) {
-                if (isExcludedDir(file, excludedDirs)) {
-                    continue;
-                }
                 // 递归处理子目录
-                loadFromDirectoryRecursive(baseDir, file, isBuiltIn, isRemote, skills, excludedDirs);
+                loadFromDirectoryRecursive(baseDir, file, isBuiltIn, isRemote, skills);
             } else if (file.getName().endsWith(".md")) {
                 try {
                     Skill skill = loadFromFile(file, isBuiltIn, isRemote);
@@ -131,26 +128,6 @@ public class SkillLoader {
                     plugin.getLogger().warning("[Skill] 加载失败: " + file.getName() + " - " + e.getMessage());
                 }
             }
-        }
-    }
-
-    private boolean isExcludedDir(File dir, Set<File> excludedDirs) {
-        if (excludedDirs.isEmpty()) {
-            return false;
-        }
-        for (File excluded : excludedDirs) {
-            if (isSamePath(dir, excluded)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isSamePath(File a, File b) {
-        try {
-            return a.getCanonicalFile().equals(b.getCanonicalFile());
-        } catch (IOException e) {
-            return a.equals(b);
         }
     }
 
@@ -235,7 +212,7 @@ public class SkillLoader {
      * @return 是否保存成功
      */
     public boolean saveSkill(Skill skill) {
-        File targetFile = new File(localDir, skill.getId() + ".md");
+        File targetFile = new File(localDir, sanitizeFileName(skill.getId()) + ".md");
 
         try {
             String content = Skill.createFileContent(skill.getMetadata(), skill.getContent());
@@ -256,7 +233,7 @@ public class SkillLoader {
      * @return 创建的 Skill 对象，失败返回 null
      */
     public Skill createSkill(String id, org.YanPl.model.SkillMetadata metadata, String content) {
-        String fileName = id.toLowerCase().replaceAll("[^a-z0-9_-]", "") + ".md";
+        String fileName = sanitizeFileName(id) + ".md";
         File targetFile = new File(localDir, fileName);
 
         // 检查是否已存在
@@ -282,11 +259,12 @@ public class SkillLoader {
      * @return 是否删除成功
      */
     public boolean deleteSkill(String id) {
-        File file = new File(localDir, id + ".md");
+        String sanitizedId = sanitizeFileName(id);
+        File file = new File(localDir, sanitizedId + ".md");
 
         if (!file.exists()) {
             // 尝试从远程目录删除
-            file = new File(remoteDir, id + ".md");
+            file = new File(remoteDir, sanitizedId + ".md");
         }
 
         if (file.exists()) {
@@ -305,7 +283,7 @@ public class SkillLoader {
      * @return 是否更新成功
      */
     public boolean updateSkill(String id, org.YanPl.model.SkillMetadata metadata, String content) {
-        File file = new File(localDir, id + ".md");
+        File file = new File(localDir, sanitizeFileName(id) + ".md");
 
         if (!file.exists()) {
             return false;
@@ -319,6 +297,13 @@ public class SkillLoader {
             plugin.getLogger().warning("[Skill] 更新失败: " + id + " - " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 统一处理文件名中的非法字符
+     */
+    private String sanitizeFileName(String id) {
+        return id.toLowerCase().replaceAll("[^a-z0-9_-]", "");
     }
 
     /**

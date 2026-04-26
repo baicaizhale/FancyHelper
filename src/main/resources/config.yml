@@ -7,6 +7,8 @@ settings:
   debug: false
   # 是否启用猫娘模式，启用后Fancy将扮演猫娘，注意某些模型(特别是国产模型如DeepSeek)可能会拒绝这个要求
   meow: true
+  # 是否启用流式输出，启用后AI回复将逐字流式显示，关闭后等待完整回复再显示
+  streaming: true
   # 补充系统提示词（会自动追加到基础系统提示词后面，不加就留空；注意如果是角色扮演类提示词请关闭Meow模式）
   supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
