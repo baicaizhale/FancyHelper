@@ -1707,7 +1707,30 @@ public class CLIManager {
         final String[] lastFormatted = {""};
         final boolean[] responseHandled = {false};
         final boolean[] isFirstLine = {true};
-        
+
+        // 思考结束回调：reasoning_content 切换到 content 时立即触发，在正文前展示按钮
+        streamingHandler.setOnReasoningCompleteCallback((thinkingTimeMs) -> {
+            if (!plugin.isEnabled() || !player.isOnline()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) return;
+                String currentThought = streamingHandler.getThoughtContent();
+                if (currentThought == null || currentThought.isEmpty()) return;
+
+                // 提前设置思考内容，让 /cli thought 可立即访问
+                session.setLastThought(currentThought);
+                // 记录正确的思考耗时到 session，供成书使用
+                session.addThinkingTime(thinkingTimeMs);
+
+                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
+                thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought"));
+                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                double sec = thinkingTimeMs / 1000.0;
+                TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", sec) + "s)");
+                thoughtBtn.addExtra(timeTag);
+                player.spigot().sendMessage(thoughtBtn);
+            });
+        });
+
         streamingHandler.setOnChunkCallback((chunk) -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
             
@@ -1768,9 +1791,6 @@ public class CLIManager {
                 String handlerThought = streamingHandler.getThoughtContent();
                 if (handlerThought != null && !handlerThought.isEmpty()) {
                     thoughtContent = handlerThought;
-                    plugin.getLogger().info("[CLI] 流式回调获取到思考内容, 长度=" + thoughtContent.length() + ", 前50字=" + thoughtContent.substring(0, Math.min(50, thoughtContent.length())));
-                } else {
-                    plugin.getLogger().info("[CLI] 流式回调未获取到思考内容, handlerThought=" + (handlerThought == null ? "null" : "空字符串"));
                 }
 
                 // 同时尝试从文本中提取标签形式的思考内容（作为 fallback）
@@ -1844,8 +1864,8 @@ public class CLIManager {
                     session.addThoughtTokens(thoughtTokens);
                 }
 
-                // 流式模式也显示思考按钮
-                if (finalThought != null) {
+                // 流式模式也显示思考按钮（仅当 reasoning-complete 未触发时作为 fallback，如标签提取的思考）
+                if (finalThought != null && !streamingHandler.hasReasoningCompleteFired()) {
                     long thoughtMessageId = -1;
                     long thoughtThinkingTimeMs = session.getLastThinkingTimeMs();
                     List<DialogueSession.Message> history = session.getHistory();

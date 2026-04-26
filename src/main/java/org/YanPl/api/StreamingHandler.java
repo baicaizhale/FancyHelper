@@ -33,7 +33,11 @@ public class StreamingHandler {
     private volatile Consumer<String> onChunkCallback;
     private volatile Consumer<String> onCompleteCallback;
     private volatile Consumer<Throwable> onErrorCallback;
+    private volatile Consumer<Long> onReasoningCompleteCallback;  // 思考结束回调，参数为思考耗时ms
     private volatile boolean errorOccurred = false;
+    private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
+    private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
+    private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     
@@ -76,6 +80,29 @@ public class StreamingHandler {
     public void setOnErrorCallback(Consumer<Throwable> callback) {
         this.onErrorCallback = callback;
     }
+
+    /**
+     * 设置思考结束回调（当 reasoning_content 切换到 content 时触发）
+     * @param callback 回调函数，参数为思考耗时毫秒
+     */
+    public void setOnReasoningCompleteCallback(Consumer<Long> callback) {
+        this.onReasoningCompleteCallback = callback;
+    }
+
+    /**
+     * 获取累积的思考内容（来自 reasoning_content 字段）
+     * @return 思考内容字符串
+     */
+    public String getThoughtContent() {
+        return thoughtContent.toString();
+    }
+
+    /**
+     * 思考结束回调是否已触发
+     */
+    public boolean hasReasoningCompleteFired() {
+        return reasoningCompleteFired;
+    }
     
     /**
      * 取消流式输出
@@ -89,8 +116,12 @@ public class StreamingHandler {
             onChunkCallback = null;
             onCompleteCallback = null;
             onErrorCallback = null;
+            onReasoningCompleteCallback = null;
             buffer.setLength(0);  // 清空缓冲
             thoughtContent.setLength(0);  // 清空思考内容
+            reasoningStartTime = -1;
+            reasoningJustCompleted = false;
+            reasoningCompleteFired = false;
             
             logger.info("[Stream] 流式输出已取消并清理资源");
         } catch (Exception e) {
@@ -114,14 +145,6 @@ public class StreamingHandler {
         return errorOccurred;
     }
 
-    /**
-     * 获取累积的思考内容（来自 reasoning_content 字段）
-     * @return 思考内容字符串
-     */
-    public String getThoughtContent() {
-        return thoughtContent.toString();
-    }
-    
     /**
      * 处理流式响应
      * @param response HTTP响应
@@ -161,6 +184,21 @@ public class StreamingHandler {
 
                         try {
                             String textChunk = extractTextFromSSE(data);
+
+                            // 检测 reasoning 刚结束 → 触发思考结束回调
+                            if (reasoningJustCompleted) {
+                                reasoningJustCompleted = false;
+                                reasoningCompleteFired = true;
+                                long thinkingMs = System.currentTimeMillis() - reasoningStartTime;
+                                if (onReasoningCompleteCallback != null && !isCancelled.get()) {
+                                    try {
+                                        onReasoningCompleteCallback.accept(thinkingMs);
+                                    } catch (Exception cbError) {
+                                        logger.warning("[Stream] 思考结束回调异常: " + cbError.getMessage());
+                                    }
+                                }
+                            }
+
                             if (textChunk != null && !textChunk.isEmpty()) {
                                 fullText.append(textChunk);
                                 buffer.append(textChunk);
@@ -277,14 +315,21 @@ public class StreamingHandler {
                     if (choice.has("delta") && choice.get("delta").isJsonObject()) {
                         var delta = choice.getAsJsonObject("delta");
                         if (delta.has("content") && !delta.get("content").isJsonNull()) {
+                            // 首次从 reasoning 切换到 content，标记思考结束
+                            if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
+                                reasoningJustCompleted = true;
+                            }
                             return delta.get("content").getAsString();
                         }
                         // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
                             String rc = delta.get("reasoning_content").getAsString();
                             if (!rc.isEmpty()) {
+                                // 第一个非空 reasoning token → 开始计时
+                                if (reasoningStartTime == -1) {
+                                    reasoningStartTime = System.currentTimeMillis();
+                                }
                                 thoughtContent.append(rc);
-                                logger.info("[Stream] 捕获 reasoning_content: " + rc);
                             }
                         }
                     }
@@ -309,7 +354,13 @@ public class StreamingHandler {
                     if (json.has("data") && json.get("data").isJsonObject()) {
                         JsonObject innerData = json.getAsJsonObject("data");
                         if (type.endsWith(".delta") && innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
-                            thoughtContent.append(innerData.get("delta").getAsString());
+                            String rc = innerData.get("delta").getAsString();
+                            if (!rc.isEmpty()) {
+                                if (reasoningStartTime == -1) {
+                                    reasoningStartTime = System.currentTimeMillis();
+                                }
+                                thoughtContent.append(rc);
+                            }
                         }
                     }
                     return null;
@@ -319,6 +370,10 @@ public class StreamingHandler {
                         JsonObject innerData = json.getAsJsonObject("data");
                         // delta 事件: type="response.output_text.delta", data.delta="text"
                         if (type.endsWith(".delta") && innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
+                            // 首次从 reasoning 切换到 content，标记思考结束
+                            if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
+                                reasoningJustCompleted = true;
+                            }
                             return innerData.get("delta").getAsString();
                         }
                         // done 事件: type="response.output_text.done", data.text="text"
