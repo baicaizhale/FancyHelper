@@ -433,13 +433,54 @@ public class StreamingHandler {
         int width = 0;
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            if (c >= '一' && c <= '鿿' || c >= '＀' && c <= '￯') {
+            if (isFullWidth(c)) {
                 width += 2;
             } else {
                 width += 1;
             }
         }
         return width;
+    }
+
+    private boolean isFullWidth(char c) {
+        // CJK Radicals Supplement
+        if (c >= 0x2E80 && c <= 0x2EFF) return true;
+        // Kangxi Radicals
+        if (c >= 0x2F00 && c <= 0x2FDF) return true;
+        // Ideographic Description Characters
+        if (c >= 0x2FF0 && c <= 0x2FFF) return true;
+        // CJK Symbols and Punctuation（全角空格、各种中文标点）
+        if (c >= 0x3000 && c <= 0x303F) return true;
+        // Hiragana
+        if (c >= 0x3040 && c <= 0x309F) return true;
+        // Katakana
+        if (c >= 0x30A0 && c <= 0x30FF) return true;
+        // Bopomofo
+        if (c >= 0x3100 && c <= 0x312F) return true;
+        // Hangul Compatibility Jamo
+        if (c >= 0x3130 && c <= 0x318F) return true;
+        // Enclosed CJK Letters and Months
+        if (c >= 0x3200 && c <= 0x33FF) return true;
+        // CJK Unified Ideographs Extension A
+        if (c >= 0x3400 && c <= 0x4DBF) return true;
+        // Yijing Hexagram Symbols
+        if (c >= 0x4DC0 && c <= 0x4DFF) return true;
+        // CJK Unified Ideographs
+        if (c >= 0x4E00 && c <= 0x9FFF) return true;
+        // Yi Script
+        if (c >= 0xA000 && c <= 0xA4CF) return true;
+        // Hangul Syllables
+        if (c >= 0xAC00 && c <= 0xD7AF) return true;
+        // CJK Compatibility Ideographs
+        if (c >= 0xF900 && c <= 0xFAFF) return true;
+        // Vertical Forms
+        if (c >= 0xFE10 && c <= 0xFE1F) return true;
+        // CJK Compatibility Forms
+        if (c >= 0xFE30 && c <= 0xFE4F) return true;
+        // Fullwidth Forms: fullwidth ASCII variants, fullwidth left/right white parenthesis, fullwidth signs
+        if (c >= 0xFF01 && c <= 0xFF60) return true;
+        if (c >= 0xFFE0 && c <= 0xFFE6) return true;
+        return false;
     }
 
     /**
