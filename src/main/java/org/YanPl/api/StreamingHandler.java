@@ -13,21 +13,28 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.logging.Logger;
 
 /**
  * 流式输出处理器
  * 负责解析SSE格式的AI响应，并以32字为缓冲单位发送给玩家
+ *
+ * 改进: 增强异常处理、线程安全性和流取消机制
  */
 public class StreamingHandler {
     private static final int BUFFER_SIZE = 32;
-    
+    private static final long READ_POLL_INTERVAL_MS = 100;  // 读取超时轮询间隔
+
     private final FancyHelper plugin;
-    private final StringBuilder buffer;
+    private final StringBuffer buffer;  // 线程安全的 StringBuffer 替代 StringBuilder
     private final AtomicBoolean isCancelled;
     private final Gson gson;
     private volatile Consumer<String> onChunkCallback;
     private volatile Consumer<String> onCompleteCallback;
     private volatile Consumer<Throwable> onErrorCallback;
+    private volatile boolean errorOccurred = false;
+    private final Logger logger;
+    private final int readTimeoutSeconds;  // 流式读取超时秒数
     
     /**
      * 创建流式输出处理器
@@ -36,9 +43,12 @@ public class StreamingHandler {
      */
     public StreamingHandler(FancyHelper plugin, Player player) {
         this.plugin = plugin;
-        this.buffer = new StringBuilder();
+        this.buffer = new StringBuffer();  // 线程安全的 StringBuffer
         this.isCancelled = new AtomicBoolean(false);
+        this.errorOccurred = false;
         this.gson = new Gson();
+        this.logger = plugin.getLogger();
+        this.readTimeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
     }
     
     /**
@@ -67,9 +77,22 @@ public class StreamingHandler {
     
     /**
      * 取消流式输出
+     * 清理所有资源和回调引用
      */
     public void cancel() {
         isCancelled.set(true);
+        
+        // 清理回调引用以防止内存泄漏
+        try {
+            onChunkCallback = null;
+            onCompleteCallback = null;
+            onErrorCallback = null;
+            buffer.setLength(0);  // 清空缓冲
+            
+            logger.info("[Stream] 流式输出已取消并清理资源");
+        } catch (Exception e) {
+            logger.warning("[Stream] 取消流式输出时出错: " + e.getMessage());
+        }
     }
     
     /**
@@ -81,56 +104,128 @@ public class StreamingHandler {
     }
     
     /**
+     * 检查是否发生错误
+     * @return 是否发生错误
+     */
+    public boolean hasError() {
+        return errorOccurred;
+    }
+    
+    /**
      * 处理流式响应
      * @param response HTTP响应
      * @return 完整的响应文本
      */
     public String processStream(HttpResponse<InputStream> response) throws IOException {
         StringBuilder fullText = new StringBuilder();
-        
+        StringBuilder nonSseFallback = new StringBuilder();  // 非SSE回退缓冲
+
+        // 包装 InputStream 以支持读取超时和取消检查
+        InputStream timeoutIn = createTimeoutInputStream(response.body());
+
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-            
+                new InputStreamReader(timeoutIn, StandardCharsets.UTF_8))) {
+
             String line;
+            boolean foundDataPrefix = false;  // 是否找到了 data: 前缀
             while ((line = reader.readLine()) != null && !isCancelled.get()) {
-                line = line.trim();
-                
-                if (line.isEmpty()) {
+                if (errorOccurred) {
+                    break;  // 如果已发生错误，停止继续处理
+                }
+
+                try {
+                    line = line.trim();
+
+                    if (line.isEmpty()) {
+                        continue;
+                    }
+
+                    if (line.startsWith("data:")) {
+                        foundDataPrefix = true;
+                        String data = line.substring(5).trim();
+
+                        if ("[DONE]".equals(data)) {
+                            break;
+                        }
+
+                        try {
+                            String textChunk = extractTextFromSSE(data);
+                            if (textChunk != null && !textChunk.isEmpty()) {
+                                fullText.append(textChunk);
+                                buffer.append(textChunk);
+
+                                flushBufferIfReady();
+                            }
+                        } catch (Exception e) {
+                            // 记录解析错误但继续处理
+                            logger.warning("[Stream] 解析SSE数据失败: " + e.getMessage() + " | 原始数据: " + data);
+                            if (plugin.getConfigManager().isDebug()) {
+                                logger.warning("[Stream] 完整错误堆栈:");
+                                e.printStackTrace();
+                            }
+                            // 不调用 onErrorCallback，继续处理下一行
+                        }
+                    } else if (!foundDataPrefix && fullText.length() == 0) {
+                        // 还没找到 data: 前缀时，缓存非空行作为非SSE回退
+                        nonSseFallback.append(line);
+                    }
+                } catch (Exception lineProcessingError) {
+                    // 行处理异常，记录但继续
+                    logger.warning("[Stream] 处理流式行时出错: " + lineProcessingError.getMessage());
+                    if (plugin.getConfigManager().isDebug()) {
+                        lineProcessingError.printStackTrace();
+                    }
                     continue;
                 }
-                
-                if (line.startsWith("data:")) {
-                    String data = line.substring(5).trim();
-                    
-                    if ("[DONE]".equals(data)) {
-                        break;
+            }
+
+            // 如果 SSE 解析没有产生任何文本，尝试作为非流式 JSON 响应解析
+            if (fullText.length() == 0 && nonSseFallback.length() > 0 && !isCancelled.get()) {
+                String fallbackJson = nonSseFallback.toString();
+                try {
+                    String fallbackText = extractTextFromSSE(fallbackJson);
+                    if (fallbackText != null && !fallbackText.isEmpty()) {
+                        logger.info("[Stream] 从非SSE响应中提取到文本 (长度: " + fallbackText.length() + ")");
+                        fullText.append(fallbackText);
+                        buffer.append(fallbackText);
                     }
-                    
-                    try {
-                        String textChunk = extractTextFromSSE(data);
-                        if (textChunk != null && !textChunk.isEmpty()) {
-                            fullText.append(textChunk);
-                            buffer.append(textChunk);
-                            
-                            flushBufferIfReady();
-                        }
-                    } catch (Exception e) {
-                        if (plugin.getConfigManager().isDebug()) {
-                            plugin.getLogger().warning("[Stream] 解析SSE数据失败: " + e.getMessage() + " | 原始数据: " + data);
-                        }
-                    }
+                } catch (Exception e) {
+                    logger.warning("[Stream] 非SSE回退解析失败: " + e.getMessage());
                 }
             }
             
             flushRemainingBuffer();
             
-            if (onCompleteCallback != null && !isCancelled.get()) {
-                onCompleteCallback.accept(fullText.toString());
+            // 完成回调：只在未被取消且未出错时触发
+            if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
+                try {
+                    onCompleteCallback.accept(fullText.toString());
+                } catch (Exception callbackError) {
+                    errorOccurred = true;
+                    logger.warning("[Stream] 完成回调异常: " + callbackError.getMessage());
+                    if (onErrorCallback != null) {
+                        try {
+                            onErrorCallback.accept(callbackError);
+                        } catch (Exception errorCallbackError) {
+                            logger.warning("[Stream] 错误回调异常: " + errorCallbackError.getMessage());
+                        }
+                    }
+                }
             }
             
         } catch (IOException e) {
+            errorOccurred = true;
+            logger.warning("[Stream] IO异常: " + e.getMessage());
+            
             if (onErrorCallback != null) {
-                onErrorCallback.accept(e);
+                try {
+                    onErrorCallback.accept(e);
+                } catch (Exception errorCallbackException) {
+                    logger.warning("[Stream] 错误回调中发生异常: " + errorCallbackException.getMessage());
+                    if (plugin.getConfigManager().isDebug()) {
+                        errorCallbackException.printStackTrace();
+                    }
+                }
             }
             throw e;
         }
@@ -143,12 +238,27 @@ public class StreamingHandler {
      * 支持多种格式：
      * 1. CloudFlare原生格式: {"response":"text"}
      * 2. OpenAI格式: {"choices":[{"delta":{"content":"text"}}]}
-     * 3. 通用格式: {"content":"text"} 或 {"text":"text"}
+     * 3. CloudFlare Responses API: {"type":"response.output_text.delta","data":{"delta":"text"}}
+     * 4. 通用格式: {"content":"text"} 或 {"text":"text"}
+     *
+     * @param jsonStr JSON字符串
+     * @return 提取的文本内容，如果无法解析返回null
+     * @throws IllegalArgumentException 如果JSON格式完全无效
      */
-    private String extractTextFromSSE(String jsonStr) {
+    private String extractTextFromSSE(String jsonStr) throws IllegalArgumentException {
+        if (jsonStr == null || jsonStr.isEmpty()) {
+            return null;
+        }
+
         try {
             JsonObject json = gson.fromJson(jsonStr, JsonObject.class);
-            
+
+            if (json == null) {
+                logger.warning("[Stream] JSON解析结果为null: " + jsonStr);
+                return null;
+            }
+
+            // 1. 尝试解析 OpenAI 格式 (choices 数组)
             if (json.has("choices") && json.get("choices").isJsonArray()) {
                 var choices = json.getAsJsonArray("choices");
                 if (choices.size() > 0) {
@@ -164,53 +274,183 @@ public class StreamingHandler {
                     }
                 }
             }
-            
+
+            // 2. 尝试解析 CloudFlare Responses API 格式
+            // SSE 事件格式:
+            //   event: response.output_text.delta
+            //   data: {"type":"response.output_text.delta","data":{"delta":"text"}}
+            //   event: response.output_text.done
+            //   data: {"type":"response.output_text.done","data":{"text":"text"}}
+            if (json.has("type") && !json.get("type").isJsonNull()) {
+                String type = json.get("type").getAsString();
+                if (type.startsWith("response.output_text.")) {
+                    if (json.has("data") && json.get("data").isJsonObject()) {
+                        JsonObject innerData = json.getAsJsonObject("data");
+                        // delta 事件: type="response.output_text.delta", data.delta="text"
+                        if (type.endsWith(".delta") && innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
+                            return innerData.get("delta").getAsString();
+                        }
+                        // done 事件: type="response.output_text.done", data.text="text"
+                        if (type.endsWith(".done") && innerData.has("text") && !innerData.get("text").isJsonNull()) {
+                            return innerData.get("text").getAsString();
+                        }
+                    }
+                }
+            }
+
+            // 3. 尝试解析 CloudFlare 原生 response 格式
             if (json.has("response") && !json.get("response").isJsonNull()) {
                 return json.get("response").getAsString();
             }
-            
+
+            // 4. 尝试解析通用 content 格式
             if (json.has("content") && !json.get("content").isJsonNull()) {
                 return json.get("content").getAsString();
             }
-            
+
+            // 5. 尝试解析通用 text 格式
             if (json.has("text") && !json.get("text").isJsonNull()) {
                 return json.get("text").getAsString();
             }
-            
-        } catch (Exception e) {
+
+            // 如果到这里，可能是其他格式的 SSE 数据（如 [DONE] 标记或控制信息）
             if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().warning("[Stream] JSON解析异常: " + e.getMessage());
+                logger.info("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
             }
+
+        } catch (com.google.gson.JsonSyntaxException jsonSyntaxError) {
+            // JSON 格式错误
+            logger.warning("[Stream] JSON语法错误: " + jsonSyntaxError.getMessage());
+            if (plugin.getConfigManager().isDebug()) {
+                logger.warning("[Stream] 原始数据: " + jsonStr);
+            }
+            throw new IllegalArgumentException("JSON格式无效: " + jsonSyntaxError.getMessage(), jsonSyntaxError);
+        } catch (Exception e) {
+            logger.warning("[Stream] 提取文本异常: " + e.getClass().getName() + " - " + e.getMessage());
+            if (plugin.getConfigManager().isDebug()) {
+                logger.warning("[Stream] 原始数据: " + jsonStr);
+                e.printStackTrace();
+            }
+            // 不重新抛出，继续处理
         }
-        
+
         return null;
     }
     
     /**
      * 如果缓冲区达到32字，则发送并清空
+     * 线程安全实现
      */
     private void flushBufferIfReady() {
         if (buffer.length() >= BUFFER_SIZE) {
             String text = buffer.toString();
             buffer.setLength(0);
             
-            if (onChunkCallback != null) {
-                onChunkCallback.accept(text);
+            if (onChunkCallback != null && !text.isEmpty()) {
+                try {
+                    onChunkCallback.accept(text);
+                } catch (Exception callbackError) {
+                    errorOccurred = true;
+                    logger.warning("[Stream] 数据块回调异常: " + callbackError.getMessage());
+                    
+                    // 调用错误回调
+                    if (onErrorCallback != null) {
+                        try {
+                            onErrorCallback.accept(callbackError);
+                        } catch (Exception errorCallbackError) {
+                            logger.warning("[Stream] 错误回调异常: " + errorCallbackError.getMessage());
+                        }
+                    }
+                }
             }
         }
     }
     
     /**
      * 发送剩余的缓冲区内容
+     * 线程安全实现
      */
     private void flushRemainingBuffer() {
         if (buffer.length() > 0 && !isCancelled.get()) {
             String text = buffer.toString();
             buffer.setLength(0);
-            
-            if (onChunkCallback != null) {
-                onChunkCallback.accept(text);
+
+            if (onChunkCallback != null && !text.isEmpty()) {
+                try {
+                    onChunkCallback.accept(text);
+                } catch (Exception callbackError) {
+                    errorOccurred = true;
+                    logger.warning("[Stream] 剩余缓冲回调异常: " + callbackError.getMessage());
+
+                    // 调用错误回调
+                    if (onErrorCallback != null) {
+                        try {
+                            onErrorCallback.accept(callbackError);
+                        } catch (Exception errorCallbackError) {
+                            logger.warning("[Stream] 错误回调异常: " + errorCallbackError.getMessage());
+                        }
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * 创建支持读取超时的 InputStream 包装器
+     * 当 AI 服务器停止发送数据超过配置超时时间时，自动抛出 IOException
+     * @param in 原始输入流
+     * @return 带超时控制的输入流
+     */
+    private InputStream createTimeoutInputStream(InputStream in) {
+        return new InputStream() {
+            private long lastDataTime = System.currentTimeMillis();
+
+            @Override
+            public int read() throws IOException {
+                waitForData();
+                int b = in.read();
+                if (b != -1) lastDataTime = System.currentTimeMillis();
+                return b;
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                waitForData();
+                int n = in.read(b, off, len);
+                if (n > 0) lastDataTime = System.currentTimeMillis();
+                return n;
+            }
+
+            /**
+             * 等待数据可用，带有超时和取消检查
+             */
+            private void waitForData() throws IOException {
+                long deadline = System.currentTimeMillis() + readTimeoutSeconds * 1000L;
+                try {
+                    while (in.available() == 0) {
+                        if (isCancelled.get()) {
+                            throw new IOException("流式读取已取消");
+                        }
+                        if (System.currentTimeMillis() > deadline) {
+                            throw new IOException("流式读取超时 (" + readTimeoutSeconds + " 秒无数据)");
+                        }
+                        Thread.sleep(READ_POLL_INTERVAL_MS);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("流式读取被中断", e);
+                }
+            }
+
+            @Override
+            public int available() throws IOException {
+                return in.available();
+            }
+
+            @Override
+            public void close() throws IOException {
+                in.close();
+            }
+        };
     }
 }

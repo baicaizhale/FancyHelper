@@ -813,12 +813,24 @@ public class CLIManager {
         pendingCommands.clear();
         generationStates.clear();
         generationStartTimes.clear();
-        
+
+        // 取消所有活跃的流式输出，防止资源泄漏
+        if (!activeStreamingHandlers.isEmpty()) {
+            plugin.getLogger().info("[CLI] 正在取消 " + activeStreamingHandlers.size() + " 个活跃的流式输出...");
+            for (Map.Entry<UUID, StreamingHandler> entry : activeStreamingHandlers.entrySet()) {
+                StreamingHandler handler = entry.getValue();
+                if (handler != null && !handler.isCancelled()) {
+                    handler.cancel();
+                }
+            }
+            activeStreamingHandlers.clear();
+        }
+
         // 关闭AI客户端（这会处理OkHttp的cleanup）
         if (ai != null) {
             ai.shutdown();
         }
-        
+
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] CLIManager 已完成关闭。");
         }

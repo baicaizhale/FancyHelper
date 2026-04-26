@@ -99,7 +99,10 @@ public class ToolExecutor {
             case "#skill":
                 handleSkillTool(player, args, session);
                 break;
-            
+            case "#unloadskill":
+                handleUnloadSkillTool(player, args, session);
+                break;
+
             // 交互工具
             case "#ask":
                 handleAskTool(player, args);
@@ -1202,15 +1205,51 @@ public class ToolExecutor {
             added = session.addSkillContext(skill);
         }
         
-        // 反馈给 AI
+        // 反馈给 AI（支持模板变量）
         String suffix = added ? "" : " (已存在)";
+        Map<String, String> templateContext = new HashMap<>();
+        templateContext.put("player", player.getName());
         String result = "#skill_result: 已加载 Skill [" + skill.getMetadata().getName() + "]" + suffix + "\n\n"
-                + skill.getFormattedContent();
+                + skill.getFormattedProcessedContent(templateContext);
         cliManager.feedbackToAI(player, result);
     }
 
     /**
-     * AskUserQuestion - 请求数据类
+     * 处理 #unloadskill 工具
+     */
+    private void handleUnloadSkillTool(Player player, String args, DialogueSession session) {
+        String skillId = args.trim().toLowerCase();
+
+        if (skillId.isEmpty()) {
+            cliManager.feedbackToAI(player, "#unloadskill_result: 错误 - 请提供 Skill ID");
+            return;
+        }
+
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        // 检查 Skill 是否存在
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+        if (skill == null) {
+            cliManager.feedbackToAI(player, "#unloadskill_result: 错误 - 未找到 Skill: " + skillId);
+            return;
+        }
+
+        // 从对话历史移除
+        boolean removedFromSession = false;
+        if (session != null) {
+            removedFromSession = session.removeSkillContext(skillId);
+        }
+
+        // 从玩家记录移除
+        boolean removedFromPlayer = plugin.getSkillManager().unloadSkillForPlayer(player, skillId);
+
+        // 反馈给 AI
+        if (removedFromSession || removedFromPlayer) {
+            cliManager.feedbackToAI(player, "#unloadskill_result: 已卸载 Skill [" + skill.getMetadata().getName() + "]");
+        } else {
+            cliManager.feedbackToAI(player, "#unloadskill_result: Skill [" + skill.getMetadata().getName() + "] 未在加载列表中");
+        }
+    }
      * 参考 Claude 的 AskUserQuestion 工具结构（单问题版本）
      */
     private static class AskUserQuestionRequest {

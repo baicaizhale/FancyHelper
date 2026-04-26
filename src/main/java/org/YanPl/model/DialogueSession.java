@@ -13,8 +13,9 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class DialogueSession {
 
-    private final Set<String> loadedSkillIds = new HashSet<>();
+    private final Set<String> loadedSkillIds = new LinkedHashSet<>();
     /**
      * 对话模式
      */
@@ -571,6 +572,7 @@ public class DialogueSession {
 
     /**
      * 添加 Skill 上下文到对话中（引用式）
+     * 如果已达到上限，自动淘汰最旧的 Skill
      * @param skill Skill 对象
      */
     public boolean addSkillContext(org.YanPl.model.Skill skill) {
@@ -582,6 +584,12 @@ public class DialogueSession {
             return false;
         }
 
+        // 自动淘汰：达到上限时移除最旧的 Skill
+        if (loadedSkillIds.size() >= 5) {
+            String oldestId = loadedSkillIds.iterator().next();
+            removeSkillContext(oldestId);
+        }
+
         loadedSkillIds.add(skillId);
 
         // 创建引用式消息，不污染历史
@@ -591,6 +599,45 @@ public class DialogueSession {
 
         // 记录到日志
         appendLog("SKILL_CONTEXT", "Loaded skill: " + skill.getId() + " (" + skill.getMetadata().getName() + ")");
+        return true;
+    }
+
+    /**
+     * 获取当前已加载的 Skill ID 集合（不可变视图）
+     */
+    public Set<String> getLoadedSkillIds() {
+        return Collections.unmodifiableSet(loadedSkillIds);
+    }
+
+    /**
+     * 检查是否已加载某个 Skill
+     */
+    public boolean hasLoadedSkill(String skillId) {
+        return loadedSkillIds.contains(skillId.toLowerCase());
+    }
+
+    /**
+     * 从对话上下文中移除指定 Skill
+     * 同时移除对应的 Skill Reference 消息
+     * @param skillId 要移除的 Skill ID
+     * @return 是否成功移除
+     */
+    public boolean removeSkillContext(String skillId) {
+        String lowerId = skillId.toLowerCase();
+        if (!loadedSkillIds.contains(lowerId)) {
+            return false;
+        }
+
+        loadedSkillIds.remove(lowerId);
+
+        // 移除对应的 Skill Reference 消息
+        String refPrefix = "[Skill Reference: ";
+        history.removeIf(msg -> msg.getRole().equals("system")
+                && msg.getContent() != null
+                && msg.getContent().startsWith(refPrefix)
+                && msg.getContent().toLowerCase().contains(lowerId));
+
+        appendLog("SKILL_CONTEXT", "Unloaded skill: " + skillId);
         return true;
     }
 
