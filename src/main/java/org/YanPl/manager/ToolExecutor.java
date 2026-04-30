@@ -217,8 +217,13 @@ public class ToolExecutor {
             }
         } else if (lowerToolName.equals("#exit")) {
             player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
-        } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") && 
-            !lowerToolName.equals("#end") && !lowerToolName.equals("#list") && 
+        } else if (lowerToolName.equals("#skill")) {
+            String skillId = args.trim().toLowerCase();
+            org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+            String skillName = skill != null ? skill.getDisplayName() : args;
+            player.sendMessage(ChatColor.GRAY + "◌ " + ChatColor.WHITE + "Run Skill: " + skillName);
+        } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") &&
+            !lowerToolName.equals("#end") && !lowerToolName.equals("#list") &&
             !lowerToolName.equals("#read") && !lowerToolName.equals("#todo") &&
             !lowerToolName.equals("#getpreset") && !lowerToolName.equals("#webread")) {
             // 对 #webread 隐藏此显示，因为 #webread 会在 executeWebReader 中显示更详细的信息
