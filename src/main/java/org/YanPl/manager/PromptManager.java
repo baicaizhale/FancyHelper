@@ -147,6 +147,7 @@ public class PromptManager {
         sb.append("[Query]\n");
         sb.append("  #search: <args>      - Internet search (Wiki priority). Add 'widely' to force general web search.\n");
         sb.append("  #skill: <id>         - Load Skill knowledge module. Always check Available Skills list first.\n");
+        sb.append("  #unloadskill: <id>   - Unload a loaded Skill to free context space.\n");
         sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
         sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
         sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
