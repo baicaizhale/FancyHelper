@@ -2120,6 +2120,10 @@ public class CLIManager {
     }
 
     private void handleAIResponse(Player player, AIResponse aiResponse) {
+        handleAIResponse(player, aiResponse, false);
+    }
+
+    private void handleAIResponse(Player player, AIResponse aiResponse, boolean skipDisplay) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
@@ -2299,12 +2303,14 @@ public class CLIManager {
             currentPos = hashIndex + 1;
         }
 
-        // 展示 Fancy 内容
-        if (!content.isEmpty()) {
-            displayFancyContent(player, content, finalThought);
-        } else if (finalThought != null) {
-            // 如果只有思考过程而没有正文内容（例如纯工具调用前的思考），也显示思考按钮
-            displayFancyContent(player, "", finalThought);
+        // 展示 Fancy 内容（流式输出已提前显示时跳过）
+        if (!skipDisplay) {
+            if (!content.isEmpty()) {
+                displayFancyContent(player, content, finalThought);
+            } else if (finalThought != null) {
+                // 如果只有思考过程而没有正文内容（例如纯工具调用前的思考），也显示思考按钮
+                displayFancyContent(player, "", finalThought);
+            }
         }
 
         // 处理工具调用
@@ -2688,12 +2694,127 @@ public class CLIManager {
             });
             
             try {
+                if (plugin.getConfigManager().isPlayerStreamingEnabled(player)) {
+                    // === 流式输出：工具反馈触发的 AI 回复 ===
+                    StreamingHandler streamingHandler = new StreamingHandler(plugin, player);
+                    activeStreamingHandlers.put(uuid, streamingHandler);
+
+                    final StringBuilder fullResponseText = new StringBuilder();
+                    final StringBuilder accumulatedText = new StringBuilder();
+                    final String[] lastFormatted = {""};
+                    final boolean[] isFirstLine = {true};
+                    final boolean[] responseHandled = {false};
+
+                    streamingHandler.setOnChunkCallback((chunk) -> {
+                        if (!plugin.isEnabled() || !player.isOnline()) return;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
+                            accumulatedText.append(chunk);
+                            String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                            formatted = ColorUtil.translateCustomColors(formatted);
+                            int commonPrefix = 0;
+                            int minLen = Math.min(lastFormatted[0].length(), formatted.length());
+                            while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
+                                commonPrefix++;
+                            }
+                            String newContent = formatted.substring(commonPrefix);
+                            lastFormatted[0] = formatted;
+                            if (newContent.isEmpty()) return;
+                            String[] lines = newContent.split("\n", -1);
+                            for (int i = 0; i < lines.length; i++) {
+                                String line = lines[i];
+                                boolean isLastLine = (i == lines.length - 1);
+                                if (isFirstLine[0]) {
+                                    if (!line.isEmpty() || !isLastLine) {
+                                        player.sendMessage(ChatColor.WHITE + "◆ " + line);
+                                        isFirstLine[0] = false;
+                                    }
+                                } else {
+                                    if (!line.isEmpty() || !isLastLine) {
+                                        player.sendMessage(ChatColor.WHITE + "  " + line);
+                                    }
+                                }
+                            }
+                        });
+                    });
+
+                    streamingHandler.setOnCompleteCallback((completeText) -> {
+                        if (responseHandled[0]) return;
+                        responseHandled[0] = true;
+                        fullResponseText.append(completeText);
+                        activeStreamingHandlers.remove(uuid);
+                        if (!plugin.isEnabled()) return;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (!player.isOnline()) return;
+                            // flush remaining undisplayed text
+                            String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                            formatted = ColorUtil.translateCustomColors(formatted);
+                            int commonPrefix = 0;
+                            int minLen = Math.min(lastFormatted[0].length(), formatted.length());
+                            while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
+                                commonPrefix++;
+                            }
+                            String remaining = formatted.substring(commonPrefix);
+                            if (!remaining.isEmpty()) {
+                                String[] lines = remaining.split("\n", -1);
+                                for (int i = 0; i < lines.length; i++) {
+                                    String line = lines[i];
+                                    boolean isLastLine = (i == lines.length - 1);
+                                    if (isFirstLine[0]) {
+                                        if (!line.isEmpty() || !isLastLine) {
+                                            player.sendMessage(ChatColor.WHITE + "◆ " + line);
+                                            isFirstLine[0] = false;
+                                        }
+                                    } else {
+                                        if (!line.isEmpty() || !isLastLine) {
+                                            player.sendMessage(ChatColor.WHITE + "  " + line);
+                                        }
+                                    }
+                                }
+                            }
+                            String thought = streamingHandler.getThoughtContent();
+                            AIResponse response = new AIResponse(completeText,
+                                (thought != null && !thought.isEmpty()) ? thought : null);
+                            handleAIResponse(player, response, true);
+                        });
+                    });
+
+                    streamingHandler.setOnErrorCallback((error) -> {
+                        if (responseHandled[0]) return;
+                        responseHandled[0] = true;
+                        activeStreamingHandlers.remove(uuid);
+                        plugin.getCloudErrorReport().report(error);
+                        if (!plugin.isEnabled()) return;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                            player.sendMessage(ChatColor.RED + "⨀ 流式输出错误: " + error.getMessage());
+                            isGenerating.put(uuid, false);
+                            generationStates.put(uuid, GenerationStatus.ERROR);
+                            generationStartTimes.remove(uuid);
+                            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
+                        });
+                    });
+
+                    String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
+
+                    // 回退：流式未产生任何 chunk（如文本一次到达）
+                    if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
+                        responseHandled[0] = true;
+                        activeStreamingHandlers.remove(uuid);
+                        String thought = streamingHandler.getThoughtContent();
+                        AIResponse response = new AIResponse(completeText,
+                            (thought != null && !thought.isEmpty()) ? thought : null);
+                        if (!plugin.isEnabled()) return;
+                        Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response, true));
+                    }
+                } else {
                     AIResponse response = ai.chat(session, systemPrompt);
 
-                if (!plugin.isEnabled()) return;
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    handleAIResponse(player, response);
-                });
+                    if (!plugin.isEnabled()) return;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        handleAIResponse(player, response);
+                    });
+                }
             } catch (IOException e) {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {

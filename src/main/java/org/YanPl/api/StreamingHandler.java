@@ -38,6 +38,7 @@ public class StreamingHandler {
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
+    private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     
@@ -122,6 +123,7 @@ public class StreamingHandler {
             reasoningStartTime = -1;
             reasoningJustCompleted = false;
             reasoningCompleteFired = false;
+            toolCallDetected = false;
             
             logger.info("[Stream] 流式输出已取消并清理资源");
         } catch (Exception e) {
@@ -201,7 +203,18 @@ public class StreamingHandler {
 
                             if (textChunk != null && !textChunk.isEmpty()) {
                                 fullText.append(textChunk);
-                                buffer.append(textChunk);
+
+                                if (!toolCallDetected) {
+                                    int hashIndex = textChunk.indexOf('#');
+                                    if (hashIndex >= 0) {
+                                        toolCallDetected = true;
+                                        if (hashIndex > 0) {
+                                            buffer.append(textChunk.substring(0, hashIndex));
+                                        }
+                                    } else {
+                                        buffer.append(textChunk);
+                                    }
+                                }
 
                                 flushBufferIfReady();
                             }
@@ -490,15 +503,23 @@ public class StreamingHandler {
     private void flushBufferIfReady() {
         if (getVisualWidth(buffer) >= MAX_LINE_WIDTH) {
             String text = buffer.toString();
+            // 安全检查：如果缓冲中出现 # 工具调用标记，截断并停止后续输出
+            if (!toolCallDetected) {
+                int hashIndex = text.indexOf('#');
+                if (hashIndex >= 0) {
+                    toolCallDetected = true;
+                    text = text.substring(0, hashIndex);
+                }
+            }
             buffer.setLength(0);
-            
+
             if (onChunkCallback != null && !text.isEmpty()) {
                 try {
                     onChunkCallback.accept(text);
                 } catch (Exception callbackError) {
                     errorOccurred = true;
                     logger.warning("[Stream] 数据块回调异常: " + callbackError.getMessage());
-                    
+
                     // 调用错误回调
                     if (onErrorCallback != null) {
                         try {
@@ -519,6 +540,14 @@ public class StreamingHandler {
     private void flushRemainingBuffer() {
         if (buffer.length() > 0 && !isCancelled.get()) {
             String text = buffer.toString();
+            // 安全检查：如果缓冲中出现 # 工具调用标记，截断
+            if (!toolCallDetected) {
+                int hashIndex = text.indexOf('#');
+                if (hashIndex >= 0) {
+                    toolCallDetected = true;
+                    text = text.substring(0, hashIndex);
+                }
+            }
             buffer.setLength(0);
 
             if (onChunkCallback != null && !text.isEmpty()) {
