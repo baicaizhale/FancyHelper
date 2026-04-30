@@ -4,6 +4,7 @@ import org.YanPl.FancyHelper;
 import org.YanPl.util.ResourceUtil;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
@@ -443,11 +444,35 @@ public class ConfigManager {
     }
 
     /**
-     * 获取是否启用流式输出
+     * 获取是否启用流式输出（全局配置默认值）
      * @return 是否启用流式输出
      */
     public boolean isStreamingEnabled() {
         return config.getBoolean("settings.streaming", true);
+    }
+
+    /**
+     * 获取玩家个人的流式输出设置
+     * @param player 玩家
+     * @return 玩家是否启用了流式输出（如未设置过则返回全局默认值）
+     */
+    public boolean isPlayerStreamingEnabled(Player player) {
+        String path = player.getUniqueId() + ".streaming";
+        if (playerData.contains(path)) {
+            return playerData.getBoolean(path);
+        }
+        return isStreamingEnabled();
+    }
+
+    /**
+     * 设置玩家个人的流式输出
+     * @param player 玩家
+     * @param enabled 是否启用
+     */
+    public void setPlayerStreamingEnabled(Player player, boolean enabled) {
+        String path = player.getUniqueId() + ".streaming";
+        playerData.set(path, enabled);
+        savePlayerData();
     }
 
     /**

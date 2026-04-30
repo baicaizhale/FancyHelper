@@ -107,6 +107,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "toggle":
             case "tools":
             case "display":
+            case "streaming":
             case "select":
             case "other":
             case "exempt_anti_loop":
@@ -173,6 +174,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
         sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
         sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
+        sender.sendMessage(" §7- §b/cli streaming §f: 切换流式输出开关");
         sender.sendMessage(" §7- §b/cli skill §f: Skill 管理命令");
         sender.sendMessage(" §7  §b/cli skill list §f: 列出所有 Skill");
         sender.sendMessage(" §7  §b/cli skill info <id> §f: 查看 Skill 详情");
@@ -246,6 +248,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 String newPos = currentPos.equalsIgnoreCase("actionbar") ? "subtitle" : "actionbar";
                 plugin.getConfigManager().setPlayerDisplayPosition(player, newPos);
                 player.sendMessage(ChatColor.GREEN + "状态显示位置已切换为: " + ChatColor.YELLOW + newPos);
+                handleSettings(player);
+                return true;
+            case "streaming":
+                boolean currentStreaming = plugin.getConfigManager().isPlayerStreamingEnabled(player);
+                plugin.getConfigManager().setPlayerStreamingEnabled(player, !currentStreaming);
+                player.sendMessage(ChatColor.GREEN + "流式输出已" + (!currentStreaming ? "开启" : "关闭"));
                 handleSettings(player);
                 return true;
             case "select":
@@ -473,10 +481,24 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         posBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态显示位置 (actionbar/subtitle)")));
         posLine.addExtra(posBtn);
         player.spigot().sendMessage(posLine);
-        
+
         player.sendMessage("");
 
-        // 3. Management Buttons
+        // 3. Streaming Toggle
+        boolean streaming = plugin.getConfigManager().isPlayerStreamingEnabled(player);
+        TextComponent streamLine = new TextComponent(ColorUtil.translateCustomColors("&7  Streaming: "));
+        TextComponent streamVal = new TextComponent(ColorUtil.translateCustomColors(streaming ? "&aEnabled" : "&cDisabled"));
+        streamLine.addExtra(streamVal);
+        streamLine.addExtra("  ");
+        TextComponent streamBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Toggle &8]"));
+        streamBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli streaming"));
+        streamBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换流式输出")));
+        streamLine.addExtra(streamBtn);
+        player.spigot().sendMessage(streamLine);
+
+        player.sendMessage("");
+
+        // 4. Management Buttons
         TextComponent toolsLine = new TextComponent("  ");
         
         TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6Tools &8]"));
@@ -1005,7 +1027,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
                 "reload", "status", "yolo", "normal", "smart", "checkupdate", "upgrade",
-                "read", "set", "settings", "tools", "display", "toggle",
+                "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
                 "stop", "download", "help", "lib", "compress", "skill"
