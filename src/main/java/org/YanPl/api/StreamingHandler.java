@@ -320,6 +320,10 @@ public class StreamingHandler {
                 return null;
             }
 
+            // 标记本 chunk 是否包含 reasoning（思考）内容，
+            // 若是则无需在末尾打印"无法提取文本"的调试日志
+            boolean hasReasoningInChunk = false;
+
             // 1. 尝试解析 OpenAI 格式 (choices 数组)
             if (json.has("choices") && json.get("choices").isJsonArray()) {
                 var choices = json.getAsJsonArray("choices");
@@ -338,6 +342,7 @@ public class StreamingHandler {
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
                             String rc = delta.get("reasoning_content").getAsString();
                             if (!rc.isEmpty()) {
+                                hasReasoningInChunk = true;
                                 // 第一个非空 reasoning token → 开始计时
                                 if (reasoningStartTime == -1) {
                                     reasoningStartTime = System.currentTimeMillis();
@@ -364,6 +369,7 @@ public class StreamingHandler {
                 String type = json.get("type").getAsString();
                 // 捕获思考模型的 reasoning 事件
                 if (type.startsWith("response.reasoning.")) {
+                    hasReasoningInChunk = true;
                     if (json.has("data") && json.get("data").isJsonObject()) {
                         JsonObject innerData = json.getAsJsonObject("data");
                         if (type.endsWith(".delta") && innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
@@ -413,7 +419,8 @@ public class StreamingHandler {
             }
 
             // 如果到这里，可能是其他格式的 SSE 数据（如 [DONE] 标记或控制信息）
-            if (plugin.getConfigManager().isDebug()) {
+            // reasoning 内容已在前面捕获，跳过日志避免噪音
+            if (plugin.getConfigManager().isDebug() && !hasReasoningInChunk) {
                 logger.info("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
             }
 

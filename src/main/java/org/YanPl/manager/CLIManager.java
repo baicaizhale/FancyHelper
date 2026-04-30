@@ -1738,26 +1738,27 @@ public class CLIManager {
                 if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
                 
                 accumulatedText.append(chunk);
-                
-                String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+
+                String safeText = stripIncompleteFormatting(accumulatedText.toString());
+                String formatted = convertMarkdownBoldToMinecraft(safeText);
                 formatted = ColorUtil.translateCustomColors(formatted);
-                
+
                 int commonPrefix = 0;
                 int minLen = Math.min(lastFormatted[0].length(), formatted.length());
                 while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
                     commonPrefix++;
                 }
-                
+
                 String newContent = formatted.substring(commonPrefix);
                 lastFormatted[0] = formatted;
-                
+
                 if (newContent.isEmpty()) return;
-                
+
                 String[] lines = newContent.split("\n", -1);
                 for (int i = 0; i < lines.length; i++) {
                     String line = lines[i];
                     boolean isLastLine = (i == lines.length - 1);
-                    
+
                     if (isFirstLine[0]) {
                         if (!line.isEmpty() || !isLastLine) {
                             player.sendMessage(ChatColor.WHITE + "◆ " + line);
@@ -2710,7 +2711,8 @@ public class CLIManager {
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
                             accumulatedText.append(chunk);
-                            String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
+                            String safeText = stripIncompleteFormatting(accumulatedText.toString());
+                            String formatted = convertMarkdownBoldToMinecraft(safeText);
                             formatted = ColorUtil.translateCustomColors(formatted);
                             int commonPrefix = 0;
                             int minLen = Math.min(lastFormatted[0].length(), formatted.length());
@@ -3094,6 +3096,27 @@ public class CLIManager {
      * @param text 原始文本
      * @return 转换后的文本
      */
+    /**
+     * 流式输出时，裁掉末尾未闭合的 Markdown 格式标记，
+     * 防止 ** 等标记在闭合前就泄露给玩家。
+     */
+    private String stripIncompleteFormatting(String text) {
+        if (text == null || text.isEmpty()) return text;
+        // 统计 ** 出现次数，奇数表示最后一个 ** 未闭合
+        int count = 0;
+        int lastPos = -1;
+        int idx = 0;
+        while ((idx = text.indexOf("**", idx)) != -1) {
+            count++;
+            lastPos = idx;
+            idx += 2;
+        }
+        if (count % 2 == 1 && lastPos >= 0) {
+            return text.substring(0, lastPos);
+        }
+        return text;
+    }
+
     private String convertMarkdownBoldToMinecraft(String text) {
         if (text == null || text.isEmpty()) {
             return text;
