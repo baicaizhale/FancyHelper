@@ -221,7 +221,7 @@ public class ToolExecutor {
             String skillId = args.trim().toLowerCase();
             org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
             String skillName = skill != null ? skill.getDisplayName() : args;
-            player.sendMessage(ChatColor.GRAY + "◌ " + ChatColor.WHITE + "Run Skill: " + skillName);
+            player.sendMessage(ChatColor.GRAY + "◌ Run Skill: " + skillName);
         } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") &&
             !lowerToolName.equals("#end") && !lowerToolName.equals("#list") &&
             !lowerToolName.equals("#read") && !lowerToolName.equals("#todo") &&
@@ -1375,7 +1375,7 @@ public class ToolExecutor {
      * 处理 #search 工具
      */
     private void handleSearchTool(Player player, String query) {
-        player.sendMessage(ChatColor.GRAY + "⨁ " + ChatColor.WHITE + "Searching: " + query);
+        player.sendMessage(ChatColor.GRAY + "⨁ Searching: " + query);
         cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
 
         if (!plugin.isEnabled()) return;
