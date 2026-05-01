@@ -1098,7 +1098,7 @@ public class CLIManager {
             Long pendingStreamed = streamedOutputTokens.get(uuid);
             if (pendingStreamed != null && pendingStreamed > 0) {
                 exitSession.addOutputTokens(pendingStreamed);
-                roundOutputTokens.merge(uuid, pendingStreamed, Long::sum);
+                roundOutputTokens.merge(uuid, pendingStreamed, (a, b) -> a + b);
             }
         }
 
@@ -2003,7 +2003,7 @@ public class CLIManager {
                     Long streamedThisCycle = streamedOutputTokens.get(uuid);
                     if (streamedThisCycle != null && streamedThisCycle > 0) {
                         session.addOutputTokens(streamedThisCycle);
-                        roundOutputTokens.merge(uuid, streamedThisCycle, Long::sum);
+                        roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
                     }
                     streamedOutputTokens.remove(uuid);
                     executeTool(player, toolCall);
@@ -2012,7 +2012,7 @@ public class CLIManager {
                     Long streamedTotal = streamedOutputTokens.get(uuid);
                     if (streamedTotal != null && streamedTotal > 0) {
                         session.addOutputTokens(streamedTotal);
-                        roundOutputTokens.merge(uuid, streamedTotal, Long::sum);
+                        roundOutputTokens.merge(uuid, streamedTotal, (a, b) -> a + b);
                     }
                     streamedOutputTokens.remove(uuid);
                     checkTokenWarning(player, session);
@@ -2028,7 +2028,7 @@ public class CLIManager {
             long streamedOutErr = streamedOutputTokens.getOrDefault(uuid, 0L);
             streamedOutputTokens.remove(uuid);
             if (streamedOutErr > 0) {
-                roundOutputTokens.merge(uuid, streamedOutErr, Long::sum);
+                roundOutputTokens.merge(uuid, streamedOutErr, (a, b) -> a + b);
             }
             plugin.getCloudErrorReport().report(error);
             if (!plugin.isEnabled()) return;
@@ -2462,7 +2462,7 @@ public class CLIManager {
             Long streamedThisCycle = streamedOutputTokens.get(uuid);
             if (streamedThisCycle != null && streamedThisCycle > 0) {
                 session.addOutputTokens(streamedThisCycle);
-                roundOutputTokens.merge(uuid, streamedThisCycle, Long::sum);
+                roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
             }
             streamedOutputTokens.remove(uuid);
             executeTool(player, toolCall);
@@ -2478,7 +2478,7 @@ public class CLIManager {
                 Long streamedTotal = streamedOutputTokens.get(uuid);
                 if (streamedTotal != null && streamedTotal > 0) {
                     session.addOutputTokens(streamedTotal);
-                    roundOutputTokens.merge(uuid, streamedTotal, Long::sum);
+                    roundOutputTokens.merge(uuid, streamedTotal, (a, b) -> a + b);
                 }
                 streamedOutputTokens.remove(uuid);
 
@@ -2957,7 +2957,7 @@ public class CLIManager {
                         long streamedOutErr2 = streamedOutputTokens.getOrDefault(uuid, 0L);
                         streamedOutputTokens.remove(uuid);
                         if (streamedOutErr2 > 0) {
-                            roundOutputTokens.merge(uuid, streamedOutErr2, Long::sum);
+                            roundOutputTokens.merge(uuid, streamedOutErr2, (a, b) -> a + b);
                         }
                         plugin.getCloudErrorReport().report(error);
                         if (!plugin.isEnabled()) return;
@@ -2991,7 +2991,7 @@ public class CLIManager {
                         streamedOutputTokens.remove(uuid);
                         if (streamedOutFallback > 0 && session != null) {
                             session.addOutputTokens(streamedOutFallback);
-                            roundOutputTokens.merge(uuid, streamedOutFallback, Long::sum);
+                            roundOutputTokens.merge(uuid, streamedOutFallback, (a, b) -> a + b);
                         }
                         String thought = streamingHandler.getThoughtContent();
                         AIResponse response = new AIResponse(completeText,
