@@ -373,4 +373,4 @@ jobs:
           tag_name: v${{ needs.build.outputs.RELEASE_VERSION }}
           name: Release v${{ needs.build.outputs.RELEASE_VERSION }}
           body_path: ./release_body.md
-          make_latest: true
+          make_latest: false
