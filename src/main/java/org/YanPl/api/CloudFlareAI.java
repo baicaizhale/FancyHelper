@@ -105,65 +105,9 @@ public class CloudFlareAI {
      */
     private void logInteraction(DialogueSession session, String requestBody, String responseBody) {
         try {
-            // 1. 记录请求内容
-            StringBuilder requestSb = new StringBuilder();
-            try {
-                JsonElement reqEl = gson.fromJson(requestBody, JsonElement.class);
-                if (reqEl.isJsonObject()) {
-                    JsonObject reqObj = reqEl.getAsJsonObject();
-                    
-                    // 记录模型信息
-                    if (reqObj.has("model")) {
-                        requestSb.append("Model: ").append(reqObj.get("model").getAsString()).append("\n\n");
-                    }
-                    
-                    // 记录消息（只记录本次新增的消息，避免重复记录历史上下文）
-                    if (reqObj.has("messages") && reqObj.get("messages").isJsonArray()) {
-                        JsonArray messages = reqObj.get("messages").getAsJsonArray();
-                        int lastLoggedCount = session.getLastLoggedMessageCount();
-                        int newMessageCount = messages.size() - lastLoggedCount;
-                        
-                        if (newMessageCount > 0) {
-                            requestSb.append("New Messages (").append(newMessageCount).append(" items):\n");
-                            
-                            // 只记录新增的消息（从 lastLoggedCount 开始）
-                            for (int i = lastLoggedCount; i < messages.size(); i++) {
-                                JsonObject msg = messages.get(i).getAsJsonObject();
-                                if (msg.has("role") && msg.has("content")) {
-                                    String role = msg.get("role").getAsString();
-                                    String content = msg.get("content").getAsString();
-                                    
-                                    // 记录系统提示词（只记录一次）
-                                    if ("system".equals(role)) {
-                                        session.logSystemPrompt(content);
-                                    } else {
-                                        requestSb.append("\n[").append(role.toUpperCase()).append("]:\n");
-                                        requestSb.append(content).append("\n");
-                                    }
-                                }
-                            }
-                            
-                            // 更新已记录的消息数量
-                            session.setLastLoggedMessageCount(messages.size());
-                        } else {
-                            requestSb.append("No new messages (all already logged)\n");
-                        }
-                    }
-                    
-                    // 记录其他参数
-                    if (reqObj.has("max_tokens")) {
-                        requestSb.append("\nMax Tokens: ").append(reqObj.get("max_tokens").getAsInt()).append("\n");
-                    }
-                    if (reqObj.has("temperature")) {
-                        requestSb.append("Temperature: ").append(reqObj.get("temperature").getAsDouble()).append("\n");
-                    }
-                }
-            } catch (Exception e) {
-                requestSb.append("Raw Request:\n").append(requestBody).append("\n");
-            }
-            session.logAIRequest(requestSb.toString());
-            
-            // 2. 记录响应内容
+            logRequestFormatted(session, requestBody);
+
+            // 记录响应内容
             StringBuilder responseSb = new StringBuilder();
             try {
                 JsonElement respEl = gson.fromJson(responseBody, JsonElement.class);
@@ -213,6 +157,66 @@ public class CloudFlareAI {
             // 异常回退 - 使用原始方法记录
             session.appendLog("AI_RAW_DEBUG", "Request:\n" + requestBody + "\n\nResponse:\n" + responseBody);
         }
+    }
+
+    /**
+     * 为流式输出构建可读的响应日志条目
+     * 流式没有完整的 API 响应 JSON，用累积文本模拟
+     */
+    private String buildStreamingLogResponse(String fullText) {
+        return fullText + "\n\n[Streaming] Finish Reason: stop\n";
+    }
+
+    /**
+     * 解析请求 JSON 并格式化写入日志（流式和非流式共用）。
+     * 只记录本次新增的消息，更新 lastLoggedMessageCount。
+     */
+    private void logRequestFormatted(DialogueSession session, String requestBody) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            JsonElement reqEl = gson.fromJson(requestBody, JsonElement.class);
+            if (reqEl.isJsonObject()) {
+                JsonObject reqObj = reqEl.getAsJsonObject();
+                if (reqObj.has("model")) {
+                    sb.append("Model: ").append(reqObj.get("model").getAsString()).append("\n\n");
+                }
+                // 支持 "messages" (OpenAI) 和 "input" (CloudFlare Responses API)
+                String msgKey = reqObj.has("messages") ? "messages" : "input";
+                if (reqObj.has(msgKey) && reqObj.get(msgKey).isJsonArray()) {
+                    JsonArray messages = reqObj.get(msgKey).getAsJsonArray();
+                    int lastLoggedCount = session.getLastLoggedMessageCount();
+                    int newMessageCount = messages.size() - lastLoggedCount;
+                    if (newMessageCount > 0) {
+                        sb.append("New Messages (").append(newMessageCount).append(" items):\n");
+                        for (int i = lastLoggedCount; i < messages.size(); i++) {
+                            JsonObject msg = messages.get(i).getAsJsonObject();
+                            if (msg.has("role") && msg.has("content")) {
+                                String role = msg.get("role").getAsString();
+                                String content = msg.get("content").getAsString();
+                                if ("system".equals(role)) {
+                                    session.logSystemPrompt(content);
+                                } else {
+                                    sb.append("\n[").append(role.toUpperCase()).append("]:\n");
+                                    sb.append(content).append("\n");
+                                }
+                            }
+                        }
+                        session.setLastLoggedMessageCount(messages.size());
+                    } else {
+                        sb.append("No new messages (all already logged)\n");
+                    }
+                }
+                if (reqObj.has("max_tokens")) {
+                    sb.append("\nMax Tokens: ").append(reqObj.get("max_tokens").getAsInt()).append("\n");
+                }
+                if (reqObj.has("temperature")) {
+                    sb.append("Temperature: ").append(reqObj.get("temperature").getAsDouble()).append("\n");
+                }
+            }
+        } catch (Exception e) {
+            sb.append("Raw Request:\n").append(requestBody).append("\n");
+        }
+        session.logAIRequest(sb.toString());
     }
 
     /**
@@ -913,6 +917,7 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -985,6 +990,7 @@ public class CloudFlareAI {
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
+
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -1066,6 +1072,7 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -1137,6 +1144,7 @@ public class CloudFlareAI {
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
+
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -1221,6 +1229,9 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+        // 记录系统提示词和请求（流式模式下也需要）
+        logRequestFormatted(session, bodyString);
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
@@ -1237,7 +1248,9 @@ public class CloudFlareAI {
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
-            return streamingHandler.processStream(response);
+            String fullText = streamingHandler.processStream(response);
+            session.logAIResponse(buildStreamingLogResponse(fullText));
+            return fullText;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("流式调用被中断: " + e.getMessage(), e);
@@ -1292,6 +1305,9 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+        // 记录系统提示词和请求（流式模式下也需要）
+        logRequestFormatted(session, bodyString);
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -1308,7 +1324,9 @@ public class CloudFlareAI {
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
-            return streamingHandler.processStream(response);
+            String fullText = streamingHandler.processStream(response);
+            session.logAIResponse(buildStreamingLogResponse(fullText));
+            return fullText;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("流式调用被中断: " + e.getMessage(), e);

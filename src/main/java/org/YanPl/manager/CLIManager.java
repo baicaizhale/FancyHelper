@@ -1835,15 +1835,17 @@ public class CLIManager {
                     commonPrefix++;
                 }
                 
-                String remaining = formatted.substring(commonPrefix);
+                // trim 尾部空白，避免 chunk 与 onComplete 之间 stripIncompleteFormatting
+                // 的差异导致差分出孤立的 \n 被当成空行发送给玩家
+                String remaining = formatted.substring(commonPrefix).trim();
                 lastFormatted[0] = formatted;
-                
+
                 if (!remaining.isEmpty()) {
                     String[] lines = remaining.split("\n", -1);
                     for (int i = 0; i < lines.length; i++) {
                         String line = lines[i];
                         boolean isLastLine = (i == lines.length - 1);
-                        
+
                         if (isFirstLine[0]) {
                             if (!line.isEmpty() || !isLastLine) {
                                 player.sendMessage(ChatColor.WHITE + "◆ " + line);
@@ -1856,7 +1858,7 @@ public class CLIManager {
                         }
                     }
                 }
-                
+
                 session.addMessage("assistant", response, finalThought);
 
                 if (!thoughtContent.isEmpty()) {
@@ -2756,7 +2758,7 @@ public class CLIManager {
                             while (commonPrefix < minLen && lastFormatted[0].charAt(commonPrefix) == formatted.charAt(commonPrefix)) {
                                 commonPrefix++;
                             }
-                            String remaining = formatted.substring(commonPrefix);
+                            String remaining = formatted.substring(commonPrefix).trim();
                             if (!remaining.isEmpty()) {
                                 String[] lines = remaining.split("\n", -1);
                                 for (int i = 0; i < lines.length; i++) {
