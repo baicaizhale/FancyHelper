@@ -216,6 +216,14 @@ public class CloudFlareAI {
     }
 
     /**
+     * 为流式输出构建可读的响应日志条目
+     * 流式没有完整的 API 响应 JSON，用累积文本模拟
+     */
+    private String buildStreamingLogResponse(String fullText) {
+        return "Streaming Response:\n" + fullText + "\n\nFinish Reason: stop\n";
+    }
+
+    /**
      * 构建消息数组（OpenAI 和 CloudFlare API 通用）
      */
     private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
@@ -913,6 +921,7 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -985,6 +994,7 @@ public class CloudFlareAI {
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
+
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -1066,6 +1076,7 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -1137,6 +1148,7 @@ public class CloudFlareAI {
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
+
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -1221,6 +1233,10 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+        // 记录系统提示词和请求（流式模式下也需要）
+        session.logSystemPrompt(systemPrompt);
+        session.logAIRequest(bodyString);
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
@@ -1237,7 +1253,9 @@ public class CloudFlareAI {
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
-            return streamingHandler.processStream(response);
+            String fullText = streamingHandler.processStream(response);
+            session.logAIResponse(buildStreamingLogResponse(fullText));
+            return fullText;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("流式调用被中断: " + e.getMessage(), e);
@@ -1292,6 +1310,10 @@ public class CloudFlareAI {
 
         String bodyString = gson.toJson(bodyJson);
 
+        // 记录系统提示词和请求（流式模式下也需要）
+        session.logSystemPrompt(systemPrompt);
+        session.logAIRequest(bodyString);
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -1308,7 +1330,9 @@ public class CloudFlareAI {
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
-            return streamingHandler.processStream(response);
+            String fullText = streamingHandler.processStream(response);
+            session.logAIResponse(buildStreamingLogResponse(fullText));
+            return fullText;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("流式调用被中断: " + e.getMessage(), e);

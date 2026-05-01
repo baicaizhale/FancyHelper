@@ -208,8 +208,10 @@ public class StreamingHandler {
                                     int hashIndex = textChunk.indexOf('#');
                                     if (hashIndex >= 0) {
                                         toolCallDetected = true;
+                                        // buffer 中可能有上一轮 flush 留下的尾部空白（如 \n\n），
+                                        // 在 # 被检测到时一并裁掉，避免正文和工具调用之间出现空行
+                                        rtrimBuffer();
                                         if (hashIndex > 0) {
-                                            // 截断 # 之前的内容，去掉尾部空白避免空行
                                             String prefix = rtrim(textChunk.substring(0, hashIndex));
                                             if (!prefix.isEmpty()) {
                                                 appendWithNewlineFlush(prefix);
@@ -544,28 +546,37 @@ public class StreamingHandler {
     }
 
     /**
-     * 发送剩余的缓冲区内容
+     * 发送剩余的缓冲区内容（最终 flush，裁掉尾部空白）
      */
     private void flushRemainingBuffer() {
         if (buffer.length() > 0 && !isCancelled.get()) {
+            rtrimBuffer();
             flushBuffer();
         }
     }
 
     /**
      * 追加文本到缓冲区，遇 \\n 自动分段 flush。
-     * 最后一个 \\n 之后的内容留在缓冲区继续累积。
+     * 最后一个 \\n 及之后的内容留在缓冲区，不立即 flush：
+     * - 若下个 chunk 是普通文本 → \\n 变为正常的行分隔
+     * - 若下个 chunk 是 # → rtrimBuffer 裁掉，避免工具调用前出现空行
      */
     private void appendWithNewlineFlush(String text) {
         if (text.isEmpty()) return;
+        // 纯空白 chunk（如 \\n\\n）全部留在 buffer，等下一个 chunk 决定命运
+        if (text.trim().isEmpty()) {
+            buffer.append(text);
+            return;
+        }
         int lastNewline = text.lastIndexOf('\n');
         if (lastNewline >= 0) {
-            buffer.append(text.substring(0, lastNewline + 1));
-            flushBuffer();
-            String remaining = text.substring(lastNewline + 1);
-            if (!remaining.isEmpty()) {
-                buffer.append(remaining);
+            // 最后一个 \\n 之前的内容立即 flush
+            if (lastNewline > 0) {
+                buffer.append(text.substring(0, lastNewline));
+                flushBuffer();
             }
+            // 最后一个 \\n 及之后的内容留在 buffer
+            buffer.append(text.substring(lastNewline));
         } else {
             buffer.append(text);
         }
@@ -580,6 +591,19 @@ public class StreamingHandler {
             end--;
         }
         return text.substring(0, end);
+    }
+
+    /**
+     * 就地裁掉 buffer 尾部的空白字符，避免 # 工具调用前残留空行
+     */
+    private void rtrimBuffer() {
+        int end = buffer.length();
+        while (end > 0 && Character.isWhitespace(buffer.charAt(end - 1))) {
+            end--;
+        }
+        if (end < buffer.length()) {
+            buffer.setLength(end);
+        }
     }
 
     /**
