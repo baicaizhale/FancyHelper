@@ -209,10 +209,14 @@ public class StreamingHandler {
                                     if (hashIndex >= 0) {
                                         toolCallDetected = true;
                                         if (hashIndex > 0) {
-                                            buffer.append(textChunk.substring(0, hashIndex));
+                                            // 截断 # 之前的内容，去掉尾部空白避免空行
+                                            String prefix = rtrim(textChunk.substring(0, hashIndex));
+                                            if (!prefix.isEmpty()) {
+                                                appendWithNewlineFlush(prefix);
+                                            }
                                         }
                                     } else {
-                                        buffer.append(textChunk);
+                                        appendWithNewlineFlush(textChunk);
                                     }
                                 }
 
@@ -505,76 +509,77 @@ public class StreamingHandler {
 
     /**
      * 如果缓冲区的视觉宽度达到阈值，则发送并清空
-     * 线程安全实现
      */
     private void flushBufferIfReady() {
         if (getVisualWidth(buffer) >= MAX_LINE_WIDTH) {
-            String text = buffer.toString();
-            // 安全检查：如果缓冲中出现 # 工具调用标记，截断并停止后续输出
-            if (!toolCallDetected) {
-                int hashIndex = text.indexOf('#');
-                if (hashIndex >= 0) {
-                    toolCallDetected = true;
-                    text = text.substring(0, hashIndex);
-                }
+            flushBuffer();
+        }
+    }
+
+    /**
+     * 强制发送缓冲区内容（忽略视觉宽度阈值）
+     */
+    private void flushBuffer() {
+        if (buffer.length() == 0) return;
+        String text = buffer.toString();
+        if (!toolCallDetected) {
+            int hashIndex = text.indexOf('#');
+            if (hashIndex >= 0) {
+                toolCallDetected = true;
+                text = text.substring(0, hashIndex);
             }
-            buffer.setLength(0);
-
-            if (onChunkCallback != null && !text.isEmpty()) {
-                try {
-                    onChunkCallback.accept(text);
-                } catch (Exception callbackError) {
-                    errorOccurred = true;
-                    logger.warning("[Stream] 数据块回调异常: " + callbackError.getMessage());
-
-                    // 调用错误回调
-                    if (onErrorCallback != null) {
-                        try {
-                            onErrorCallback.accept(callbackError);
-                        } catch (Exception errorCallbackError) {
-                            logger.warning("[Stream] 错误回调异常: " + errorCallbackError.getMessage());
-                        }
-                    }
+        }
+        buffer.setLength(0);
+        if (onChunkCallback != null && !text.isEmpty()) {
+            try {
+                onChunkCallback.accept(text);
+            } catch (Exception callbackError) {
+                errorOccurred = true;
+                logger.warning("[Stream] Flush回调异常: " + callbackError.getMessage());
+                if (onErrorCallback != null) {
+                    try { onErrorCallback.accept(callbackError); } catch (Exception e) {}
                 }
             }
         }
     }
-    
+
     /**
      * 发送剩余的缓冲区内容
-     * 线程安全实现
      */
     private void flushRemainingBuffer() {
         if (buffer.length() > 0 && !isCancelled.get()) {
-            String text = buffer.toString();
-            // 安全检查：如果缓冲中出现 # 工具调用标记，截断
-            if (!toolCallDetected) {
-                int hashIndex = text.indexOf('#');
-                if (hashIndex >= 0) {
-                    toolCallDetected = true;
-                    text = text.substring(0, hashIndex);
-                }
-            }
-            buffer.setLength(0);
-
-            if (onChunkCallback != null && !text.isEmpty()) {
-                try {
-                    onChunkCallback.accept(text);
-                } catch (Exception callbackError) {
-                    errorOccurred = true;
-                    logger.warning("[Stream] 剩余缓冲回调异常: " + callbackError.getMessage());
-
-                    // 调用错误回调
-                    if (onErrorCallback != null) {
-                        try {
-                            onErrorCallback.accept(callbackError);
-                        } catch (Exception errorCallbackError) {
-                            logger.warning("[Stream] 错误回调异常: " + errorCallbackError.getMessage());
-                        }
-                    }
-                }
-            }
+            flushBuffer();
         }
+    }
+
+    /**
+     * 追加文本到缓冲区，遇 \\n 自动分段 flush。
+     * 最后一个 \\n 之后的内容留在缓冲区继续累积。
+     */
+    private void appendWithNewlineFlush(String text) {
+        if (text.isEmpty()) return;
+        int lastNewline = text.lastIndexOf('\n');
+        if (lastNewline >= 0) {
+            buffer.append(text.substring(0, lastNewline + 1));
+            flushBuffer();
+            String remaining = text.substring(lastNewline + 1);
+            if (!remaining.isEmpty()) {
+                buffer.append(remaining);
+            }
+        } else {
+            buffer.append(text);
+        }
+    }
+
+    /**
+     * 去掉字符串尾部空白字符（空格、\\r、\\n、\\t 等）
+     */
+    private static String rtrim(String text) {
+        int end = text.length();
+        while (end > 0 && Character.isWhitespace(text.charAt(end - 1))) {
+            end--;
+        }
+        return text.substring(0, end);
     }
 
     /**
