@@ -33,6 +33,7 @@ public class StreamingHandler {
     private volatile Consumer<String> onChunkCallback;
     private volatile Consumer<String> onCompleteCallback;
     private volatile Consumer<Throwable> onErrorCallback;
+    private volatile Consumer<String> onReasoningCallback;      // 思考内容逐片回调
     private volatile Consumer<Long> onReasoningCompleteCallback;  // 思考结束回调，参数为思考耗时ms
     private volatile boolean errorOccurred = false;
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
@@ -83,6 +84,14 @@ public class StreamingHandler {
     }
 
     /**
+     * 设置思考内容逐片回调（每收到一段 reasoning_content 时触发）
+     * @param callback 回调函数，参数为思考内容文本片段
+     */
+    public void setOnReasoningCallback(Consumer<String> callback) {
+        this.onReasoningCallback = callback;
+    }
+
+    /**
      * 设置思考结束回调（当 reasoning_content 切换到 content 时触发）
      * @param callback 回调函数，参数为思考耗时毫秒
      */
@@ -117,6 +126,7 @@ public class StreamingHandler {
             onChunkCallback = null;
             onCompleteCallback = null;
             onErrorCallback = null;
+            onReasoningCallback = null;
             onReasoningCompleteCallback = null;
             buffer.setLength(0);  // 清空缓冲
             thoughtContent.setLength(0);  // 清空思考内容
@@ -354,6 +364,9 @@ public class StreamingHandler {
                                     reasoningStartTime = System.currentTimeMillis();
                                 }
                                 thoughtContent.append(rc);
+                                if (onReasoningCallback != null) {
+                                    try { onReasoningCallback.accept(rc); } catch (Exception ignored) {}
+                                }
                             }
                         }
                     }
@@ -385,6 +398,9 @@ public class StreamingHandler {
                                     reasoningStartTime = System.currentTimeMillis();
                                 }
                                 thoughtContent.append(rc);
+                                if (onReasoningCallback != null) {
+                                    try { onReasoningCallback.accept(rc); } catch (Exception ignored) {}
+                                }
                             }
                         }
                     }

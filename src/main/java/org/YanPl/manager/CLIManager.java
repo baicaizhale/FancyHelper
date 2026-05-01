@@ -53,6 +53,23 @@ public class CLIManager {
     private final Map<UUID, Boolean> isGenerating = new ConcurrentHashMap<>();
     private final Map<UUID, GenerationStatus> generationStates = new ConcurrentHashMap<>();
     private final Map<UUID, Long> generationStartTimes = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> messageReceiveTimes = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> wordStartTimes = new ConcurrentHashMap<>();
+    private final Map<UUID, String> currentThinkingWords = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> streamedOutputTokens = new ConcurrentHashMap<>();
+
+    private static final String[] THINKING_WORDS = {
+        "Coalescing", "Vibing", "Puzzling", "Computing", "Forging",
+        "Tinkering", "Unfurling", "Stewing", "Determining", "Actioning",
+        "Hatching", "Improvising"
+    };
+
+    private static final long[] BREATHING_PHASE_ENDS = { 300, 500, 600, 800, 1100 };
+    private static final String[] BREATHING_HEX = {
+        "#FF5F00", "#B34100", "#8C3200", "#B34100", "#FF5F00"
+    };
+    private static final net.md_5.bungee.api.ChatColor WORD_COLOR_BUNGEE = net.md_5.bungee.api.ChatColor.of("#FF5F00");
+    private static final net.md_5.bungee.api.ChatColor STATS_COLOR = net.md_5.bungee.api.ChatColor.GRAY;
     private final Map<UUID, String> pendingCommands = new ConcurrentHashMap<>();
     private final Map<UUID, String> interruptedToolCalls = new ConcurrentHashMap<>();
     private final Map<UUID, RetryInfo> retryInfoMap = new ConcurrentHashMap<>();
@@ -469,13 +486,58 @@ public class CLIManager {
                         case THINKING:
                             Long startTime = generationStartTimes.get(uuid);
                             if (startTime == null) {
-                                // 如果开始时间为空，可能是竞态条件导致的（状态已变更但计时器还未检测到）
-                                // 跳过显示，避免重新设置时间导致计时继续
                                 continue;
                             }
-                            long elapsed = (now - startTime) / 1000;
-                            message = ChatColor.GRAY + "- 思考中 " + elapsed + "s -";
-                            sendStatusMessage(player, message);
+
+                            long msgTime = messageReceiveTimes.getOrDefault(uuid, startTime);
+                            long elapsedFromMsg = (now - msgTime) / 1000;
+
+                            // 1. 呼吸动画 — ⁕ 颜色在 1.1s 周期内循环
+                            long animPhase = (now - startTime) % 1100;
+                            int phaseIdx = 0;
+                            for (int i = 0; i < BREATHING_PHASE_ENDS.length; i++) {
+                                if (animPhase < BREATHING_PHASE_ENDS[i]) {
+                                    phaseIdx = i;
+                                    break;
+                                }
+                            }
+                            net.md_5.bungee.api.ChatColor starColor = net.md_5.bungee.api.ChatColor.of(BREATHING_HEX[phaseIdx]);
+
+                            // 2. 随机词（每 7 秒切换）
+                            Long wordStart = wordStartTimes.get(uuid);
+                            String word = currentThinkingWords.get(uuid);
+                            if (wordStart == null || word == null || now - wordStart > 7000) {
+                                word = THINKING_WORDS[new Random().nextInt(THINKING_WORDS.length)];
+                                currentThinkingWords.put(uuid, word);
+                                wordStartTimes.put(uuid, now);
+                            }
+
+                            // 3. Token 统计（含实时流式累计）
+                            DialogueSession session = sessions.get(uuid);
+                            String tokensInfo = "";
+                            if (session != null) {
+                                long streamingTokens = streamedOutputTokens.getOrDefault(uuid, 0L);
+                                long totalTokens = session.getTotalInputTokens() + session.getTotalOutputTokens() + streamingTokens;
+                                tokensInfo = " · " + totalTokens;
+                            }
+
+                            String statsSuffix = " (" + elapsedFromMsg + "s" + tokensInfo + " tokens)";
+
+                            // ActionBar: TextComponent.setColor() 直接用 hex
+                            TextComponent comp = new TextComponent("⁕ ");
+                            comp.setColor(starColor);
+                            TextComponent wordComp = new TextComponent(word + " ");
+                            wordComp.setColor(WORD_COLOR_BUNGEE);
+                            comp.addExtra(wordComp);
+                            TextComponent statsComp = new TextComponent(statsSuffix);
+                            statsComp.setColor(STATS_COLOR);
+                            comp.addExtra(statsComp);
+
+                            // Subtitle: ChatColor.of(hex) + 字符串，其 toString() 产出 §x§R§G§B 格式，sendTitle 无 bug
+                            String subtitleMsg = starColor + "⁕ " + WORD_COLOR_BUNGEE + word
+                                + STATS_COLOR + statsSuffix;
+
+                            sendStatusMessage(player, comp, subtitleMsg);
                             break;
                         case EXECUTING_TOOL:
                             message = ChatColor.GRAY + "....";
@@ -554,10 +616,23 @@ public class CLIManager {
     private void sendStatusMessage(Player player, String message) {
         String position = plugin.getConfigManager().getPlayerDisplayPosition(player);
         if ("subtitle".equalsIgnoreCase(position)) {
-            // 为了保证 subtitle 显示，发送空内容的 title
             player.sendTitle("", message, 0, 20, 0);
         } else {
             player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(message));
+        }
+    }
+
+    /**
+     * 发送含 hex 颜色的状态消息。
+     * ActionBar 路径使用已设置好颜色的 TextComponent（避 SPIGOT-5851 §x 解析 bug），
+     * Subtitle 路径使用 §x 格式字符串（sendTitle 无此 bug）。
+     */
+    private void sendStatusMessage(Player player, TextComponent actionBarComp, String subtitleMsg) {
+        String position = plugin.getConfigManager().getPlayerDisplayPosition(player);
+        if ("subtitle".equalsIgnoreCase(position)) {
+            player.sendTitle("", subtitleMsg, 0, 20, 0);
+        } else {
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, actionBarComp);
         }
     }
 
@@ -1027,6 +1102,10 @@ public class CLIManager {
         isGenerating.remove(uuid);
         generationStates.remove(uuid);
         generationStartTimes.remove(uuid);
+        messageReceiveTimes.remove(uuid);
+        wordStartTimes.remove(uuid);
+        currentThinkingWords.remove(uuid);
+        streamedOutputTokens.remove(uuid);
     }
 
     public void switchMode(Player player, DialogueSession.Mode targetMode) {
@@ -1731,13 +1810,24 @@ public class CLIManager {
             });
         });
 
+        streamingHandler.setOnReasoningCallback((reasoningChunk) -> {
+            // 异步线程直接累计 reasoning tokens
+            if (reasoningChunk == null || reasoningChunk.isEmpty()) return;
+            streamedOutputTokens.put(uuid, streamedOutputTokens.getOrDefault(uuid, 0L)
+                + DialogueSession.calculateTokens(reasoningChunk));
+        });
+
         streamingHandler.setOnChunkCallback((chunk) -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
             
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
-                
+
                 accumulatedText.append(chunk);
+
+                // 实时累计流式输出 Token
+                streamedOutputTokens.put(uuid, streamedOutputTokens.getOrDefault(uuid, 0L)
+                    + DialogueSession.calculateTokens(chunk));
 
                 String safeText = stripIncompleteFormatting(accumulatedText.toString());
                 String formatted = convertMarkdownBoldToMinecraft(safeText);
@@ -1779,6 +1869,7 @@ public class CLIManager {
             
             fullResponseText.append(completeText);
             activeStreamingHandlers.remove(uuid);
+            streamedOutputTokens.remove(uuid);
             
             if (!plugin.isEnabled()) return;
             
@@ -1903,8 +1994,9 @@ public class CLIManager {
         streamingHandler.setOnErrorCallback((error) -> {
             if (responseHandled[0]) return;
             responseHandled[0] = true;
-            
+
             activeStreamingHandlers.remove(uuid);
+            streamedOutputTokens.remove(uuid);
             plugin.getCloudErrorReport().report(error);
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -1996,6 +2088,10 @@ public class CLIManager {
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
         generationStartTimes.put(uuid, System.currentTimeMillis());
+        messageReceiveTimes.put(uuid, System.currentTimeMillis());
+        wordStartTimes.put(uuid, System.currentTimeMillis());
+        currentThinkingWords.put(uuid, THINKING_WORDS[new Random().nextInt(THINKING_WORDS.length)]);
+        streamedOutputTokens.remove(uuid);
 
         TextComponent playerMsg = new TextComponent(ChatColor.GRAY + "◇ " + message);
         playerMsg.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
@@ -2708,11 +2804,22 @@ public class CLIManager {
                     final boolean[] isFirstLine = {true};
                     final boolean[] responseHandled = {false};
 
+                    streamingHandler.setOnReasoningCallback((reasoningChunk) -> {
+                        if (reasoningChunk == null || reasoningChunk.isEmpty()) return;
+                        streamedOutputTokens.put(uuid, streamedOutputTokens.getOrDefault(uuid, 0L)
+                            + DialogueSession.calculateTokens(reasoningChunk));
+                    });
+
                     streamingHandler.setOnChunkCallback((chunk) -> {
                         if (!plugin.isEnabled() || !player.isOnline()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
                             accumulatedText.append(chunk);
+
+                            // 实时累计流式输出 Token
+                            streamedOutputTokens.put(uuid, streamedOutputTokens.getOrDefault(uuid, 0L)
+                                + DialogueSession.calculateTokens(chunk));
+
                             String safeText = stripIncompleteFormatting(accumulatedText.toString());
                             String formatted = convertMarkdownBoldToMinecraft(safeText);
                             formatted = ColorUtil.translateCustomColors(formatted);
@@ -2747,6 +2854,7 @@ public class CLIManager {
                         responseHandled[0] = true;
                         fullResponseText.append(completeText);
                         activeStreamingHandlers.remove(uuid);
+                        streamedOutputTokens.remove(uuid);
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (!player.isOnline()) return;
@@ -2787,6 +2895,7 @@ public class CLIManager {
                         if (responseHandled[0]) return;
                         responseHandled[0] = true;
                         activeStreamingHandlers.remove(uuid);
+                        streamedOutputTokens.remove(uuid);
                         plugin.getCloudErrorReport().report(error);
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -2805,6 +2914,7 @@ public class CLIManager {
                     if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
                         responseHandled[0] = true;
                         activeStreamingHandlers.remove(uuid);
+                        streamedOutputTokens.remove(uuid);
                         String thought = streamingHandler.getThoughtContent();
                         AIResponse response = new AIResponse(completeText,
                             (thought != null && !thought.isEmpty()) ? thought : null);
