@@ -451,18 +451,21 @@ public class StreamingHandler {
     
     /**
      * 计算文本在Minecraft聊天框中的视觉宽度
-     * 中文字符/全角字符权重为2，ASCII/半角字符权重为1
+     * 中文字符/全角字符权重为 1.7，ASCII/半角字符权重为 1.1
+     * 计数前剥离 ** 加粗标记
      * @param text 要计算的文本
      * @return 视觉宽度值
      */
-    private int getVisualWidth(CharSequence text) {
-        int width = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
+    private double getVisualWidth(CharSequence text) {
+        // 剥离 ** 加粗标记，不计入视觉宽度
+        String cleaned = text.toString().replace("**", "");
+        double width = 0;
+        for (int i = 0; i < cleaned.length(); i++) {
+            char c = cleaned.charAt(i);
             if (isFullWidth(c)) {
-                width += 2;
+                width += 1.7;
             } else {
-                width += 1;
+                width += 1.1;
             }
         }
         return width;
