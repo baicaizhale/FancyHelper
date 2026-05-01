@@ -1,16 +1,13 @@
 # 配置版本，请勿修改
-version: 3.7.3
-
-# AI 提供商选择: cloudflare 或 openai（默认 cloudflare）
-provider: cloudflare
+version: 3.7.4
 
 # 插件设置
 settings:
   # 是否启用调试模式，启用后会在控制台输出详细调试信息
   debug: false
-  # 是否启用猫娘模式，启用后Fancy将扮演猫娘，注意某些模型(特别是国产模型如DeepSeek)可能会拒绝这个要求
+  # 是否启用猫娘模式，启用后Fancy将扮演猫娘，注意某些模型可能会拒绝这个要求
   meow: true
-  # 是否启用流式输出，启用后AI回复将逐字流式显示，关闭后等待完整回复再显示
+  # 如果支持流式输出但玩家没有设置，是否默认启用流式输出
   streaming: true
   # 补充系统提示词（会自动追加到基础系统提示词后面，不加就留空；注意如果是角色扮演类提示词请关闭Meow模式）
   supplementary_prompt: ""
@@ -20,8 +17,10 @@ settings:
   # 对于推理模型（如 gpt-oss-120b、deepseek-reasoner、kimi-k2.5 等），建议设置为 120-300 秒
   # 对于普通模型（如 gpt-4o、gpt-4o-mini），建议设置为 60-120 秒
   api_timeout_seconds: 120
-  # Token（字符数）剩余警告阈值
-  token_warning_threshold: 100
+  # 上下文窗口剩余警告阈值
+  context_window_warning_threshold: 500
+  # 上下文窗口大小上限
+  context_window_limit: 256000
   # 是否启用匿名错误上报，帮助开发者改进插件
   auto_report: true  
   # 是否启用自动更新检查
@@ -64,12 +63,8 @@ settings:
     - scoreboard
     - tag
 
-# 公告配置
-notice:
-  # 玩家加入时是否显示插件公告（需要 FancyHelper.notice 权限）
-  show_on_join: true
-  # 每隔多久从服务器拉取公告（单位：分钟），默认 5 分钟
-  refresh_interval: 5
+# 提供商选择（接受参数：cloudflare/openai）
+provider: cloudflare
 
 # CloudFlare Workers AI 配置
 cloudflare:
@@ -78,27 +73,23 @@ cloudflare:
   # 使用的模型名称，不推荐更改，可以是任何一个Text-Generation模型
   model: "@cf/moonshotai/kimi-k2.5"
 
-# OpenAI 兼容 API 配置（provider 设为 openai 时使用）
+# OpenAI 兼容端点配置（provider 设为 openai 时使用）
 openai:
   # Based API 地址（支持自定义地址，如 OpenAI 官方、Azure OpenAI、本地模型等）
   # 示例：
-  #   - OpenAI 官方: https://api.openai.com/v1/chat/completions
+  #   - OpenAI: https://api.openai.com/v1/chat/completions
   #   - DeepSeek: https://api.deepseek.com/chat/completions
-  #   - Ollama (本地): http://localhost:11434/v1/chat/completions
-  #   - 阿里云通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+  #   - Ollama: http://localhost:11434/v1/chat/completions
   #   - Kimi开放平台: https://api.moonshot.cn/v1/chat/completions
-  #   - 其他兼容 OpenAI 格式的 API
-  api_url: https://api.openai.com/v1/chat/completions
+  #   - 其他使用 OpenAI 兼容端点的地址
+  api_url: https://api.deepseek.com/chat/completions
   # API 密钥
   api_key: your-openai-api-key
   # 使用的模型名称
   # 示例：
-  #   - OpenAI: gpt-4o, gpt-4o-mini, o1-preview, o1-mini
-  #   - DeepSeek: deepseek-chat, deepseek-reasoner
-  #   - Ollama: llama3, mistral
-  #   - Kimi开放平台: kimi-k2.5
-  #   - 阿里云通义千问: qwen3-max
-  model: gpt-4o
+  #   - DeepSeek: DeepSeek-V4-Pro,DeepSeek-V4-Flash
+  #   - Kimi开放平台: kimi-k2.6
+  model: DeepSeek-V4-Pro
 
 # 副模型设置
 # 注意：CloudFlare使用主模型的cf_key，OpenAI使用主模型的api_url和api_key
@@ -112,7 +103,7 @@ co-model:
   # OpenAI 兼容 API （仅配置模型名称，APIURL和key使用主模型设置）
   openai:
     # 使用的模型名称，推荐使用轻量级模型
-    model: gpt-4o-mini
+    model: DeepSeek-V4-Flash
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:
@@ -138,3 +129,9 @@ tavily:
   # 是否包含原始内容（可能增加响应时间）
   include_raw_content: false
 
+# 公告配置
+notice:
+  # 玩家加入时是否显示插件公告（需要 FancyHelper.notice 权限）
+  show_on_join: true
+  # 每隔多久从服务器拉取公告（单位：分钟），默认 5 分钟
+  refresh_interval: 5

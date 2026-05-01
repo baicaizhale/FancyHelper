@@ -118,6 +118,13 @@ public class ConfigManager {
                 plugin.getLogger().info("已迁移旧配置 openai.enabled=" + openaiWasEnabled + " 到 provider=" + (openaiWasEnabled ? "openai" : "cloudflare"));
             }
 
+            // 迁移旧版 token_warning_threshold 到 context_window_warning_threshold
+            if (oldValues.containsKey("settings.token_warning_threshold")) {
+                Object oldVal = oldValues.get("settings.token_warning_threshold");
+                newConfig.set("settings.context_window_warning_threshold", oldVal);
+                plugin.getLogger().info("已迁移旧配置 settings.token_warning_threshold=" + oldVal + " 到 settings.context_window_warning_threshold=" + oldVal);
+            }
+
             try {
                 newConfig.save(configFile);
                 plugin.getLogger().info("配置文件更新完成！");
@@ -270,8 +277,16 @@ public class ConfigManager {
         return config.getInt("settings.api_timeout_seconds", 120);
     }
 
-    public int getTokenWarningThreshold() {
-        return config.getInt("settings.token_warning_threshold", 500);
+    public int getContextWindowWarningThreshold() {
+        return config.getInt("settings.context_window_warning_threshold", 500);
+    }
+
+    /**
+     * 获取上下文窗口大小上限
+     * @return 上下文窗口大小上限（token数）
+     */
+    public int getContextWindowLimit() {
+        return config.getInt("settings.context_window_limit", 12800);
     }
 
     public boolean isAutoReportEnabled() {

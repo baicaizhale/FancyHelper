@@ -2511,10 +2511,10 @@ public class CLIManager {
 
     private void checkTokenWarning(Player player, DialogueSession session) {
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
-        int maxTokens = 12800;
+        int maxTokens = plugin.getConfigManager().getContextWindowLimit();
         int remaining = maxTokens - estimatedTokens;
 
-        if (remaining < plugin.getConfigManager().getTokenWarningThreshold()) {
+        if (remaining < plugin.getConfigManager().getContextWindowWarningThreshold()) {
             player.sendMessage(ChatColor.YELLOW + "⨀ 剩余上下文长度不足 ，Fancy 可能会遗忘较早的对话内容来保证对话继续。");
         }
     }

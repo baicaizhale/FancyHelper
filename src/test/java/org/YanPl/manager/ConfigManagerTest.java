@@ -163,13 +163,23 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("getTokenWarningThreshold 应返回配置值")
-    void testGetTokenWarningThreshold_ReturnsConfigValue() {
-        when(config.getInt("settings.token_warning_threshold", 500)).thenReturn(1000);
+    @DisplayName("getContextWindowWarningThreshold 应返回配置值")
+    void testGetContextWindowWarningThreshold_ReturnsConfigValue() {
+        when(config.getInt("settings.context_window_warning_threshold", 500)).thenReturn(1000);
 
-        int result = configManager.getTokenWarningThreshold();
+        int result = configManager.getContextWindowWarningThreshold();
 
         assertEquals(1000, result);
+    }
+
+    @Test
+    @DisplayName("getContextWindowLimit 应返回配置值")
+    void testGetContextWindowLimit_ReturnsConfigValue() {
+        when(config.getInt("settings.context_window_limit", 12800)).thenReturn(32000);
+
+        int result = configManager.getContextWindowLimit();
+
+        assertEquals(32000, result);
     }
 
     @Test
