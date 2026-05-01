@@ -42,8 +42,8 @@ public class DialogueSession {
     private int toolFailureCount = 0;
     private int currentChainToolCount = 0;
     private int thoughtTokens = 0;
-    private long totalInputTokens = 0;
-    private long totalOutputTokens = 0;
+    private volatile long totalInputTokens = 0;
+    private volatile long totalOutputTokens = 0;
     private long totalThinkingTimeMs = 0;
     private boolean antiLoopExempted = false;
     private Mode mode = Mode.NORMAL;

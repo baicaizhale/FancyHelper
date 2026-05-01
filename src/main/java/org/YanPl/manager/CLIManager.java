@@ -57,6 +57,7 @@ public class CLIManager {
     private final Map<UUID, Long> wordStartTimes = new ConcurrentHashMap<>();
     private final Map<UUID, String> currentThinkingWords = new ConcurrentHashMap<>();
     private final Map<UUID, Long> streamedOutputTokens = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> roundOutputTokens = new ConcurrentHashMap<>();
 
     private static final String[] THINKING_WORDS = {
         "Coalescing", "Vibing", "Puzzling", "Computing", "Forging",
@@ -64,9 +65,12 @@ public class CLIManager {
         "Hatching", "Improvising"
     };
 
-    private static final long[] BREATHING_PHASE_ENDS = { 300, 500, 600, 800, 1100 };
+    private static final long[] BREATHING_PHASE_ENDS = { 500, 800, 1000, 1100, 1300, 1600 };
     private static final String[] BREATHING_HEX = {
-        "#FF5F00", "#B34100", "#8C3200", "#B34100", "#FF5F00"
+        "#FF7800", "#D46700", "#A15100", "#8F5200", "#A15100", "#D46700"
+    };
+    private static final String[] BREATHING_SYMBOLS = {
+        "⁕", "⁕", "⁜", "▪", "⁜", "⁕"
     };
     private static final net.md_5.bungee.api.ChatColor WORD_COLOR_BUNGEE = net.md_5.bungee.api.ChatColor.of("#FF5F00");
     private static final net.md_5.bungee.api.ChatColor STATS_COLOR = net.md_5.bungee.api.ChatColor.GRAY;
@@ -492,8 +496,8 @@ public class CLIManager {
                             long msgTime = messageReceiveTimes.getOrDefault(uuid, startTime);
                             long elapsedFromMsg = (now - msgTime) / 1000;
 
-                            // 1. 呼吸动画 — ⁕ 颜色在 1.1s 周期内循环
-                            long animPhase = (now - startTime) % 1100;
+                            // 1. 呼吸动画 — 颜色/符号在 1.6s 周期内循环
+                            long animPhase = (now - startTime) % 1600;
                             int phaseIdx = 0;
                             for (int i = 0; i < BREATHING_PHASE_ENDS.length; i++) {
                                 if (animPhase < BREATHING_PHASE_ENDS[i]) {
@@ -512,21 +516,21 @@ public class CLIManager {
                                 wordStartTimes.put(uuid, now);
                             }
 
-                            // 3. Token 统计（含实时流式累计）
+                            // 3. Token 统计（仅本轮输出，含实时流式累计）
                             DialogueSession session = sessions.get(uuid);
                             String tokensInfo = "";
                             if (session != null) {
                                 long streamingTokens = streamedOutputTokens.getOrDefault(uuid, 0L);
-                                long totalTokens = session.getTotalInputTokens() + session.getTotalOutputTokens() + streamingTokens;
-                                tokensInfo = " · " + totalTokens;
+                                long roundTokens = roundOutputTokens.getOrDefault(uuid, 0L);
+                                tokensInfo = " · " + (roundTokens + streamingTokens);
                             }
 
                             String statsSuffix = " (" + elapsedFromMsg + "s" + tokensInfo + " tokens)";
 
                             // ActionBar: TextComponent.setColor() 直接用 hex
-                            TextComponent comp = new TextComponent("⁕ ");
+                            TextComponent comp = new TextComponent(BREATHING_SYMBOLS[phaseIdx] + " ");
                             comp.setColor(starColor);
-                            TextComponent wordComp = new TextComponent(word + " ");
+                            TextComponent wordComp = new TextComponent(word + "... ");
                             wordComp.setColor(WORD_COLOR_BUNGEE);
                             comp.addExtra(wordComp);
                             TextComponent statsComp = new TextComponent(statsSuffix);
@@ -534,7 +538,7 @@ public class CLIManager {
                             comp.addExtra(statsComp);
 
                             // Subtitle: ChatColor.of(hex) + 字符串，其 toString() 产出 §x§R§G§B 格式，sendTitle 无 bug
-                            String subtitleMsg = starColor + "⁕ " + WORD_COLOR_BUNGEE + word
+                            String subtitleMsg = starColor + BREATHING_SYMBOLS[phaseIdx] + " " + WORD_COLOR_BUNGEE + word + "... "
                                 + STATS_COLOR + statsSuffix;
 
                             sendStatusMessage(player, comp, subtitleMsg);
@@ -592,7 +596,7 @@ public class CLIManager {
                     }
                 }
             }
-        }.runTaskTimer(plugin, 5L, 5L); // 提高更新频率到 0.25s，让计时更平滑
+        }.runTaskTimer(plugin, 2L, 2L); // 提高更新频率到 0.1s
     }
 
     /**
@@ -1087,6 +1091,17 @@ public class CLIManager {
         retryInfoMap.remove(uuid);
 
         recordThinkingTime(uuid);
+
+        // 退出前刷入尚未写回 session 的流式 token
+        DialogueSession exitSession = sessions.get(uuid);
+        if (exitSession != null) {
+            Long pendingStreamed = streamedOutputTokens.get(uuid);
+            if (pendingStreamed != null && pendingStreamed > 0) {
+                exitSession.addOutputTokens(pendingStreamed);
+                roundOutputTokens.merge(uuid, pendingStreamed, Long::sum);
+            }
+        }
+
         sendExitMessage(player);
         
         // 保存会话历史 - 仅在插件卸载时保存
@@ -1106,6 +1121,7 @@ public class CLIManager {
         wordStartTimes.remove(uuid);
         currentThinkingWords.remove(uuid);
         streamedOutputTokens.remove(uuid);
+        roundOutputTokens.remove(uuid);
     }
 
     public void switchMode(Player player, DialogueSession.Mode targetMode) {
@@ -1869,13 +1885,12 @@ public class CLIManager {
             
             fullResponseText.append(completeText);
             activeStreamingHandlers.remove(uuid);
-            streamedOutputTokens.remove(uuid);
-            
+
             if (!plugin.isEnabled()) return;
-            
+
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline()) return;
-                
+
                 String response = completeText;
                 String thoughtContent = "";
 
@@ -1981,11 +1996,25 @@ public class CLIManager {
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
-                
+
                 String toolCall = extractToolCall(response);
                 if (!toolCall.isEmpty()) {
+                    // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
+                    Long streamedThisCycle = streamedOutputTokens.get(uuid);
+                    if (streamedThisCycle != null && streamedThisCycle > 0) {
+                        session.addOutputTokens(streamedThisCycle);
+                        roundOutputTokens.merge(uuid, streamedThisCycle, Long::sum);
+                    }
+                    streamedOutputTokens.remove(uuid);
                     executeTool(player, toolCall);
                 } else {
+                    // 本轮输出完全结束 → 累积 token 写回 session
+                    Long streamedTotal = streamedOutputTokens.get(uuid);
+                    if (streamedTotal != null && streamedTotal > 0) {
+                        session.addOutputTokens(streamedTotal);
+                        roundOutputTokens.merge(uuid, streamedTotal, Long::sum);
+                    }
+                    streamedOutputTokens.remove(uuid);
                     checkTokenWarning(player, session);
                 }
             });
@@ -1996,10 +2025,18 @@ public class CLIManager {
             responseHandled[0] = true;
 
             activeStreamingHandlers.remove(uuid);
+            long streamedOutErr = streamedOutputTokens.getOrDefault(uuid, 0L);
             streamedOutputTokens.remove(uuid);
+            if (streamedOutErr > 0) {
+                roundOutputTokens.merge(uuid, streamedOutErr, Long::sum);
+            }
             plugin.getCloudErrorReport().report(error);
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {
+                if (streamedOutErr > 0) {
+                    DialogueSession s = sessions.get(uuid);
+                    if (s != null) s.addOutputTokens(streamedOutErr);
+                }
                 retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
                 player.sendMessage(ChatColor.RED + "⨀ 流式输出错误: " + error.getMessage());
                 isGenerating.put(uuid, false);
@@ -2008,7 +2045,14 @@ public class CLIManager {
             });
         });
         
-        String completeText = ai.chatStreaming(session, promptManager.getBaseSystemPrompt(player, matchedSkills), streamingHandler);
+        // 估算本轮输入的 prompt tokens 并记入 session
+        String systemPrompt = promptManager.getBaseSystemPrompt(player, matchedSkills);
+        String modelName = plugin.getConfigManager().getCloudflareModel();
+        int estimatedInput = DialogueSession.calculateTokens(systemPrompt, modelName)
+            + session.getEstimatedTokens(modelName) + 3;
+        session.addInputTokens(estimatedInput);
+
+        String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
         
         if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
             responseHandled[0] = true;
@@ -2044,7 +2088,6 @@ public class CLIManager {
             session.addMessage("assistant", finalResponse, finalThought);
             
             if (!thoughtContent.isEmpty()) {
-                String modelName = plugin.getConfigManager().getCloudflareModel();
                 int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
                 session.addThoughtTokens(thoughtTokens);
             }
@@ -2092,6 +2135,7 @@ public class CLIManager {
         wordStartTimes.put(uuid, System.currentTimeMillis());
         currentThinkingWords.put(uuid, THINKING_WORDS[new Random().nextInt(THINKING_WORDS.length)]);
         streamedOutputTokens.remove(uuid);
+        roundOutputTokens.put(uuid, 0L);
 
         TextComponent playerMsg = new TextComponent(ChatColor.GRAY + "◇ " + message);
         playerMsg.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
@@ -2414,15 +2458,30 @@ public class CLIManager {
 
         // 处理工具调用
         if (!toolCall.isEmpty()) {
+            // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
+            Long streamedThisCycle = streamedOutputTokens.get(uuid);
+            if (streamedThisCycle != null && streamedThisCycle > 0) {
+                session.addOutputTokens(streamedThisCycle);
+                roundOutputTokens.merge(uuid, streamedThisCycle, Long::sum);
+            }
+            streamedOutputTokens.remove(uuid);
             executeTool(player, toolCall);
         } else {
             // 检查响应是否被截断
             if (aiResponse.isTruncated()) {
                 // 显示截断提示
                 player.sendMessage(ChatColor.YELLOW + "⨀ 响应被截断，正在继续生成...");
-                // 自动继续生成
+                // 自动继续生成（streamedOutputTokens 不清除，延续到下一轮）
                 continueGeneration(player, session);
             } else {
+                // 本轮输出完全结束：累积的流式 token 写回 session
+                Long streamedTotal = streamedOutputTokens.get(uuid);
+                if (streamedTotal != null && streamedTotal > 0) {
+                    session.addOutputTokens(streamedTotal);
+                    roundOutputTokens.merge(uuid, streamedTotal, Long::sum);
+                }
+                streamedOutputTokens.remove(uuid);
+
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 checkTokenWarning(player, session);
@@ -2547,8 +2606,8 @@ public class CLIManager {
         // 设置生成状态
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
-        generationStartTimes.put(uuid, System.currentTimeMillis());
-        
+        generationStartTimes.putIfAbsent(uuid, System.currentTimeMillis());
+
         // 添加一个提示消息，让AI知道继续生成
         session.addMessage("user", "请继续生成剩余的内容");
         
@@ -2761,7 +2820,7 @@ public class CLIManager {
 
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
-        generationStartTimes.put(uuid, System.currentTimeMillis());
+        generationStartTimes.putIfAbsent(uuid, System.currentTimeMillis());
 
         // 工具返回信息不显示给玩家，仅在日志记录并触发 AI 思考
         if (plugin.getConfigManager().isDebug()) {
@@ -2854,7 +2913,7 @@ public class CLIManager {
                         responseHandled[0] = true;
                         fullResponseText.append(completeText);
                         activeStreamingHandlers.remove(uuid);
-                        streamedOutputTokens.remove(uuid);
+
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (!player.isOnline()) return;
@@ -2895,10 +2954,18 @@ public class CLIManager {
                         if (responseHandled[0]) return;
                         responseHandled[0] = true;
                         activeStreamingHandlers.remove(uuid);
+                        long streamedOutErr2 = streamedOutputTokens.getOrDefault(uuid, 0L);
                         streamedOutputTokens.remove(uuid);
+                        if (streamedOutErr2 > 0) {
+                            roundOutputTokens.merge(uuid, streamedOutErr2, Long::sum);
+                        }
                         plugin.getCloudErrorReport().report(error);
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (streamedOutErr2 > 0) {
+                                DialogueSession s2 = sessions.get(uuid);
+                                if (s2 != null) s2.addOutputTokens(streamedOutErr2);
+                            }
                             retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
                             player.sendMessage(ChatColor.RED + "⨀ 流式输出错误: " + error.getMessage());
                             isGenerating.put(uuid, false);
@@ -2908,13 +2975,24 @@ public class CLIManager {
                         });
                     });
 
+                    // 估算本轮输入的 prompt tokens 并记入 session
+                    String modelName = plugin.getConfigManager().getCloudflareModel();
+                    int estimatedInput2 = DialogueSession.calculateTokens(systemPrompt, modelName)
+                        + session.getEstimatedTokens(modelName) + 3;
+                    session.addInputTokens(estimatedInput2);
+
                     String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
 
                     // 回退：流式未产生任何 chunk（如文本一次到达）
                     if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
                         responseHandled[0] = true;
                         activeStreamingHandlers.remove(uuid);
+                        long streamedOutFallback = streamedOutputTokens.getOrDefault(uuid, 0L);
                         streamedOutputTokens.remove(uuid);
+                        if (streamedOutFallback > 0 && session != null) {
+                            session.addOutputTokens(streamedOutFallback);
+                            roundOutputTokens.merge(uuid, streamedOutFallback, Long::sum);
+                        }
                         String thought = streamingHandler.getThoughtContent();
                         AIResponse response = new AIResponse(completeText,
                             (thought != null && !thought.isEmpty()) ? thought : null);
