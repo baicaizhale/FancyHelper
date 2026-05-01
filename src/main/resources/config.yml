@@ -1,6 +1,9 @@
 # 配置版本，请勿修改
 version: 3.7.3
 
+# AI 提供商选择: cloudflare 或 openai（默认 cloudflare）
+provider: cloudflare
+
 # 插件设置
 settings:
   # 是否启用调试模式，启用后会在控制台输出详细调试信息
@@ -75,10 +78,8 @@ cloudflare:
   # 使用的模型名称，不推荐更改，可以是任何一个Text-Generation模型
   model: "@cf/moonshotai/kimi-k2.5"
 
-# OpenAI 兼容 API 配置（支持自定义 OpenAI 接口）
+# OpenAI 兼容 API 配置（provider 设为 openai 时使用）
 openai:
-  # 是否启用 OpenAI 兼容模式（启用后将优先使用此配置）
-  enabled: false
   # Based API 地址（支持自定义地址，如 OpenAI 官方、Azure OpenAI、本地模型等）
   # 示例：
   #   - OpenAI 官方: https://api.openai.com/v1/chat/completions

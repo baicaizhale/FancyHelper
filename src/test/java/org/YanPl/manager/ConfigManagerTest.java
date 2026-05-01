@@ -92,13 +92,23 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("isOpenAiEnabled 应返回配置值")
-    void testIsOpenAiEnabled_ReturnsConfigValue() {
-        when(config.getBoolean("openai.enabled", false)).thenReturn(true);
+    @DisplayName("getProvider 应返回 cloudflare 当配置为 cloudflare")
+    void testGetProvider_ReturnsCloudflare() {
+        when(config.getString("provider", "cloudflare")).thenReturn("cloudflare");
 
-        boolean result = configManager.isOpenAiEnabled();
+        String result = configManager.getProvider();
 
-        assertTrue(result);
+        assertEquals("cloudflare", result);
+    }
+
+    @Test
+    @DisplayName("getProvider 应返回 openai 当配置为 openai")
+    void testGetProvider_ReturnsOpenAI() {
+        when(config.getString("provider", "cloudflare")).thenReturn("openai");
+
+        String result = configManager.getProvider();
+
+        assertEquals("openai", result);
     }
 
     @Test

@@ -110,7 +110,14 @@ public class ConfigManager {
                     newConfig.set(entry.getKey(), entry.getValue());
                 }
             }
-            
+
+            // 迁移旧版 openai.enabled 到新版 provider 字段
+            if (oldValues.containsKey("openai.enabled")) {
+                boolean openaiWasEnabled = Boolean.parseBoolean(String.valueOf(oldValues.get("openai.enabled")));
+                newConfig.set("provider", openaiWasEnabled ? "openai" : "cloudflare");
+                plugin.getLogger().info("已迁移旧配置 openai.enabled=" + openaiWasEnabled + " 到 provider=" + (openaiWasEnabled ? "openai" : "cloudflare"));
+            }
+
             try {
                 newConfig.save(configFile);
                 plugin.getLogger().info("配置文件更新完成！");
@@ -220,11 +227,11 @@ public class ConfigManager {
     }
 
     /**
-     * 获取是否启用 OpenAI 模式
-     * @return 是否启用 OpenAI 模式
+     * 获取 AI 提供商
+     * @return AI 提供商名称 (cloudflare 或 openai)
      */
-    public boolean isOpenAiEnabled() {
-        return config.getBoolean("openai.enabled", false);
+    public String getProvider() {
+        return config.getString("provider", "cloudflare");
     }
 
     /**
