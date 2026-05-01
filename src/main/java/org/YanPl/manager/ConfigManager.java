@@ -110,7 +110,21 @@ public class ConfigManager {
                     newConfig.set(entry.getKey(), entry.getValue());
                 }
             }
-            
+
+            // 迁移旧版 openai.enabled 到新版 provider 字段
+            if (oldValues.containsKey("openai.enabled")) {
+                boolean openaiWasEnabled = Boolean.parseBoolean(String.valueOf(oldValues.get("openai.enabled")));
+                newConfig.set("provider", openaiWasEnabled ? "openai" : "cloudflare");
+                plugin.getLogger().info("已迁移旧配置 openai.enabled=" + openaiWasEnabled + " 到 provider=" + (openaiWasEnabled ? "openai" : "cloudflare"));
+            }
+
+            // 迁移旧版 token_warning_threshold 到 context_window_warning_threshold
+            if (oldValues.containsKey("settings.token_warning_threshold")) {
+                Object oldVal = oldValues.get("settings.token_warning_threshold");
+                newConfig.set("settings.context_window_warning_threshold", oldVal);
+                plugin.getLogger().info("已迁移旧配置 settings.token_warning_threshold=" + oldVal + " 到 settings.context_window_warning_threshold=" + oldVal);
+            }
+
             try {
                 newConfig.save(configFile);
                 plugin.getLogger().info("配置文件更新完成！");
@@ -220,11 +234,11 @@ public class ConfigManager {
     }
 
     /**
-     * 获取是否启用 OpenAI 模式
-     * @return 是否启用 OpenAI 模式
+     * 获取 AI 提供商
+     * @return AI 提供商名称 (cloudflare 或 openai)
      */
-    public boolean isOpenAiEnabled() {
-        return config.getBoolean("openai.enabled", false);
+    public String getProvider() {
+        return config.getString("provider", "cloudflare");
     }
 
     /**
@@ -263,8 +277,16 @@ public class ConfigManager {
         return config.getInt("settings.api_timeout_seconds", 120);
     }
 
-    public int getTokenWarningThreshold() {
-        return config.getInt("settings.token_warning_threshold", 500);
+    public int getContextWindowWarningThreshold() {
+        return config.getInt("settings.context_window_warning_threshold", 500);
+    }
+
+    /**
+     * 获取上下文窗口大小上限
+     * @return 上下文窗口大小上限（token数）
+     */
+    public int getContextWindowLimit() {
+        return config.getInt("settings.context_window_limit", 12800);
     }
 
     public boolean isAutoReportEnabled() {

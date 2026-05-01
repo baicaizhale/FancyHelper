@@ -33,6 +33,7 @@ public class StreamingHandler {
     private volatile Consumer<String> onChunkCallback;
     private volatile Consumer<String> onCompleteCallback;
     private volatile Consumer<Throwable> onErrorCallback;
+    private volatile Consumer<String> onReasoningCallback;      // 思考内容逐片回调
     private volatile Consumer<Long> onReasoningCompleteCallback;  // 思考结束回调，参数为思考耗时ms
     private volatile boolean errorOccurred = false;
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
@@ -83,6 +84,14 @@ public class StreamingHandler {
     }
 
     /**
+     * 设置思考内容逐片回调（每收到一段 reasoning_content 时触发）
+     * @param callback 回调函数，参数为思考内容文本片段
+     */
+    public void setOnReasoningCallback(Consumer<String> callback) {
+        this.onReasoningCallback = callback;
+    }
+
+    /**
      * 设置思考结束回调（当 reasoning_content 切换到 content 时触发）
      * @param callback 回调函数，参数为思考耗时毫秒
      */
@@ -117,6 +126,7 @@ public class StreamingHandler {
             onChunkCallback = null;
             onCompleteCallback = null;
             onErrorCallback = null;
+            onReasoningCallback = null;
             onReasoningCompleteCallback = null;
             buffer.setLength(0);  // 清空缓冲
             thoughtContent.setLength(0);  // 清空思考内容
@@ -354,6 +364,9 @@ public class StreamingHandler {
                                     reasoningStartTime = System.currentTimeMillis();
                                 }
                                 thoughtContent.append(rc);
+                                if (onReasoningCallback != null) {
+                                    try { onReasoningCallback.accept(rc); } catch (Exception ignored) {}
+                                }
                             }
                         }
                     }
@@ -385,6 +398,9 @@ public class StreamingHandler {
                                     reasoningStartTime = System.currentTimeMillis();
                                 }
                                 thoughtContent.append(rc);
+                                if (onReasoningCallback != null) {
+                                    try { onReasoningCallback.accept(rc); } catch (Exception ignored) {}
+                                }
                             }
                         }
                     }
@@ -451,18 +467,21 @@ public class StreamingHandler {
     
     /**
      * 计算文本在Minecraft聊天框中的视觉宽度
-     * 中文字符/全角字符权重为2，ASCII/半角字符权重为1
+     * 中文字符/全角字符权重为 1.7，ASCII/半角字符权重为 1.1
+     * 计数前剥离 ** 加粗标记
      * @param text 要计算的文本
      * @return 视觉宽度值
      */
-    private int getVisualWidth(CharSequence text) {
-        int width = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
+    private double getVisualWidth(CharSequence text) {
+        // 剥离 ** 加粗标记，不计入视觉宽度
+        String cleaned = text.toString().replace("**", "");
+        double width = 0;
+        for (int i = 0; i < cleaned.length(); i++) {
+            char c = cleaned.charAt(i);
             if (isFullWidth(c)) {
-                width += 2;
+                width += 1.7;
             } else {
-                width += 1;
+                width += 1.1;
             }
         }
         return width;

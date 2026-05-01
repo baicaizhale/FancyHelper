@@ -348,7 +348,7 @@ public class CloudFlareAI {
 
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
         // 检测是否启用 OpenAI 模式
-        if (plugin.getConfigManager().isOpenAiEnabled()) {
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(session, systemPrompt);
         }
         // 否则使用 CloudFlare Workers AI
@@ -1185,7 +1185,7 @@ public class CloudFlareAI {
      * @return 完整的响应文本
      */
     public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
-        if (plugin.getConfigManager().isOpenAiEnabled()) {
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
         }
         return chatStreamingWithCloudFlare(session, systemPrompt, streamingHandler);

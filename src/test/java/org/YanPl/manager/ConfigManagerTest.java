@@ -92,13 +92,23 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("isOpenAiEnabled 应返回配置值")
-    void testIsOpenAiEnabled_ReturnsConfigValue() {
-        when(config.getBoolean("openai.enabled", false)).thenReturn(true);
+    @DisplayName("getProvider 应返回 cloudflare 当配置为 cloudflare")
+    void testGetProvider_ReturnsCloudflare() {
+        when(config.getString("provider", "cloudflare")).thenReturn("cloudflare");
 
-        boolean result = configManager.isOpenAiEnabled();
+        String result = configManager.getProvider();
 
-        assertTrue(result);
+        assertEquals("cloudflare", result);
+    }
+
+    @Test
+    @DisplayName("getProvider 应返回 openai 当配置为 openai")
+    void testGetProvider_ReturnsOpenAI() {
+        when(config.getString("provider", "cloudflare")).thenReturn("openai");
+
+        String result = configManager.getProvider();
+
+        assertEquals("openai", result);
     }
 
     @Test
@@ -153,13 +163,23 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("getTokenWarningThreshold 应返回配置值")
-    void testGetTokenWarningThreshold_ReturnsConfigValue() {
-        when(config.getInt("settings.token_warning_threshold", 500)).thenReturn(1000);
+    @DisplayName("getContextWindowWarningThreshold 应返回配置值")
+    void testGetContextWindowWarningThreshold_ReturnsConfigValue() {
+        when(config.getInt("settings.context_window_warning_threshold", 500)).thenReturn(1000);
 
-        int result = configManager.getTokenWarningThreshold();
+        int result = configManager.getContextWindowWarningThreshold();
 
         assertEquals(1000, result);
+    }
+
+    @Test
+    @DisplayName("getContextWindowLimit 应返回配置值")
+    void testGetContextWindowLimit_ReturnsConfigValue() {
+        when(config.getInt("settings.context_window_limit", 12800)).thenReturn(32000);
+
+        int result = configManager.getContextWindowLimit();
+
+        assertEquals(32000, result);
     }
 
     @Test
