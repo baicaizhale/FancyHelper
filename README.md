@@ -6,10 +6,10 @@
 
 <div align="center">
 Also available in:
-<a href="README_lzh.md">
+<a href="README_LZH.md">
   <img src="https://img.shields.io/badge/-文言 (华夏)-red?style=flat" alt="文言文"/>
 </a>   OR
-<a href="README_en.md">
+<a href="README_EN.md">
   <img src="https://img.shields.io/badge/-English-green?style=flat" alt="English"/>
 </a>
 .
