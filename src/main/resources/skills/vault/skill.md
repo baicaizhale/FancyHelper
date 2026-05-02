@@ -1,5 +1,5 @@
 ---
-name: "Vault 经济插件"
+name: "vault"
 description: "Vault 经济系统插件的使用指南"
 triggers:
   - "vault"

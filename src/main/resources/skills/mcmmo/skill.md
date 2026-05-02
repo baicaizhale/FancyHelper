@@ -1,5 +1,5 @@
 ---
-name: "mcMMO 技能树"
+name: "mcmmo"
 description: "mcMMO 技能系统的完整使用指南"
 triggers:
   - "mcmmo"

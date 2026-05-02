@@ -1,5 +1,5 @@
 ---
-name: "Multiverse 多世界管理"
+name: "multiverse"
 description: "Multiverse 多世界管理插件的完整使用指南"
 triggers:
   - "multiverse"

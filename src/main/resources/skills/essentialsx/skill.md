@@ -1,5 +1,5 @@
 ---
-name: "EssentialsX 基本命令"
+name: "essentialsx"
 description: "EssentialsX 插件常用命令，包含传送、经济、游戏模式等"
 triggers:
   - "essentials"

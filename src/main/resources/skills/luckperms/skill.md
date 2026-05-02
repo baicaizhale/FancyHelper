@@ -1,5 +1,5 @@
 ---
-name: "LuckPerms 权限管理"
+name: "luckperms"
 description: "LuckPerms 权限管理插件的完整使用指南"
 triggers:
   - "luckperms"

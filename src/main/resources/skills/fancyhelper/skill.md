@@ -1,5 +1,5 @@
 ---
-name: "FancyHelper 配置及命令"
+name: "fancyhelper"
 description: "FancyHelper 插件的配置和命令指南"
 triggers:
   - "fancyhelper"

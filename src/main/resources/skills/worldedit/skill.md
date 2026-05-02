@@ -1,5 +1,5 @@
 ---
-name: "WorldEdit 世界编辑"
+name: "worldedit"
 description: "WorldEdit 世界编辑插件的使用指南"
 triggers:
   - "worldedit"
