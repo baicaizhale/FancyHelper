@@ -50,8 +50,8 @@
 ## 快速开始
 
 ### 下载插件
-<a href="[https://fancy.baicaizhale.top/](https://fancy.baicaizhale.top/)">
-  <img src="[https://img.shields.io/badge/](https://img.shields.io/badge/)🌕_查看构建列表-Enter-orange?style=for-the-badge&labelColor=555" alt="下载构建" style="vertical-align: middle;"/>
+<a href="https://fancy.baicaizhale.top/">
+  <img src="https://img.shields.io/badge/🌕_查看构建列表-Enter-orange?style=for-the-badge&labelColor=555" alt="下载构建" style="vertical-align: middle;"/>
 </a>
 
 > 💡 建议下载最新版本，包含最新功能与修复。

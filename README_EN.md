@@ -50,8 +50,8 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 ## Quick Start
 
 ### Download Plugin
-<a href="[https://fancy.baicaizhale.top/](https://fancy.baicaizhale.top/)">
-  <img src="[https://img.shields.io/badge/](https://img.shields.io/badge/)🌕_View_Build_List-Enter-orange?style=for-the-badge&labelColor=555" alt="Download Build" style="vertical-align: middle;"/>
+<a href="https://fancy.baicaizhale.top/">
+  <img src="https://img.shields.io/badge/🌕_查看构建列表-Enter-orange?style=for-the-badge&labelColor=555" alt="下载构建" style="vertical-align: middle;"/>
 </a>
 
 > 💡 Recommended to download the latest version for the newest features and fixes.
