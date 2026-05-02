@@ -59,12 +59,12 @@ public class CLIManager {
     private final Map<UUID, Long> streamedOutputTokens = new ConcurrentHashMap<>();
     private final Map<UUID, Long> roundOutputTokens = new ConcurrentHashMap<>();
 
+    // 思考状态的随机神经病词列表
     private static final String[] THINKING_WORDS = {
-        "Coalescing", "Vibing", "Puzzling", "Computing", "Forging",
-        "Tinkering", "Unfurling", "Stewing", "Determining", "Actioning",
-        "Hatching", "Improvising"
+        "Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Bamboozling", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Burrowing", "Calculating", "Canoodling", "Caramelizing", "Cascading", "Catapulting", "Catalyzing", "Cerebrating", "Channeling", "Channelling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Colloquializing", "Combobulating", "Composing", "Computing", "Concocting", "Congealing", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Decomposing", "Deliberating", "Determining", "Diffusing", "Dilly-dallying", "Discombobulating", "Dissolving", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Enchanting", "Envisioning", "Extrapolating", "Fermenting", "Festering", "Finagling", "Flambeing", "Flibbertigibbeting", "Flummoxing", "Forging", "Forming", "Frosting", "Frolicking", "Furnishing", "Gallivanting", "Galloping", "Garnishing", "Gelatinizing", "Generating", "Germinating", "Hatching", "Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring", "Ionizing", "Iridescent", "Jiving", "Jostling", "Julienning", "Kneading", "Leavening", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Moseying", "Moonwalking", "Mulling", "Mustering", "Musing", "Navigating", "Nebulating", "Noodling", "Osmosing", "Percolating", "Perusing", "Philosophising", "Polymerizing", "Pontificating", "Pondering", "Processing", "Proofing", "Puttering", "Puzzling", "Radiating", "Razzle-dazzling", "Reticulating", "Reverberating", "Ricocheting", "Rippling", "Ruminating", "Sauteing", "Scampering", "Scheming", "Schlepping", "Scurrying", "Seasoning", "Shimmying", "Shenaniganing", "Simmering", "Smooshing", "Soldering", "Spelunking", "Spinning", "Spiraling", "Synthesizing", "Synergizing", "Tempering", "Tinkering", "Thinking", "Tomfoolering", "Topsy-turvying", "Transmuting", "Trickling", "Ubiquitizing", "Undulating", "Unfurling", "Unravelling", "Untangling", "Vibing", "Vexing", "Waddling", "Wandering", "Waxing", "Whatchamacalliting", "Whirring", "Whisking", "Wibbling", "Wizarding", "Working", "Wrangling", "Zigzagging", "Zesting"
     };
-
+    
+    // 状态栏呼吸动画
     private static final long[] BREATHING_PHASE_ENDS = { 500, 800, 1000, 1100, 1300, 1600 };
     private static final String[] BREATHING_HEX = {
         "#FF7800", "#D46700", "#A15100", "#8F5200", "#A15100", "#D46700"
