@@ -87,9 +87,9 @@ openai:
   api_key: your-openai-api-key
   # 使用的模型名称
   # 示例：
-  #   - DeepSeek: DeepSeek-V4-Pro,DeepSeek-V4-Flash
+  #   - DeepSeek: deepseek-v4-pro,deepseek-v4-flash
   #   - Kimi开放平台: kimi-k2.6
-  model: DeepSeek-V4-Pro
+  model: deepseek-v4-pro
 
 # 副模型设置
 # 注意：CloudFlare使用主模型的cf_key，OpenAI使用主模型的api_url和api_key
@@ -103,7 +103,7 @@ co-model:
   # OpenAI 兼容 API （仅配置模型名称，APIURL和key使用主模型设置）
   openai:
     # 使用的模型名称，推荐使用轻量级模型
-    model: DeepSeek-V4-Flash
+    model: deepseek-v4-flash
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:
