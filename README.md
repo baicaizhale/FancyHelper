@@ -4,6 +4,19 @@
 
 > 用说人话的方式管理你的 Minecraft 服务器。
 
+<div align="center">
+Also available in:
+<a href="README_lzh.md">
+  <img src="https://img.shields.io/badge/-文言 (华夏)-red?style=flat" alt="文言文"/>
+</a>   OR
+<a href="README_en.md">
+  <img src="https://img.shields.io/badge/-English-green?style=flat" alt="English"/>
+</a>
+.
+</div>
+
+---
+
 每次想给玩家调个权限、改个配置都要翻半天 Wiki？背指令背到头疼？
 
 FancyHelper 就是来解决这个问题的。装好之后，你在游戏里直接跟 AI 说需求，比如"把 baicaizhale 设成管理员"，它会自己生成对应的指令，问你确认，然后执行。不用背指令，不用翻文档。
@@ -141,7 +154,7 @@ mvn clean package
 
 需要 Java 17 + Maven。
 
-## ❤ 赞助我们
+## 赞助我们
 
 为铸FancyHelper，吾等焚膏继晷，兀兀穷年，耗尽心血。若此物有幸助君一臂之力，不知可否邀君共饮一杯薄酒，或赐一盏清茶之资？
 
