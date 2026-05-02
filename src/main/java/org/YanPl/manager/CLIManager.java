@@ -1522,7 +1522,12 @@ public class CLIManager {
             }
             
             if (isGenerating.getOrDefault(uuid, false)) {
-                player.sendMessage(ChatColor.RED + "⨀ 请不要在 Fancy 生成内容时发送消息，如需打断请输入 stop");
+                TextComponent warnMsg = new TextComponent(ChatColor.RED + "⨀ 请不要在 Fancy 生成内容时发送消息");
+                TextComponent interruptBtn = new TextComponent(ChatColor.YELLOW + "[点击打断]");
+                interruptBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
+                interruptBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断生成")));
+                warnMsg.addExtra(interruptBtn);
+                player.spigot().sendMessage(warnMsg);
                 return true;
             }
 
@@ -2137,8 +2142,6 @@ public class CLIManager {
         roundOutputTokens.put(uuid, 0L);
 
         TextComponent playerMsg = new TextComponent(ChatColor.GRAY + "◇ " + message);
-        playerMsg.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
-        playerMsg.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断")));
         player.spigot().sendMessage(playerMsg);
 
         if (plugin.getConfigManager().isDebug()) {
