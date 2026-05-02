@@ -277,66 +277,25 @@ public class UpdateManager implements Listener {
 
                 plugin.getLogger().info("文件下载完成，大小: " + newJarFile.length() + " 字节");
 
-                // 尝试移动旧版本到 plugins/FancyHelper/old 目录
-                File oldDir = new File(plugin.getDataFolder(), "old");
-                if (!oldDir.exists()) oldDir.mkdirs();
-
-                boolean moved = false;
-                String moveError = "";
-
-                // 直接遍历 plugins 目录寻找旧版文件
-                File[] files = pluginsDir.listFiles();
-                if (files != null) {
-                    for (File file : files) {
-                        if (file.isFile() && file.getName().toLowerCase().endsWith(".jar")) {
-                            String fileName = file.getName();
-                            // 匹配逻辑：文件名包含 fancyhelper (不区分大小写) 且不是刚刚下载的新文件
-                            if (fileName.toLowerCase().contains("fancyhelper") && !fileName.equals(newJarName)) {
-                                try {
-                                    File destOldJar = new File(oldDir, fileName);
-                                    Files.move(file.toPath(), destOldJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                                    moved = true;
-                                    plugin.getLogger().info("已将旧版文件 [" + fileName + "] 移动至 plugins/FancyHelper/old/");
-                                } catch (IOException e) {
-                                    moveError = e.getMessage();
-                                    plugin.getLogger().warning("无法移动旧版文件 [" + fileName + "]: " + moveError);
-                                }
-                            }
-                        }
-                    }
-                }
+                // 旧 JAR 删除由 ReloadService 在 FancyHelper 卸载后处理（避免 Paper 1.26.1+ 文件锁定）
 
                 if (sender != null) {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载完成！"));
-                    if (moved) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f旧版本已成功移动至 plugins/FancyHelper/old/"));
-                    } else if (!moveError.isEmpty()) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f提示：由于系统锁定，部分旧版 JAR 无法自动移动。"));
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请在下次重启前手动处理。"));
-                    }
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f新版本已就绪: " + newJarName));
-                    if (!autoReload) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请重启服务器或使用 PlugMan 重载以完成更新。"));
-                    }
                 } else {
                     Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载完成！"));
-                    if (moved) {
-                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f旧版本已成功移动至 plugins/FancyHelper/old/"));
-                    } else if (!moveError.isEmpty()) {
-                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f提示：由于系统锁定，部分旧版 JAR 无法自动移动。"));
-                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请在下次重启前手动处理。"));
-                    }
                     Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f新版本已就绪: " + newJarName));
                 }
 
                 if (autoReload) {
-                    if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("准备执行自动重载...");
-                }
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        // 强制使用控制台执行深度重载，避免权限或上下文问题
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "fancy reload deeply");
+                        // 通知 ReloadService，然后自卸载
+                        if (plugin.signalReloadService("UPDATE", newJarName)) {
+                            Bukkit.getPluginManager().disablePlugin(plugin);
+                        } else {
+                            plugin.getLogger().severe("无法连接 ReloadService，更新无法自动完成。请重启服务器。");
+                        }
                     });
                 }
             } catch (IOException e) {
