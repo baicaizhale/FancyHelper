@@ -117,28 +117,33 @@ public class CloudErrorReport {
     private void collectConsoleMessages(File file) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, StandardCharsets.UTF_8))) {
             writer.write("最近200条终端消息:\n");
-            
+
             // 尝试获取服务器日志文件
             File serverLog = new File("logs/latest.log");
             if (serverLog.exists() && serverLog.isFile()) {
                 // 读取日志文件的最后部分
+                byte[] content;
                 try (RandomAccessFile raf = new RandomAccessFile(serverLog, "r")) {
                     long fileLength = raf.length();
                     long startPos = Math.max(0, fileLength - 1024 * 1024); // 读取最后1MB
                     raf.seek(startPos);
-                    
-                    List<String> lines = new ArrayList<>();
-                    String line;
-                    while ((line = raf.readLine()) != null) {
-                        lines.add(line);
+                    content = new byte[(int) (fileLength - startPos)];
+                    raf.readFully(content);
+                }
+
+                // 显式用 UTF-8 解码（raf.readLine() 用的是 ISO-8859-1，会导致中文乱码）
+                String text = new String(content, StandardCharsets.UTF_8);
+                String[] lines = text.split("\n", -1);
+
+                // 取最近200条
+                int startIndex = Math.max(0, lines.length - 200);
+                for (int i = startIndex; i < lines.length; i++) {
+                    String line = lines[i];
+                    if (line.endsWith("\r")) {
+                        line = line.substring(0, line.length() - 1);
                     }
-                    
-                    // 取最近200条
-                    int startIndex = Math.max(0, lines.size() - 200);
-                    for (int i = startIndex; i < lines.size(); i++) {
-                        writer.write(lines.get(i));
-                        writer.newLine();
-                    }
+                    writer.write(line);
+                    writer.newLine();
                 }
             } else {
                 writer.write("无法找到服务器日志文件\n");
