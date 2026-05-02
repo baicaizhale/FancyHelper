@@ -1,5 +1,5 @@
 ---
-name: "Give 物品给予"
+name: "give"
 description: "Minecraft 原版 /give 命令的使用指南，包含 NBT 和组件格式"
 triggers:
   - "give"

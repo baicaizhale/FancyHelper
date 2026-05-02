@@ -840,7 +840,6 @@ public class CLIManager {
      */
     public void sendUnloadMessage(Player player) {
         // 创建主消息 - 使用自定义颜色
-        @SuppressWarnings("deprecation")
         net.md_5.bungee.api.chat.BaseComponent[] components = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
             ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f与Fancy的会话已被挂起 ")
         );
