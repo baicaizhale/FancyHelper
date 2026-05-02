@@ -15,8 +15,6 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.PluginManager;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,7 +23,7 @@ import java.util.stream.Collectors;
 
 /**
  * /fancyhelper 命令的处理器。
- * 提供切换 CLI、重载、查看状态等子命令，并支持 Tab 完成。
+ * 提供切换 CLI、重载、查看状态等子命令, 并支持 Tab 完成。
  */
 public class CLICommand implements CommandExecutor, TabCompleter {
     private final FancyHelper plugin;
@@ -336,47 +334,21 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * 深度重载：尽可能“卸载”当前插件实例，然后从 plugins 目录重新加载 jar 并启用。
-     * 说明：Bukkit 并不官方支持真正的卸载/重载，这里做的是常见的 best-effort 热重载流程。
+     * 深度重载:发送 RELOAD 信号给 ReloadService, 然后自卸载。
+     * ReloadService 会等待本插件完全下线后清理 Paper 注册缓存并重新加载 JAR。
      */
     private void handleDeepReload(CommandSender sender) {
-        PluginManager pluginManager = Bukkit.getPluginManager();
-
-        // 不再调用 PlugMan，而是使用内置的热重载服务
-        File libDir = new File(plugin.getDataFolder(), "lib");
-        if (!libDir.exists()) {
-            libDir.mkdirs();
-        }
-        File reloadServiceJar = new File(libDir, "FancyHelperReloadService.jar");
-
-        if (!reloadServiceJar.exists()) {
-            sender.sendMessage(ChatColor.RED + "Deep reload failed: Helper jar not found at " + reloadServiceJar.getAbsolutePath());
-            return;
-        }
-
         try {
-            // 尝试加载或获取已加载的重载服务插件
-            Plugin reloadPlugin = pluginManager.getPlugin("FancyHelperReloadService");
-            if (reloadPlugin == null) {
-                reloadPlugin = pluginManager.loadPlugin(reloadServiceJar);
-            }
+            if (plugin.signalReloadService("RELOAD", null)) {
+                sender.sendMessage(ChatColor.GREEN + ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载, 可能需要20s左右的时间等待响应"));
 
-            if (reloadPlugin == null) {
-                sender.sendMessage(ChatColor.RED + "Deep reload failed: Could not load FancyHelperReloadService.");
-                return;
+                // 信号已发送, 立即在主线程自卸载
+                Bukkit.getPluginManager().disablePlugin(plugin);
+            } else {
+                sender.sendMessage(ChatColor.RED + "深度重载失败: 无法连接到 ReloadService");
             }
-
-            // 确保启用该插件以触发其内部的重载逻辑
-            if (reloadPlugin.isEnabled()) {
-                // 如果已启用，先禁用再启用以触发 onEnable
-                pluginManager.disablePlugin(reloadPlugin);
-            }
-            pluginManager.enablePlugin(reloadPlugin);
-
-            sender.sendMessage(ChatColor.GREEN + ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载，可能需要20s左右的时间等待响应"));
         } catch (Exception e) {
-            sender.sendMessage(ChatColor.RED + ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f启动重载服务时发生错误: " + e.getMessage()));
-            e.printStackTrace();
+            sender.sendMessage(ChatColor.RED + "深度重载失败: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
         }
     }
@@ -912,7 +884,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * 处理库管理命令，如安装ProtocolLib
+     * 处理库管理命令, 如安装ProtocolLib
      * @param sender 命令发送者
      * @param args 命令参数
      */
@@ -947,7 +919,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         // 检查是否已加载 ProtocolLib
         if (Bukkit.getPluginManager().getPlugin("ProtocolLib") != null) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cProtocolLib 已加载，无需重新安装。"));
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cProtocolLib 已加载, 无需重新安装。"));
             return;
         }
 
@@ -967,7 +939,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         if (protocolLibExists) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c插件目录已存在 ProtocolLib 文件，请重启服务器以加载。"));
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c插件目录已存在 ProtocolLib 文件, 请重启服务器以加载。"));
             return;
         }
 
@@ -1001,7 +973,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                         }
                     }
 
-                    // 下载完成，提示用户
+                    // 下载完成, 提示用户
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §aProtocolLib 下载完成！"));
                         sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请重启服务器以加载 ProtocolLib。"));
@@ -1009,7 +981,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 } else {
                     // 下载失败
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c下载失败，HTTP 响应码: " + responseCode));
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c下载失败, HTTP 响应码: " + responseCode));
                     });
                 }
             } catch (Exception e) {

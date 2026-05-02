@@ -1,5 +1,5 @@
 ---
-name: "房屋建造预设"
+name: "house-builder"
 description: "使用Minecraft原生fill和setblock命令一键建造房屋"
 triggers:
   - "建房"

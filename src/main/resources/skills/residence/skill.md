@@ -1,5 +1,5 @@
 ---
-name: "Residence 领地插件"
+name: "residence"
 description: "Residence 领地管理插件的完整使用指南"
 triggers:
   - "residence"

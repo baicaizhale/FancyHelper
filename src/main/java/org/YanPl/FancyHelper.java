@@ -24,9 +24,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.SimpleCommandMap;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Map;
 
 /**
@@ -62,9 +64,6 @@ public final class FancyHelper extends JavaPlugin {
 
             // 执行旧插件清理（清理带有 mineagent 关键词的文件）
             cleanOldPluginFiles();
-
-            // 释放热重载服务 jar 到 plugins/FancyHelper/lib
-            saveResource("lib/FancyHelperReloadService.jar", true);
 
             // 初始化 EULA 管理器（优先于配置，以便更新时强制替换 EULA）
             eulaManager = new EulaManager(this);
@@ -471,6 +470,47 @@ public final class FancyHelper extends JavaPlugin {
 
     public SkillManager getSkillManager() {
         return skillManager;
+    }
+
+    /**
+     * 公开的 lib JAR 释放入口，供 ConfigManager 在版本变更或首次安装时调用。
+     */
+    public void extractLibJar() {
+        saveResource("lib/FancyHelperReloadService.jar", true);
+    }
+
+    /**
+     * 通过反射向 FancyHelperReloadService 发送重载信号，随后本插件应立即自卸载。
+     * ReloadService 会等待本插件完全下线后处理文件清理和重新加载。
+     * @param mode "UPDATE" 或 "RELOAD"
+     * @param newJarName UPDATE 模式下新 JAR 的文件名，RELOAD 模式传 null
+     * @return 是否成功发送信号
+     */
+    public boolean signalReloadService(String mode, String newJarName) {
+        try {
+            Plugin reloadPlugin = getServer().getPluginManager().getPlugin("FancyHelperReloadService");
+            if (reloadPlugin == null) {
+                java.io.File libJar = new java.io.File(getDataFolder(), "lib/FancyHelperReloadService.jar");
+                if (libJar.exists()) {
+                    reloadPlugin = getServer().getPluginManager().loadPlugin(libJar);
+                }
+            }
+            if (reloadPlugin == null) {
+                getLogger().severe("无法找到 FancyHelperReloadService，信号发送失败");
+                return false;
+            }
+            if (!reloadPlugin.isEnabled()) {
+                getServer().getPluginManager().enablePlugin(reloadPlugin);
+            }
+            Method method = reloadPlugin.getClass().getMethod("onReloadSignal", String.class, String.class);
+            method.invoke(reloadPlugin, mode, newJarName);
+            getLogger().info("已向 ReloadService 发送 " + mode + " 信号");
+            return true;
+        } catch (Exception e) {
+            getLogger().severe("发送重载信号失败: " + e.getMessage());
+            if (cloudErrorReport != null) cloudErrorReport.report(e);
+            return false;
+        }
     }
 
     /**

@@ -1,5 +1,5 @@
 ---
-name: "CoreProtect 日志查询"
+name: "coreprotect"
 description: "CoreProtect 日志查询与回档插件的完整使用指南"
 triggers:
   - "coreprotect"

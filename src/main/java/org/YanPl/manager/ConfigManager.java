@@ -60,8 +60,10 @@ public class ConfigManager {
      */
     private void checkAndUpdateConfig() {
         File configFile = new File(plugin.getDataFolder(), "config.yml");
-        // 如果尚无配置文件则直接返回（后续 saveDefaultConfig 会生成）
+
+        // 首次安装：释放 lib JAR 后返回
         if (!configFile.exists()) {
+            plugin.extractLibJar();
             return;
         }
 
@@ -127,7 +129,13 @@ public class ConfigManager {
 
             try {
                 newConfig.save(configFile);
-                plugin.getLogger().info("配置文件更新完成！");
+                // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
+            File oldLibJar = new File(plugin.getDataFolder(), "lib/FancyHelperReloadService.jar");
+            if (oldLibJar.exists()) {
+                oldLibJar.delete();
+            }
+            plugin.extractLibJar();
+            plugin.getLogger().info("配置文件更新完成！");
             } catch (IOException e) {
                 plugin.getLogger().severe("保存新配置文件时出错: " + e.getMessage());
                 plugin.getCloudErrorReport().report(e);
