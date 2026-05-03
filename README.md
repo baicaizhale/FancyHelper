@@ -11,9 +11,10 @@ Also available in:
 </a>   OR
 <a href="README_EN.md">
   <img src="https://img.shields.io/badge/-English-green?style=flat" alt="English"/>
-</a>
-.
+</a>.
 </div>
+
+## 有问题？尝试 → [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/baicaizhale/Fancyhelper)
 
 ---
 
