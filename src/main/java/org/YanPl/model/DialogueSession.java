@@ -28,7 +28,7 @@ public class DialogueSession {
      * 对话模式
      */
     public enum Mode {
-        NORMAL, YOLO, SMART
+        NORMAL, YOLO, SMART, PLAN
     }
 
     /**
