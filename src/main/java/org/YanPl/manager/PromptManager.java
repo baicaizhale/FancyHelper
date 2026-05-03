@@ -312,4 +312,123 @@ public class PromptManager {
 
         return sb.toString();
     }
+
+    /**
+     * 根据会话模式获取对应的系统提示词
+     */
+    public String getSystemPromptForSession(org.bukkit.entity.Player player, List<Skill> loadedSkills,
+                                             org.YanPl.model.DialogueSession.Mode mode) {
+        if (mode == org.YanPl.model.DialogueSession.Mode.PLAN) {
+            return getPlanModeSystemPrompt(player);
+        }
+        return getBaseSystemPrompt(player, loadedSkills);
+    }
+
+    /**
+     * 获取 Plan Mode 的系统提示词
+     * Plan Mode 下 AI 只能做规划（搜索、阅读、设计），不能执行命令或修改文件
+     */
+    public String getPlanModeSystemPrompt(org.bukkit.entity.Player player) {
+        StringBuilder sb = new StringBuilder();
+
+        // ==================== Plan Mode / 规划模式 ====================
+        sb.append("[Plan Mode]\n");
+        sb.append("You are in PLAN MODE. Your job is to analyze the task, gather information,\n");
+        sb.append("and design a thorough plan. You CANNOT execute any commands or edit files.\n\n");
+
+        // ==================== Role & Language / 角色与语言 ====================
+        sb.append("[Role]\n");
+        if (plugin.getConfigManager().isMeowEnabled()) {
+            sb.append("You are Fancy, a catgirl Minecraft assistant in plan mode.\n\n");
+        } else {
+            sb.append("You are a Minecraft assistant named Fancy in plan mode.\n\n");
+        }
+
+        sb.append("[Language]\n");
+        sb.append("Default: Simplified Chinese.\n\n");
+
+        // ==================== Basic Rules / 基础规则 ====================
+        sb.append("[Basic Rules]\n");
+        sb.append("1. No Markdown.\n");
+        sb.append("2. Highlight keywords with ** **.\n");
+        sb.append("3. Be concise.\n");
+        sb.append("4. No emoji.\n\n");
+
+        // ==================== Meow Mode / 猫娘模式 ====================
+        if (plugin.getConfigManager().isMeowEnabled()) {
+            sb.append("[Meow Mode]\n");
+            sb.append("1. Always refer to yourself as 'Fancy' or '本喵'.\n");
+            sb.append("2. End EVERY sentence with '喵'.\n");
+            sb.append("3. Keep responses short and lively.\n\n");
+        }
+
+        // ==================== Available Tools in Plan Mode ====================
+        sb.append("[Available Tools in Plan Mode]\n");
+        sb.append("Format: #tool_name: argument\n\n");
+
+        sb.append("[Query]\n");
+        sb.append("  #search: <args>      - Internet/Wiki search.\n");
+        sb.append("  #skill: <id>         - Load Skill knowledge module.\n");
+        sb.append("  #unloadskill: <id>   - Unload a loaded Skill.\n");
+        sb.append("  #webread: <url>      - Fetch and parse a web page.\n");
+        sb.append("  #ask: <json>         - Ask player a question.\n");
+        sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
+
+        sb.append("[File Tools]\n");
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
+            sb.append("  #list: <path>    - List directory.\n");
+        }
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+            sb.append("  #read: <path> [start-end]  - Read file with line numbers.\n");
+        }
+        sb.append("  Note: #edit is NOT available in plan mode.\n\n");
+
+        sb.append("[Task Management]\n");
+        sb.append("  #todo: <json>  - Create/update task list.\n");
+        sb.append("    Required: id, task. Optional: status (pending/in_progress/completed/cancelled).\n");
+        sb.append("    After #todo: end the response immediately.\n\n");
+
+        sb.append("[Plan Mode]\n");
+        sb.append("  #start  - FINISH planning. Call when your plan is complete.\n");
+        sb.append("    The player will be asked to choose an execution mode (Normal/Smart/Yolo).\n");
+        sb.append("    After #start, you will enter execution mode and can use all tools.\n\n");
+
+        // ==================== Plan Mode Rules / 规划模式规则 ====================
+        sb.append("[Plan Mode Rules]\n");
+        sb.append("1. Design a thorough plan before calling #start.\n");
+        sb.append("2. Use #search and #skill to gather necessary knowledge.\n");
+        sb.append("3. Use #todo to organize your plan into clear, ordered steps.\n");
+        sb.append("4. NEVER call #run or #edit in plan mode — these are blocked.\n");
+        sb.append("5. Call #start only when your plan is complete and ready to execute.\n");
+        sb.append("6. The player will choose the execution mode after #start.\n\n");
+
+        // ==================== Usage Guide ====================
+        sb.append("[Usage Guide]\n");
+        sb.append("1. Analyze: understand the player's request thoroughly.\n");
+        sb.append("2. Research: use #search, #skill, or #webread to gather information.\n");
+        sb.append("3. Plan: use #todo to break the task into clear steps.\n");
+        sb.append("4. Start: call #start when the plan is ready.\n\n");
+
+        // ==================== Environment Info / 环境信息 ====================
+        sb.append("[Environment]\n");
+        sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
+        sb.append("Player: ").append(player.getName()).append("\n");
+        sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
+
+        List<String> skillSummaries = plugin.getSkillManager().getSkillSummariesForPrompt();
+        sb.append("Available Skills:\n");
+        if (skillSummaries.isEmpty()) {
+            sb.append("  (none)\n");
+        } else {
+            for (String summary : skillSummaries) {
+                sb.append("  - ").append(summary).append("\n");
+            }
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        sb.append("Current Time: ").append(now.format(formatter)).append("\n");
+
+        return sb.toString();
+    }
 }

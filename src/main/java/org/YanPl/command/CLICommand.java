@@ -95,6 +95,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "yolo":
             case "normal":
             case "smart":
+            case "plan":
+            case "plan_clear_y":
+            case "plan_clear_n":
+            case "plan_start":
             case "confirm":
             case "cancel":
             case "agree":
@@ -189,6 +193,20 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "smart":
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.SMART);
+                return true;
+            case "plan":
+                plugin.getCliManager().enterPlanMode(player);
+                return true;
+            case "plan_clear_y":
+                plugin.getCliManager().handlePlanClearY(player);
+                return true;
+            case "plan_clear_n":
+                plugin.getCliManager().handlePlanClearN(player);
+                return true;
+            case "plan_start":
+                if (args.length > 1) {
+                    plugin.getCliManager().handlePlanStartMode(player, args[1]);
+                }
                 return true;
             case "confirm":
                 plugin.getCliManager().handleConfirm(player);
@@ -998,7 +1016,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "reload", "status", "yolo", "normal", "smart", "checkupdate", "upgrade",
+                "reload", "status", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
@@ -1030,6 +1048,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         } else if (args.length == 3 && args[0].equalsIgnoreCase("lib") && args[1].equalsIgnoreCase("install")) {
             return Arrays.asList("protocolib").stream()
                     .filter(s -> s.startsWith(args[2].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("plan_start")) {
+            return Arrays.asList("normal", "smart", "yolo").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("skill")) {
             List<String> skillSubCommands = new ArrayList<>(Arrays.asList("list", "info", "load"));

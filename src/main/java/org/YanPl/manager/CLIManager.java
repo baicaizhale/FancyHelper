@@ -48,6 +48,10 @@ public class CLIManager {
     private final File yoloAgreedPlayersFile;
     private final File yoloModePlayersFile;
     private final File smartModePlayersFile;
+    private final File planModePlayersFile;
+    private final Set<UUID> planModePlayers = new HashSet<>();
+    private final Set<UUID> pendingPlanContextClear = new HashSet<>();
+    private final Set<UUID> pendingPlanStartMode = new HashSet<>();
     private final Map<UUID, PendingSmartAction> pendingSmartActions = new ConcurrentHashMap<>();
     private final Map<UUID, DialogueSession> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> isGenerating = new ConcurrentHashMap<>();
@@ -128,10 +132,12 @@ public class CLIManager {
         this.yoloAgreedPlayersFile = new File(plugin.getDataFolder(), "yolo_agreed_players.txt");
         this.yoloModePlayersFile = new File(plugin.getDataFolder(), "yolo_mode_players.txt");
         this.smartModePlayersFile = new File(plugin.getDataFolder(), "smart_mode_players.txt");
+        this.planModePlayersFile = new File(plugin.getDataFolder(), "plan_mode_players.txt");
         loadAgreedPlayers();
         loadYoloAgreedPlayers();
         loadYoloModePlayers();
         loadSmartModePlayers();
+        loadPlanModePlayers();
         startTimeoutTask();
         startThinkingTask();
         startLogCleanupTask();
@@ -271,11 +277,54 @@ public class CLIManager {
             for (UUID uuid : smartModePlayers) {
                 lines.add(uuid.toString());
             }
-            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines, 
-                java.nio.file.StandardOpenOption.CREATE, 
+            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines,
+                java.nio.file.StandardOpenOption.CREATE,
                 java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 SMART 模式玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    public void loadPlanModePlayers() {
+        planModePlayers.clear();
+        if (!planModePlayersFile.exists()) return;
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(planModePlayersFile.toPath());
+            for (String line : lines) {
+                try {
+                    planModePlayers.add(UUID.fromString(line.trim()));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法加载处于 Plan 模式的玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    private void savePlanModeState(UUID uuid, boolean isPlan) {
+        if (isPlan) {
+            if (planModePlayers.add(uuid)) {
+                writePlanModePlayers();
+            }
+        } else {
+            if (planModePlayers.remove(uuid)) {
+                writePlanModePlayers();
+            }
+        }
+    }
+
+    private void writePlanModePlayers() {
+        try {
+            List<String> lines = new ArrayList<>();
+            for (UUID uuid : planModePlayers) {
+                lines.add(uuid.toString());
+            }
+            java.nio.file.Files.write(planModePlayersFile.toPath(), lines,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            plugin.getLogger().warning("无法保存 Plan 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
         }
     }
@@ -956,6 +1005,8 @@ public class CLIManager {
                 session.setMode(DialogueSession.Mode.YOLO);
             } else if (smartModePlayers.contains(uuid)) {
                 session.setMode(DialogueSession.Mode.SMART);
+            } else if (planModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.PLAN);
             }
             
             // 先将会话放入 Map，确保后续操作能获取到正确的模式
@@ -1112,6 +1163,8 @@ public class CLIManager {
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
         pendingYoloAgreementPlayers.remove(uuid);
+        pendingPlanContextClear.remove(uuid);
+        pendingPlanStartMode.remove(uuid);
         sessions.remove(uuid);
         isGenerating.remove(uuid);
         generationStates.remove(uuid);
@@ -1127,6 +1180,14 @@ public class CLIManager {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
+
+        if (targetMode == DialogueSession.Mode.PLAN) {
+            enterPlanMode(player);
+            return;
+        }
+
+        // 退出 Plan 模式
+        savePlanModeState(uuid, false);
 
         if (targetMode == DialogueSession.Mode.YOLO) {
             if (!yoloAgreedPlayers.contains(uuid)) {
@@ -1172,6 +1233,218 @@ public class CLIManager {
 
         player.spigot().sendMessage(message);
         player.sendMessage(ChatColor.RED + "===============");
+    }
+
+    /**
+     * 进入 Plan Mode
+     */
+    public void enterPlanMode(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session == null) return;
+
+        // 如果已经在 Plan Mode，无需重复进入
+        if (session.getMode() == DialogueSession.Mode.PLAN) {
+            player.sendMessage(ChatColor.YELLOW + "已在 Plan Mode 中。");
+            return;
+        }
+
+        // 如果有历史消息，询问是否清空上下文
+        if (!session.getHistory().isEmpty()) {
+            pendingPlanContextClear.add(uuid);
+            player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
+            player.sendMessage(ChatColor.WHITE + "进入 Plan Mode 前，是否清空上下文？");
+
+            TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ] 清空");
+            yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_clear_y"));
+            yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("清空对话历史后进入 Plan Mode")));
+
+            TextComponent spacer = new TextComponent("  ");
+
+            TextComponent nBtn = new TextComponent(ChatColor.RED + "[ N ] 保留");
+            nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_clear_n"));
+            nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("保留对话历史并进入 Plan Mode")));
+
+            TextComponent message = new TextComponent("");
+            message.addExtra(yBtn);
+            message.addExtra(spacer);
+            message.addExtra(nBtn);
+
+            player.spigot().sendMessage(message);
+            player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
+            return;
+        }
+
+        activatePlanMode(player);
+    }
+
+    /**
+     * 激活 Plan Mode（清空上下文后直接进入）
+     */
+    private void activatePlanMode(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session == null) return;
+
+        session.setMode(DialogueSession.Mode.PLAN);
+        savePlanModeState(uuid, true);
+        saveYoloModeState(uuid, false);
+        saveSmartModeState(uuid, false);
+
+        sendEnterMessage(player);
+        player.sendMessage(ChatColor.AQUA + "◈ 已进入 Plan Mode。在此模式下 Fancy 仅做规划，不执行任何操作。");
+
+        // 触发 AI 使用 Plan Mode 提示词响应
+        isGenerating.put(uuid, true);
+        generationStates.put(uuid, GenerationStatus.THINKING);
+        generationStartTimes.putIfAbsent(uuid, System.currentTimeMillis());
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            final String systemPrompt = promptManager.getPlanModeSystemPrompt(player);
+            try {
+                AIResponse response = ai.chat(session, systemPrompt);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response));
+            } catch (IOException e) {
+                plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    isGenerating.put(uuid, false);
+                    generationStates.put(uuid, GenerationStatus.ERROR);
+                    player.sendMessage(ChatColor.RED + "Plan Mode 初始化失败: " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    /**
+     * 处理 Plan Mode 上下文清空确认 (Y)
+     */
+    public void handlePlanClearY(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (!pendingPlanContextClear.contains(uuid)) return;
+        pendingPlanContextClear.remove(uuid);
+
+        DialogueSession session = sessions.get(uuid);
+        if (session != null) {
+            session.clearHistory();
+        }
+        activatePlanMode(player);
+    }
+
+    /**
+     * 处理 Plan Mode 上下文清空确认 (N)
+     */
+    public void handlePlanClearN(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (!pendingPlanContextClear.contains(uuid)) return;
+        pendingPlanContextClear.remove(uuid);
+
+        activatePlanMode(player);
+    }
+
+    /**
+     * 处理 Plan Mode 的 #start 工具：显示执行模式选择 UI
+     */
+    public void handlePlanStart(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session == null || session.getMode() != DialogueSession.Mode.PLAN) return;
+
+        pendingPlanStartMode.add(uuid);
+        setGenerating(uuid, false, GenerationStatus.WAITING_CHOICE);
+
+        player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
+        player.sendMessage(ChatColor.GOLD + " ◆ 规划已完成！");
+        player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
+        player.sendMessage(ChatColor.WHITE + " • 以何种方式开始任务？");
+
+        // Normal 模式
+        TextComponent normalBtn = new TextComponent(ChatColor.GREEN + " » Normal ");
+        normalBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_start normal"));
+        normalBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "每次执行命令前都需要确认")));
+        player.spigot().sendMessage(normalBtn);
+        player.sendMessage(ChatColor.GRAY + "   每次执行命令前都需要确认");
+
+        // Smart 模式
+        TextComponent smartBtn = new TextComponent(ChatColor.BLUE + " » Smart ");
+        smartBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_start smart"));
+        smartBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "AI 评估风险，高风险操作需要确认")));
+        player.spigot().sendMessage(smartBtn);
+        player.sendMessage(ChatColor.GRAY + "   AI 评估风险，高风险操作需要确认");
+
+        // Yolo 模式
+        TextComponent yoloBtn = new TextComponent(ChatColor.RED + " » Yolo ");
+        yoloBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_start yolo"));
+        yoloBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "自动执行大部分命令（风险命令仍需确认）")));
+        player.spigot().sendMessage(yoloBtn);
+        player.sendMessage(ChatColor.GRAY + "   自动执行大部分命令（风险命令仍需确认）");
+
+        player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
+    }
+
+    /**
+     * 处理 Plan Mode 执行模式选择
+     */
+    public void handlePlanStartMode(Player player, String modeStr) {
+        UUID uuid = player.getUniqueId();
+        if (!pendingPlanStartMode.contains(uuid)) return;
+        pendingPlanStartMode.remove(uuid);
+
+        DialogueSession.Mode targetMode;
+        String modeDisplayName;
+        switch (modeStr.toLowerCase()) {
+            case "yolo":
+                // YOLO 需要先同意协议
+                if (!yoloAgreedPlayers.contains(uuid)) {
+                    sendYoloWarning(player);
+                    pendingYoloAgreementPlayers.add(uuid);
+                    // 同时保存 plan start mode 信息，等 YOLO 同意后再继续
+                    // 先把 session 设为 YOLO pending 状态
+                    player.sendMessage(ChatColor.YELLOW + "请先同意 YOLO 模式协议后再继续。");
+                    return;
+                }
+                targetMode = DialogueSession.Mode.YOLO;
+                modeDisplayName = "YOLO";
+                break;
+            case "smart":
+                targetMode = DialogueSession.Mode.SMART;
+                modeDisplayName = "Smart";
+                break;
+            default:
+                targetMode = DialogueSession.Mode.NORMAL;
+                modeDisplayName = "Normal";
+                break;
+        }
+
+        final DialogueSession.Mode finalMode = targetMode;
+        final String finalDisplayName = modeDisplayName;
+
+        // 延迟 0.3 秒 (6 ticks) 后发送确认并开始执行
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+
+            player.sendMessage(ChatColor.GOLD + " ◆ 好的，我将以 " + finalDisplayName + " 执行此任务。");
+
+            DialogueSession session = sessions.get(uuid);
+            if (session == null) return;
+
+            // 切换模式
+            session.setMode(finalMode);
+            savePlanModeState(uuid, false);
+            if (finalMode == DialogueSession.Mode.YOLO) {
+                saveYoloModeState(uuid, true);
+            } else if (finalMode == DialogueSession.Mode.SMART) {
+                saveSmartModeState(uuid, true);
+            }
+
+            // 反馈给 AI：规划完成，开始执行
+            String feedback = "#start_result: 玩家选择了 " + finalDisplayName + " 模式。现在开始执行规划好的任务。";
+            session.appendLog("PLAN_START", "Plan mode ended. Execution mode: " + finalDisplayName);
+
+            // 使用 feedbackToAI 触发 AI 响应（复用现有流式/非流式逻辑）
+            feedbackToAI(player, feedback);
+        }, 6L);
     }
 
     /**
@@ -1429,6 +1702,18 @@ public class CLIManager {
                 player.sendMessage(ChatColor.GRAY + "⇒ 已取消进入 YOLO 模式。");
             } else {
                 player.sendMessage(ChatColor.RED + "请发送 agree 以进入 YOLO 模式，或发送 stop 取消。");
+            }
+            return true;
+        }
+
+        // 如果玩家在等待 Plan Mode 上下文清空确认
+        if (pendingPlanContextClear.contains(uuid)) {
+            if (message.equalsIgnoreCase("y")) {
+                handlePlanClearY(player);
+            } else if (message.equalsIgnoreCase("n")) {
+                handlePlanClearN(player);
+            } else {
+                player.sendMessage(ChatColor.RED + "请选择 [Y] 清空上下文 或 [N] 保留上下文。");
             }
             return true;
         }
@@ -2050,7 +2335,7 @@ public class CLIManager {
         });
         
         // 估算本轮输入的 prompt tokens 并记入 session
-        String systemPrompt = promptManager.getBaseSystemPrompt(player, matchedSkills);
+        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode());
         String modelName = plugin.getConfigManager().getCloudflareModel();
         int estimatedInput = DialogueSession.calculateTokens(systemPrompt, modelName)
             + session.getEstimatedTokens(modelName) + 3;
@@ -2113,7 +2398,9 @@ public class CLIManager {
     }
 
     private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
-        String systemPrompt = promptManager.getBaseSystemPrompt(player, matchedSkills);
+        DialogueSession nsSession = sessions.get(player.getUniqueId());
+        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills,
+                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL);
         AIResponse response = ai.chat(sessions.get(player.getUniqueId()), systemPrompt);
         
         if (!plugin.isEnabled()) return;
@@ -2358,7 +2645,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -2518,7 +2805,7 @@ public class CLIManager {
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
         
-        List<String> knownTools = Arrays.asList("#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#getpreset", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread");
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
@@ -2636,7 +2923,7 @@ public class CLIManager {
             
             try {
                 // continueGeneration 不需要匹配新 Skills，使用空列表
-                AIResponse response = ai.chat(session, promptManager.getBaseSystemPrompt(player, Collections.emptyList()));
+                AIResponse response = ai.chat(session, promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode()));
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -2833,7 +3120,7 @@ public class CLIManager {
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             // feedbackToAI 不需要匹配新 Skills，使用空列表
-            final String systemPrompt = promptManager.getBaseSystemPrompt(player, Collections.emptyList()); // 在 try 块外部定义
+            final String systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode());
             
             // 设置重试回调，向玩家显示重试提示
             ai.setRetryCallback((statusCode, retryMessage) -> {
@@ -3372,6 +3659,8 @@ public class CLIManager {
             modeTag = new TextComponent(ChatColor.GREEN + " (Normal) ");
         } else if (mode == DialogueSession.Mode.SMART) {
             modeTag = new TextComponent(ChatColor.BLUE + " (SMART) ");
+        } else if (mode == DialogueSession.Mode.PLAN) {
+            modeTag = new TextComponent(ChatColor.AQUA + " (Plan) ");
         } else {
             modeTag = new TextComponent(ChatColor.RED + " (YOLO) ");
         }

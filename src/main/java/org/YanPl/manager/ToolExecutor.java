@@ -67,6 +67,19 @@ public class ToolExecutor {
         // 显示工具调用信息
         displayToolCall(player, toolName, args);
 
+        // Plan Mode 工具白名单检查
+        if (session != null && session.getMode() == DialogueSession.Mode.PLAN) {
+            if (!isPlanModeTool(toolName)) {
+                String error = "#error: 当前处于 Plan Mode，仅允许规划相关工具。使用 #start 结束规划并开始执行。";
+                cliManager.feedbackToAI(player, error);
+                if (session != null) {
+                    session.setLastError(error);
+                    session.appendLog("PLAN_MODE_BLOCKED", "Blocked tool in plan mode: " + toolName);
+                }
+                return false;
+            }
+        }
+
         // 执行对应的工具
         boolean success = true;
         String lowerToolName = toolName.toLowerCase();
@@ -78,6 +91,9 @@ public class ToolExecutor {
                 break;
             case "#exit":
                 cliManager.exitCLI(player);
+                break;
+            case "#start":
+                handleStartTool(player);
                 break;
             
             // 执行工具
@@ -1892,5 +1908,25 @@ public class ToolExecutor {
             }
         }
         return line;
+    }
+
+    /**
+     * 检查工具是否在 Plan Mode 白名单中
+     */
+    private boolean isPlanModeTool(String toolName) {
+        String lower = toolName.toLowerCase().trim();
+        return switch (lower) {
+            case "#start", "#search", "#skill", "#unloadskill", "#webread",
+                 "#list", "#read", "#todo", "#ask", "#end", "#exit" -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * 处理 #start 工具 — 结束 Plan Mode，显示执行模式选择
+     */
+    private void handleStartTool(Player player) {
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.WAITING_CHOICE);
+        cliManager.handlePlanStart(player);
     }
 }
