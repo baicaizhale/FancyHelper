@@ -1389,7 +1389,6 @@ public class CLIManager {
     public void handlePlanStartMode(Player player, String modeStr) {
         UUID uuid = player.getUniqueId();
         if (!pendingPlanStartMode.contains(uuid)) return;
-        pendingPlanStartMode.remove(uuid);
 
         DialogueSession.Mode targetMode;
         String modeDisplayName;
@@ -1399,8 +1398,7 @@ public class CLIManager {
                 if (!yoloAgreedPlayers.contains(uuid)) {
                     sendYoloWarning(player);
                     pendingYoloAgreementPlayers.add(uuid);
-                    // 同时保存 plan start mode 信息，等 YOLO 同意后再继续
-                    // 先把 session 设为 YOLO pending 状态
+                    // 保留 pendingPlanStartMode，等 YOLO 同意后由 handleChat 继续
                     player.sendMessage(ChatColor.YELLOW + "请先同意 YOLO 模式协议后再继续。");
                     return;
                 }
@@ -1416,6 +1414,8 @@ public class CLIManager {
                 modeDisplayName = "Normal";
                 break;
         }
+
+        pendingPlanStartMode.remove(uuid);
 
         final DialogueSession.Mode finalMode = targetMode;
         final String finalDisplayName = modeDisplayName;
@@ -1696,10 +1696,20 @@ public class CLIManager {
             if (message.equalsIgnoreCase("agree")) {
                 pendingYoloAgreementPlayers.remove(uuid);
                 saveYoloAgreedPlayer(uuid);
-                switchMode(player, DialogueSession.Mode.YOLO);
+                // 如果 YOLO 同意来自 Plan Mode 的 #start 流程，继续 plan 执行
+                if (pendingPlanStartMode.contains(uuid)) {
+                    handlePlanStartMode(player, "yolo");
+                } else {
+                    switchMode(player, DialogueSession.Mode.YOLO);
+                }
             } else if (message.equalsIgnoreCase("stop")) {
                 pendingYoloAgreementPlayers.remove(uuid);
-                player.sendMessage(ChatColor.GRAY + "⇒ 已取消进入 YOLO 模式。");
+                if (pendingPlanStartMode.contains(uuid)) {
+                    // Plan 启动中的 YOLO 取消：重新显示模式选择 UI
+                    handlePlanStart(player);
+                } else {
+                    player.sendMessage(ChatColor.GRAY + "⇒ 已取消进入 YOLO 模式。");
+                }
             } else {
                 player.sendMessage(ChatColor.RED + "请发送 agree 以进入 YOLO 模式，或发送 stop 取消。");
             }
