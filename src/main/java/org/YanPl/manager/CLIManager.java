@@ -1179,7 +1179,13 @@ public class CLIManager {
     public void switchMode(Player player, DialogueSession.Mode targetMode) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
-        if (session == null) return;
+
+        // 如果玩家不在 CLI 模式中，自动进入 CLI
+        if (session == null) {
+            ensureInCLI(player);
+            session = sessions.get(uuid);
+            if (session == null) return;
+        }
 
         if (targetMode == DialogueSession.Mode.PLAN) {
             enterPlanMode(player);
@@ -1236,12 +1242,82 @@ public class CLIManager {
     }
 
     /**
+     * 确保玩家已进入 CLI 模式（无问候语，无 sendEnterMessage）。
+     * 用于 /cli plan/normal/smart/yolo 等命令在未进入 CLI 时自动进入。
+     */
+    private void ensureInCLI(Player player) {
+        UUID uuid = player.getUniqueId();
+
+        // 检查 EULA 文件状态
+        if (!plugin.getEulaManager().isEulaValid()) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"));
+            return;
+        }
+
+        // 检查用户协议
+        if (!agreedPlayers.contains(uuid)) {
+            sendAgreement(player);
+            pendingAgreementPlayers.add(uuid);
+            return;
+        }
+
+        // 检查是否已经有会话
+        DialogueSession session = sessions.get(uuid);
+        if (session != null) {
+            // 已有会话，只需加入活跃列表
+            activeCLIPayers.add(uuid);
+            return;
+        }
+
+        // 尝试加载历史会话
+        session = loadSessionHistory(uuid);
+
+        // 创建新会话
+        if (session == null) {
+            session = new DialogueSession();
+            // 恢复上次的模式
+            if (yoloModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.YOLO);
+            } else if (smartModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.SMART);
+            } else if (planModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.PLAN);
+            }
+
+            sessions.put(uuid, session);
+
+            // 创建日志文件
+            try {
+                Path logDir = plugin.getDataFolder().toPath().resolve("logs");
+                Files.createDirectories(logDir);
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+                String logFileName = timestamp + ".log";
+                Path logFilePath = logDir.resolve(logFileName);
+                session.setLogFilePath(logFilePath.toString());
+                session.setVerboseLogging(plugin.getConfigManager().isDebug());
+            } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
+            }
+        } else {
+            sessions.put(uuid, session);
+        }
+
+        activeCLIPayers.add(uuid);
+    }
+
+    /**
      * 进入 Plan Mode
      */
     public void enterPlanMode(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
-        if (session == null) return;
+
+        // 如果玩家不在 CLI 模式中，自动进入 CLI
+        if (session == null) {
+            ensureInCLI(player);
+            session = sessions.get(uuid);
+            if (session == null) return;
+        }
 
         // 如果已经在 Plan Mode，无需重复进入
         if (session.getMode() == DialogueSession.Mode.PLAN) {
@@ -1249,8 +1325,10 @@ public class CLIManager {
             return;
         }
 
-        // 如果有历史消息，询问是否清空上下文
-        if (!session.getHistory().isEmpty()) {
+        // 如果有用户消息（排除系统自动存储的问候语等），询问是否清空上下文
+        boolean hasUserMessages = session.getHistory().stream()
+                .anyMatch(msg -> "user".equals(msg.getRole()));
+        if (hasUserMessages) {
             pendingPlanContextClear.add(uuid);
             player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
             player.sendMessage(ChatColor.WHITE + "进入 Plan Mode 前，是否清空上下文？");
@@ -1294,27 +1372,8 @@ public class CLIManager {
         sendEnterMessage(player);
         player.sendMessage(ChatColor.AQUA + "◈ 已进入 Plan Mode。在此模式下 Fancy 仅做规划，不执行任何操作。");
 
-        // 触发 AI 使用 Plan Mode 提示词响应
-        isGenerating.put(uuid, true);
-        generationStates.put(uuid, GenerationStatus.THINKING);
-        generationStartTimes.putIfAbsent(uuid, System.currentTimeMillis());
-
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            final String systemPrompt = promptManager.getPlanModeSystemPrompt(player);
-            try {
-                AIResponse response = ai.chat(session, systemPrompt);
-                if (!plugin.isEnabled()) return;
-                Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response));
-            } catch (IOException e) {
-                plugin.getCloudErrorReport().report(e);
-                if (!plugin.isEnabled()) return;
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    isGenerating.put(uuid, false);
-                    generationStates.put(uuid, GenerationStatus.ERROR);
-                    player.sendMessage(ChatColor.RED + "Plan Mode 初始化失败: " + e.getMessage());
-                });
-            }
-        });
+        // 将进入 Plan Mode 的记录存入上下文，等待用户提问，不触发 API 调用
+        session.addMessage("assistant", "[系统] 已进入 Plan Mode。等待用户提出问题后进行规划。");
     }
 
     /**
