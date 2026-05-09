@@ -369,6 +369,20 @@ public class StreamingHandler {
                                 }
                             }
                         }
+                        // 捕获 Gemma 等模型的 reasoning 字段（CloudFlare Workers AI 兼容格式）
+                        if (delta.has("reasoning") && !delta.get("reasoning").isJsonNull()) {
+                            String rc = delta.get("reasoning").getAsString();
+                            if (!rc.isEmpty()) {
+                                hasReasoningInChunk = true;
+                                if (reasoningStartTime == -1) {
+                                    reasoningStartTime = System.currentTimeMillis();
+                                }
+                                thoughtContent.append(rc);
+                                if (onReasoningCallback != null) {
+                                    try { onReasoningCallback.accept(rc); } catch (Exception ignored) {}
+                                }
+                            }
+                        }
                     }
                     if (choice.has("text") && !choice.get("text").isJsonNull()) {
                         return choice.get("text").getAsString();
