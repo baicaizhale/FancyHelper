@@ -2114,7 +2114,6 @@ public class CLIManager {
     /**
      * 手动压缩上下文（供玩家通过命令调用）
      * @param player 玩家
-     * @param mode 压缩模式（保留参数但不再使用）
      */
     public void compressContext(Player player, String mode) {
         UUID uuid = player.getUniqueId();
