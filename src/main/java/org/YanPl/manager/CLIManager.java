@@ -2323,6 +2323,7 @@ public class CLIManager {
                 }
 
                 session.addMessage("assistant", response, finalThought);
+                session.logAIResponse(response + "\n\n[Streaming] Finish Reason: stop\n");
 
                 if (!thoughtContent.isEmpty()) {
                     String modelName = plugin.getConfigManager().getCloudflareModel();
@@ -2443,7 +2444,8 @@ public class CLIManager {
             String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
             session.setLastThought(finalThought);
             session.addMessage("assistant", finalResponse, finalThought);
-            
+            session.logAIResponse(finalResponse + "\n\n[Streaming] Finish Reason: stop\n");
+
             if (!thoughtContent.isEmpty()) {
                 int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
                 session.addThoughtTokens(thoughtTokens);
@@ -3301,6 +3303,7 @@ public class CLIManager {
                                 }
                             }
                             String thought = streamingHandler.getThoughtContent();
+                            session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                             AIResponse response = new AIResponse(completeText,
                                 (thought != null && !thought.isEmpty()) ? thought : null);
                             handleAIResponse(player, response, true);
@@ -3351,6 +3354,7 @@ public class CLIManager {
                             roundOutputTokens.merge(uuid, streamedOutFallback, (a, b) -> a + b);
                         }
                         String thought = streamingHandler.getThoughtContent();
+                        session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                         AIResponse response = new AIResponse(completeText,
                             (thought != null && !thought.isEmpty()) ? thought : null);
                         if (!plugin.isEnabled()) return;
