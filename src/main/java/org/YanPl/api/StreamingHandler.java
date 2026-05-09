@@ -1,6 +1,8 @@
 package org.YanPl.api;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
 import org.bukkit.entity.Player;
@@ -312,6 +314,35 @@ public class StreamingHandler {
     }
     
     /**
+     * 处理非流式完成的文本（用于 gpt-oss 等不支持流式的模型）
+     * 将完整文本通过回调机制传递给 UI，触发完成回调
+     * @param fullText 完整的响应文本
+     * @return 原始文本
+     */
+    public String feedCompletedText(String fullText) {
+        if (fullText != null && !fullText.isEmpty() && !isCancelled.get() && onChunkCallback != null) {
+            try {
+                onChunkCallback.accept(fullText);
+            } catch (Exception e) {
+                logger.warning("[Stream] 非流式文本回调异常: " + e.getMessage());
+            }
+        }
+        // 触发完成回调
+        if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
+            try {
+                onCompleteCallback.accept(fullText != null ? fullText : "");
+            } catch (Exception e) {
+                errorOccurred = true;
+                logger.warning("[Stream] 完成回调异常: " + e.getMessage());
+                if (onErrorCallback != null) {
+                    try { onErrorCallback.accept(e); } catch (Exception ignored) {}
+                }
+            }
+        }
+        return fullText != null ? fullText : "";
+    }
+
+    /**
      * 从SSE数据行中提取文本内容
      * 支持多种格式：
      * 1. CloudFlare原生格式: {"response":"text"}
@@ -360,6 +391,20 @@ public class StreamingHandler {
                             if (!rc.isEmpty()) {
                                 hasReasoningInChunk = true;
                                 // 第一个非空 reasoning token → 开始计时
+                                if (reasoningStartTime == -1) {
+                                    reasoningStartTime = System.currentTimeMillis();
+                                }
+                                thoughtContent.append(rc);
+                                if (onReasoningCallback != null) {
+                                    try { onReasoningCallback.accept(rc); } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+                        // 捕获 Gemma 等模型的 reasoning 字段（CloudFlare Workers AI 兼容格式）
+                        if (delta.has("reasoning") && !delta.get("reasoning").isJsonNull()) {
+                            String rc = delta.get("reasoning").getAsString();
+                            if (!rc.isEmpty()) {
+                                hasReasoningInChunk = true;
                                 if (reasoningStartTime == -1) {
                                     reasoningStartTime = System.currentTimeMillis();
                                 }
@@ -425,17 +470,96 @@ public class StreamingHandler {
                 }
             }
 
-            // 3. 尝试解析 CloudFlare 原生 response 格式
+            // 3. 尝试解析 CloudFlare Responses API 非流式格式
+            // {"output":[{"type":"message","content":[{"type":"output_text","text":"..."}]}]}
+            if (json.has("output") && json.get("output").isJsonArray()) {
+                JsonArray output = json.getAsJsonArray("output");
+                for (int i = 0; i < output.size(); i++) {
+                    JsonObject item = output.get(i).getAsJsonObject();
+                    String itemType = item.has("type") ? item.get("type").getAsString() : "";
+                    // 提取 reasoning 内容
+                    if ("reasoning".equals(itemType) && !hasReasoningInChunk) {
+                        hasReasoningInChunk = true;
+                        StringBuilder rcBuilder = new StringBuilder();
+                        // 尝试从 summary 字段解析（可能是数组或字符串）
+                        if (item.has("summary")) {
+                            JsonElement summaryEl = item.get("summary");
+                            if (summaryEl.isJsonArray()) {
+                                JsonArray summaries = summaryEl.getAsJsonArray();
+                                for (int j = 0; j < summaries.size(); j++) {
+                                    JsonObject s = summaries.get(j).getAsJsonObject();
+                                    if (s.has("text") && !s.get("text").isJsonNull()) {
+                                        String text = s.get("text").getAsString();
+                                        if (!text.isEmpty()) {
+                                            if (rcBuilder.length() > 0) rcBuilder.append("\n");
+                                            rcBuilder.append(text);
+                                        }
+                                    }
+                                }
+                            } else if (summaryEl.isJsonPrimitive()) {
+                                String text = summaryEl.getAsString();
+                                if (!text.isEmpty()) {
+                                    rcBuilder.append(text);
+                                }
+                            }
+                        }
+                        // 如果 summary 没有内容，尝试从 content 数组解析
+                        if (rcBuilder.length() == 0 && item.has("content") && item.get("content").isJsonArray()) {
+                            JsonArray reasoningContents = item.getAsJsonArray("content");
+                            for (int j = 0; j < reasoningContents.size(); j++) {
+                                JsonObject c = reasoningContents.get(j).getAsJsonObject();
+                                String ct = c.has("type") ? c.get("type").getAsString() : "";
+                                if (("reasoning_text".equals(ct) || "text".equals(ct)) && c.has("text") && !c.get("text").isJsonNull()) {
+                                    String text = c.get("text").getAsString();
+                                    if (!text.isEmpty()) {
+                                        if (rcBuilder.length() > 0) rcBuilder.append("\n");
+                                        rcBuilder.append(text);
+                                    }
+                                }
+                            }
+                        }
+                        if (rcBuilder.length() > 0) {
+                            if (reasoningStartTime == -1) {
+                                reasoningStartTime = System.currentTimeMillis();
+                            }
+                            thoughtContent.append(rcBuilder);
+                            if (onReasoningCallback != null) {
+                                try { onReasoningCallback.accept(rcBuilder.toString()); } catch (Exception ignored) {}
+                            }
+                        }
+                    }
+                    // 提取消息内容
+                    if ("message".equals(itemType) && item.has("content") && item.get("content").isJsonArray()) {
+                        JsonArray contents = item.getAsJsonArray("content");
+                        for (int j = 0; j < contents.size(); j++) {
+                            JsonObject contentObj = contents.get(j).getAsJsonObject();
+                            String contentType = contentObj.has("type") ? contentObj.get("type").getAsString() : "";
+                            if ("output_text".equals(contentType) && !contentObj.get("text").isJsonNull()) {
+                                String text = contentObj.get("text").getAsString();
+                                if (text != null && !text.isEmpty()) {
+                                    // 首次从 reasoning 切换到 content，标记思考结束
+                                    if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
+                                        reasoningJustCompleted = true;
+                                    }
+                                    return text;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. 尝试解析 CloudFlare 原生 response 格式
             if (json.has("response") && !json.get("response").isJsonNull()) {
                 return json.get("response").getAsString();
             }
 
-            // 4. 尝试解析通用 content 格式
+            // 5. 尝试解析通用 content 格式
             if (json.has("content") && !json.get("content").isJsonNull()) {
                 return json.get("content").getAsString();
             }
 
-            // 5. 尝试解析通用 text 格式
+            // 6. 尝试解析通用 text 格式
             if (json.has("text") && !json.get("text").isJsonNull()) {
                 return json.get("text").getAsString();
             }
