@@ -1288,15 +1288,16 @@ public class CloudFlareAI {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.addProperty("max_tokens", 4096);
-        bodyJson.addProperty("stream", true);
 
         if (useResponsesApi) {
+            // gpt-oss 模型通过 Responses API 不支持流式，走非流式请求
             bodyJson.add("input", messagesArray);
             JsonObject reasoning = new JsonObject();
             reasoning.addProperty("effort", "medium");
             reasoning.addProperty("summary", "detailed");
             bodyJson.add("reasoning", reasoning);
         } else {
+            bodyJson.addProperty("stream", true);
             bodyJson.add("messages", messagesArray);
             if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
                 bodyJson.addProperty("reasoning_effort", "medium");
@@ -1317,8 +1318,22 @@ public class CloudFlareAI {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
+            if (useResponsesApi) {
+                // gpt-oss 模型使用非流式请求，通过 responseParser 解析
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    throw new IOException("非流式请求失败: " + response.statusCode() + " - " + response.body());
+                }
+                JsonObject responseJson = gson.fromJson(response.body(), JsonObject.class);
+                AIResponse aiResponse = responseParser.parseResponse(responseJson);
+                String fullText = aiResponse != null ? aiResponse.getContent() : "";
+                streamingHandler.feedCompletedText(fullText);
+                session.logAIResponse(buildStreamingLogResponse(fullText));
+                return fullText;
+            }
+
             HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            
+
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);

@@ -314,6 +314,35 @@ public class StreamingHandler {
     }
     
     /**
+     * 处理非流式完成的文本（用于 gpt-oss 等不支持流式的模型）
+     * 将完整文本通过回调机制传递给 UI，触发完成回调
+     * @param fullText 完整的响应文本
+     * @return 原始文本
+     */
+    public String feedCompletedText(String fullText) {
+        if (fullText != null && !fullText.isEmpty() && !isCancelled.get() && onChunkCallback != null) {
+            try {
+                onChunkCallback.accept(fullText);
+            } catch (Exception e) {
+                logger.warning("[Stream] 非流式文本回调异常: " + e.getMessage());
+            }
+        }
+        // 触发完成回调
+        if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
+            try {
+                onCompleteCallback.accept(fullText != null ? fullText : "");
+            } catch (Exception e) {
+                errorOccurred = true;
+                logger.warning("[Stream] 完成回调异常: " + e.getMessage());
+                if (onErrorCallback != null) {
+                    try { onErrorCallback.accept(e); } catch (Exception ignored) {}
+                }
+            }
+        }
+        return fullText != null ? fullText : "";
+    }
+
+    /**
      * 从SSE数据行中提取文本内容
      * 支持多种格式：
      * 1. CloudFlare原生格式: {"response":"text"}
