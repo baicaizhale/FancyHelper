@@ -376,6 +376,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
             sender.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
             sender.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
+            sender.sendMessage(ChatColor.WHITE + "已加载 Skills: " + ChatColor.YELLOW + plugin.getSkillManager().getSkillCount());
             sender.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
             sender.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
             sender.sendMessage(ChatColor.AQUA + "=======================");
@@ -404,7 +405,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         // Indexed Skills
         TextComponent skillLine = new TextComponent(ColorUtil.translateCustomColors("&7  Loaded Skills: "));
-        TextComponent skillVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getWorkspaceIndexer().getIndexedPresets().size()));
+        TextComponent skillVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getSkillManager().getSkillCount()));
         skillVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "已加载的 Skill 数量")));
         skillLine.addExtra(skillVal);
         player.spigot().sendMessage(skillLine);
