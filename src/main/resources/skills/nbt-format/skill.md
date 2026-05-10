@@ -9,6 +9,7 @@ triggers:
   - "item"
   - "format"
 auto_trigger: true
+source: "nbt-format"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

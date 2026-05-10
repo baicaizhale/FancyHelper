@@ -9,6 +9,7 @@ triggers:
   - "重载"
   - "设置"
 auto_trigger: true
+source: "fancyhelper"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

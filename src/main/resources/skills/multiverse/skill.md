@@ -8,6 +8,7 @@ triggers:
   - "多世界"
   - "传送世界"
 auto_trigger: true
+source: "multiverse"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

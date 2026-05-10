@@ -10,6 +10,7 @@ triggers:
   - "warp"
   - "spawn"
 auto_trigger: true
+source: "essentialsx"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

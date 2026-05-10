@@ -7,6 +7,7 @@ triggers:
   - "物品"
   - "give命令"
 auto_trigger: true
+source: "give"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

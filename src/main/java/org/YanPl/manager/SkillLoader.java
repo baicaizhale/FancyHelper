@@ -2,6 +2,7 @@ package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
 import org.YanPl.model.Skill;
+import org.YanPl.model.SkillMetadata;
 import org.YanPl.util.ResourceUtil;
 
 import java.io.*;
@@ -12,44 +13,21 @@ import java.util.*;
 
 /**
  * Skill 加载器
- * 负责从本地文件系统和插件资源中加载 Skill 文件
+ * 负责从本地文件系统加载 Skill 文件
  */
 public class SkillLoader {
 
     private final FancyHelper plugin;
 
-    // Skill 目录
+    // Skill 目录（所有 Skill 均存放在此目录下）
     private final File skillsDir;
-    private final File builtinDir;
-    private final File localDir;
-    private final File remoteDir;
 
     public SkillLoader(FancyHelper plugin) {
         this.plugin = plugin;
         this.skillsDir = new File(plugin.getDataFolder(), "skills");
-        this.builtinDir = new File(skillsDir, "builtin");
-        this.localDir = new File(skillsDir, "local");
-        this.remoteDir = new File(skillsDir, "remote");
 
-        // 确保目录存在
-        ensureDirectories();
-    }
-
-    /**
-     * 确保所有 Skill 目录存在
-     */
-    private void ensureDirectories() {
         if (!skillsDir.exists()) {
             skillsDir.mkdirs();
-        }
-        if (!builtinDir.exists()) {
-            builtinDir.mkdirs();
-        }
-        if (!localDir.exists()) {
-            localDir.mkdirs();
-        }
-        if (!remoteDir.exists()) {
-            remoteDir.mkdirs();
         }
     }
 
@@ -61,17 +39,11 @@ public class SkillLoader {
     public List<Skill> loadAllSkills() {
         List<Skill> skills = new ArrayList<>();
 
-        // 1. 释放内置 Skill 资源到 builtin 目录
-        releaseBuiltinSkills();
+        // 释放内置 Skill 资源（不覆盖已存在的文件）
+        ResourceUtil.releaseResources(plugin, "skills/", false, ".md");
 
-        // 2. 从 builtin 目录加载内置 Skill
-        skills.addAll(loadFromDirectory(builtinDir, true, false));
-
-        // 3. 加载本地 Skill
-        skills.addAll(loadFromDirectory(localDir, false, false));
-
-        // 4. 加载远程 Skill
-        skills.addAll(loadFromDirectory(remoteDir, false, true));
+        // 从 skillsDir 递归加载所有 Skill
+        skills.addAll(loadFromDirectory(skillsDir, false, false));
 
         plugin.getLogger().info("[Skill] 已加载 " + skills.size() + " 个 Skill");
 
@@ -82,8 +54,8 @@ public class SkillLoader {
      * 从指定目录加载 Skill
      *
      * @param directory 目录
-     * @param isBuiltIn 是否内置
-     * @param isRemote  是否远程
+     * @param isBuiltIn 是否内置（保留参数，始终传 false）
+     * @param isRemote  是否远程（保留参数，始终传 false）
      * @return Skill 列表
      */
     public List<Skill> loadFromDirectory(File directory, boolean isBuiltIn, boolean isRemote) {
@@ -101,12 +73,6 @@ public class SkillLoader {
 
     /**
      * 递归从目录加载 Skill
-     *
-     * @param baseDir   基础目录（用于计算相对路径）
-     * @param currentDir 当前目录
-     * @param isBuiltIn 是否内置
-     * @param isRemote  是否远程
-     * @param skills    Skill 列表
      */
     private void loadFromDirectoryRecursive(File baseDir, File currentDir, boolean isBuiltIn, boolean isRemote, List<Skill> skills) {
         File[] files = currentDir.listFiles();
@@ -116,7 +82,6 @@ public class SkillLoader {
 
         for (File file : files) {
             if (file.isDirectory()) {
-                // 递归处理子目录
                 loadFromDirectoryRecursive(baseDir, file, isBuiltIn, isRemote, skills);
             } else if (file.getName().endsWith(".md")) {
                 try {
@@ -135,8 +100,8 @@ public class SkillLoader {
      * 从文件加载 Skill
      *
      * @param file      文件
-     * @param isBuiltIn 是否内置
-     * @param isRemote  是否远程
+     * @param isBuiltIn 是否内置（保留参数，始终传 false）
+     * @param isRemote  是否远程（保留参数，始终传 false）
      * @return Skill 对象
      */
     public Skill loadFromFile(File file, boolean isBuiltIn, boolean isRemote) throws IOException {
@@ -147,72 +112,10 @@ public class SkillLoader {
     }
 
     /**
-     * 释放内置 Skill 资源到 builtin 目录
-     */
-    private void releaseBuiltinSkills() {
-        // 先释放到临时目录，然后移动到 builtin 目录
-        ResourceUtil.releaseResources(plugin, "skills/", true, ".md");
-        
-        // 将释放的文件从 skills/ 移动到 skills/builtin/
-        moveToBuiltinDir();
-    }
-    
-    /**
-     * 将 skills/ 目录下的 Skill 目录移动到 builtin/ 目录
-     */
-    private void moveToBuiltinDir() {
-        if (!skillsDir.exists() || !skillsDir.isDirectory()) {
-            return;
-        }
-        
-        File[] files = skillsDir.listFiles();
-        if (files == null) {
-            return;
-        }
-        
-        for (File file : files) {
-            if (file.isDirectory() && !file.equals(builtinDir) && 
-                !file.equals(localDir) && !file.equals(remoteDir)) {
-                // 这是 Skill 目录，移动到 builtin/
-                File targetDir = new File(builtinDir, file.getName());
-                try {
-                    if (targetDir.exists()) {
-                        // 如果目标已存在，删除旧的
-                        deleteDirectory(targetDir);
-                    }
-                    Files.move(file.toPath(), targetDir.toPath());
-                } catch (IOException e) {
-                    plugin.getLogger().warning("[Skill] 移动目录失败: " + file.getName() + " - " + e.getMessage());
-                }
-            }
-        }
-    }
-    
-    /**
-     * 递归删除目录
-     */
-    private void deleteDirectory(File dir) {
-        File[] files = dir.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    deleteDirectory(file);
-                } else {
-                    file.delete();
-                }
-            }
-        }
-        dir.delete();
-    }
-
-    /**
      * 保存 Skill 到本地目录
-     *
-     * @param skill Skill 对象
-     * @return 是否保存成功
      */
     public boolean saveSkill(Skill skill) {
-        File targetFile = new File(localDir, sanitizeFileName(skill.getId()) + ".md");
+        File targetFile = new File(skillsDir, sanitizeFileName(skill.getId()) + ".md");
 
         try {
             String content = Skill.createFileContent(skill.getMetadata(), skill.getContent());
@@ -232,9 +135,9 @@ public class SkillLoader {
      * @param content  内容
      * @return 创建的 Skill 对象，失败返回 null
      */
-    public Skill createSkill(String id, org.YanPl.model.SkillMetadata metadata, String content) {
+    public Skill createSkill(String id, SkillMetadata metadata, String content) {
         String fileName = sanitizeFileName(id) + ".md";
-        File targetFile = new File(localDir, fileName);
+        File targetFile = new File(skillsDir, fileName);
 
         // 检查是否已存在
         if (targetFile.exists()) {
@@ -253,22 +156,26 @@ public class SkillLoader {
     }
 
     /**
-     * 删除本地 Skill
-     *
-     * @param id Skill ID
-     * @return 是否删除成功
+     * 删除 Skill
      */
     public boolean deleteSkill(String id) {
         String sanitizedId = sanitizeFileName(id);
-        File file = new File(localDir, sanitizedId + ".md");
 
-        if (!file.exists()) {
-            // 尝试从远程目录删除
-            file = new File(remoteDir, sanitizedId + ".md");
+        // 尝试删除目录格式 skills/<id>/skill.md
+        File dirFile = new File(skillsDir, sanitizedId + File.separator + "skill.md");
+        if (dirFile.exists()) {
+            File parentDir = dirFile.getParentFile();
+            if (dirFile.delete()) {
+                parentDir.delete(); // 尝试删除空目录
+                return true;
+            }
+            return false;
         }
 
-        if (file.exists()) {
-            return file.delete();
+        // 尝试删除平面格式 skills/<id>.md
+        File flatFile = new File(skillsDir, sanitizedId + ".md");
+        if (flatFile.exists()) {
+            return flatFile.delete();
         }
 
         return false;
@@ -276,61 +183,48 @@ public class SkillLoader {
 
     /**
      * 更新 Skill 内容
-     *
-     * @param id       Skill ID
-     * @param metadata 新元数据
-     * @param content  新内容
-     * @return 是否更新成功
      */
-    public boolean updateSkill(String id, org.YanPl.model.SkillMetadata metadata, String content) {
-        File file = new File(localDir, sanitizeFileName(id) + ".md");
-
-        if (!file.exists()) {
-            return false;
+    public boolean updateSkill(String id, SkillMetadata metadata, String content) {
+        // 尝试目录格式 skills/<id>/skill.md
+        File dirFile = new File(skillsDir, sanitizeFileName(id) + File.separator + "skill.md");
+        if (dirFile.exists()) {
+            try {
+                String fileContent = Skill.createFileContent(metadata, content);
+                Files.write(dirFile.toPath(), fileContent.getBytes(StandardCharsets.UTF_8));
+                return true;
+            } catch (IOException e) {
+                plugin.getLogger().warning("[Skill] 更新失败: " + id + " - " + e.getMessage());
+                return false;
+            }
         }
 
-        try {
-            String fileContent = Skill.createFileContent(metadata, content);
-            Files.write(file.toPath(), fileContent.getBytes(StandardCharsets.UTF_8));
-            return true;
-        } catch (IOException e) {
-            plugin.getLogger().warning("[Skill] 更新失败: " + id + " - " + e.getMessage());
-            return false;
+        // 尝试平面格式 skills/<id>.md
+        File flatFile = new File(skillsDir, sanitizeFileName(id) + ".md");
+        if (flatFile.exists()) {
+            try {
+                String fileContent = Skill.createFileContent(metadata, content);
+                Files.write(flatFile.toPath(), fileContent.getBytes(StandardCharsets.UTF_8));
+                return true;
+            } catch (IOException e) {
+                plugin.getLogger().warning("[Skill] 更新失败: " + id + " - " + e.getMessage());
+                return false;
+            }
         }
+
+        return false;
     }
 
     /**
      * 统一处理文件名中的非法字符
      */
-    private String sanitizeFileName(String id) {
+    public String sanitizeFileName(String id) {
         return id.toLowerCase().replaceAll("[^a-z0-9_-]", "");
     }
 
     /**
-     * 获取内置 Skill 目录
+     * 获取 Skill 目录
      */
-    public File getBuiltinDir() {
-        return builtinDir;
-    }
-
-    /**
-     * 获取本地 Skill 目录
-     */
-    public File getLocalDir() {
-        return localDir;
-    }
-
-    /**
-     * 获取远程 Skill 目录
-     */
-    public File getRemoteDir() {
-        return remoteDir;
-    }
-
-    /**
-     * 获取所有 Skill 目录
-     */
-    public List<File> getAllSkillDirs() {
-        return Arrays.asList(builtinDir, localDir, remoteDir);
+    public File getSkillsDir() {
+        return skillsDir;
     }
 }

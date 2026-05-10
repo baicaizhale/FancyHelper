@@ -8,6 +8,7 @@ triggers:
   - "balance"
   - "支付"
 auto_trigger: true
+source: "vault"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

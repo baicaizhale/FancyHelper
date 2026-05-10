@@ -30,6 +30,7 @@ triggers:
   - "rankup"
   - "升级"
 auto_trigger: true
+source: "cmi"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

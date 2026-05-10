@@ -289,11 +289,6 @@ public class SkillManager {
             return false;
         }
 
-        // 只能删除本地或远程 Skill，不能删除内置
-        if (skill.isBuiltIn()) {
-            return false;
-        }
-
         if (loader.deleteSkill(id)) {
             registry.unregister(skill);
             return true;
@@ -315,15 +310,10 @@ public class SkillManager {
             return false;
         }
 
-        // 只能更新本地 Skill
-        if (skill.isBuiltIn() || skill.isRemote()) {
-            return false;
-        }
-
         if (loader.updateSkill(id, metadata, content)) {
             // 重新加载该 Skill
             try {
-                File file = new File(loader.getLocalDir(), id + ".md");
+                File file = new File(loader.getSkillsDir(), loader.sanitizeFileName(id) + ".md");
                 Skill updatedSkill = loader.loadFromFile(file, false, false);
                 registry.unregister(skill);
                 registry.register(updatedSkill);
@@ -346,30 +336,12 @@ public class SkillManager {
     }
 
     /**
-     * 获取内置 Skill 数量
+     * 获取可在线更新的 Skill 数量
      *
-     * @return 内置 Skill 数量
+     * @return 可更新的 Skill 数量
      */
-    public int getBuiltinCount() {
-        return registry.getBuiltinSkills().size();
-    }
-
-    /**
-     * 获取本地 Skill 数量
-     *
-     * @return 本地 Skill 数量
-     */
-    public int getLocalCount() {
-        return registry.getLocalSkills().size();
-    }
-
-    /**
-     * 获取远程 Skill 数量
-     *
-     * @return 远程 Skill 数量
-     */
-    public int getRemoteCount() {
-        return registry.getRemoteSkills().size();
+    public int getUpdatableCount() {
+        return registry.getUpdatableSkills().size();
     }
 
     /**
@@ -426,30 +398,8 @@ public class SkillManager {
 
         lines.add("§6========== 可用 Skill 列表 ==========");
 
-        // 按来源分组
-        List<Skill> builtin = registry.getBuiltinSkills();
-        List<Skill> local = registry.getLocalSkills();
-        List<Skill> remote = registry.getRemoteSkills();
-
-        if (!builtin.isEmpty()) {
-            lines.add("§e§l内置 Skill:");
-            for (Skill skill : builtin) {
-                lines.add("  " + skill.getShortInfo());
-            }
-        }
-
-        if (!local.isEmpty()) {
-            lines.add("§e§l本地 Skill:");
-            for (Skill skill : local) {
-                lines.add("  " + skill.getShortInfo());
-            }
-        }
-
-        if (!remote.isEmpty()) {
-            lines.add("§e§l远程 Skill:");
-            for (Skill skill : remote) {
-                lines.add("  " + skill.getShortInfo());
-            }
+        for (Skill skill : skills) {
+            lines.add("  " + skill.getShortInfo());
         }
 
         lines.add("§6====================================");

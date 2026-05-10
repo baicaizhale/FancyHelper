@@ -8,6 +8,7 @@ triggers:
   - "选区"
   - "快速建筑"
 auto_trigger: true
+source: "worldedit"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

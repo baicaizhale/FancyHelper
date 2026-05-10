@@ -8,6 +8,7 @@ triggers:
   - "建造房屋"
   - "房子预设"
 auto_trigger: true
+source: "house-builder"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

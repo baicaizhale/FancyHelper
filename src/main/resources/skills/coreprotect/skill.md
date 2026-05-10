@@ -9,6 +9,7 @@ triggers:
   - "rollback"
   - "回档"
 auto_trigger: true
+source: "coreprotect"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

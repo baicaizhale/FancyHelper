@@ -8,6 +8,7 @@ triggers:
   - "经验"
   - "mcmmo技能"
 auto_trigger: true
+source: "mcmmo"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

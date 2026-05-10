@@ -8,6 +8,7 @@ triggers:
   - "圈地"
   - "保护领地"
 auto_trigger: true
+source: "residence"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

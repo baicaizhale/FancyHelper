@@ -7,6 +7,7 @@ triggers:
   - "变量"
   - "占位符"
 auto_trigger: true
+source: "placeholderapi"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:

@@ -8,6 +8,7 @@ triggers:
   - "permission"
   - "权限组"
 auto_trigger: true
+source: "luckperms"
 author: "FancyHelper Team"
 version: "1.0.0"
 categories:
