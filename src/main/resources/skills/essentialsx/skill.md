@@ -1,6 +1,6 @@
 ---
 name: "essentialsx"
-description: "EssentialsX 插件常用命令，包含传送、经济、游戏模式等"
+description: "EssentialsX 插件常用命令，包含传送、经济、游戏模式等，请先确保服务器安装的是此插件而不是cmi"
 triggers:
   - "essentials"
   - "ess"

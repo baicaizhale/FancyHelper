@@ -60,6 +60,7 @@ public class UpdateManager implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
                     .build();
 
             try {
@@ -175,9 +176,11 @@ public class UpdateManager implements Listener {
                         }
                     }
                 } else {
-                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败：服务器响应异常。"));
+                    String responseBody = response.body();
+                    plugin.getLogger().warning("检查更新失败 - HTTP " + response.statusCode() + ": " + (responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody));
+                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + response.statusCode() + "）。"));
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败：服务器响应异常。"));
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + response.statusCode() + "）。"));
                     }
                 }
             } catch (IOException e) {

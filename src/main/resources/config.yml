@@ -69,9 +69,10 @@ provider: cloudflare
 # CloudFlare Workers AI 配置
 cloudflare:
   # CloudFlare Workers AI API 密钥，FancyHelper会自动根据密钥来获取对应的account-id
+  # 如果你有疑问，可以看看 https://blog.baicaizhale.top/post/create-cf-key-for-fhai
   cf_key: "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0"
   # 使用的模型名称，不推荐更改，可以是任何一个Text-Generation模型
-  model: "@cf/moonshotai/kimi-k2.5"
+  model: "@cf/google/gemma-4-26b-a4b-it"
 
 # OpenAI 兼容端点配置（provider 设为 openai 时使用）
 openai:

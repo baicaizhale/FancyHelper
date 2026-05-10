@@ -2114,7 +2114,6 @@ public class CLIManager {
     /**
      * 手动压缩上下文（供玩家通过命令调用）
      * @param player 玩家
-     * @param mode 压缩模式（保留参数但不再使用）
      */
     public void compressContext(Player player, String mode) {
         UUID uuid = player.getUniqueId();
@@ -2324,6 +2323,7 @@ public class CLIManager {
                 }
 
                 session.addMessage("assistant", response, finalThought);
+                session.logAIResponse(response + "\n\n[Streaming] Finish Reason: stop\n");
 
                 if (!thoughtContent.isEmpty()) {
                     String modelName = plugin.getConfigManager().getCloudflareModel();
@@ -2444,7 +2444,8 @@ public class CLIManager {
             String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
             session.setLastThought(finalThought);
             session.addMessage("assistant", finalResponse, finalThought);
-            
+            session.logAIResponse(finalResponse + "\n\n[Streaming] Finish Reason: stop\n");
+
             if (!thoughtContent.isEmpty()) {
                 int thoughtTokens = DialogueSession.calculateTokens(thoughtContent, modelName);
                 session.addThoughtTokens(thoughtTokens);
@@ -3302,6 +3303,7 @@ public class CLIManager {
                                 }
                             }
                             String thought = streamingHandler.getThoughtContent();
+                            session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                             AIResponse response = new AIResponse(completeText,
                                 (thought != null && !thought.isEmpty()) ? thought : null);
                             handleAIResponse(player, response, true);
@@ -3352,6 +3354,7 @@ public class CLIManager {
                             roundOutputTokens.merge(uuid, streamedOutFallback, (a, b) -> a + b);
                         }
                         String thought = streamingHandler.getThoughtContent();
+                        session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                         AIResponse response = new AIResponse(completeText,
                             (thought != null && !thought.isEmpty()) ? thought : null);
                         if (!plugin.isEnabled()) return;
