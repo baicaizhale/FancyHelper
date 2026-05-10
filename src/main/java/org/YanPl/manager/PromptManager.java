@@ -268,6 +268,11 @@ public class PromptManager {
         // 【环境信息】放在最后：动态内容（玩家名、时间）每次变化，
         sb.append("[Environment]\n");
         sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
+        sb.append("Loaded Plugins: ");
+        sb.append(java.util.Arrays.stream(org.bukkit.Bukkit.getPluginManager().getPlugins())
+                .map(p -> p.getName())
+                .collect(java.util.stream.Collectors.joining(", ")));
+        sb.append("\n");
         sb.append("Player: ").append(player.getName()).append("\n");
         sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
 
@@ -412,6 +417,11 @@ public class PromptManager {
         // ==================== Environment Info / 环境信息 ====================
         sb.append("[Environment]\n");
         sb.append("Minecraft Version: ").append(org.bukkit.Bukkit.getBukkitVersion()).append("\n");
+        sb.append("Loaded Plugins: ");
+        sb.append(java.util.Arrays.stream(org.bukkit.Bukkit.getPluginManager().getPlugins())
+                .map(p -> p.getName())
+                .collect(java.util.stream.Collectors.joining(", ")));
+        sb.append("\n");
         sb.append("Player: ").append(player.getName()).append("\n");
         sb.append("Available Commands: ").append(String.join(", ", plugin.getWorkspaceIndexer().getIndexedCommands())).append("\n");
 
