@@ -81,8 +81,11 @@ public class ChatListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
-        if (paperChatEventExists) return;
-        
+        // 即使 paperChatEventExists 为 true（Paper 服务端），也要处理 Bukkit 事件，
+        // 因为 TrChat 等聊天插件可能监听 Bukkit 的 AsyncPlayerChatEvent，
+        // 而 Paper 为了兼容性会同时触发 Bukkit 事件。
+        // 如果只处理 Paper 的 AsyncChatEvent，Bukkit 事件仍会被其他插件收到并广播。
+
         String message = event.getMessage();
         Player player = event.getPlayer();
         if (!plugin.getCliManager().handleChat(player, message)) {
@@ -140,6 +143,13 @@ public class ChatListener implements Listener {
                             }
                             return;
                         }
+                        // 清空消息内容，防止 TrChat 等插件在 HIGHEST 优先级（ignoreCancelled=true）
+                        // 仍然读取并广播原始消息
+                        Class<?> componentClass = Class.forName("net.kyori.adventure.text.Component");
+                        Method emptyMethod = componentClass.getMethod("empty");
+                        Object emptyComponent = emptyMethod.invoke(null);
+                        Method setMessageMethod = event.getClass().getMethod("message", componentClass);
+                        setMessageMethod.invoke(event, emptyComponent);
                         try {
                             Method setCancelledMethod = event.getClass().getMethod("setCancelled", boolean.class);
                             setCancelledMethod.invoke(event, true);
