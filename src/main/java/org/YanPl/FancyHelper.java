@@ -106,9 +106,9 @@ public final class FancyHelper extends JavaPlugin {
             skillManager = new SkillManager(this);
             skillManager.initialize();
 
-            // 初始化 Skill 更新管理器
+            // 初始化 Skill 更新管理器（启动时自动检查并下载更新）
             skillUpdateManager = new SkillUpdateManager(this, skillManager);
-            skillUpdateManager.checkForUpdates();
+            skillUpdateManager.checkAndUpdate();
 
             // 初始化 CLI 管理器（管理玩家的 AI 会话）
             cliManager = new CLIManager(this);
