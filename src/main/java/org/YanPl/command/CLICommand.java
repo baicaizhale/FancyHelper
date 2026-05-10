@@ -376,6 +376,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(ChatColor.AQUA + "=== FancyHelper 状态 ===");
             sender.sendMessage(ChatColor.WHITE + "已索引命令: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedCommands().size());
             sender.sendMessage(ChatColor.WHITE + "已索引预设: " + ChatColor.YELLOW + plugin.getWorkspaceIndexer().getIndexedPresets().size());
+            sender.sendMessage(ChatColor.WHITE + "已加载 Skills: " + ChatColor.YELLOW + plugin.getSkillManager().getSkillCount());
             sender.sendMessage(ChatColor.WHITE + "CLI 模式玩家: " + ChatColor.YELLOW + plugin.getCliManager().getActivePlayersCount());
             sender.sendMessage(ChatColor.WHITE + "插件版本: " + ChatColor.YELLOW + plugin.getDescription().getVersion());
             sender.sendMessage(ChatColor.AQUA + "=======================");
@@ -404,7 +405,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         // Indexed Skills
         TextComponent skillLine = new TextComponent(ColorUtil.translateCustomColors("&7  Loaded Skills: "));
-        TextComponent skillVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getWorkspaceIndexer().getIndexedPresets().size()));
+        TextComponent skillVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getSkillManager().getSkillCount()));
         skillVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "已加载的 Skill 数量")));
         skillLine.addExtra(skillVal);
         player.spigot().sendMessage(skillLine);
@@ -776,6 +777,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             player.sendMessage(" §7- §b/cli skill load <id> §f: 加载 Skill 到当前对话");
             if (player.hasPermission("fancyhelper.skill.admin")) {
                 player.sendMessage(" §7- §b/cli skill reload §f: 重新加载所有 Skill");
+                player.sendMessage(" §7- §b/cli skill checkupdate §f: 检查 Skill 更新");
+                player.sendMessage(" §7- §b/cli skill upgrade §f: 下载并安装所有 Skill 更新");
             }
             return true;
         }
@@ -810,6 +813,20 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getSkillManager().reloadSkills();
                 player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已重新加载所有 Skill"));
                 player.sendMessage("§7共加载 " + plugin.getSkillManager().getSkillCount() + " 个 Skill");
+                break;
+            case "checkupdate":
+                if (!player.hasPermission("fancyhelper.skill.admin")) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    return true;
+                }
+                plugin.getSkillUpdateManager().checkForUpdates(player);
+                break;
+            case "upgrade":
+                if (!player.hasPermission("fancyhelper.skill.admin")) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    return true;
+                }
+                plugin.getSkillUpdateManager().downloadUpdates(player);
                 break;
             default:
                 player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知子命令: " + subCommand));
@@ -1057,6 +1074,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             List<String> skillSubCommands = new ArrayList<>(Arrays.asList("list", "info", "load"));
             if (sender.hasPermission("fancyhelper.skill.admin")) {
                 skillSubCommands.add("reload");
+                skillSubCommands.add("checkupdate");
+                skillSubCommands.add("upgrade");
             }
             return skillSubCommands.stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))

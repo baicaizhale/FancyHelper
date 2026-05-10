@@ -322,6 +322,20 @@ public class ConfigManager {
     }
 
     /**
+     * 获取 Skill 远程仓库地址
+     */
+    public String getSkillRepoBase() {
+        return config.getString("settings.skill_repo_base", "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/");
+    }
+
+    /**
+     * 获取 Skill 下载镜像源
+     */
+    public String getSkillUpdateMirror() {
+        return config.getString("settings.skill_update_mirror", "https://ghproxy.net/");
+    }
+
+    /**
      * 获取防循环检测的连续相似调用阈值
      * @return 连续相似调用阈值
      */

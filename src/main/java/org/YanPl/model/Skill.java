@@ -299,7 +299,7 @@ public class Skill {
         lines.add("§eAuto Trigger: §f" + (metadata.isAutoTrigger() ? "Yes" : "No"));
         lines.add("§ePriority: §f" + metadata.getPriority());
         lines.add("§eSource: §f" + (isRemote ? "Remote" : (isBuiltIn ? "Built-in" : "Local")));
-
+        lines.add("§eUpdatable: §f" + (isUpdatable() ? "§aYes" : "§cNo"));
         if (!metadata.getSource().isEmpty()) {
             lines.add("§eSource URL: §f" + metadata.getSource());
         }
@@ -370,6 +370,14 @@ public class Skill {
 
     public void setDirty(boolean dirty) {
         isDirty = dirty;
+    }
+
+    /**
+     * 检查此 Skill 是否支持在线更新
+     * 通过 YAML 中的 source 字段判断（非空即表示可从远程更新）
+     */
+    public boolean isUpdatable() {
+        return metadata.getSource() != null && !metadata.getSource().isEmpty();
     }
 
     /**

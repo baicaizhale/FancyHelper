@@ -63,14 +63,7 @@ public class SkillRegistry {
      * 判断是否应该用新 Skill 替换旧的
      */
     private boolean shouldReplace(Skill existing, Skill newer) {
-        // 远程 > 本地 > 内置
-        if (newer.isRemote() && !existing.isRemote()) return true;
-        if (!existing.isRemote() && newer.isRemote()) return false;
-
-        if (!existing.isBuiltIn() && newer.isBuiltIn()) return false;
-        if (existing.isBuiltIn() && !newer.isBuiltIn()) return true;
-
-        // 同类型时，后加载的替换先加载的（更新）
+        // 所有 Skill 统一存放在同一目录，后加载的替换先加载的
         return true;
     }
 
@@ -226,35 +219,13 @@ public class SkillRegistry {
     }
 
     /**
-     * 获取所有本地 Skill
+     * 获取所有可在线更新的 Skill
      *
      * @return Skill 列表
      */
-    public List<Skill> getLocalSkills() {
+    public List<Skill> getUpdatableSkills() {
         return allSkills.stream()
-                .filter(skill -> !skill.isBuiltIn() && !skill.isRemote())
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 获取所有内置 Skill
-     *
-     * @return Skill 列表
-     */
-    public List<Skill> getBuiltinSkills() {
-        return allSkills.stream()
-                .filter(Skill::isBuiltIn)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 获取所有远程 Skill
-     *
-     * @return Skill 列表
-     */
-    public List<Skill> getRemoteSkills() {
-        return allSkills.stream()
-                .filter(Skill::isRemote)
+                .filter(Skill::isUpdatable)
                 .collect(Collectors.toList());
     }
 

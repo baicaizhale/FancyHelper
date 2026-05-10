@@ -17,6 +17,7 @@ import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.manager.InstructionManager;
 import org.YanPl.manager.GuiManager;
 import org.YanPl.manager.SkillManager;
+import org.YanPl.manager.SkillUpdateManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -52,6 +53,7 @@ public final class FancyHelper extends JavaPlugin {
     private InstructionManager instructionManager;
     private GuiManager guiManager;
     private SkillManager skillManager;
+    private SkillUpdateManager skillUpdateManager;
 
     @Override
     public void onEnable() {
@@ -103,6 +105,10 @@ public final class FancyHelper extends JavaPlugin {
             // 初始化 Skill 管理器
             skillManager = new SkillManager(this);
             skillManager.initialize();
+
+            // 初始化 Skill 更新管理器（启动时自动检查并下载更新）
+            skillUpdateManager = new SkillUpdateManager(this, skillManager);
+            skillUpdateManager.checkAndUpdate();
 
             // 初始化 CLI 管理器（管理玩家的 AI 会话）
             cliManager = new CLIManager(this);
@@ -470,6 +476,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public SkillManager getSkillManager() {
         return skillManager;
+    }
+
+    public SkillUpdateManager getSkillUpdateManager() {
+        return skillUpdateManager;
     }
 
     /**
