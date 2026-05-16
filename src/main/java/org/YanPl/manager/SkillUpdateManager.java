@@ -139,23 +139,14 @@ public class SkillUpdateManager implements Listener {
         hasUpdates = false;
 
         try {
-            String manifestUrl = getManifestUrl();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(manifestUrl))
-                    .header("User-Agent", "FancyHelper-SkillUpdater")
-                    .timeout(Duration.ofSeconds(15))
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                notify(sender, "§c获取 Skill 更新清单失败 (HTTP " + response.statusCode() + ")");
-                plugin.getLogger().warning("[SkillUpdate] 获取 manifest 失败: HTTP " + response.statusCode());
+            String body = fetchWithFallback(getManifestUrl(), plugin.getConfigManager().getSkillRepoBase() + "manifest.json");
+            if (body == null) {
+                notify(sender, "§c获取 Skill 更新清单失败");
+                plugin.getLogger().warning("[SkillUpdate] 获取 manifest 失败（镜像+直连均不可用）");
                 return;
             }
 
-            JsonObject manifest = JsonParser.parseString(response.body()).getAsJsonObject();
+            JsonObject manifest = JsonParser.parseString(body).getAsJsonObject();
             if (!manifest.has("skills")) {
                 notify(sender, "§cSkill 更新清单格式错误");
                 return;
@@ -211,13 +202,6 @@ public class SkillUpdateManager implements Listener {
                 plugin.getLogger().info("[SkillUpdate] 所有 Skill 已是最新 (" + checkedCount + " 个检查)");
             }
 
-        } catch (IOException e) {
-            plugin.getLogger().warning("[SkillUpdate] 检查更新失败: " + e.getMessage());
-            notify(sender, "§c检查 Skill 更新失败: " + e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            plugin.getLogger().warning("[SkillUpdate] 检查更新被中断");
-            notify(sender, "§c检查 Skill 更新被中断");
         } finally {
             checking = false;
         }
@@ -261,21 +245,16 @@ public class SkillUpdateManager implements Listener {
      * 下载单个 Skill 文件到 skills 目录
      */
     private boolean downloadSkillFile(String skillId) {
-        String fileUrl = getSkillFileUrl(skillId);
+        String mirrorUrl = getSkillFileUrl(skillId);
+        String directUrl = plugin.getConfigManager().getSkillRepoBase() + skillId + "/skill.md";
         SkillLoader loader = skillManager.getLoader();
 
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(fileUrl))
-                    .header("User-Agent", "FancyHelper-SkillUpdater")
-                    .timeout(Duration.ofSeconds(30))
-                    .GET()
-                    .build();
-
-            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-
-            if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[SkillUpdate] 下载 " + skillId + " 失败: HTTP " + response.statusCode());
+            // 优先镜像，失败回退直连
+            HttpResponse<InputStream> response = fetchInputStreamWithFallback(mirrorUrl, directUrl);
+            if (response == null || response.statusCode() != 200) {
+                int code = response != null ? response.statusCode() : 0;
+                plugin.getLogger().warning("[SkillUpdate] 下载 " + skillId + " 失败: HTTP " + code);
                 return false;
             }
 
@@ -292,10 +271,7 @@ public class SkillUpdateManager implements Listener {
 
             return true;
 
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+        } catch (IOException e) {
             plugin.getLogger().warning("[SkillUpdate] 下载 " + skillId + " 失败: " + e.getMessage());
             return false;
         }
@@ -344,6 +320,76 @@ public class SkillUpdateManager implements Listener {
     private String getJsonString(JsonObject obj, String key) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) {
             return obj.get(key).getAsString();
+        }
+        return null;
+    }
+
+    /**
+     * 请求 URL 获取文本，优先走镜像，失败回退直连。
+     * @return 响应体，失败返回 null
+     */
+    private String fetchWithFallback(String mirrorUrl, String directUrl) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(mirrorUrl))
+                    .header("User-Agent", "FancyHelper-SkillUpdater")
+                    .timeout(Duration.ofSeconds(15))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) return response.body();
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        }
+        // 回退直连
+        try {
+            plugin.getLogger().info("[SkillUpdate] 镜像源不可用，尝试直连...");
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(directUrl))
+                    .header("User-Agent", "FancyHelper-SkillUpdater")
+                    .timeout(Duration.ofSeconds(15))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) return response.body();
+            plugin.getLogger().warning("[SkillUpdate] 直连返回 HTTP " + response.statusCode());
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            plugin.getLogger().warning("[SkillUpdate] 直连请求失败: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 请求 URL 获取输入流，优先走镜像，失败回退直连。
+     * @return 响应，失败返回 null
+     */
+    private HttpResponse<InputStream> fetchInputStreamWithFallback(String mirrorUrl, String directUrl) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(mirrorUrl))
+                    .header("User-Agent", "FancyHelper-SkillUpdater")
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() == 200) return response;
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        }
+        // 回退直连
+        try {
+            plugin.getLogger().info("[SkillUpdate] 镜像源不可用，尝试直连下载...");
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(directUrl))
+                    .header("User-Agent", "FancyHelper-SkillUpdater")
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() == 200) return response;
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
         }
         return null;
     }

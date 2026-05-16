@@ -223,17 +223,6 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("getUpdateMirror 应返回配置值")
-    void testGetUpdateMirror_ReturnsConfigValue() {
-        when(config.getString("settings.update_mirror", "https://gh-proxy.com/"))
-            .thenReturn("https://custom.mirror/");
-
-        String result = configManager.getUpdateMirror();
-
-        assertEquals("https://custom.mirror/", result);
-    }
-
-    @Test
     @DisplayName("getAntiLoopThresholdCount 应返回配置值")
     void testGetAntiLoopThresholdCount_ReturnsConfigValue() {
         when(config.getInt("settings.anti_loop.threshold_count", 3)).thenReturn(5);
@@ -448,17 +437,6 @@ class ConfigManagerTest {
         boolean result = configManager.isToolEnabled("unknown");
 
         assertFalse(result);
-    }
-
-    @Test
-    @DisplayName("getUpdateMirror 默认值")
-    void testGetUpdateMirror_DefaultValue() {
-        when(config.getString("settings.update_mirror", "https://gh-proxy.com/"))
-            .thenReturn("https://gh-proxy.com/");
-
-        String result = configManager.getUpdateMirror();
-
-        assertEquals("https://gh-proxy.com/", result);
     }
 
     @Test

@@ -64,14 +64,19 @@ public class UpdateManager implements Listener {
                     .build();
 
             try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(repoUrl))
-                        .header("User-Agent", "FancyHelper-Updater")
-                        .timeout(Duration.ofSeconds(10))
-                        .GET()
-                        .build();
-
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                // 优先通过镜像代理 API 请求，避免 GitHub 频率限制
+                String mirror = "https://gh-proxy.com/";
+                HttpResponse<String> response;
+                try {
+                    response = fetchApiResponse(client, mirror + repoUrl);
+                } catch (IOException e) {
+                    plugin.getLogger().info("镜像代理连接失败 (" + e.getMessage() + ")，尝试直连...");
+                    response = fetchApiResponse(client, repoUrl);
+                }
+                if (response.statusCode() != 200) {
+                    plugin.getLogger().info("镜像代理 API 返回 " + response.statusCode() + "，回退直连...");
+                    response = fetchApiResponse(client, repoUrl);
+                }
 
                 if (response.statusCode() == 200) {
                     String jsonResponse = response.body();
@@ -235,7 +240,7 @@ public class UpdateManager implements Listener {
         if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始下载更新..."));
 
         Runnable downloadTask = () -> {
-            String mirror = plugin.getConfigManager().getUpdateMirror();
+            String mirror = "https://gh-proxy.com/";
             String finalUrl = mirror + downloadUrl;
 
             if (plugin.getConfigManager().isDebug()) {
@@ -433,5 +438,15 @@ public class UpdateManager implements Listener {
                 player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 §e/fancy upgrade §f自动下载并更新。"));
             }, 40L); // 延迟 2 秒提示
         }
+    }
+
+    private HttpResponse<String> fetchApiResponse(HttpClient client, String url) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("User-Agent", "FancyHelper-Updater")
+                .timeout(Duration.ofSeconds(10))
+                .GET()
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

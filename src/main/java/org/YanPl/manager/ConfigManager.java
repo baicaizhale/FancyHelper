@@ -345,10 +345,6 @@ public class ConfigManager {
         return config.getBoolean("settings.auto_upgrade", false);
     }
 
-    public String getUpdateMirror() {
-        return config.getString("settings.update_mirror", "https://gh-proxy.com/");
-    }
-
     /**
      * 获取 Skill 远程仓库地址
      */
