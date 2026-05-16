@@ -131,10 +131,25 @@ public class ConfigManager {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
             File oldLibJar = new File(plugin.getDataFolder(), "lib/FancyHelperReloadService.jar");
-            if (oldLibJar.exists()) {
-                oldLibJar.delete();
+            org.bukkit.plugin.Plugin reloadService = plugin.getServer().getPluginManager().getPlugin("FancyHelperReloadService");
+            if (reloadService != null && reloadService.isEnabled()) {
+                // ReloadService 仍在运行，JAR 被 JVM 锁定，延后到它自我关闭后再操作
+                plugin.getLogger().info("ReloadService 正在运行，将在它关闭后更新 lib JAR...");
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    waitForReloadServiceDisabled();
+                    if (oldLibJar.exists()) {
+                        oldLibJar.delete();
+                    }
+                    plugin.extractLibJar();
+                    plugin.getLogger().info("ReloadService JAR 已更新");
+                }, 80L); // 80 ticks ≈ 4 秒，ReloadService 在 1 秒后关闭自身
+            } else {
+                // ReloadService 未运行，直接操作（正常启动场景）
+                if (oldLibJar.exists()) {
+                    oldLibJar.delete();
+                }
+                plugin.extractLibJar();
             }
-            plugin.extractLibJar();
             plugin.getLogger().info("配置文件更新完成！");
             } catch (IOException e) {
                 plugin.getLogger().severe("保存新配置文件时出错: " + e.getMessage());
@@ -158,6 +173,26 @@ public class ConfigManager {
                 }
             }
         }
+    }
+
+    /**
+     * 等待 ReloadService 插件完全卸载（最长 15 秒），用于确保其 JAR 文件不再被锁定。
+     */
+    private void waitForReloadServiceDisabled() {
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < 15000) {
+            org.bukkit.plugin.Plugin reloadService = plugin.getServer().getPluginManager().getPlugin("FancyHelperReloadService");
+            if (reloadService == null || !reloadService.isEnabled()) {
+                return;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        plugin.getLogger().warning("等待 ReloadService 关闭超时，将尝试强制释放 JAR");
     }
 
     private void deleteDirectory(File directory) {
