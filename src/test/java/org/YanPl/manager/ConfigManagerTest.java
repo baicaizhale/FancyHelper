@@ -225,7 +225,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getUpdateMirror 应返回配置值")
     void testGetUpdateMirror_ReturnsConfigValue() {
-        when(config.getString("settings.update_mirror", "https://ghproxy.net/"))
+        when(config.getString("settings.update_mirror", "https://gh-proxy.com/"))
             .thenReturn("https://custom.mirror/");
 
         String result = configManager.getUpdateMirror();
@@ -453,12 +453,12 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getUpdateMirror 默认值")
     void testGetUpdateMirror_DefaultValue() {
-        when(config.getString("settings.update_mirror", "https://ghproxy.net/"))
-            .thenReturn("https://ghproxy.net/");
+        when(config.getString("settings.update_mirror", "https://gh-proxy.com/"))
+            .thenReturn("https://gh-proxy.com/");
 
         String result = configManager.getUpdateMirror();
 
-        assertEquals("https://ghproxy.net/", result);
+        assertEquals("https://gh-proxy.com/", result);
     }
 
     @Test

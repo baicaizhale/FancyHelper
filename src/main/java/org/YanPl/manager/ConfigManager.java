@@ -346,7 +346,7 @@ public class ConfigManager {
     }
 
     public String getUpdateMirror() {
-        return config.getString("settings.update_mirror", "https://ghproxy.net/");
+        return config.getString("settings.update_mirror", "https://gh-proxy.com/");
     }
 
     /**
@@ -360,7 +360,7 @@ public class ConfigManager {
      * 获取 Skill 下载镜像源
      */
     public String getSkillUpdateMirror() {
-        return config.getString("settings.skill_update_mirror", "https://ghproxy.net/");
+        return config.getString("settings.skill_update_mirror", "https://gh-proxy.com/");
     }
 
     /**
