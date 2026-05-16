@@ -39,8 +39,8 @@ public class SkillLoader {
     public List<Skill> loadAllSkills() {
         List<Skill> skills = new ArrayList<>();
 
-        // 释放内置 Skill 资源（不覆盖已存在的文件）
-        ResourceUtil.releaseResources(plugin, "skills/", false, ".md");
+        // 释放内置 Skill 资源（覆盖旧文件以确保 source 等字段最新）
+        ResourceUtil.releaseResources(plugin, "skills/", true, ".md");
 
         // 从 skillsDir 递归加载所有 Skill
         skills.addAll(loadFromDirectory(skillsDir, false, false));

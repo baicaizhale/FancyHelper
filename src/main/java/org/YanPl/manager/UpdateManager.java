@@ -181,11 +181,14 @@ public class UpdateManager implements Listener {
                         }
                     }
                 } else {
-                    String responseBody = response.body();
-                    plugin.getLogger().warning("检查更新失败 - HTTP " + response.statusCode() + ": " + (responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody));
-                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + response.statusCode() + "）。"));
+                    int code = response.statusCode();
+                    if (code == 403 || code == 429) {
+                        plugin.getLogger().info("GitHub API 访问受限（频率限制），跳过本次更新检查");
+                    } else {
+                        plugin.getLogger().warning("检查更新失败 - HTTP " + code);
+                    }
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + response.statusCode() + "）。"));
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + code + "）。"));
                     }
                 }
             } catch (IOException e) {
