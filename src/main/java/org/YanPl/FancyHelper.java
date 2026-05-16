@@ -30,6 +30,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -374,6 +376,9 @@ public final class FancyHelper extends JavaPlugin {
         // 注销命令，防止重载后命令指向旧插件实例
         unregisterCommands();
 
+        // 清理 Paper 插件注册表缓存，防止第三方插件管理器重载时报 duplicate plugin identifier
+        cleanupPaperPluginRegistry();
+
         // 关闭 CLI 管理器，释放资源
         if (cliManager != null) {
             cliManager.shutdown();
@@ -585,5 +590,111 @@ public final class FancyHelper extends JavaPlugin {
         } catch (Throwable t) {
             // 忽略调度失败
         }
+    }
+
+    /**
+     * 清理 Paper 插件管理器中的 FancyHelper 注册缓存，防止重载时出现 duplicate plugin identifier 错误。
+     */
+    private void cleanupPaperPluginRegistry() {
+        String pluginName = "FancyHelper";
+        try {
+            Class<?> pmClass = Class.forName("io.papermc.paper.plugin.manager.PaperPluginManagerImpl");
+            Method getInstance = pmClass.getMethod("getInstance");
+            Object paperPluginManager = getInstance.invoke(null);
+            if (paperPluginManager == null) return;
+
+            Field instanceManagerField = paperPluginManager.getClass().getDeclaredField("instanceManager");
+            instanceManagerField.setAccessible(true);
+            Object instanceManager = instanceManagerField.get(paperPluginManager);
+
+            for (Field field : instanceManager.getClass().getDeclaredFields()) {
+                field.setAccessible(true);
+                removeFromCollection(field.get(instanceManager), pluginName);
+            }
+
+            try {
+                Field pluginManagerField = paperPluginManager.getClass().getDeclaredField("pluginManager");
+                pluginManagerField.setAccessible(true);
+                Object simplePluginManager = pluginManagerField.get(paperPluginManager);
+                if (simplePluginManager != null) {
+                    for (Field field : simplePluginManager.getClass().getDeclaredFields()) {
+                        field.setAccessible(true);
+                        removeFromCollection(field.get(simplePluginManager), pluginName);
+                    }
+                    try {
+                        Field providerStorageField = simplePluginManager.getClass().getDeclaredField("providerStorage");
+                        providerStorageField.setAccessible(true);
+                        Object providerStorage = providerStorageField.get(simplePluginManager);
+                        if (providerStorage != null) {
+                            for (Field field : providerStorage.getClass().getDeclaredFields()) {
+                                field.setAccessible(true);
+                                removeFromCollection(field.get(providerStorage), pluginName);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+
+            cleanupServerPluginProviderStorage(paperPluginManager, pluginName);
+        } catch (Exception ignored) {}
+    }
+
+    @SuppressWarnings("unchecked")
+    private void removeFromCollection(Object collection, String pluginName) {
+        if (collection == null) return;
+        try {
+            if (collection instanceof Map) {
+                Map<Object, Object> map = (Map<Object, Object>) collection;
+                Iterator<Map.Entry<Object, Object>> iterator = map.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Object, Object> entry = iterator.next();
+                    String keyStr = safeToString(entry.getKey());
+                    String valueStr = safeToString(entry.getValue());
+                    if (keyStr.contains(pluginName) || valueStr.contains(pluginName)) {
+                        iterator.remove();
+                    }
+                }
+            } else if (collection instanceof Collection) {
+                ((Collection<Object>) collection).removeIf(obj -> {
+                    String str = safeToString(obj);
+                    return str.contains(pluginName);
+                });
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private String safeToString(Object obj) {
+        if (obj == null) return "null";
+        try {
+            return obj.toString();
+        } catch (Exception e) {
+            return obj.getClass().getName();
+        }
+    }
+
+    private void cleanupServerPluginProviderStorage(Object paperPluginManager, String pluginName) {
+        try {
+            Field entrypointHandlerField = paperPluginManager.getClass().getDeclaredField("entrypointHandler");
+            entrypointHandlerField.setAccessible(true);
+            Object entrypointHandler = entrypointHandlerField.get(paperPluginManager);
+            if (entrypointHandler == null) return;
+
+            for (Field field : entrypointHandler.getClass().getDeclaredFields()) {
+                field.setAccessible(true);
+                Object value = field.get(entrypointHandler);
+                if (value instanceof Map) {
+                    ((Map<Object, Object>) value).values().forEach(storage -> {
+                        if (storage != null) {
+                            for (Field sf : storage.getClass().getDeclaredFields()) {
+                                sf.setAccessible(true);
+                                try {
+                                    removeFromCollection(sf.get(storage), pluginName);
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (Exception ignored) {}
     }
 }
