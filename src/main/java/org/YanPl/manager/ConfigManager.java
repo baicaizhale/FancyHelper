@@ -131,23 +131,16 @@ public class ConfigManager {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
             File oldLibJar = new File(plugin.getDataFolder(), "lib/FancyHelperReloadService.jar");
-            org.bukkit.plugin.Plugin reloadService = plugin.getServer().getPluginManager().getPlugin("FancyHelperReloadService");
-            if (reloadService != null && reloadService.isEnabled()) {
-                // ReloadService 仍在运行，JAR 被 JVM 锁定，延后到它自我关闭后再操作
-                plugin.getLogger().info("ReloadService 正在运行，将在它关闭后更新 lib JAR...");
+            if (oldLibJar.exists() && !oldLibJar.delete()) {
+                // 文件被锁定（ReloadService 仍在运行），延后到它关闭后再操作
+                plugin.getLogger().info("无法删除旧 ReloadService JAR（文件被占用），将在延迟后重试...");
                 plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                     waitForReloadServiceDisabled();
-                    if (oldLibJar.exists()) {
-                        oldLibJar.delete();
-                    }
+                    oldLibJar.delete();
                     plugin.extractLibJar();
                     plugin.getLogger().info("ReloadService JAR 已更新");
-                }, 80L); // 80 ticks ≈ 4 秒，ReloadService 在 1 秒后关闭自身
+                }, 80L);
             } else {
-                // ReloadService 未运行，直接操作（正常启动场景）
-                if (oldLibJar.exists()) {
-                    oldLibJar.delete();
-                }
                 plugin.extractLibJar();
             }
             plugin.getLogger().info("配置文件更新完成！");
