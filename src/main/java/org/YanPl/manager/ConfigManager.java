@@ -131,10 +131,18 @@ public class ConfigManager {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
             File oldLibJar = new File(plugin.getDataFolder(), "lib/FancyHelperReloadService.jar");
-            if (oldLibJar.exists()) {
-                oldLibJar.delete();
+            if (oldLibJar.exists() && !oldLibJar.delete()) {
+                // 文件被锁定（ReloadService 仍在运行），延后到它关闭后再操作
+                plugin.getLogger().info("无法删除旧 ReloadService JAR（文件被占用），将在延迟后重试...");
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    waitForReloadServiceDisabled();
+                    oldLibJar.delete();
+                    plugin.extractLibJar();
+                    plugin.getLogger().info("ReloadService JAR 已更新");
+                }, 80L);
+            } else {
+                plugin.extractLibJar();
             }
-            plugin.extractLibJar();
             plugin.getLogger().info("配置文件更新完成！");
             } catch (IOException e) {
                 plugin.getLogger().severe("保存新配置文件时出错: " + e.getMessage());
@@ -158,6 +166,26 @@ public class ConfigManager {
                 }
             }
         }
+    }
+
+    /**
+     * 等待 ReloadService 插件完全卸载（最长 15 秒），用于确保其 JAR 文件不再被锁定。
+     */
+    private void waitForReloadServiceDisabled() {
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < 15000) {
+            org.bukkit.plugin.Plugin reloadService = plugin.getServer().getPluginManager().getPlugin("FancyHelperReloadService");
+            if (reloadService == null || !reloadService.isEnabled()) {
+                return;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        plugin.getLogger().warning("等待 ReloadService 关闭超时，将尝试强制释放 JAR");
     }
 
     private void deleteDirectory(File directory) {
