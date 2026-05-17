@@ -76,6 +76,22 @@ public class CLIManager {
     private static final String[] BREATHING_SYMBOLS = {
         "⁕", "⁕", "⁜", "▪", "⁜", "⁕"
     };
+    // 进入CLI时的随机提示语
+    private static final String[] ENTER_TIPS = {
+        "在 CLI 对话中直接输入 stop 即可中断 AI 生成，输入 exit 即可退出 CLI 模式",
+        "在 CLI 对话中直接输入 y（确认）或 n（取消）即可响应 AI 的确认请求，无需输入完整命令",
+        "/cli retry 可以在 AI 调用失败后一键重新发起上一次请求",
+        "/cli skill list 查看所有可用技能，/cli skill load <id> 加载技能到当前对话",
+        "/cli settings 打开偏好设置面板，/cli tools 管理 ls/read/edit 文件工具权限",
+        "/cli compress 让 AI 自动压缩旧对话为摘要，释放 token 空间以继续长对话",
+        "/cli exempt_anti_loop 可临时豁免反循环检测，允许 AI 连续调用同类工具",
+        "/cli streaming 切换流式输出开关，控制 AI 回复是逐字显示还是一次性完整显示",
+        "/cli display 切换状态指示器位置：ActionBar（快捷栏上方）或 Subtitle（屏幕中央）",
+        "/cli plan 进入规划模式，AI 只制定计划不执行，确认后用 /cli plan_start normal|smart|yolo 切换执行",
+        "/cli memory add <内容> 添加持久化记忆，AI 每次对话都会记住；/cli memory 查看全部",
+        "记忆支持分类标签，用 | 分隔：/cli memory add 偏好|我喜欢简约风格",
+        "/cli compress 自动压缩旧对话为摘要，释放上下文"
+    };
     private static final net.md_5.bungee.api.ChatColor WORD_COLOR_BUNGEE = net.md_5.bungee.api.ChatColor.of("#FF5F00");
     private static final net.md_5.bungee.api.ChatColor STATS_COLOR = net.md_5.bungee.api.ChatColor.GRAY;
     private final Map<UUID, String> pendingCommands = new ConcurrentHashMap<>();
@@ -3717,6 +3733,10 @@ public class CLIManager {
         player.openBook(plugin.getTodoManager().getTodoBook(player));
     }
 
+    private String getRandomTip() {
+        return ENTER_TIPS[new Random().nextInt(ENTER_TIPS.length)];
+    }
+
     private void sendEnterMessage(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -3724,7 +3744,7 @@ public class CLIManager {
 
         player.sendMessage(ChatColor.GRAY + "==================");
         player.sendMessage("");
-        
+
         TextComponent message = new TextComponent(ChatColor.WHITE + "Chatting with Fancy ");
         
         TextComponent modeTag;
@@ -3749,6 +3769,7 @@ public class CLIManager {
         player.spigot().sendMessage(message);
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "==================");
+        player.sendMessage(ColorUtil.translateCustomColors("§e💡§fTips: " + getRandomTip()));
     }
 
     private void sendExitMessage(Player player) {
