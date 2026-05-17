@@ -1333,13 +1333,13 @@ public class CLIManager {
             player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
             player.sendMessage(ChatColor.WHITE + "进入 Plan Mode 前，是否清空上下文？");
 
-            TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ] 清空");
+            TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔ 清空");
             yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_clear_y"));
             yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("清空对话历史后进入 Plan Mode")));
 
             TextComponent spacer = new TextComponent("  ");
 
-            TextComponent nBtn = new TextComponent(ChatColor.RED + "[ N ] 保留");
+            TextComponent nBtn = new TextComponent(ChatColor.RED + "✘ 保留");
             nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_clear_n"));
             nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("保留对话历史并进入 Plan Mode")));
 
