@@ -281,15 +281,19 @@ public class Skill {
      */
     public List<String> getDetailedInfo() {
         List<String> lines = new ArrayList<>();
-        lines.add("§6========== Skill Info ==========");
-        lines.add("§eID: §f" + id);
-        lines.add("§eName: §f" + metadata.getName());
-        lines.add("§eDescription: §f" + metadata.getDescription());
-        lines.add("§eVersion: §f" + metadata.getVersion());
-        lines.add("§eAuthor: §f" + metadata.getAuthor());
+
+        lines.add("§8§m------------------------------------");
+        lines.add("");
+
+        // 标题行
+        lines.add("§8▌ §zFancyHelper §8§m── §eSkill: §b" + id);
+        lines.add("§8▌ §f" + metadata.getName() + "  §7v" + metadata.getVersion() + "  §8by §7" + metadata.getAuthor());
+        if (!metadata.getDescription().isEmpty()) {
+            lines.add("§8▌ §7" + metadata.getDescription());
+        }
 
         if (!metadata.getTriggers().isEmpty()) {
-            lines.add("§eTriggers: §f" + String.join(", ", metadata.getTriggers()));
+            lines.add("§8▌ §7触发: §f" + String.join(", ", metadata.getTriggers()));
         }
 
         if (!metadata.getTriggerWeights().isEmpty()) {
@@ -297,27 +301,31 @@ public class Skill {
             for (Map.Entry<String, Integer> entry : metadata.getTriggerWeights().entrySet()) {
                 weightStrs.add(entry.getKey() + "=" + entry.getValue() + "%");
             }
-            lines.add("§eTrigger Weights: §f" + String.join(", ", weightStrs));
+            lines.add("§8▌ §7Weights: §f" + String.join(", ", weightStrs));
         }
 
         if (!metadata.getCategories().isEmpty()) {
-            lines.add("§eCategories: §f" + String.join(", ", metadata.getCategories()));
+            lines.add("§8▌ §7分类: §f" + String.join(", ", metadata.getCategories()));
         }
 
-        lines.add("§eAuto Trigger: §f" + (metadata.isAutoTrigger() ? "Yes" : "No"));
-        lines.add("§ePriority: §f" + metadata.getPriority());
-        lines.add("§eSource: §f" + (isRemote ? "Remote" : (isBuiltIn ? "Built-in" : "Local")));
-        lines.add("§eUpdatable: §f" + (isUpdatable() ? "§aYes" : "§cNo"));
+        String sourceStr = isRemote ? "Remote" : (isBuiltIn ? "Built-in" : "Local");
+        lines.add("§8▌ §7Auto: §f" + (metadata.isAutoTrigger() ? "Yes" : "No")
+                + "  §7Priority: §f" + metadata.getPriority()
+                + "  §7Source: §f" + sourceStr
+                + "  §7Updatable: §f" + (isUpdatable() ? "Yes" : "No"));
+
         if (!metadata.getSource().isEmpty()) {
-            lines.add("§eSource URL: §f" + metadata.getSource());
+            lines.add("§8▌ §7URL: §f" + metadata.getSource());
         }
 
         if (sourceFile != null) {
-            lines.add("§eFile: §f" + sourceFile.getName());
+            lines.add("§8▌ §7File: §f" + sourceFile.getName());
         }
 
-        lines.add("§eLast Modified: §f" + new java.util.Date(lastModified));
-        lines.add("§6================================");
+        lines.add("§8▌ §7Updated: §f" + new java.util.Date(lastModified));
+
+        lines.add("");
+        lines.add("§8§m------------------------------------");
 
         return lines;
     }
