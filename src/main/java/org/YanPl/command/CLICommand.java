@@ -118,6 +118,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "menu":
             case "retry":
             case "stop":
+            case "exit":
             case "memory":
             case "mem":
             case "smart_allow":
@@ -175,6 +176,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli normal §f: 切换到普通模式（需要确认）");
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
         sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
+        sender.sendMessage(" §7- §b/cli exit §f: 退出 CLI 模式");
         sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
         sender.sendMessage(" §7- §b/cli streaming §f: 切换流式输出开关");
         sender.sendMessage(" §7- §b/cli skill §f: Skill 管理命令");
@@ -289,6 +291,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "stop":
                 plugin.getCliManager().handleChat(player, "stop");
+                return true;
+            case "exit":
+                plugin.getCliManager().exitCLI(player);
                 return true;
             case "todo":
                 plugin.getCliManager().openTodoBook(player);
@@ -1037,7 +1042,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
-                "stop", "download", "help", "lib", "compress", "skill"
+                "stop", "exit", "download", "help", "lib", "compress", "skill"
             ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
