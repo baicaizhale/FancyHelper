@@ -507,6 +507,10 @@ public class DialogueSession {
         this.lastThought = lastThought;
     }
 
+    public long getNextMessageId() {
+        return nextMessageId;
+    }
+
     public String getLastError() {
         return lastError;
     }

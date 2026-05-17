@@ -2153,7 +2153,8 @@ public class CLIManager {
         
         StreamingHandler streamingHandler = new StreamingHandler(plugin, player);
         activeStreamingHandlers.put(uuid, streamingHandler);
-        
+        final long reservedMessageId = session.getNextMessageId();
+
         final StringBuilder fullResponseText = new StringBuilder();
         final StringBuilder accumulatedText = new StringBuilder();
         final String[] lastFormatted = {""};
@@ -2174,7 +2175,7 @@ public class CLIManager {
                 session.addThinkingTime(thinkingTimeMs);
 
                 TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
-                thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought"));
+                thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought t:" + reservedMessageId));
                 thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
                 double sec = thinkingTimeMs / 1000.0;
                 TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", sec) + "s)");
