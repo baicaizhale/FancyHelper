@@ -420,15 +420,15 @@ public class ToolExecutor {
      */
     public void sendConfirmButtons(Player player, String displayAction) {
         TextComponent message = new TextComponent(displayAction != null && !displayAction.trim().isEmpty() 
-            ? (ChatColor.GRAY + ">> " + ChatColor.WHITE + displayAction + " ") : "");
+            ? (ChatColor.GRAY + ">> " + ChatColor.WHITE + displayAction + "   ") : "");
 
-        TextComponent yBtn = new TextComponent(ChatColor.GREEN + "[ Y ]");
+        TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
         yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("确认执行操作")));
 
         TextComponent spacer = new TextComponent(" / ");
 
-        TextComponent nBtn = new TextComponent(ChatColor.RED + "[ N ]");
+        TextComponent nBtn = new TextComponent(ChatColor.RED + "✘");
         nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli cancel"));
         nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("取消执行")));
 
