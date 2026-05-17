@@ -1,12 +1,18 @@
 package org.YanPl.listener;
 
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
@@ -100,6 +106,31 @@ public class ChatListener implements Listener {
         }
         event.getRecipients().clear();
         event.setCancelled(true);
+    }
+
+    /**
+     * 拦截 CLI 模式下玩家误输 /stop 和 /exit 等命令
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        if (!plugin.getCliManager().isInCLI(player)) return;
+
+        String cmd = event.getMessage().toLowerCase().split(" ")[0];
+
+        if (cmd.equals("/stop")) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.YELLOW + "⚡ 检测到 /stop，是否想输入 stop 打断 AI？已为你执行打断。");
+            plugin.getCliManager().handleChat(player, "stop");
+        } else if (cmd.equals("/exit")) {
+            event.setCancelled(true);
+            TextComponent msg = new TextComponent(ChatColor.GRAY + "你是否想退出 CLI 模式？ ");
+            TextComponent escapeBtn = new TextComponent(ChatColor.GOLD + "" + ChatColor.BOLD + "[ Escape ]");
+            escapeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exit"));
+            escapeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击退出 CLI 模式")));
+            msg.addExtra(escapeBtn);
+            player.spigot().sendMessage(msg);
+        }
     }
 
     /**
