@@ -3742,63 +3742,119 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         DialogueSession.Mode mode = session != null ? session.getMode() : DialogueSession.Mode.NORMAL;
 
-        player.sendMessage(ChatColor.GRAY + "==================");
+        // 顶部分隔线
+        player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
         player.sendMessage("");
 
-        TextComponent message = new TextComponent(ChatColor.WHITE + "Chatting with Fancy ");
-        
-        TextComponent modeTag;
+        // ▌FancyHelper ── Chatting  [Normal] [⚙]
+        TextComponent line1 = new TextComponent();
+
+        TextComponent bar = new TextComponent("▌ ");
+        bar.setColor(net.md_5.bungee.api.ChatColor.DARK_GRAY);
+        line1.addExtra(bar);
+
+        TextComponent brand = new TextComponent("FancyHelper ");
+        brand.setColor(net.md_5.bungee.api.ChatColor.of("#30AEE5"));
+        line1.addExtra(brand);
+
+        TextComponent divider = new TextComponent("──");
+        divider.setColor(net.md_5.bungee.api.ChatColor.DARK_GRAY);
+        divider.setStrikethrough(true);
+        line1.addExtra(divider);
+
+        TextComponent chatting = new TextComponent(" Chatting  ");
+        chatting.setColor(net.md_5.bungee.api.ChatColor.WHITE);
+        line1.addExtra(chatting);
+
+        // 模式标签（可点击切换）
+        net.md_5.bungee.api.ChatColor modeColor;
+        String modeName;
         if (mode == DialogueSession.Mode.NORMAL) {
-            modeTag = new TextComponent(ChatColor.GREEN + " (Normal) ");
+            modeColor = net.md_5.bungee.api.ChatColor.GREEN;
+            modeName = "Normal";
         } else if (mode == DialogueSession.Mode.SMART) {
-            modeTag = new TextComponent(ChatColor.BLUE + " (SMART) ");
+            modeColor = net.md_5.bungee.api.ChatColor.of("#5555FF");
+            modeName = "SMART";
         } else if (mode == DialogueSession.Mode.PLAN) {
-            modeTag = new TextComponent(ChatColor.AQUA + " (Plan) ");
+            modeColor = net.md_5.bungee.api.ChatColor.AQUA;
+            modeName = "Plan";
         } else {
-            modeTag = new TextComponent(ChatColor.RED + " (YOLO) ");
+            modeColor = net.md_5.bungee.api.ChatColor.RED;
+            modeName = "YOLO";
         }
-        modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击选择模式")));
-        modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli gui mode"));
-        message.addExtra(modeTag);
 
-        TextComponent settingsBtn = new TextComponent(ChatColor.GRAY + "[Settings]");
-        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击打开工具设置")));
+        TextComponent modeTag = new TextComponent("[" + modeName + "]");
+        modeTag.setColor(modeColor);
+        modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击切换模式")));
+        modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli gui mode"));
+        line1.addExtra(modeTag);
+
+        TextComponent space = new TextComponent(" ");
+        line1.addExtra(space);
+
+        TextComponent settingsBtn = new TextComponent("[⚙]");
+        settingsBtn.setColor(net.md_5.bungee.api.ChatColor.GRAY);
+        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打开设置")));
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        message.addExtra(settingsBtn);
-        
-        player.spigot().sendMessage(message);
+        line1.addExtra(settingsBtn);
+
+        player.spigot().sendMessage(line1);
+
+        // ▌💡 Tips
+        player.sendMessage(ColorUtil.translateCustomColors("§8▌ §e💡 §f" + getRandomTip()));
         player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "==================");
-        player.sendMessage(ColorUtil.translateCustomColors("§e💡§fTips: " + getRandomTip()));
+        player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
     }
 
     private void sendExitMessage(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
-        
+
         long totalTokens = 0;
-        long inputTokens = 0;
-        long outputTokens = 0;
-        
         if (session != null) {
-            inputTokens = session.getTotalInputTokens();
-            outputTokens = session.getTotalOutputTokens();
-            totalTokens = inputTokens + outputTokens;
+            totalTokens = session.getTotalInputTokens() + session.getTotalOutputTokens();
         }
 
         long durationMs = session != null ? System.currentTimeMillis() - session.getStartTime() : 0;
         double durationSec = durationMs / 1000.0;
-        
-        // 获取思考总时长
         double thinkingSec = session != null ? session.getTotalThinkingTimeMs() / 1000.0 : 0.0;
 
-        player.sendMessage(ChatColor.GRAY + "==================");
+        // 顶部分隔线
+        player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
         player.sendMessage("");
-        player.sendMessage(ChatColor.WHITE + "已退出 FancyHelper");
-        player.sendMessage(ChatColor.GRAY + "消耗 Token: " + totalTokens + " (In: " + inputTokens + ", Out: " + outputTokens + ")");
-        player.sendMessage(ChatColor.GRAY + "总时长: " + String.format("%.1f", durationSec) + " 秒 (思考: " + String.format("%.1f", thinkingSec) + " 秒)");
+
+        // ▌FancyHelper ── 已退出
+        TextComponent line1 = new TextComponent();
+
+        TextComponent bar = new TextComponent("▌ ");
+        bar.setColor(net.md_5.bungee.api.ChatColor.DARK_GRAY);
+        line1.addExtra(bar);
+
+        TextComponent brand = new TextComponent("FancyHelper ");
+        brand.setColor(net.md_5.bungee.api.ChatColor.of("#30AEE5"));
+        line1.addExtra(brand);
+
+        TextComponent divider = new TextComponent("──");
+        divider.setColor(net.md_5.bungee.api.ChatColor.DARK_GRAY);
+        divider.setStrikethrough(true);
+        line1.addExtra(divider);
+
+        TextComponent exited = new TextComponent(" 已退出");
+        exited.setColor(net.md_5.bungee.api.ChatColor.WHITE);
+        line1.addExtra(exited);
+
+        player.spigot().sendMessage(line1);
+
+        // ▌⟐ tokens · time (思考 thinkTime)
+        String stats = "⟐ " + totalTokens + " tokens · " + String.format("%.1f", durationSec) + "s";
+        if (thinkingSec > 0) {
+            stats += " (思考 " + String.format("%.1f", thinkingSec) + "s)";
+        }
+        player.sendMessage(ColorUtil.translateCustomColors("§8▌ §7" + stats));
+
+        // 底部分隔线
         player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "==================");
+        player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
     }
 
     /**
