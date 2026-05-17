@@ -193,9 +193,8 @@ public class SkillUpdateManager implements Listener {
                         String localVer = local != null ? local.getMetadata().getVersion() : "未安装";
                         sender.sendMessage(" §7- §b" + entry.getKey() + " §7" + localVer + " §7→ §a" + entry.getValue());
                     }
-                } else {
-                    sender.sendMessage(msg("所有 Skill 已是最新版本"));
                 }
+                // 无更新时不发送消息，避免打扰
             }
 
             if (hasUpdates) {
