@@ -152,26 +152,28 @@ public class SkillUpdateManager implements Listener {
                 return;
             }
 
-            JsonObject skills = manifest.getAsJsonObject("skills");
+            JsonObject skillsObj = manifest.getAsJsonObject("skills");
             List<Skill> localUpdatable = skillManager.getRegistry().getUpdatableSkills();
 
             int checkedCount = 0;
 
             for (Skill localSkill : localUpdatable) {
                 String id = localSkill.getId();
-                if (!skills.has(id)) continue;
+                if (!skillsObj.has(id)) continue;
 
-                JsonObject remoteSkill = skills.getAsJsonObject(id);
+                JsonObject remoteSkill = skillsObj.getAsJsonObject(id);
                 String remoteVersion = getJsonString(remoteSkill, "version");
+                String localVersion = localSkill.getMetadata().getVersion();
 
-                if (remoteVersion != null && isNewerVersion(localSkill.getMetadata().getVersion(), remoteVersion)) {
+                // 只要版本不同就更新，不比较高低
+                if (remoteVersion != null && !remoteVersion.equals(localVersion)) {
                     pendingUpdates.put(id, remoteVersion);
                 }
                 checkedCount++;
             }
 
             // 本地没有但远端有的技能（新技能）
-            for (Map.Entry<String, JsonElement> entry : skills.entrySet()) {
+            for (Map.Entry<String, JsonElement> entry : skillsObj.entrySet()) {
                 String id = entry.getKey();
                 if (!skillManager.hasSkill(id)) {
                     JsonObject remoteSkill = entry.getValue().getAsJsonObject();
@@ -292,28 +294,6 @@ public class SkillUpdateManager implements Listener {
     private void notify(Player player, String text) {
         if (player != null) {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper §7> §f" + text));
-        }
-    }
-
-    private boolean isNewerVersion(String current, String latest) {
-        if (current == null || latest == null) return false;
-        String[] currentParts = current.split("\\.");
-        String[] latestParts = latest.split("\\.");
-        int length = Math.max(currentParts.length, latestParts.length);
-        for (int i = 0; i < length; i++) {
-            int curr = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
-            int late = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
-            if (late > curr) return true;
-            if (late < curr) return false;
-        }
-        return false;
-    }
-
-    private int parseVersionPart(String part) {
-        try {
-            return Integer.parseInt(part.replaceAll("[^0-9]", ""));
-        } catch (NumberFormatException e) {
-            return 0;
         }
     }
 

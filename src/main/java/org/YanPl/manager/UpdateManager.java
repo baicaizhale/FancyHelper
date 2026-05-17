@@ -392,27 +392,35 @@ public class UpdateManager implements Listener {
      */
     private boolean isNewerVersion(String current, String latest) {
         if (current == null || latest == null) return false;
-
-        String[] currentParts = current.split("\\.");
-        String[] latestParts = latest.split("\\.");
-
-        int length = Math.max(currentParts.length, latestParts.length);
-        for (int i = 0; i < length; i++) {
-            int curr = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
-            int late = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
-
-            if (late > curr) return true;
-            if (late < curr) return false;
-        }
-        return false;
+        return compareVersion(current, latest) < 0;
     }
 
-    private int parseVersionPart(String part) {
-        try {
-            return Integer.parseInt(part.replaceAll("[^0-9]", ""));
-        } catch (NumberFormatException e) {
-            return 0;
+    private int compareVersion(String v1, String v2) {
+        String[] p1 = v1.trim().split("\\.");
+        String[] p2 = v2.trim().split("\\.");
+        int len = Math.max(p1.length, p2.length);
+        for (int i = 0; i < len; i++) {
+            int n1 = i < p1.length ? toInt(p1[i]) : 0;
+            int n2 = i < p2.length ? toInt(p2[i]) : 0;
+            if (n1 != n2) return n1 - n2;
         }
+        return 0;
+    }
+
+    private int toInt(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        int num = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= '0' && c <= '9') {
+                num = num * 10 + (c - '0');
+            } else if (i == 0) {
+                continue;
+            } else {
+                break;
+            }
+        }
+        return num;
     }
 
     @EventHandler
