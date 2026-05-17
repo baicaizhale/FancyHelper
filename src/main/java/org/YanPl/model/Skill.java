@@ -15,7 +15,7 @@ public class Skill {
 
     // Front Matter 分隔符正则
     private static final Pattern FRONT_MATTER_PATTERN =
-            Pattern.compile("^---\\s*\\r?\\n(.*?)\\r?\\n---\\s*\\r?\\n(.*)", Pattern.DOTALL);
+            Pattern.compile("^---\\s*\\R(.*?)\\R---", Pattern.DOTALL);
 
     private final String id;
     private final SkillMetadata metadata;
@@ -75,19 +75,27 @@ public class Skill {
 
         Matcher matcher = FRONT_MATTER_PATTERN.matcher(fullContent);
 
-        if (matcher.find()) {
-            String yamlPart = matcher.group(1);
-            String markdownPart = matcher.group(2);
+        SkillMetadata metadata;
+        String content;
 
-            SkillMetadata metadata = SkillMetadata.fromYaml(yamlPart);
-            return new Skill(id, metadata, markdownPart.trim(), fullContent, sourceFile, isRemote, isBuiltIn);
+        if (matcher.find()) {
+            String yamlRaw = matcher.group(1);
+            metadata = SkillMetadata.fromYaml(yamlRaw);
+            content = fullContent.substring(matcher.end()).trim();
         } else {
-            // 无 Front Matter，创建默认元数据
-            SkillMetadata metadata = new SkillMetadata();
+            metadata = new SkillMetadata();
             metadata.setName(id);
             metadata.setDescription("No description provided");
-            return new Skill(id, metadata, fullContent.trim(), fullContent, sourceFile, isRemote, isBuiltIn);
+            metadata.setVersion("0");
+            content = fullContent.trim();
         }
+
+        // 如果 source 未设置，用 skill ID（目录名）兜底 — 两个分支通用
+        if (metadata.getSource() == null || metadata.getSource().isEmpty()) {
+            metadata.setSource(id);
+        }
+
+        return new Skill(id, metadata, content, fullContent, sourceFile, isRemote, isBuiltIn);
     }
 
     /**

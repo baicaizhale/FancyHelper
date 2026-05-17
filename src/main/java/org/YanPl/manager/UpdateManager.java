@@ -64,14 +64,19 @@ public class UpdateManager implements Listener {
                     .build();
 
             try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(repoUrl))
-                        .header("User-Agent", "FancyHelper-Updater")
-                        .timeout(Duration.ofSeconds(10))
-                        .GET()
-                        .build();
-
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                // 优先通过镜像代理 API 请求，避免 GitHub 频率限制
+                String mirror = "https://gh-proxy.com/";
+                HttpResponse<String> response;
+                try {
+                    response = fetchApiResponse(client, mirror + repoUrl);
+                } catch (IOException e) {
+                    plugin.getLogger().info("镜像代理连接失败 (" + e.getMessage() + ")，尝试直连...");
+                    response = fetchApiResponse(client, repoUrl);
+                }
+                if (response.statusCode() != 200) {
+                    plugin.getLogger().info("镜像代理 API 返回 " + response.statusCode() + "，回退直连...");
+                    response = fetchApiResponse(client, repoUrl);
+                }
 
                 if (response.statusCode() == 200) {
                     String jsonResponse = response.body();
@@ -176,11 +181,14 @@ public class UpdateManager implements Listener {
                         }
                     }
                 } else {
-                    String responseBody = response.body();
-                    plugin.getLogger().warning("检查更新失败 - HTTP " + response.statusCode() + ": " + (responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody));
-                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + response.statusCode() + "）。"));
+                    int code = response.statusCode();
+                    if (code == 403 || code == 429) {
+                        plugin.getLogger().info("GitHub API 访问受限（频率限制），跳过本次更新检查");
+                    } else {
+                        plugin.getLogger().warning("检查更新失败 - HTTP " + code);
+                    }
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + response.statusCode() + "）。"));
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + code + "）。"));
                     }
                 }
             } catch (IOException e) {
@@ -235,7 +243,7 @@ public class UpdateManager implements Listener {
         if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始下载更新..."));
 
         Runnable downloadTask = () -> {
-            String mirror = plugin.getConfigManager().getUpdateMirror();
+            String mirror = "https://gh-proxy.com/";
             String finalUrl = mirror + downloadUrl;
 
             if (plugin.getConfigManager().isDebug()) {
@@ -384,27 +392,35 @@ public class UpdateManager implements Listener {
      */
     private boolean isNewerVersion(String current, String latest) {
         if (current == null || latest == null) return false;
-
-        String[] currentParts = current.split("\\.");
-        String[] latestParts = latest.split("\\.");
-
-        int length = Math.max(currentParts.length, latestParts.length);
-        for (int i = 0; i < length; i++) {
-            int curr = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
-            int late = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
-
-            if (late > curr) return true;
-            if (late < curr) return false;
-        }
-        return false;
+        return compareVersion(current, latest) < 0;
     }
 
-    private int parseVersionPart(String part) {
-        try {
-            return Integer.parseInt(part.replaceAll("[^0-9]", ""));
-        } catch (NumberFormatException e) {
-            return 0;
+    private int compareVersion(String v1, String v2) {
+        String[] p1 = v1.trim().split("\\.");
+        String[] p2 = v2.trim().split("\\.");
+        int len = Math.max(p1.length, p2.length);
+        for (int i = 0; i < len; i++) {
+            int n1 = i < p1.length ? toInt(p1[i]) : 0;
+            int n2 = i < p2.length ? toInt(p2[i]) : 0;
+            if (n1 != n2) return n1 - n2;
         }
+        return 0;
+    }
+
+    private int toInt(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        int num = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= '0' && c <= '9') {
+                num = num * 10 + (c - '0');
+            } else if (i == 0) {
+                continue;
+            } else {
+                break;
+            }
+        }
+        return num;
     }
 
     @EventHandler
@@ -433,5 +449,15 @@ public class UpdateManager implements Listener {
                 player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 §e/fancy upgrade §f自动下载并更新。"));
             }, 40L); // 延迟 2 秒提示
         }
+    }
+
+    private HttpResponse<String> fetchApiResponse(HttpClient client, String url) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("User-Agent", "FancyHelper-Updater")
+                .timeout(Duration.ofSeconds(10))
+                .GET()
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }
