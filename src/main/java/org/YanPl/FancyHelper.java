@@ -18,6 +18,7 @@ import org.YanPl.manager.InstructionManager;
 import org.YanPl.manager.GuiManager;
 import org.YanPl.manager.SkillManager;
 import org.YanPl.manager.SkillUpdateManager;
+import org.YanPl.manager.StatsManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -56,6 +57,7 @@ public final class FancyHelper extends JavaPlugin {
     private GuiManager guiManager;
     private SkillManager skillManager;
     private SkillUpdateManager skillUpdateManager;
+    private StatsManager statsManager;
 
     @Override
     public void onEnable() {
@@ -145,7 +147,8 @@ public final class FancyHelper extends JavaPlugin {
 
             // bStats 统计
             int pluginId = 29036;
-            new Metrics(this, pluginId);
+            Metrics metrics = new Metrics(this, pluginId);
+            statsManager = new StatsManager(this, metrics);
 
             // 检查 server.properties 中的安全配置并提示
             checkSecureProfile();
@@ -409,6 +412,11 @@ public final class FancyHelper extends JavaPlugin {
             instructionManager.shutdown();
         }
 
+        // 保存统计数据
+        if (statsManager != null) {
+            statsManager.save();
+        }
+
         // 等待短暂时间以确保后台任务结束
         try {
             Thread.sleep(500);
@@ -485,6 +493,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public SkillUpdateManager getSkillUpdateManager() {
         return skillUpdateManager;
+    }
+
+    public StatsManager getStatsManager() {
+        return statsManager;
     }
 
     /**
