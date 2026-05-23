@@ -136,6 +136,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "help":
                 sendHelp(sender);
                 return true;
+            case "permission":
+                handlePermissionCommand(sender, args);
+                break;
             case "lib":
                 handleLibCommand(sender, args);
                 break;
@@ -1028,6 +1031,49 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 e.printStackTrace();
             }
         });
+    }
+
+    /**
+     * 处理 /fancy permission <ls|read|edit> <enable|disable> <playername>
+     * 仅控制台可用，不提供 tab 补全。
+     */
+    private void handlePermissionCommand(CommandSender sender, String[] args) {
+        if (sender instanceof Player) {
+            sender.sendMessage(ChatColor.RED + "该命令仅限控制台使用。");
+            return;
+        }
+
+        if (args.length < 4) {
+            sender.sendMessage(ChatColor.RED + "用法: /fancy permission <ls|read|edit> <enable|disable> <playername>");
+            return;
+        }
+
+        String tool = args[1].toLowerCase();
+        if (!tool.equals("ls") && !tool.equals("read") && !tool.equals("edit")) {
+            sender.sendMessage(ChatColor.RED + "无效的工具类型: " + args[1] + " (可选: ls, read, edit)");
+            return;
+        }
+
+        boolean enabled;
+        String action = args[2].toLowerCase();
+        if (action.equals("enable")) {
+            enabled = true;
+        } else if (action.equals("disable")) {
+            enabled = false;
+        } else {
+            sender.sendMessage(ChatColor.RED + "无效的操作: " + args[2] + " (可选: enable, disable)");
+            return;
+        }
+
+        String playerName = args[3];
+        Player target = Bukkit.getPlayer(playerName);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "未找到在线玩家: " + playerName);
+            return;
+        }
+
+        plugin.getConfigManager().setPlayerToolEnabled(target, tool, enabled);
+        sender.sendMessage(ChatColor.GREEN + "已" + (enabled ? "启用" : "禁用") + "玩家 " + target.getName() + " 的 " + tool + " 工具权限。");
     }
 
     @Override
