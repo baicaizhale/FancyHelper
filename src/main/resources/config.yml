@@ -32,7 +32,7 @@ settings:
   # Skill 远程仓库地址
   skill_repo_base: "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/"
   # Skill 下载镜像源
-  skill_update_mirror: "https://gh-proxy.com/"  
+  skill_update_mirror: "https://ghproxy.vip/"
   # 防循环检测的连续相似调用阈值
   anti_loop:
     # 连续多少次相似调用触发中断

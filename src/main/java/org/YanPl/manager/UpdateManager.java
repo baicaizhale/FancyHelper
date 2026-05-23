@@ -65,7 +65,7 @@ public class UpdateManager implements Listener {
 
             try {
                 // 优先通过镜像代理 API 请求，避免 GitHub 频率限制
-                String mirror = "https://gh-proxy.com/";
+                String mirror = "https://ghproxy.vip/";
                 HttpResponse<String> response;
                 try {
                     response = fetchApiResponse(client, mirror + repoUrl);
@@ -243,7 +243,7 @@ public class UpdateManager implements Listener {
         if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始下载更新..."));
 
         Runnable downloadTask = () -> {
-            String mirror = "https://gh-proxy.com/";
+            String mirror = "https://ghproxy.vip/";
             String finalUrl = mirror + downloadUrl;
 
             if (plugin.getConfigManager().isDebug()) {
