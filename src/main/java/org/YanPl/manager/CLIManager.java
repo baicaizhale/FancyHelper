@@ -1058,6 +1058,7 @@ public class CLIManager {
         }
         
         activeCLIPayers.add(uuid);
+        plugin.getStatsManager().incrementCliEntry();
         // 注意：新会话已经在上面放入 Map，这里只处理恢复会话的情况
         if (session != null) {
             sessions.put(uuid, session);
@@ -1165,6 +1166,11 @@ public class CLIManager {
             if (pendingStreamed != null && pendingStreamed > 0) {
                 exitSession.addOutputTokens(pendingStreamed);
                 roundOutputTokens.merge(uuid, pendingStreamed, (a, b) -> a + b);
+            }
+            // 将本次会话的总 token 汇入全局统计
+            long sessionTotal = exitSession.getTotalInputTokens() + exitSession.getTotalOutputTokens();
+            if (sessionTotal > 0) {
+                plugin.getStatsManager().addTokens(sessionTotal);
             }
         }
 
@@ -2394,7 +2400,7 @@ public class CLIManager {
                 }
             });
         });
-        
+
         streamingHandler.setOnErrorCallback((error) -> {
             if (responseHandled[0]) return;
             responseHandled[0] = true;
@@ -2542,6 +2548,7 @@ public class CLIManager {
         }
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.getStatsManager().incrementConversation();
             ai.setRetryCallback((statusCode, retryMessage) -> {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
