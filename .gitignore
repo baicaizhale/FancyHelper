@@ -8,6 +8,7 @@
 *.ipr
 *.iws
 AGENT.md
+CLAUDE.md
 AGENTS.md
 .classpath
 worker/
