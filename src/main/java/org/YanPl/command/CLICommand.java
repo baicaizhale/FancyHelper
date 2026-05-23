@@ -62,10 +62,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "update":
             case "checkupdate":
-                if (!(sender.isOp() || sender.hasPermission("fancyhelper.reload"))) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限检查更新。"));
-                    return true;
-                }
                 sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在检查更新..."));
                 plugin.getUpdateManager().checkForUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
@@ -136,11 +132,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限使用 Skill 命令。"));
                     return true;
                 }
-                if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
-                    return true;
-                }
-                return handleSkillCommand((Player) sender, args);
+                return handleSkillCommand(sender, args);
             case "help":
                 sendHelp(sender);
                 return true;
@@ -229,7 +221,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getCliManager().handleChat(player, "agree");
                 return true;
             case "read":
-                plugin.getCliManager().openEulaBook(player);
+                plugin.getCliManager().openEulaUrl(player);
                 return true;
             case "thought":
                 plugin.getCliManager().handleThought(player, Arrays.copyOfRange(args, 1, args.length));
@@ -773,17 +765,17 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     /**
      * 处理 Skill 子命令
      */
-    private boolean handleSkillCommand(Player player, String[] args) {
+    private boolean handleSkillCommand(CommandSender sender, String[] args) {
         if (args.length < 2) {
             // 显示 Skill 帮助
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fSkill 管理命令:"));
-            player.sendMessage(" §7- §b/cli skill list §f: 列出所有 Skill");
-            player.sendMessage(" §7- §b/cli skill info <id> §f: 查看 Skill 详情");
-            player.sendMessage(" §7- §b/cli skill load <id> §f: 加载 Skill 到当前对话");
-            if (player.hasPermission("fancyhelper.skill.admin")) {
-                player.sendMessage(" §7- §b/cli skill reload §f: 重新加载所有 Skill");
-                player.sendMessage(" §7- §b/cli skill checkupdate §f: 检查 Skill 更新");
-                player.sendMessage(" §7- §b/cli skill upgrade §f: 下载并安装所有 Skill 更新");
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fSkill 管理命令:"));
+            sender.sendMessage(" §7- §b/cli skill list §f: 列出所有 Skill");
+            sender.sendMessage(" §7- §b/cli skill info <id> §f: 查看 Skill 详情");
+            sender.sendMessage(" §7- §b/cli skill load <id> §f: 加载 Skill 到当前对话");
+            if (sender.hasPermission("fancyhelper.skill.admin")) {
+                sender.sendMessage(" §7- §b/cli skill reload §f: 重新加载所有 Skill");
+                sender.sendMessage(" §7- §b/cli skill checkupdate §f: 检查 Skill 更新");
+                sender.sendMessage(" §7- §b/cli skill upgrade §f: 下载并安装所有 Skill 更新");
             }
             return true;
         }
@@ -792,49 +784,53 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         switch (subCommand) {
             case "list":
-                handleSkillList(player);
+                handleSkillList(sender);
                 break;
             case "info":
                 if (args.length < 3) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
-                    player.sendMessage("§7用法: /cli skill info <id>");
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
+                    sender.sendMessage("§7用法: /cli skill info <id>");
                 } else {
-                    handleSkillInfo(player, args[2]);
+                    handleSkillInfo(sender, args[2]);
                 }
                 break;
             case "load":
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    return true;
+                }
                 if (args.length < 3) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
-                    player.sendMessage("§7用法: /cli skill load <id>");
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
+                    sender.sendMessage("§7用法: /cli skill load <id>");
                 } else {
-                    handleSkillLoad(player, args[2]);
+                    handleSkillLoad((Player) sender, args[2]);
                 }
                 break;
             case "reload":
-                if (!player.hasPermission("fancyhelper.skill.admin")) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                if (!sender.hasPermission("fancyhelper.skill.admin")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
                     return true;
                 }
                 plugin.getSkillManager().reloadSkills();
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已重新加载所有 Skill"));
-                player.sendMessage("§7共加载 " + plugin.getSkillManager().getSkillCount() + " 个 Skill");
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已重新加载所有 Skill"));
+                sender.sendMessage("§7共加载 " + plugin.getSkillManager().getSkillCount() + " 个 Skill");
                 break;
             case "checkupdate":
-                if (!player.hasPermission("fancyhelper.skill.admin")) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                if (!sender.hasPermission("fancyhelper.skill.admin")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
                     return true;
                 }
-                plugin.getSkillUpdateManager().checkForUpdates(player);
+                plugin.getSkillUpdateManager().checkForUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
             case "upgrade":
-                if (!player.hasPermission("fancyhelper.skill.admin")) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                if (!sender.hasPermission("fancyhelper.skill.admin")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
                     return true;
                 }
-                plugin.getSkillUpdateManager().downloadUpdates(player);
+                plugin.getSkillUpdateManager().downloadUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
             default:
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知子命令: " + subCommand));
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知子命令: " + subCommand));
                 break;
         }
 
@@ -844,24 +840,24 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     /**
      * 处理 Skill 列表
      */
-    private void handleSkillList(Player player) {
+    private void handleSkillList(CommandSender sender) {
         List<String> lines = plugin.getSkillManager().getFormattedSkillList();
         for (String line : lines) {
-            player.sendMessage(ColorUtil.translateCustomColors(line));
+            sender.sendMessage(ColorUtil.translateCustomColors(line));
         }
     }
 
     /**
      * 处理 Skill 详情
      */
-    private void handleSkillInfo(Player player, String skillId) {
+    private void handleSkillInfo(CommandSender sender, String skillId) {
         org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
 
         if (skill == null) {
             // 尝试搜索
             List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
             if (matches.isEmpty()) {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 Skill: " + skillId));
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 Skill: " + skillId));
                 return;
             }
             skill = matches.get(0);
@@ -869,7 +865,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         List<String> infoLines = skill.getDetailedInfo();
         for (String line : infoLines) {
-            player.sendMessage(ColorUtil.translateCustomColors(line));
+            sender.sendMessage(ColorUtil.translateCustomColors(line));
         }
     }
 

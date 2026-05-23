@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 /**
  * Skill 更新管理器
@@ -77,7 +78,7 @@ public class SkillUpdateManager implements Listener {
     public void checkAndUpdate() {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                doCheck(null);
+                doCheck(null, true);
                 if (hasUpdates && !pendingUpdates.isEmpty()) {
                     plugin.getLogger().info("[SkillUpdate] 发现 " + pendingUpdates.size() + " 个 Skill 更新，开始自动下载...");
                     doDownload(null);
@@ -99,6 +100,15 @@ public class SkillUpdateManager implements Listener {
      * 检查所有可更新 Skill 的版本，并通知指定玩家
      */
     public void checkForUpdates(Player sender) {
+        checkForUpdates(sender, false);
+    }
+
+    /**
+     * 检查所有可更新 Skill 的版本
+     * @param sender 接收通知的玩家，可为 null
+     * @param silentNoUpdate true=无更新时不发消息（管理员进服等自动场景），false=始终通知（手动执行命令）
+     */
+    public void checkForUpdates(Player sender, boolean silentNoUpdate) {
         if (checking) {
             if (sender != null) {
                 sender.sendMessage(msg("正在检查中，请稍候..."));
@@ -106,7 +116,7 @@ public class SkillUpdateManager implements Listener {
             return;
         }
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> doCheck(sender));
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> doCheck(sender, silentNoUpdate));
     }
 
     /**
@@ -133,7 +143,7 @@ public class SkillUpdateManager implements Listener {
     /**
      * 执行检查（必须在异步线程调用）
      */
-    private void doCheck(Player sender) {
+    private void doCheck(Player sender, boolean silentNoUpdate) {
         checking = true;
         pendingUpdates.clear();
         hasUpdates = false;
@@ -193,8 +203,9 @@ public class SkillUpdateManager implements Listener {
                         String localVer = local != null ? local.getMetadata().getVersion() : "未安装";
                         sender.sendMessage(" §7- §b" + entry.getKey() + " §7" + localVer + " §7→ §a" + entry.getValue());
                     }
+                } else if (!silentNoUpdate) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper §7> §a所有 Skill 已是最新版本"));
                 }
-                // 无更新时不发送消息，避免打扰
             }
 
             if (hasUpdates) {
@@ -203,6 +214,9 @@ public class SkillUpdateManager implements Listener {
                 plugin.getLogger().info("[SkillUpdate] 所有 Skill 已是最新 (" + checkedCount + " 个检查)");
             }
 
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "[SkillUpdate] 检查更新异常", e);
+            notify(sender, "§c检查更新时发生错误: " + e.getMessage());
         } finally {
             checking = false;
         }
@@ -378,6 +392,6 @@ public class SkillUpdateManager implements Listener {
         if (!plugin.getConfigManager().isOpUpdateNotify()) return;
         Player player = event.getPlayer();
         if (!player.isOp()) return;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> checkForUpdates(player), 60L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> checkForUpdates(player, true), 60L);
     }
 }

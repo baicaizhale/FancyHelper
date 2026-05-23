@@ -3700,29 +3700,36 @@ public class CLIManager {
         player.sendMessage(ChatColor.WHITE + "在进入 FancyHelper 之前，您需要阅读并同意用户协议。");
         // player.sendMessage("");
         TextComponent message = new TextComponent(ChatColor.WHITE + "请点击 ");
-        TextComponent bookBtn = new TextComponent(ChatColor.AQUA + "[阅读协议]");
-        bookBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli read"));
-        bookBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.AQUA + "点击阅读 FancyHelper 用户协议")));
+        TextComponent bookBtn = new TextComponent(ChatColor.AQUA + "" + ChatColor.BOLD + "[阅读完整协议]");
+        bookBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/fancyhelper-eula"));
+        bookBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击在浏览器中打开 FancyHelper 最终用户许可协议")));
         
         message.addExtra(bookBtn);
-        message.addExtra(new TextComponent(ChatColor.WHITE + " 并在阅读完成后发送 "));
+        message.addExtra(new TextComponent(ChatColor.WHITE + "，阅读完成后发送 "));
         
-        TextComponent agreeBtn = new TextComponent(ChatColor.GREEN + "agree");
+        TextComponent agreeBtn = new TextComponent(ChatColor.GREEN + "" + ChatColor.BOLD + "agree");
         agreeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli agree"));
-        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击直接同意协议")));
+        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
+            new Text(net.md_5.bungee.api.ChatColor.GREEN + "点击同意协议")));
         
         message.addExtra(agreeBtn);
-        message.addExtra(new TextComponent(ChatColor.WHITE + " 表示同意并继续。"));
+        message.addExtra(new TextComponent(ChatColor.WHITE + " 表示同意。"));
         
         player.spigot().sendMessage(message);
-        player.sendMessage(ChatColor.GRAY + "=================");
+        player.sendMessage(ChatColor.RED + "发送 agree 即表示您确认已阅读、理解并接受本协议全部条款。");
+        player.sendMessage(ChatColor.GRAY + "==============================================");
     }
 
     /**
-     * 为玩家打开 EULA 虚拟书本。
+     * 为玩家打开 EULA 网页链接。
      */
-    public void openEulaBook(Player player) {
-        player.openBook(plugin.getEulaManager().getEulaBook());
+    public void openEulaUrl(Player player) {
+        TextComponent message = new TextComponent(ChatColor.AQUA + "" + ChatColor.BOLD + "[点击查看 FancyHelper 最终用户许可协议]");
+        message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/fancyhelper-eula"));
+        message.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击在浏览器中打开协议页面")));
+        player.spigot().sendMessage(message);
     }
 
     /**
