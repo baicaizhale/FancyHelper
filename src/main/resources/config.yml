@@ -77,21 +77,14 @@ cloudflare:
   model: "@cf/google/gemma-4-26b-a4b-it"
 
 # OpenAI 兼容端点配置（provider 设为 openai 时使用）
+# 理论上支持所有兼容 OpenAI Chat Completions API 的服务商
+# 详细配置指南见：https://blog.baicaizhale.top/post/openai-compatible-providers
 openai:
-  # Based API 地址（支持自定义地址，如 OpenAI 官方、Azure OpenAI、本地模型等）
-  # 示例：
-  #   - OpenAI: https://api.openai.com/v1/chat/completions
-  #   - DeepSeek: https://api.deepseek.com/chat/completions
-  #   - Ollama: http://localhost:11434/v1/chat/completions
-  #   - Kimi开放平台: https://api.moonshot.cn/v1/chat/completions
-  #   - 其他使用 OpenAI 兼容端点的地址
+  # API 地址，各服务商地址不同
   api_url: https://api.deepseek.com/chat/completions
   # API 密钥
   api_key: your-openai-api-key
-  # 使用的模型名称
-  # 示例：
-  #   - DeepSeek: deepseek-v4-pro,deepseek-v4-flash
-  #   - Kimi开放平台: kimi-k2.6
+  # 模型名称
   model: deepseek-v4-pro
 
 # 副模型设置
