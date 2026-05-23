@@ -3701,9 +3701,9 @@ public class CLIManager {
         // player.sendMessage("");
         TextComponent message = new TextComponent(ChatColor.WHITE + "请点击 ");
         TextComponent bookBtn = new TextComponent(ChatColor.AQUA + "" + ChatColor.BOLD + "[阅读完整协议]");
-        bookBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli read"));
-        bookBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击打开 FancyHelper 最终用户许可协议书本")));
+        bookBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/fancyhelper-eula"));
+        bookBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击在浏览器中打开 FancyHelper 最终用户许可协议")));
         
         message.addExtra(bookBtn);
         message.addExtra(new TextComponent(ChatColor.WHITE + "，阅读完成后发送 "));
@@ -3722,10 +3722,14 @@ public class CLIManager {
     }
 
     /**
-     * 为玩家打开 EULA 虚拟书本。
+     * 为玩家打开 EULA 网页链接。
      */
-    public void openEulaBook(Player player) {
-        player.openBook(plugin.getEulaManager().getEulaBook());
+    public void openEulaUrl(Player player) {
+        TextComponent message = new TextComponent(ChatColor.AQUA + "" + ChatColor.BOLD + "[点击查看 FancyHelper 最终用户许可协议]");
+        message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/fancyhelper-eula"));
+        message.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击在浏览器中打开协议页面")));
+        player.spigot().sendMessage(message);
     }
 
     /**

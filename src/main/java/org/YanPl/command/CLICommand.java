@@ -229,7 +229,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getCliManager().handleChat(player, "agree");
                 return true;
             case "read":
-                plugin.getCliManager().openEulaBook(player);
+                plugin.getCliManager().openEulaUrl(player);
                 return true;
             case "thought":
                 plugin.getCliManager().handleThought(player, Arrays.copyOfRange(args, 1, args.length));
