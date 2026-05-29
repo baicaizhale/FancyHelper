@@ -21,6 +21,10 @@ public class ConfigManager {
     private FileConfiguration playerData;
     private File playerDataFile;
 
+    private static final String SKILL_PRIMARY_MIRROR = "https://fancy-skill.baicaizhale.top/";
+    private static final String SKILL_REPO_BASE = "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/";
+    private static final String SKILL_UPDATE_MIRROR = "https://ghproxy.vip/";
+
     public ConfigManager(FancyHelper plugin) {
         this.plugin = plugin;
         checkAndUpdateConfig();
@@ -346,17 +350,24 @@ public class ConfigManager {
     }
 
     /**
-     * 获取 Skill 远程仓库地址
+     * 获取 Skill 主下载源
      */
-    public String getSkillRepoBase() {
-        return config.getString("settings.skill_repo_base", "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/");
+    public String getSkillPrimaryMirror() {
+        return SKILL_PRIMARY_MIRROR;
     }
 
     /**
-     * 获取 Skill 下载镜像源
+     * 获取 Skill 远程仓库地址
+     */
+    public String getSkillRepoBase() {
+        return SKILL_REPO_BASE;
+    }
+
+    /**
+     * 获取 Skill 下载镜像源（旧 ghproxy 留底）
      */
     public String getSkillUpdateMirror() {
-        return config.getString("settings.skill_update_mirror", "https://ghproxy.vip/");
+        return SKILL_UPDATE_MIRROR;
     }
 
     /**
