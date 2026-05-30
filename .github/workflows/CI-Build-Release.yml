@@ -69,8 +69,7 @@ jobs:
     needs: [ test ]
     if: |
       always() &&
-      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
-      github.event_name != 'pull_request'
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
     outputs:
       IS_RELEASE: ${{ steps.check_release.outputs.IS_RELEASE }}
       RELEASE_VERSION: ${{ steps.check_release.outputs.RELEASE_VERSION }}
@@ -157,8 +156,7 @@ jobs:
     needs: [ build ]
     if: |
       always() &&
-      (needs.build.result == 'success') &&
-      github.event_name != 'pull_request'
+      (needs.build.result == 'success')
     steps:
       - name: 下载构建产物
         uses: actions/download-artifact@v4
