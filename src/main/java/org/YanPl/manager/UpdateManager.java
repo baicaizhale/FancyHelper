@@ -59,17 +59,17 @@ public class UpdateManager implements Listener {
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                // 第一层：从 Cloudflare Worker 获取版本信息
-                boolean fetched = fetchFromWorkerApi(sender);
+                // 第一层：GitHub API（ghproxy + 直连）
+                boolean fetched = fetchFromGitHubApi(sender);
 
-                // 第二层：回退到 GitHub API（ghproxy + 直连）
+                // 第二层：回退到 Cloudflare Worker
                 if (!fetched) {
-                    fetched = fetchFromGitHubApi(sender);
+                    fetched = fetchFromWorkerApi(sender);
                 }
 
                 if (!fetched) {
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（Worker/GitHub API 均不可用）。"));
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（GitHub/Worker 均不可用）。"));
                     }
                     return;
                 }
@@ -260,16 +260,16 @@ public class UpdateManager implements Listener {
 
         Runnable downloadTask = () -> {
             try {
-                // 第一层：Worker CDN（fancy.baicaizhale.top/latest）
-                String primaryUrl = plugin.getConfigManager().getPluginCdnBase() + "latest";
-
-                // 第二层：ghproxy
+                // 第一层：ghproxy
                 String mirrorUrl = "https://ghproxy.vip/" + downloadUrl;
 
-                // 第三层：直连
+                // 第二层：直连
                 String directUrl = downloadUrl;
 
-                HttpResponse<InputStream> response = fetchInputStreamWithFallback(primaryUrl, mirrorUrl, directUrl);
+                // 第三层：CDN 留底（fancy.baicaizhale.top/latest）
+                String primaryUrl = plugin.getConfigManager().getPluginCdnBase() + "latest";
+
+                HttpResponse<InputStream> response = fetchInputStreamWithFallback(mirrorUrl, directUrl, primaryUrl);
 
                 if (response == null || response.statusCode() != 200) {
                     int code = response != null ? response.statusCode() : 0;
@@ -344,22 +344,22 @@ public class UpdateManager implements Listener {
         return null;
     }
 
-    private HttpResponse<InputStream> fetchInputStreamWithFallback(String primaryUrl, String mirrorUrl, String directUrl) {
-        // 第一层：Worker CDN
-        HttpResponse<InputStream> response = tryFetchStream(primaryUrl);
-        if (response != null && response.statusCode() == 200) return response;
-        plugin.getLogger().info("[Update] CDN 主源不可用，尝试 ghproxy...");
-
-        // 第二层：ghproxy
-        response = tryFetchStream(mirrorUrl);
+    private HttpResponse<InputStream> fetchInputStreamWithFallback(String mirrorUrl, String directUrl, String cdnUrl) {
+        // 第一层：ghproxy
+        HttpResponse<InputStream> response = tryFetchStream(mirrorUrl);
         if (response != null && response.statusCode() == 200) return response;
         plugin.getLogger().info("[Update] ghproxy 不可用，尝试直连...");
 
-        // 第三层：直连
+        // 第二层：直连
         response = tryFetchStream(directUrl);
+        if (response != null && response.statusCode() == 200) return response;
+        plugin.getLogger().info("[Update] 直连不可用，尝试 CDN 留底...");
+
+        // 第三层：CDN 留底
+        response = tryFetchStream(cdnUrl);
         if (response == null || response.statusCode() != 200) {
             int code = response != null ? response.statusCode() : 0;
-            plugin.getLogger().warning("[Update] 直连下载返回 HTTP " + code);
+            plugin.getLogger().warning("[Update] CDN 留底下载返回 HTTP " + code);
         }
         return response;
     }

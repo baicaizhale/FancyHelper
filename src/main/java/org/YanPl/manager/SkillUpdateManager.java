@@ -213,12 +213,12 @@ public class SkillUpdateManager implements Listener {
 
         try {
             String body = fetchWithFallback(
-                    getPrimaryUrl("manifest.json"),
                     getMirrorUrl("manifest.json"),
-                    getDirectUrl("manifest.json"));
+                    getDirectUrl("manifest.json"),
+                    getPrimaryUrl("manifest.json"));
             if (body == null) {
-                notify(sender, "§c获取 Skill 更新清单失败（主源/镜像/直连均不可用）");
-                plugin.getLogger().warning("[SkillUpdate] 获取 manifest 失败（主源/镜像/直连均不可用）");
+                notify(sender, "§c获取 Skill 更新清单失败（镜像/直连/主源均不可用）");
+                plugin.getLogger().warning("[SkillUpdate] 获取 manifest 失败（镜像/直连/主源均不可用）");
                 return;
             }
 
@@ -321,11 +321,11 @@ public class SkillUpdateManager implements Listener {
         SkillLoader loader = skillManager.getLoader();
 
         try {
-            // 三级级联：主源 → 镜像(ghproxy) → 直连(GitHub)
+            // 三级级联：镜像(ghproxy) → 直连(GitHub) → 主源(留底)
             HttpResponse<InputStream> response = fetchInputStreamWithFallback(
-                    getPrimaryUrl(path),
                     getMirrorUrl(path),
-                    getDirectUrl(path));
+                    getDirectUrl(path),
+                    getPrimaryUrl(path));
             if (response == null || response.statusCode() != 200) {
                 int code = response != null ? response.statusCode() : 0;
                 plugin.getLogger().warning("[SkillUpdate] 下载 " + skillId + " 失败: HTTP " + code);
@@ -368,9 +368,9 @@ public class SkillUpdateManager implements Listener {
      */
     private JsonObject fetchManifest() {
         String body = fetchWithFallback(
-                getPrimaryUrl("manifest.json"),
                 getMirrorUrl("manifest.json"),
-                getDirectUrl("manifest.json"));
+                getDirectUrl("manifest.json"),
+                getPrimaryUrl("manifest.json"));
         if (body == null) return null;
         return JsonParser.parseString(body).getAsJsonObject();
     }
@@ -389,24 +389,24 @@ public class SkillUpdateManager implements Listener {
     }
 
     /**
-     * 三级级联请求：主源 → 镜像(ghproxy) → 直连(GitHub)
+     * 三级级联请求：镜像(ghproxy) → 直连(GitHub) → 主源(留底)
      * @return 响应体，全部失败返回 null
      */
-    private String fetchWithFallback(String primaryUrl, String mirrorUrl, String directUrl) {
-        // 第一层：主源
-        String body = tryFetchString(primaryUrl);
-        if (body != null) return body;
-        plugin.getLogger().info("[SkillUpdate] 主源不可用，尝试镜像源...");
-
-        // 第二层：镜像(ghproxy)
-        body = tryFetchString(mirrorUrl);
+    private String fetchWithFallback(String url1, String url2, String url3) {
+        // 第一层：镜像(ghproxy)
+        String body = tryFetchString(url1);
         if (body != null) return body;
         plugin.getLogger().info("[SkillUpdate] 镜像源不可用，尝试直连...");
 
-        // 第三层：直连(GitHub)
-        body = tryFetchString(directUrl);
+        // 第二层：直连(GitHub)
+        body = tryFetchString(url2);
+        if (body != null) return body;
+        plugin.getLogger().info("[SkillUpdate] 直连不可用，尝试主源(留底)...");
+
+        // 第三层：主源(留底)
+        body = tryFetchString(url3);
         if (body == null) {
-            plugin.getLogger().warning("[SkillUpdate] 直连也失败");
+            plugin.getLogger().warning("[SkillUpdate] 主源也失败");
         }
         return body;
     }
@@ -428,25 +428,25 @@ public class SkillUpdateManager implements Listener {
     }
 
     /**
-     * 三级级联请求输入流：主源 → 镜像(ghproxy) → 直连(GitHub)
+     * 三级级联请求输入流：镜像(ghproxy) → 直连(GitHub) → 主源(留底)
      * @return 响应，全部失败返回 null
      */
-    private HttpResponse<InputStream> fetchInputStreamWithFallback(String primaryUrl, String mirrorUrl, String directUrl) {
-        // 第一层：主源
-        HttpResponse<InputStream> response = tryFetchStream(primaryUrl);
-        if (response != null && response.statusCode() == 200) return response;
-        plugin.getLogger().info("[SkillUpdate] 主源不可用，尝试镜像源下载...");
-
-        // 第二层：镜像(ghproxy)
-        response = tryFetchStream(mirrorUrl);
+    private HttpResponse<InputStream> fetchInputStreamWithFallback(String url1, String url2, String url3) {
+        // 第一层：镜像(ghproxy)
+        HttpResponse<InputStream> response = tryFetchStream(url1);
         if (response != null && response.statusCode() == 200) return response;
         plugin.getLogger().info("[SkillUpdate] 镜像源不可用，尝试直连下载...");
 
-        // 第三层：直连(GitHub)
-        response = tryFetchStream(directUrl);
+        // 第二层：直连(GitHub)
+        response = tryFetchStream(url2);
+        if (response != null && response.statusCode() == 200) return response;
+        plugin.getLogger().info("[SkillUpdate] 直连不可用，尝试主源(留底)下载...");
+
+        // 第三层：主源(留底)
+        response = tryFetchStream(url3);
         if (response == null || response.statusCode() != 200) {
             int code = response != null ? response.statusCode() : 0;
-            plugin.getLogger().warning("[SkillUpdate] 直连下载返回 HTTP " + code);
+            plugin.getLogger().warning("[SkillUpdate] 主源下载返回 HTTP " + code);
         }
         return response;
     }
