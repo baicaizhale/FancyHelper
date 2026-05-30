@@ -18,7 +18,6 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 - **Pre-execution Confirmation** — AI-generated commands require manual confirmation (`y`/`n`) by default to prevent accidents.
 - **YOLO Mode** — Tired of confirming? After agreeing to the terms, most commands execute automatically, though high-risk operations like `op`, `ban`, and `stop` still require approval.
 - **Real-time Status Bar** — The Action Bar displays what the AI is currently doing (Thinking / Executing / Waiting for confirmation).
-- **Built-in Wiki Search** — Includes documentation presets for LuckPerms, EssentialsX, WorldEdit, and more. It can even search the web if not found locally.
 - **Feedback Loop** — The output of executed commands is fed back to the AI. If something fails, the AI can correct itself.
 - **Automatic Config Updates** — No need to manually edit configs during upgrades; it handles them automatically.
 - **Anti-Loop Protection** — Automatically intercepts the AI if it starts repeating operations or making excessive calls.

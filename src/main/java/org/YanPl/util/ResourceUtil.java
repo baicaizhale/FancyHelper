@@ -12,7 +12,7 @@ import java.util.jar.JarFile;
 public class ResourceUtil {
 
     /**
-     * 资源工具类：负责将 jar 内嵌的资源释放到插件数据目录（如 preset 文件）。
+     * 资源工具类：负责将 jar 内嵌的资源释放到插件数据目录。
      */
 
     public static void releaseResources(FancyHelper plugin, String resourceDir, boolean replace, String extension) {

@@ -88,8 +88,7 @@ public class PromptManager {
         // 2. 【单命令执行】#run 工具一次只能执行一条命令，禁止使用 && 或 ; 连接多个命令
         // 3. 【工具位置】工具调用必须另起一行，不得在正文或注释中调用
         // 4. 【格式规范】工具名和冒号之间不要有空格，命令参数不要带斜杠 /
-        // 5. 【强制读预设】执行任务前必须先检查 Available Presets 列表，存在则调用 #getpreset
-        // 6. 【禁止猜测命令】没有预设且没有搜索结果时，禁止执行命令，必须先搜索
+        // 5. 【禁止猜测命令】没有搜索结果时，禁止执行命令，必须先搜索
         sb.append("[Core Constraints] (Violations cause parsing failures — follow strictly)\n\n");
 
         sb.append("1. [Single Tool Call] Each response may contain ONLY ONE tool call.\n");
@@ -101,9 +100,7 @@ public class PromptManager {
 
         sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
 
-        sb.append("5. [Read Preset First] Check Available Presets list before any task. If the preset exists, call #getpreset first.\n\n");
-
-        sb.append("6. [Never Guess Commands] If no preset and no search result, do NOT execute commands. Search first.\n\n");
+        sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
 
         // 正确示例 / 错误示例（精简为最典型的两个，避免负面示例过多干扰模型）
         sb.append("Example:\n");
