@@ -1,7 +1,5 @@
 package org.YanPl.manager;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.YanPl.FancyHelper;
@@ -25,15 +23,18 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 
 /**
- * 更新管理器：负责从 GitHub 获取最新版本并提醒管理员。
+ * 更新管理器：从 Cloudflare Worker 获取最新版本，并通过三级级联下载 JAR。
  */
 public class UpdateManager implements Listener {
     private final FancyHelper plugin;
-    private final String repoUrl = "https://api.github.com/repos/baicaizhale/FancyHelper/releases/latest";
+
+    private static final String GITHUB_API_URL = "https://api.github.com/repos/baicaizhale/FancyHelper/releases/latest";
+    private static final String GITHUB_DL_BASE = "https://github.com/baicaizhale/FancyHelper/releases/download/";
+
     private String latestVersion = null;
     private String downloadUrl = null;
     private String latestFileName = null;
-    private String releaseOverview = null; // Release Overview (AI生成的版本概述)
+    private String releaseOverview = null;
     private boolean hasUpdate = false;
 
     public UpdateManager(FancyHelper plugin) {
@@ -50,7 +51,6 @@ public class UpdateManager implements Listener {
 
     /**
      * 检查更新并通知特定玩家。
-     * @param sender 通知对象（可为 null，仅输出到控制台）
      */
     public void checkForUpdates(Player sender) {
         if (!plugin.getConfigManager().isCheckUpdate() && sender == null) {
@@ -58,157 +58,181 @@ public class UpdateManager implements Listener {
         }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .build();
-
             try {
-                // 优先通过镜像代理 API 请求，避免 GitHub 频率限制
-                String mirror = "https://ghproxy.vip/";
-                HttpResponse<String> response;
-                try {
-                    response = fetchApiResponse(client, mirror + repoUrl);
-                } catch (IOException e) {
-                    plugin.getLogger().info("镜像代理连接失败 (" + e.getMessage() + ")，尝试直连...");
-                    response = fetchApiResponse(client, repoUrl);
-                }
-                if (response.statusCode() != 200) {
-                    plugin.getLogger().info("镜像代理 API 返回 " + response.statusCode() + "，回退直连...");
-                    response = fetchApiResponse(client, repoUrl);
+                // 第一层：从 Cloudflare Worker 获取版本信息
+                boolean fetched = fetchFromWorkerApi(sender);
+
+                // 第二层：回退到 GitHub API（ghproxy + 直连）
+                if (!fetched) {
+                    fetched = fetchFromGitHubApi(sender);
                 }
 
-                if (response.statusCode() == 200) {
-                    String jsonResponse = response.body();
-                    JsonObject jsonObject = JsonParser.parseString(jsonResponse).getAsJsonObject();
-
-                    if (!jsonObject.has("tag_name") || jsonObject.get("tag_name").isJsonNull()) {
-                        plugin.getLogger().warning("检查更新失败：响应中缺少 tag_name 字段");
-                        return;
+                if (!fetched) {
+                    if (sender != null) {
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（Worker/GitHub API 均不可用）。"));
                     }
-                    latestVersion = jsonObject.get("tag_name").getAsString().replace("v", "");
+                    return;
+                }
 
-                    // 获取 Release Overview (body 字段的前半部分，AI 生成的内容)
-                    if (jsonObject.has("body") && !jsonObject.get("body").isJsonNull()) {
-                        String body = jsonObject.get("body").getAsString();
-                        // 提取 Overview 部分（## 🚀 版本概述 到 ## What's Changed 之前）
-                        releaseOverview = extractOverview(body);
-                    }
+                String currentVersion = plugin.getDescription().getVersion();
+                if (isNewerVersion(currentVersion, latestVersion)) {
+                    hasUpdate = true;
+                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: v" + latestVersion));
+                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f下载地址: " + downloadUrl));
 
-                    // 获取第一个 .jar 文件的下载地址和文件名
-                    if (!jsonObject.has("assets") || jsonObject.get("assets").isJsonNull()) {
-                        plugin.getLogger().warning("检查更新失败：响应中缺少 assets 字段");
-                        return;
-                    }
-                    JsonArray assets = jsonObject.getAsJsonArray("assets");
-                    for (JsonElement assetElement : assets) {
-                        JsonObject asset = assetElement.getAsJsonObject();
-                        String name = asset.get("name").getAsString();
-                        if (name.endsWith(".jar")) {
-                            downloadUrl = asset.get("browser_download_url").getAsString();
-                            latestFileName = name;
-                            break;
+                    if (releaseOverview != null && !releaseOverview.isEmpty()) {
+                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
+                        for (String line : releaseOverview.split("\\r?\\n")) {
+                            String trimmedLine = line.trim();
+                            if (!trimmedLine.isEmpty()) {
+                                trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
+                                Bukkit.getConsoleSender().sendMessage(" §b§l> §r" + trimmedLine);
+                            }
                         }
                     }
 
-                    if (downloadUrl == null) {
-                        if (jsonObject.has("html_url") && !jsonObject.get("html_url").isJsonNull()) {
-                            downloadUrl = jsonObject.get("html_url").getAsString();
-                            latestFileName = "FancyHelper-v" + latestVersion + ".jar";
-                        } else {
-                            plugin.getLogger().warning("检查更新失败：无法获取下载链接");
-                            return;
-                        }
+                    if (plugin.getConfigManager().isAutoUpgrade()) {
+                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到自动升级已开启，正在后台下载更新..."));
+                        downloadAndInstall(null, true, true);
+                    } else {
+                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f如需自动下载更新，请将 config.yml 中的 auto_upgrade 设置为 true"));
                     }
 
-                    String currentVersion = plugin.getDescription().getVersion();
-
-                    if (isNewerVersion(currentVersion, latestVersion)) {
-                        hasUpdate = true;
-                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: v" + latestVersion));
-                        Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f下载地址: " + downloadUrl));
-
-                        // 显示 Release Overview（控制台）
+                    if (sender != null) {
+                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: " + ChatColor.WHITE + "v" + latestVersion));
                         if (releaseOverview != null && !releaseOverview.isEmpty()) {
-                            Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
+                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
                             for (String line : releaseOverview.split("\\r?\\n")) {
                                 String trimmedLine = line.trim();
                                 if (!trimmedLine.isEmpty()) {
                                     trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
-                                    Bukkit.getConsoleSender().sendMessage(" §b§l> §r" + trimmedLine);
+                                    sender.sendMessage(" §b§l> §r" + trimmedLine);
                                 }
                             }
                         }
-
-                        // 自动升级逻辑
                         if (plugin.getConfigManager().isAutoUpgrade()) {
-                            Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到自动升级已开启，正在后台下载更新..."));
-                            downloadAndInstall(null, true, true);
+                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在执行自动更新..."));
                         } else {
-                            Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f如需自动下载更新，请将 config.yml 中的 auto_upgrade 设置为 true"));
-                        }
-
-                        if (sender != null) {
-                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: " + ChatColor.WHITE + "v" + latestVersion));
-                            // 显示 Release Overview
-                            if (releaseOverview != null && !releaseOverview.isEmpty()) {
-                                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
-                                // 使用正则表达式分割，支持 \n 和 \r\n
-                                for (String line : releaseOverview.split("\\r?\\n")) {
-                                    // 移除每行开头和结尾的空白字符
-                                    String trimmedLine = line.trim();
-                                    if (!trimmedLine.isEmpty()) {
-                                        // 移除 Markdown 列表符号 * - 等
-                                        trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
-                                        sender.sendMessage(" §b§l> §r" + trimmedLine);
-                                    }
-                                }
-                            }
-                            if (plugin.getConfigManager().isAutoUpgrade()) {
-                                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在执行自动更新..."));
-                            } else {
-                                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.WHITE + " 自动下载并更新。"));
-                            }
-                        }
-                    } else {
-                        hasUpdate = false;
-                        // 无论 sender 是否为 null，都输出检查结果
-                        String message = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前已是最新版本 (v" + currentVersion + ")");
-                        if (sender != null) {
-                            sender.sendMessage(message);
-                        } else {
-                            Bukkit.getConsoleSender().sendMessage(message);
+                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.WHITE + " 自动下载并更新。"));
                         }
                     }
                 } else {
-                    int code = response.statusCode();
-                    if (code == 403 || code == 429) {
-                        plugin.getLogger().info("GitHub API 访问受限（频率限制），跳过本次更新检查");
-                    } else {
-                        plugin.getLogger().warning("检查更新失败 - HTTP " + code);
-                    }
+                    hasUpdate = false;
+                    String message = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前已是最新版本 (v" + currentVersion + ")");
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（HTTP " + code + "）。"));
+                        sender.sendMessage(message);
+                    } else {
+                        Bukkit.getConsoleSender().sendMessage(message);
                     }
                 }
-            } catch (IOException e) {
+
+            } catch (Exception e) {
                 plugin.getLogger().warning("检查更新失败: " + e.getMessage());
                 if (sender != null) {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败: " + e.getMessage()));
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                plugin.getLogger().warning("检查更新被中断: " + e.getMessage());
-                if (sender != null) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新被中断: " + e.getMessage()));
                 }
             }
         });
     }
 
     /**
+     * 从 Cloudflare Worker API 获取版本信息
+     */
+    private boolean fetchFromWorkerApi(Player sender) {
+        try {
+            String apiUrl = plugin.getConfigManager().getPluginVersionApi();
+            String body = tryFetchString(apiUrl);
+
+            if (body == null) {
+                plugin.getLogger().info("[Update] Worker API 不可用，尝试 GitHub API...");
+                return false;
+            }
+
+            JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+            if (!json.has("version")) {
+                plugin.getLogger().warning("[Update] Worker API 返回格式异常");
+                return false;
+            }
+
+            latestVersion = json.get("version").getAsString().replace("v", "");
+            // 下载走 fancy.baicaizhale.top/latest，GitHub URL 作为留底
+            latestFileName = "FancyHelper-v" + latestVersion + ".jar";
+            downloadUrl = GITHUB_DL_BASE + "v" + latestVersion + "/" + latestFileName;
+            releaseOverview = json.has("changelog") && !json.get("changelog").isJsonNull()
+                    ? json.get("changelog").getAsString() : null;
+
+            plugin.getLogger().info("[Update] 从 Worker 获取版本信息成功: v" + latestVersion);
+            return true;
+
+        } catch (Exception e) {
+            plugin.getLogger().info("[Update] Worker API 请求异常: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 从 GitHub API 获取版本信息（ghproxy + 直连回退）
+     */
+    private boolean fetchFromGitHubApi(Player sender) {
+        try {
+            String mirror = "https://ghproxy.vip/";
+            String body = tryFetchString(mirror + GITHUB_API_URL);
+
+            if (body == null) {
+                plugin.getLogger().info("[Update] GitHub API 镜像不可用，尝试直连...");
+                body = tryFetchString(GITHUB_API_URL);
+            }
+
+            if (body == null) {
+                plugin.getLogger().warning("[Update] GitHub API 直连也失败");
+                return false;
+            }
+
+            JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+            if (!json.has("tag_name") || json.get("tag_name").isJsonNull()) {
+                plugin.getLogger().warning("[Update] GitHub API 响应中缺少 tag_name");
+                return false;
+            }
+
+            latestVersion = json.get("tag_name").getAsString().replace("v", "");
+
+            if (json.has("body") && !json.get("body").isJsonNull()) {
+                releaseOverview = extractOverview(json.get("body").getAsString());
+            }
+
+            if (json.has("assets") && !json.get("assets").isJsonNull()) {
+                var assets = json.getAsJsonArray("assets");
+                for (var element : assets) {
+                    var asset = element.getAsJsonObject();
+                    String name = asset.get("name").getAsString();
+                    if (name.endsWith(".jar")) {
+                        downloadUrl = asset.get("browser_download_url").getAsString();
+                        latestFileName = name;
+                        break;
+                    }
+                }
+            }
+
+            if (downloadUrl == null) {
+                if (json.has("html_url") && !json.get("html_url").isJsonNull()) {
+                    downloadUrl = json.get("html_url").getAsString();
+                    latestFileName = "FancyHelper-v" + latestVersion + ".jar";
+                } else {
+                    return false;
+                }
+            }
+
+            plugin.getLogger().info("[Update] 从 GitHub API 获取版本信息成功: v" + latestVersion);
+            return true;
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("[Update] GitHub API 请求异常: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 下载并安装更新。
-     * @param sender 发起更新的玩家（可为 null）
      */
     public void downloadAndInstall(Player sender) {
         downloadAndInstall(sender, false);
@@ -216,71 +240,45 @@ public class UpdateManager implements Listener {
 
     /**
      * 下载并安装更新。
-     * @param sender 发起更新的玩家（可为 null）
-     * @param autoReload 是否在下载完成后自动重载
      */
     public void downloadAndInstall(Player sender, boolean autoReload) {
         downloadAndInstall(sender, autoReload, false);
     }
 
     /**
-     * 下载并安装更新。
-     * @param sender 发起更新的玩家（可为 null）
-     * @param autoReload 是否在下载完成后自动重载
-     * @param alreadyAsync 是否已经在异步任务中执行
+     * 下载并安装更新（三级级联：Worker CDN → ghproxy → GitHub 直连）。
      */
     public void downloadAndInstall(Player sender, boolean autoReload, boolean alreadyAsync) {
-        if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("下载并安装更新被调用 - 有可用更新: " + hasUpdate + ", 下载地址: " + downloadUrl);
-        }
-
         if (!hasUpdate || downloadUrl == null) {
-            if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可用的更新。"));
-            plugin.getLogger().warning("无法下载更新：有可用更新=" + hasUpdate + ", 下载地址=" + downloadUrl);
+            String msg = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可用的更新。");
+            if (sender != null) sender.sendMessage(msg);
+            plugin.getLogger().warning("无法下载更新：hasUpdate=" + hasUpdate + ", downloadUrl=" + downloadUrl);
             return;
         }
 
         if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始下载更新..."));
 
         Runnable downloadTask = () -> {
-            String mirror = "https://ghproxy.vip/";
-            String finalUrl = mirror + downloadUrl;
-
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("开始下载更新，镜像源: " + mirror);
-                plugin.getLogger().info("下载URL: " + finalUrl);
-            }
-
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(30))
-                    .build();
-
             try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(finalUrl))
-                        .header("User-Agent", "FancyHelper-Updater")
-                        .timeout(Duration.ofSeconds(60))
-                        .GET()
-                        .build();
+                // 第一层：Worker CDN（fancy.baicaizhale.top/latest）
+                String primaryUrl = plugin.getConfigManager().getPluginCdnBase() + "latest";
 
-                HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                // 第二层：ghproxy
+                String mirrorUrl = "https://ghproxy.vip/" + downloadUrl;
 
-                if (response.statusCode() != 200) {
-                    plugin.getLogger().severe("下载失败: " + response.statusCode());
-                    if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f下载失败: " + response.statusCode()));
-                    }
-                    throw new IOException("下载失败: " + response.statusCode());
+                // 第三层：直连
+                String directUrl = downloadUrl;
+
+                HttpResponse<InputStream> response = fetchInputStreamWithFallback(primaryUrl, mirrorUrl, directUrl);
+
+                if (response == null || response.statusCode() != 200) {
+                    int code = response != null ? response.statusCode() : 0;
+                    throw new IOException("下载失败: HTTP " + code);
                 }
 
-                // 准备保存新版本
                 File pluginsDir = plugin.getDataFolder().getParentFile();
                 String newJarName = latestFileName;
                 File newJarFile = new File(pluginsDir, newJarName);
-                
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("准备保存新版本到: " + newJarFile.getAbsolutePath());
-                }
 
                 try (InputStream inputStream = response.body()) {
                     Files.copy(inputStream, newJarFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
@@ -288,20 +286,19 @@ public class UpdateManager implements Listener {
 
                 plugin.getLogger().info("文件下载完成，大小: " + newJarFile.length() + " 字节");
 
-                // 旧 JAR 删除由 ReloadService 在 FancyHelper 卸载后处理（避免 Paper 1.26.1+ 文件锁定）
-
+                String successMsg = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载完成！");
+                String versionMsg = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f新版本已就绪: " + newJarName);
                 if (sender != null) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载完成！"));
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f新版本已就绪: " + newJarName));
+                    sender.sendMessage(successMsg);
+                    sender.sendMessage(versionMsg);
                 } else {
-                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载完成！"));
-                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f新版本已就绪: " + newJarName));
+                    Bukkit.getConsoleSender().sendMessage(successMsg);
+                    Bukkit.getConsoleSender().sendMessage(versionMsg);
                 }
 
                 if (autoReload) {
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        // 通知 ReloadService，然后自卸载
                         if (plugin.signalReloadService("UPDATE", newJarName)) {
                             Bukkit.getPluginManager().disablePlugin(plugin);
                         } else {
@@ -309,21 +306,15 @@ public class UpdateManager implements Listener {
                         }
                     });
                 }
+
             } catch (IOException e) {
                 plugin.getLogger().severe("更新下载失败: " + e.getMessage());
                 if (sender != null) {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载失败: " + e.getMessage()));
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                plugin.getLogger().severe("更新下载被中断: " + e.getMessage());
-                if (sender != null) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载被中断: " + e.getMessage()));
-                }
             }
         };
 
-        // 根据是否已经在异步任务中来决定如何执行
         if (alreadyAsync) {
             downloadTask.run();
         } else {
@@ -331,65 +322,93 @@ public class UpdateManager implements Listener {
         }
     }
 
-    /**
-     * 从 Release body 中提取 Overview 部分。
-     * @param body Release body 内容
-     * @return Overview 部分（AI 生成的版本概述）
-     */
-    private String extractOverview(String body) {
-        if (body == null || body.isEmpty()) {
-            return null;
+    // ==================== 三级级联 HTTP 工具方法 ====================
+
+    private String tryFetchString(String url) {
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("User-Agent", "FancyHelper-Updater")
+                    .timeout(Duration.ofSeconds(15))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) return response.body();
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
         }
-        
-        // 查找 "## Overview" 的位置
-        int overviewStart = body.indexOf("## Overview");
-        if (overviewStart == -1) {
-            overviewStart = body.indexOf("## 🚀 版本概述");
-        }
-        if (overviewStart == -1) {
-            overviewStart = body.indexOf("## 版本概述");
-        }
-        if (overviewStart == -1) {
-            overviewStart = body.indexOf("## 🚀");
-        }
-        
-        if (overviewStart == -1) {
-            // 如果找不到特定标记，尝试获取第一段内容
-            overviewStart = 0;
-        }
-        
-        // 查找 "## What's Changed" 或 "## **Full Changelog**" 的位置作为结束
-        int overviewEnd = body.indexOf("## What's Changed");
-        if (overviewEnd == -1) {
-            overviewEnd = body.indexOf("## **Full Changelog**");
-        }
-        if (overviewEnd == -1) {
-            overviewEnd = body.indexOf("## Full Changelog");
-        }
-        
-        if (overviewEnd == -1) {
-            // 如果找不到结束标记，取前500字符或全部内容
-            overviewEnd = Math.min(body.length(), 500);
-        }
-        
-        String overview = body.substring(overviewStart, overviewEnd).trim();
-        
-        // 清理 Markdown 格式，转换为 Minecraft 格式
-        overview = overview.replace("## Overview", "")
-                           .replace("## 🚀 版本概述", "")
-                           .replace("## 版本概述", "")
-                           .replace("## 🚀", "")
-                           .trim();
-        
-        return overview;
+        return null;
     }
 
-    /**
-     * 比较版本号。
-     * @param current 当前版本
-     * @param latest 最新版本
-     * @return 如果最新版本大于当前版本则返回 true
-     */
+    private HttpResponse<InputStream> fetchInputStreamWithFallback(String primaryUrl, String mirrorUrl, String directUrl) {
+        // 第一层：Worker CDN
+        HttpResponse<InputStream> response = tryFetchStream(primaryUrl);
+        if (response != null && response.statusCode() == 200) return response;
+        plugin.getLogger().info("[Update] CDN 主源不可用，尝试 ghproxy...");
+
+        // 第二层：ghproxy
+        response = tryFetchStream(mirrorUrl);
+        if (response != null && response.statusCode() == 200) return response;
+        plugin.getLogger().info("[Update] ghproxy 不可用，尝试直连...");
+
+        // 第三层：直连
+        response = tryFetchStream(directUrl);
+        if (response == null || response.statusCode() != 200) {
+            int code = response != null ? response.statusCode() : 0;
+            plugin.getLogger().warning("[Update] 直连下载返回 HTTP " + code);
+        }
+        return response;
+    }
+
+    private HttpResponse<InputStream> tryFetchStream(String url) {
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(30))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("User-Agent", "FancyHelper-Updater")
+                    .timeout(Duration.ofSeconds(60))
+                    .GET()
+                    .build();
+            return client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        }
+        return null;
+    }
+
+    // ==================== 事件监听 ====================
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (!plugin.getConfigManager().isOpUpdateNotify()) return;
+        Player player = event.getPlayer();
+        if (hasUpdate && player.isOp()) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: §a" + latestVersion));
+                if (releaseOverview != null && !releaseOverview.isEmpty()) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
+                    for (String line : releaseOverview.split("\\r?\\n")) {
+                        String trimmedLine = line.trim();
+                        if (!trimmedLine.isEmpty()) {
+                            trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
+                            player.sendMessage(" §b§l- §r" + trimmedLine);
+                        }
+                    }
+                }
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 §e/fancy upgrade §f自动下载并更新。"));
+            }, 40L);
+        }
+    }
+
+    // ==================== 版本比较 ====================
+
     private boolean isNewerVersion(String current, String latest) {
         if (current == null || latest == null) return false;
         return compareVersion(current, latest) < 0;
@@ -423,41 +442,43 @@ public class UpdateManager implements Listener {
         return num;
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        if (!plugin.getConfigManager().isOpUpdateNotify()) {
-            return;
-        }
-        Player player = event.getPlayer();
-        if (hasUpdate && player.isOp()) {
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: §a" + latestVersion));
-                // 显示 Release Overview
-                if (releaseOverview != null && !releaseOverview.isEmpty()) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
-                    // 使用正则表达式分割，支持 \n 和 \r\n
-                    for (String line : releaseOverview.split("\\r?\\n")) {
-                        // 移除每行开头和结尾的空白字符
-                        String trimmedLine = line.trim();
-                        if (!trimmedLine.isEmpty()) {
-                            // 移除 Markdown 列表符号 * - 等
-                            trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
-                            player.sendMessage(" §b§l- §r" + trimmedLine);
-                        }
-                    }
-                }
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 §e/fancy upgrade §f自动下载并更新。"));
-            }, 40L); // 延迟 2 秒提示
-        }
+    /**
+     * 从 Release body 中提取 Overview 部分
+     */
+    private String extractOverview(String body) {
+        if (body == null || body.isEmpty()) return null;
+
+        int overviewStart = body.indexOf("## Overview");
+        if (overviewStart == -1) overviewStart = body.indexOf("## 🚀 版本概述");
+        if (overviewStart == -1) overviewStart = body.indexOf("## 版本概述");
+        if (overviewStart == -1) overviewStart = body.indexOf("## 🚀");
+        if (overviewStart == -1) overviewStart = 0;
+
+        int overviewEnd = body.indexOf("## What's Changed");
+        if (overviewEnd == -1) overviewEnd = body.indexOf("## **Full Changelog**");
+        if (overviewEnd == -1) overviewEnd = body.indexOf("## Full Changelog");
+        if (overviewEnd == -1) overviewEnd = Math.min(body.length(), 500);
+
+        String overview = body.substring(overviewStart, overviewEnd).trim();
+        overview = overview.replace("## Overview", "")
+                           .replace("## 🚀 版本概述", "")
+                           .replace("## 版本概述", "")
+                           .replace("## 🚀", "")
+                           .trim();
+        return overview;
     }
 
-    private HttpResponse<String> fetchApiResponse(HttpClient client, String url) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("User-Agent", "FancyHelper-Updater")
-                .timeout(Duration.ofSeconds(10))
-                .GET()
-                .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    // ==================== 状态查询 ====================
+
+    public boolean hasUpdate() {
+        return hasUpdate;
+    }
+
+    public String getLatestVersion() {
+        return latestVersion;
+    }
+
+    public String getReleaseOverview() {
+        return releaseOverview;
     }
 }
