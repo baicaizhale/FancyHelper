@@ -109,9 +109,6 @@ public class ToolExecutor {
             case "#edit":
                 handleFileTool(player, "edit", args, session);
                 break;
-            case "#getpreset":
-                handleGetTool(player, args);
-                break;
             case "#skill":
                 handleSkillTool(player, args, session);
                 break;
@@ -239,7 +236,7 @@ public class ToolExecutor {
         } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") &&
             !lowerToolName.equals("#end") && !lowerToolName.equals("#list") &&
             !lowerToolName.equals("#read") && !lowerToolName.equals("#todo") &&
-            !lowerToolName.equals("#getpreset") && !lowerToolName.equals("#webread")) {
+            !lowerToolName.equals("#webread")) {
             // 对 #webread 隐藏此显示，因为 #webread 会在 executeWebReader 中显示更详细的信息
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         }
@@ -347,24 +344,6 @@ public class ToolExecutor {
      */
     private void handleFileTool(Player player, String type, String args, DialogueSession session) {
         UUID uuid = player.getUniqueId();
-
-        if ("read".equals(type)) {
-            String pathArg = args == null ? "" : args.trim();
-            String[] parts = pathArg.split("\\s+");
-            String path = parts.length > 0 ? parts[0] : "";
-            try {
-                String cleaned = path.startsWith("/") || path.startsWith("\\") ? path.substring(1) : path;
-                java.io.File worldRoot = org.bukkit.Bukkit.getWorldContainer();
-                java.io.File target = new java.io.File(worldRoot, cleaned).getCanonicalFile();
-                java.io.File presetDir = new java.io.File(plugin.getDataFolder(), "preset").getCanonicalFile();
-                if (target.getPath().startsWith(presetDir.getPath() + java.io.File.separator) || target.equals(presetDir)) {
-                    String name = target.getName();
-                    player.sendMessage(org.bukkit.ChatColor.YELLOW + "提示: 预设文件请使用 #getpreset: " + name);
-                    cliManager.feedbackToAI(player, "#read_result: 错误 - 预设文件请使用 #getpreset: " + name);
-                    return;
-                }
-            } catch (Exception ignored) {}
-        }
 
         // #ls 和 #read 不需要确认，直接执行
         if ("ls".equals(type) || "read".equals(type)) {
@@ -1155,29 +1134,6 @@ public class ToolExecutor {
         if (type == short.class) return (short) 0;
         if (type == char.class) return '\0';
         return null;
-    }
-
-    /**
-     * 处理 #getpreset 工具
-     */
-    private void handleGetTool(Player player, String fileName) {
-        // 显示正在读取预设的信息
-        player.sendMessage(ChatColor.GRAY + "〇 正在读取预设...");
-        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
-        
-        File presetFile = new File(plugin.getDataFolder(), "preset/" + fileName);
-        if (!presetFile.exists()) {
-            cliManager.feedbackToAI(player, "#get_result: 文件不存在");
-            return;
-        }
-
-        try {
-            List<String> lines = Files.readAllLines(presetFile.toPath());
-            String content = String.join("\n", lines);
-            cliManager.feedbackToAI(player, "#get_result: " + content);
-        } catch (IOException e) {
-            cliManager.feedbackToAI(player, "#get_result: 读取文件失败 - " + e.getMessage());
-        }
     }
 
     /**

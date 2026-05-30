@@ -1,7 +1,6 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
-import org.YanPl.util.ResourceUtil;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -111,13 +110,8 @@ public class ConfigManager {
 
             // 2. 释放新配置
             configFile.delete();
-            File presetDir = new File(plugin.getDataFolder(), "preset");
-            if (presetDir.exists()) {
-                deleteDirectory(presetDir);
-            }
 
             plugin.saveDefaultConfig();
-            ResourceUtil.releaseResources(plugin, "preset/", true, ".txt");
 
             // 3. 把旧配置写入新配置
             FileConfiguration newConfig = YamlConfiguration.loadConfiguration(configFile);
@@ -200,21 +194,6 @@ public class ConfigManager {
             }
         }
         plugin.getLogger().warning("等待 ReloadService 关闭超时，将尝试强制释放 JAR");
-    }
-
-    private void deleteDirectory(File directory) {
-        File[] files = directory.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    deleteDirectory(file);
-                } else {
-                    file.delete();
-                }
-            }
-        }
-        // 删除目录自身
-        directory.delete();
     }
 
     public void loadConfig() {
