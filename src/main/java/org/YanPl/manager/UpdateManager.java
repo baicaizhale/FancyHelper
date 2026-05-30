@@ -149,14 +149,15 @@ public class UpdateManager implements Listener {
             }
 
             JsonObject json = JsonParser.parseString(body).getAsJsonObject();
-            if (!json.has("version") || !json.has("download_url")) {
+            if (!json.has("version")) {
                 plugin.getLogger().warning("[Update] Worker API 返回格式异常");
                 return false;
             }
 
             latestVersion = json.get("version").getAsString().replace("v", "");
-            downloadUrl = json.get("download_url").getAsString();
-            latestFileName = json.has("file_name") ? json.get("file_name").getAsString() : ("FancyHelper-v" + latestVersion + ".jar");
+            // 下载走 fancy.baicaizhale.top/latest，GitHub URL 作为留底
+            latestFileName = "FancyHelper-v" + latestVersion + ".jar";
+            downloadUrl = GITHUB_DL_BASE + "v" + latestVersion + "/" + latestFileName;
             releaseOverview = json.has("changelog") && !json.get("changelog").isJsonNull()
                     ? json.get("changelog").getAsString() : null;
 
