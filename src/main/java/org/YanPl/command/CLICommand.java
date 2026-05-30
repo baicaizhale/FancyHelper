@@ -19,6 +19,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -777,8 +778,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(" §7- §b/cli skill load <id> §f: 加载 Skill 到当前对话");
             if (sender.hasPermission("fancyhelper.skill.admin")) {
                 sender.sendMessage(" §7- §b/cli skill reload §f: 重新加载所有 Skill");
-                sender.sendMessage(" §7- §b/cli skill checkupdate §f: 检查 Skill 更新");
-                sender.sendMessage(" §7- §b/cli skill upgrade §f: 下载并安装所有 Skill 更新");
+                sender.sendMessage(" §7- §b/cli skill checkupdate §f: 检查已有 Skill 更新");
+                sender.sendMessage(" §7- §b/cli skill upgrade §f: 下载并安装已有 Skill 更新");
+                sender.sendMessage(" §7- §b/cli skill list-remote §f: 列出远程仓库中可安装的 Skill");
+                sender.sendMessage(" §7- §b/cli skill install <id> §f: 从远程仓库安装指定 Skill");
             }
             return true;
         }
@@ -831,6 +834,25 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 plugin.getSkillUpdateManager().downloadUpdates(sender instanceof Player ? (Player) sender : null);
+                break;
+            case "list-remote":
+                if (!sender.hasPermission("fancyhelper.skill.admin")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    return true;
+                }
+                handleSkillListRemote(sender);
+                break;
+            case "install":
+                if (!sender.hasPermission("fancyhelper.skill.admin")) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    return true;
+                }
+                if (args.length < 3) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供要安装的 Skill ID"));
+                    sender.sendMessage("§7用法: /cli skill install <id>");
+                } else {
+                    handleSkillInstall(sender, args[2]);
+                }
                 break;
             default:
                 sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知子命令: " + subCommand));
@@ -903,6 +925,53 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage(ColorUtil.translateCustomColors("§aSkill §7> §f" + skill.getMetadata().getName()));
+    }
+
+    /**
+     * 处理 list-remote 子命令：列出远程仓库中可安装的 Skill
+     */
+    private void handleSkillListRemote(CommandSender sender) {
+        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在获取远程 Skill 列表..."));
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            Map<String, String> remote = plugin.getSkillUpdateManager().listRemoteSkills();
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (remote.isEmpty()) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e远程仓库中没有新的 Skill 可安装"));
+                    return;
+                }
+
+                sender.sendMessage(ColorUtil.translateCustomColors("§6========== 可安装的远程 Skill =========="));
+                for (Map.Entry<String, String> entry : remote.entrySet()) {
+                    sender.sendMessage(" §7- §b" + entry.getKey() + " §7v" + entry.getValue());
+                }
+                sender.sendMessage(ColorUtil.translateCustomColors("§6========================================="));
+                sender.sendMessage("§7使用 §b/cli skill install <id> §7安装");
+            });
+        });
+    }
+
+    /**
+     * 处理 install 子命令：安装远程 Skill
+     */
+    private void handleSkillInstall(CommandSender sender, String skillId) {
+        if (plugin.getSkillManager().hasSkill(skillId)) {
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §eSkill §b" + skillId + " §e已安装"));
+            return;
+        }
+
+        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始安装 §b" + skillId + "§f..."));
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean success = plugin.getSkillUpdateManager().installSkill(skillId, sender instanceof Player ? (Player) sender : null);
+            if (!success) {
+                // installSkill 已经发送了具体错误消息，这里只补充
+                if (sender != null && !(sender instanceof Player)) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cSkill 安装失败"));
+                }
+            }
+        });
     }
 
     private void handleNotice(CommandSender sender) {
@@ -1123,6 +1192,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 skillSubCommands.add("reload");
                 skillSubCommands.add("checkupdate");
                 skillSubCommands.add("upgrade");
+                skillSubCommands.add("list-remote");
+                skillSubCommands.add("install");
             }
             return skillSubCommands.stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
