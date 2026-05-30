@@ -25,6 +25,10 @@ public class ConfigManager {
     private static final String SKILL_REPO_BASE = "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/";
     private static final String SKILL_UPDATE_MIRROR = "https://ghproxy.vip/";
 
+    // 插件更新相关
+    private static final String PLUGIN_VERSION_API = "https://fancy-version.baicaizhale.top/api/plugin/latest";
+    private static final String PLUGIN_CDN_BASE = "https://fancy.baicaizhale.top/";
+
     public ConfigManager(FancyHelper plugin) {
         this.plugin = plugin;
         checkAndUpdateConfig();
@@ -354,6 +358,20 @@ public class ConfigManager {
      */
     public String getSkillPrimaryMirror() {
         return SKILL_PRIMARY_MIRROR;
+    }
+
+    /**
+     * 获取插件版本信息 API 地址
+     */
+    public String getPluginVersionApi() {
+        return PLUGIN_VERSION_API;
+    }
+
+    /**
+     * 获取插件 CDN 下载基地址
+     */
+    public String getPluginCdnBase() {
+        return PLUGIN_CDN_BASE;
     }
 
     /**

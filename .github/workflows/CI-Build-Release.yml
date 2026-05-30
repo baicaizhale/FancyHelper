@@ -212,6 +212,88 @@ jobs:
             fi
           done
 
+      - name: 上传版本信息到 Worker
+        env:
+          PLUGIN_UPLOAD_TOKEN: ${{ secrets.PLUGIN_UPLOAD_TOKEN }}
+          WORKER_VERSION_URL: ${{ secrets.WORKER_VERSION_URL }}
+        run: |
+          IS_RELEASE="${{ needs.build.outputs.IS_RELEASE }}"
+
+          for jar in artifacts/FancyHelper-*.jar; do
+            if [[ -f "$jar" ]]; then
+              FILENAME=$(basename "$jar")
+              VERSION="${FILENAME#FancyHelper-}"
+              VERSION="${VERSION%.jar}"
+              SHA256=$(sha256sum "$jar" | cut -d' ' -f1)
+
+              if [[ "$IS_RELEASE" == "true" ]]; then
+                UPLOAD_DIR="releases"
+              else
+                UPLOAD_DIR="snapshots"
+              fi
+              DOWNLOAD_URL="https://fancy.baicaizhale.top/download/${UPLOAD_DIR}/${FILENAME}"
+
+              echo "上传版本信息: ${VERSION} (${FILENAME})"
+
+              curl -s -X POST "${WORKER_VERSION_URL}/api/plugin/upload" \
+                -H "Authorization: Bearer ${PLUGIN_UPLOAD_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"version\": \"${VERSION}\",
+                  \"file_name\": \"${FILENAME}\",
+                  \"download_url\": \"${DOWNLOAD_URL}\",
+                  \"sha256\": \"${SHA256}\"
+                }"
+
+              echo ""
+              echo "版本信息已上传: ${VERSION}"
+              break
+            fi
+          done
+
+      - name: 上传 Release 版本信息（含更新日志）
+        if: needs.build.outputs.IS_RELEASE == 'true'
+        env:
+          PLUGIN_UPLOAD_TOKEN: ${{ secrets.PLUGIN_UPLOAD_TOKEN }}
+          WORKER_VERSION_URL: ${{ secrets.WORKER_VERSION_URL }}
+        run: |
+          for jar in artifacts/FancyHelper-*.jar; do
+            if [[ -f "$jar" ]]; then
+              FILENAME=$(basename "$jar")
+              VERSION="${FILENAME#FancyHelper-}"
+              VERSION="${VERSION%.jar}"
+              SHA256=$(sha256sum "$jar" | cut -d' ' -f1)
+              DOWNLOAD_URL="https://fancy.baicaizhale.top/download/releases/${FILENAME}"
+
+              CHANGELOG=$(curl -sL "https://api.github.com/repos/baicaizhale/FancyHelper/releases/tags/v${VERSION}" \
+                | jq -r '.body // empty' 2>/dev/null | head -c 5000 || echo "")
+
+              if [[ -z "$CHANGELOG" ]]; then
+                if [[ -f "release_body.md" ]]; then
+                  CHANGELOG=$(head -c 5000 release_body.md)
+                fi
+              fi
+
+              echo "上传 Release 版本信息（含更新日志）: ${VERSION}"
+
+              jq -n \
+                --arg version "$VERSION" \
+                --arg file_name "$FILENAME" \
+                --arg download_url "$DOWNLOAD_URL" \
+                --arg sha256 "$SHA256" \
+                --arg changelog "$CHANGELOG" \
+                '{version: $version, file_name: $file_name, download_url: $download_url, sha256: $sha256, changelog: $changelog}' \
+                | curl -s -X POST "${WORKER_VERSION_URL}/api/plugin/upload" \
+                  -H "Authorization: Bearer ${PLUGIN_UPLOAD_TOKEN}" \
+                  -H "Content-Type: application/json" \
+                  -d @-
+
+              echo ""
+              echo "Release 版本信息已上传: ${VERSION}"
+              break
+            fi
+          done
+
   # ==================== AI 生成发行注记 ====================
   # 需要配置 CLOUDFLARE_API_KEY 密钥，该密钥需要有 Workers AI 权限
   generate-overview:
