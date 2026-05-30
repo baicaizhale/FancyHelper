@@ -83,8 +83,12 @@ public class FileWatcherManager {
             if (!plugin.isEnabled()) return;
             switch (fileName) {
                 case "config.yml":
-                    plugin.getConfigManager().loadConfig();
-                    plugin.getLogger().info("检测到 config.yml 变动，已自动重载。");
+                    try {
+                        plugin.getConfigManager().loadConfig();
+                        plugin.getLogger().info("检测到 config.yml 变动，已自动重载。");
+                    } catch (Exception e) {
+                        plugin.getLogger().severe("重载 config.yml 时出错: " + e.getMessage());
+                    }
                     break;
                 case "playerdata.yml":
                     plugin.getConfigManager().loadPlayerData();

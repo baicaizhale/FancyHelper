@@ -784,27 +784,15 @@ public class ToolExecutor {
             newLines.add(lines.get(i));
         }
         
-        // 插入修改后的内容（保留缩进和注释）
+        // 插入修改后的内容（行内替换，保留行内其他部分）
         String[] replacementLines = replacement.split("\n");
         for (int j = 0; j < originalLineCount; j++) {
             String originalLine = lines.get(matchStartIndex + j);
             String newLine;
-            
+
             if (j < replacementLines.length) {
-                // 提取原始行的缩进和注释
-                String indent = extractIndent(originalLine);
-                String comment = extractComment(originalLine);
-                
-                int textEndPos = originalLine.indexOf('#');
-                if (textEndPos == -1) {
-                    textEndPos = originalLine.length();
-                }
-                
-                // 构建新行：缩进 + 新内容 + 注释
-                newLine = indent + replacementLines[j];
-                if (!comment.isEmpty()) {
-                    newLine += comment;
-                }
+                // 行内子串替换：将匹配到的内容替换为新内容，缩进和注释等其余部分自动保留
+                newLine = originalLine.replace(originalLines[j], replacementLines[j]);
             } else {
                 // 如果 replacement 行数少于 original 行数，保留原始行
                 newLine = originalLine;

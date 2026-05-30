@@ -349,20 +349,13 @@ public final class FancyHelper extends JavaPlugin {
             }
         }
         
-        // 如果检测到是 Spigot（非 Paper 及下游），显示警告并禁用自动升级
+        // 如果检测到是 Spigot（非 Paper 及下游），显示警告
         if (!isPaperOrFork && (lowerName.contains("spigot") || lowerName.contains("craftbukkit"))) {
             getLogger().warning("====================");
             getLogger().warning("您正在使用 Spigot 服务端，可能导致一些奇怪的问题。");
             getLogger().warning("您可以考虑转移到 Paper 服务端哦。");
             getLogger().warning("Paper 服务端地址: https://papermc.io/");
             getLogger().warning("====================");
-            
-            // 禁用自动升级功能（Spigot 服务端可能存在兼容性问题）
-            if (configManager.isAutoUpgrade()) {
-                getConfig().set("settings.auto_upgrade", false);
-                configManager.save();
-                getLogger().warning("已自动禁用自动升级功能（auto_upgrade = false），以避免潜在的兼容性问题。");
-            }
         }
     }
 

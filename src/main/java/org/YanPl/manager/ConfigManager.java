@@ -75,7 +75,13 @@ public class ConfigManager {
             return;
         }
 
-        FileConfiguration currentConfig = YamlConfiguration.loadConfiguration(configFile);
+        FileConfiguration currentConfig;
+        try {
+            currentConfig = YamlConfiguration.loadConfiguration(configFile);
+        } catch (Exception e) {
+            plugin.getLogger().severe("config.yml 格式错误，跳过版本检查: " + e.getMessage());
+            return;
+        }
         String configVersion = currentConfig.getString("version", "");
         String pluginVersion = plugin.getDescription().getVersion();
 
@@ -214,7 +220,17 @@ public class ConfigManager {
     public void loadConfig() {
         // 确保存在默认配置并读取
         plugin.saveDefaultConfig();
-        plugin.reloadConfig();
+        try {
+            plugin.reloadConfig();
+        } catch (Exception e) {
+            plugin.getLogger().severe("config.yml 格式错误，无法加载配置文件: " + e.getMessage());
+            if (config == null) {
+                // 首次加载失败时，回退到默认空配置
+                config = plugin.getConfig();
+            }
+            // 保留旧 config 对象不变，避免下游读取到空值产生误导性错误
+            return;
+        }
         this.config = plugin.getConfig();
 
         // 清理 config.yml 中可能存在的旧玩家数据（迁移到 playerdata.yml 后）
