@@ -212,7 +212,8 @@ jobs:
             fi
           done
 
-      - name: 上传版本信息到 Worker
+      - name: 上传版本信息到 Worker（仅正式版）
+        if: needs.build.outputs.IS_RELEASE == 'true'
         env:
           PLUGIN_UPLOAD_TOKEN: ${{ secrets.PLUGIN_UPLOAD_TOKEN }}
           WORKER_VERSION_URL: ${{ secrets.WORKER_VERSION_URL }}
@@ -236,44 +237,6 @@ jobs:
 
               echo ""
               echo "版本信息已上传: ${VERSION}"
-              break
-            fi
-          done
-
-      - name: 上传 Release 版本信息（含更新日志）
-        if: needs.build.outputs.IS_RELEASE == 'true'
-        env:
-          PLUGIN_UPLOAD_TOKEN: ${{ secrets.PLUGIN_UPLOAD_TOKEN }}
-          WORKER_VERSION_URL: ${{ secrets.WORKER_VERSION_URL }}
-        run: |
-          for jar in artifacts/FancyHelper-*.jar; do
-            if [[ -f "$jar" ]]; then
-              FILENAME=$(basename "$jar")
-              VERSION="${FILENAME#FancyHelper-}"
-              VERSION="${VERSION%.jar}"
-              SHA256=$(sha256sum "$jar" | cut -d' ' -f1)
-
-              CHANGELOG=$(curl -sL "https://api.github.com/repos/baicaizhale/FancyHelper/releases/tags/v${VERSION}" \
-                | jq -r '.body // empty' 2>/dev/null | head -c 5000 || echo "")
-
-              if [[ -z "$CHANGELOG" && -f "release_body.md" ]]; then
-                CHANGELOG=$(head -c 5000 release_body.md)
-              fi
-
-              echo "上传 Release 版本信息（含更新日志）: ${VERSION}"
-
-              jq -n \
-                --arg version "$VERSION" \
-                --arg sha256 "$SHA256" \
-                --arg changelog "$CHANGELOG" \
-                '{version: $version, sha256: $sha256, changelog: $changelog}' \
-                | curl -s -X POST "${WORKER_VERSION_URL}/api/plugin/upload" \
-                  -H "Authorization: Bearer ${PLUGIN_UPLOAD_TOKEN}" \
-                  -H "Content-Type: application/json" \
-                  -d @-
-
-              echo ""
-              echo "Release 版本信息已上传: ${VERSION}"
               break
             fi
           done
