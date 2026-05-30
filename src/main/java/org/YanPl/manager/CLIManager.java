@@ -572,7 +572,7 @@ public class CLIManager {
                             }
                             net.md_5.bungee.api.ChatColor starColor = net.md_5.bungee.api.ChatColor.of(BREATHING_HEX[phaseIdx]);
 
-                            // 2. 随机词（每 7 秒切换）
+                            // 2. 随机词 + 打字机效果（每 7 秒切换新词，逐字揭示）
                             Long wordStart = wordStartTimes.get(uuid);
                             String word = currentThinkingWords.get(uuid);
                             if (wordStart == null || word == null || now - wordStart > 7000) {
@@ -580,6 +580,16 @@ public class CLIManager {
                                 currentThinkingWords.put(uuid, word);
                                 wordStartTimes.put(uuid, now);
                             }
+
+                            // 打字机缓动效果 — ease-out cubic，先快后慢，约 3.5s 打完
+                            long wordElapsed = now - wordStart;
+                            double typeDuration = 2000.0;
+                            double progress = Math.min(wordElapsed / typeDuration, 1.0);
+                            double eased = 1 - Math.pow(1 - progress, 3);
+                            int revealIdx = Math.max(1, Math.min((int) Math.round(eased * word.length()), word.length()));
+                            String typewriterWord = word.substring(0, revealIdx);
+                            boolean isFullyRevealed = revealIdx >= word.length();
+                            String suffix = isFullyRevealed ? "... " : "_ ";
 
                             // 3. Token 统计（仅本轮输出，含实时流式累计）
                             DialogueSession session = sessions.get(uuid);
@@ -595,7 +605,7 @@ public class CLIManager {
                             // ActionBar: TextComponent.setColor() 直接用 hex
                             TextComponent comp = new TextComponent(BREATHING_SYMBOLS[phaseIdx] + " ");
                             comp.setColor(starColor);
-                            TextComponent wordComp = new TextComponent(word + "... ");
+                            TextComponent wordComp = new TextComponent(typewriterWord + suffix);
                             wordComp.setColor(WORD_COLOR_BUNGEE);
                             comp.addExtra(wordComp);
                             TextComponent statsComp = new TextComponent(statsSuffix);
@@ -603,7 +613,7 @@ public class CLIManager {
                             comp.addExtra(statsComp);
 
                             // Subtitle: ChatColor.of(hex) + 字符串，其 toString() 产出 §x§R§G§B 格式，sendTitle 无 bug
-                            String subtitleMsg = starColor + BREATHING_SYMBOLS[phaseIdx] + " " + WORD_COLOR_BUNGEE + word + "... "
+                            String subtitleMsg = starColor + BREATHING_SYMBOLS[phaseIdx] + " " + WORD_COLOR_BUNGEE + typewriterWord + suffix
                                 + STATS_COLOR + statsSuffix;
 
                             sendStatusMessage(player, comp, subtitleMsg);
