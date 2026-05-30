@@ -127,3 +127,18 @@ notice:
   show_on_join: true
   # 每隔多久从服务器拉取公告（单位：分钟），默认 5 分钟
   refresh_interval: 5
+
+# 声音反馈配置
+sounds:
+  # 全局开关，设为 false 则所有声音反馈都不播放
+  enabled: true
+  # AI 回复完成时的音效
+  ai_complete: "block.note_block.hat"
+  # AI 调用出错时的音效
+  ai_error: "block.note_block.bass"
+  # 进入 CLI 模式时的音效
+  cli_enter: "block.note_block.chime"
+  # 退出 CLI 模式时的音效
+  cli_exit: "block.note_block.bell"
+  # 玩家发送消息时的音效
+  user_input: "block.wooden_button.click_on"

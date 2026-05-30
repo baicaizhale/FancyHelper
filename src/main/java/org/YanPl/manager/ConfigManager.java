@@ -614,6 +614,41 @@ public class ConfigManager {
         savePlayerData();
     }
 
+    // ========== 声音反馈配置 ==========
+
+    public boolean isSoundEnabled() {
+        return config.getBoolean("sounds.enabled", true);
+    }
+
+    public String getSoundAiComplete() {
+        return config.getString("sounds.ai_complete", "block.note_block.hat");
+    }
+
+    public String getSoundAiError() {
+        return config.getString("sounds.ai_error", "block.note_block.bass");
+    }
+
+    public String getSoundCliEnter() {
+        return config.getString("sounds.cli_enter", "block.note_block.chime");
+    }
+
+    public String getSoundCliExit() {
+        return config.getString("sounds.cli_exit", "block.note_block.bell");
+    }
+
+    public String getSoundUserInput() {
+        return config.getString("sounds.user_input", "block.wooden_button.click_on");
+    }
+
+    public boolean isPlayerSoundDisabled(java.util.UUID uuid) {
+        return playerData.getBoolean("sound_disabled." + uuid.toString(), false);
+    }
+
+    public void setPlayerSoundDisabled(java.util.UUID uuid, boolean disabled) {
+        playerData.set("sound_disabled." + uuid.toString(), disabled);
+        savePlayerData();
+    }
+
     public void save() {
         try {
             config.save(new File(plugin.getDataFolder(), "config.yml"));

@@ -128,6 +128,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 Player player = (Player) sender;
                 return handlePlayerSubCommand(player, subCommand, args);
+            case "sound":
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    return true;
+                }
+                player = (Player) sender;
+                return handlePlayerSubCommand(player, subCommand, args);
             case "skill":
                 if (!sender.hasPermission("fancyhelper.skill.use")) {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限使用 Skill 命令。"));
@@ -175,6 +182,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli exit §f: 退出 CLI 模式");
         sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
         sender.sendMessage(" §7- §b/cli streaming §f: 切换流式输出开关");
+        sender.sendMessage(" §7- §b/cli sound §f: 切换声音反馈开关");
         sender.sendMessage(" §7- §b/cli skill §f: Skill 管理命令");
         sender.sendMessage(" §7  §b/cli skill list §f: 列出所有 Skill");
         sender.sendMessage(" §7  §b/cli skill info <id> §f: 查看 Skill 详情");
@@ -313,6 +321,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "compress":
                 plugin.getCliManager().compressContext(player, args.length > 1 ? args[1] : null);
+                return true;
+            case "sound":
+                boolean disabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
+                plugin.getConfigManager().setPlayerSoundDisabled(player.getUniqueId(), !disabled);
+                player.sendMessage(ChatColor.GREEN + "声音反馈已" + (disabled ? "开启" : "关闭"));
                 return true;
         }
         return true;
@@ -1152,7 +1165,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
-                "stop", "exit", "download", "help", "lib", "compress", "skill"
+                "stop", "exit", "download", "help", "lib", "compress", "skill", "sound"
             ));
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
