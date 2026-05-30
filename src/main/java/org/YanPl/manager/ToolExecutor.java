@@ -1838,37 +1838,6 @@ public class ToolExecutor {
     }
 
     /**
-     * 提取行的缩进（前导空格和制表符）
-     * @param line 原始行
-     * @return 缩进字符串
-     */
-    private String extractIndent(String line) {
-        StringBuilder indent = new StringBuilder();
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            if (c == ' ' || c == '\t') {
-                indent.append(c);
-            } else {
-                break;
-            }
-        }
-        return indent.toString();
-    }
-
-    /**
-     * 提取行的注释（# 及其后的内容）
-     * @param line 原始行
-     * @return 注释字符串（包括 #），如果没有注释则返回空字符串
-     */
-    private String extractComment(String line) {
-        int commentIndex = line.indexOf('#');
-        if (commentIndex != -1) {
-            return line.substring(commentIndex);
-        }
-        return "";
-    }
-
-    /**
      * 去掉行号前缀（格式：数字: ）
      * @param line 带行号的行，如 "94: enabled: true"
      * @return 去掉行号后的行，如 "enabled: true"
