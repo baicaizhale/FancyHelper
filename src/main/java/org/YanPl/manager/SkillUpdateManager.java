@@ -135,6 +135,72 @@ public class SkillUpdateManager implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> doDownload(sender));
     }
 
+    // ==================== 远程技能浏览与安装 ====================
+
+    /**
+     * 获取远程仓库中本地未安装的 Skill 列表
+     * @return skillId -> version 的 Map
+     */
+    public Map<String, String> listRemoteSkills() {
+        Map<String, String> available = new LinkedHashMap<>();
+        try {
+            JsonObject manifest = fetchManifest();
+            if (manifest == null || !manifest.has("skills")) return available;
+
+            JsonObject skillsObj = manifest.getAsJsonObject("skills");
+            for (Map.Entry<String, JsonElement> entry : skillsObj.entrySet()) {
+                String id = entry.getKey();
+                if (!skillManager.hasSkill(id)) {
+                    JsonObject remoteSkill = entry.getValue().getAsJsonObject();
+                    String version = getJsonString(remoteSkill, "version");
+                    available.put(id, version != null ? version : "1.0.0");
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "[SkillUpdate] 获取远程列表失败", e);
+        }
+        return available;
+    }
+
+    /**
+     * 从远程安装指定 Skill
+     * @param skillId 要安装的 Skill ID
+     * @param sender 接收通知的玩家，可为 null
+     * @return 是否安装成功
+     */
+    public boolean installSkill(String skillId, Player sender) {
+        if (skillManager.hasSkill(skillId)) {
+            notify(sender, "§eSkill §b" + skillId + " §e已安装，无需重复安装");
+            return false;
+        }
+
+        JsonObject manifest = fetchManifest();
+        if (manifest == null || !manifest.has("skills")) {
+            notify(sender, "§c无法获取远程 Skill 清单");
+            return false;
+        }
+
+        JsonObject skillsObj = manifest.getAsJsonObject("skills");
+        if (!skillsObj.has(skillId)) {
+            notify(sender, "§c远程仓库中不存在 Skill: " + skillId);
+            return false;
+        }
+
+        String remoteVersion = getJsonString(skillsObj.getAsJsonObject(skillId), "version");
+        notify(sender, "§f正在安装 §b" + skillId + " §fv" + (remoteVersion != null ? remoteVersion : "?") + "§f...");
+
+        boolean success = downloadSkillFile(skillId);
+        if (success) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                skillManager.reloadSkills();
+                notify(sender, "§aSkill §b" + skillId + " §a安装成功！");
+            });
+        } else {
+            notify(sender, "§cSkill §b" + skillId + " §c安装失败");
+        }
+        return success;
+    }
+
     // ==================== 核心逻辑 ====================
 
     /**
@@ -180,16 +246,6 @@ public class SkillUpdateManager implements Listener {
                     pendingUpdates.put(id, remoteVersion);
                 }
                 checkedCount++;
-            }
-
-            // 本地没有但远端有的技能（新技能）
-            for (Map.Entry<String, JsonElement> entry : skillsObj.entrySet()) {
-                String id = entry.getKey();
-                if (!skillManager.hasSkill(id)) {
-                    JsonObject remoteSkill = entry.getValue().getAsJsonObject();
-                    String remoteVersion = getJsonString(remoteSkill, "version");
-                    pendingUpdates.put(id, remoteVersion != null ? remoteVersion : "1.0.0");
-                }
             }
 
             hasUpdates = !pendingUpdates.isEmpty();
@@ -306,6 +362,18 @@ public class SkillUpdateManager implements Listener {
     }
 
     // ==================== 工具方法 ====================
+
+    /**
+     * 获取并解析远程 manifest.json
+     */
+    private JsonObject fetchManifest() {
+        String body = fetchWithFallback(
+                getPrimaryUrl("manifest.json"),
+                getMirrorUrl("manifest.json"),
+                getDirectUrl("manifest.json"));
+        if (body == null) return null;
+        return JsonParser.parseString(body).getAsJsonObject();
+    }
 
     private void notify(Player player, String text) {
         if (player != null) {
