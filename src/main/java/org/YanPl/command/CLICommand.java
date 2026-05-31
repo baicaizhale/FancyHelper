@@ -275,7 +275,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "streaming":
                 boolean currentStreaming = plugin.getConfigManager().isPlayerStreamingEnabled(player);
                 plugin.getConfigManager().setPlayerStreamingEnabled(player, !currentStreaming);
-                player.sendMessage(ChatColor.GREEN + "流式输出已" + (!currentStreaming ? "开启" : "关闭"));
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f流式输出已" + (!currentStreaming ? "开启" : "关闭")));
                 handleSettings(player);
                 return true;
             case "select":
@@ -325,7 +325,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "sound":
                 boolean disabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
                 plugin.getConfigManager().setPlayerSoundDisabled(player.getUniqueId(), !disabled);
-                player.sendMessage(ChatColor.GREEN + "声音反馈已" + (disabled ? "开启" : "关闭"));
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f声音反馈已" + (disabled ? "开启" : "关闭")));
+                handleSettings(player);
                 return true;
         }
         return true;
@@ -502,7 +503,21 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         player.sendMessage("");
 
-        // 4. Management Buttons
+        // 5. Sound Toggle
+        boolean soundDisabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
+        TextComponent soundLine = new TextComponent(ColorUtil.translateCustomColors("&7  Sound: "));
+        TextComponent soundVal = new TextComponent(ColorUtil.translateCustomColors(soundDisabled ? "&cDisabled" : "&aEnabled"));
+        soundLine.addExtra(soundVal);
+        soundLine.addExtra("  ");
+        TextComponent soundBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Toggle &8]"));
+        soundBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli sound"));
+        soundBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换声音反馈")));
+        soundLine.addExtra(soundBtn);
+        player.spigot().sendMessage(soundLine);
+
+        player.sendMessage("");
+
+        // 6. Management Buttons
         TextComponent toolsLine = new TextComponent("  ");
         
         TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6Tools &8]"));
