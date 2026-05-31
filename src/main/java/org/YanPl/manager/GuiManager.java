@@ -119,8 +119,11 @@ public class GuiManager implements Listener {
 
         // 4. 状态显示位置 (ActionBar/Subtitle)
         updateDisplayPosItem(inv, player);
-        
-        // 5. 关闭按钮
+
+        // 5. 声音开关
+        updateSoundItem(inv, player);
+
+        // 6. 关闭按钮
         ItemStack closeItem = createItem(Material.BARRIER, ColorUtil.translateCustomColors("&c&l关闭菜单"), 
                 ColorUtil.translateCustomColors("&7点击关闭此菜单"));
         inv.setItem(26, closeItem);
@@ -193,6 +196,27 @@ public class GuiManager implements Listener {
         inv.setItem(16, item);
     }
 
+    private void updateSoundItem(Inventory inv, Player player) {
+        boolean disabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
+        ItemStack item;
+        if (disabled) {
+            item = createItem(Material.GRAY_DYE, ColorUtil.translateCustomColors("&7&l声音反馈: 关闭"),
+                    ColorUtil.translateCustomColors("&8&m------------------------"),
+                    ColorUtil.translateCustomColors("&7当前声音反馈已 &c关闭"),
+                    "",
+                    ColorUtil.translateCustomColors("&e▸ 点击开启声音反馈"),
+                    ColorUtil.translateCustomColors("&8&m------------------------"));
+        } else {
+            item = createItem(Material.LIME_DYE, ColorUtil.translateCustomColors("&a&l声音反馈: 开启"),
+                    ColorUtil.translateCustomColors("&8&m------------------------"),
+                    ColorUtil.translateCustomColors("&7当前声音反馈已 &a开启"),
+                    "",
+                    ColorUtil.translateCustomColors("&e▸ 点击关闭声音反馈"),
+                    ColorUtil.translateCustomColors("&8&m------------------------"));
+        }
+        inv.setItem(18, item);
+    }
+
     private ItemStack createItem(Material material, String name, String... lore) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
@@ -261,6 +285,12 @@ public class GuiManager implements Listener {
             player.performCommand("cli display");
             // 刷新图标
             updateDisplayPosItem(event.getClickedInventory(), player);
+            player.playSound(player.getLocation(), "ui.button.click", 1, 1);
+        }
+        // 声音开关
+        else if (slot == 18) {
+            player.performCommand("cli sound");
+            updateSoundItem(event.getClickedInventory(), player);
             player.playSound(player.getLocation(), "ui.button.click", 1, 1);
         }
         // 关闭

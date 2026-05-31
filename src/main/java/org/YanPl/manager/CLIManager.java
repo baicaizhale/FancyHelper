@@ -1074,6 +1074,7 @@ public class CLIManager {
         if (session != null) {
             sessions.put(uuid, session);
         }
+        playFeedbackSound(player, "cli_enter");
     }
 
     /**
@@ -1186,7 +1187,8 @@ public class CLIManager {
         }
 
         sendExitMessage(player);
-        
+        playFeedbackSound(player, "cli_exit");
+
         // 保存会话历史 - 仅在插件卸载时保存
         // DialogueSession session = sessions.get(uuid);
         // if (session != null) {
@@ -2408,6 +2410,7 @@ public class CLIManager {
                     }
                     streamedOutputTokens.remove(uuid);
                     checkTokenWarning(player, session);
+                    playFeedbackSound(player, "ai_complete");
                 }
             });
         });
@@ -2434,9 +2437,10 @@ public class CLIManager {
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.ERROR);
                 generationStartTimes.remove(uuid);
+                playFeedbackSound(player, "ai_error");
             });
         });
-        
+
         // 估算本轮输入的 prompt tokens 并记入 session
         String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode());
         String modelName = plugin.getConfigManager().getCloudflareModel();
@@ -2497,6 +2501,7 @@ public class CLIManager {
                 } else {
                     checkTokenWarning(player, session);
                 }
+                playFeedbackSound(player, "ai_complete");
             });
         }
     }
@@ -2506,10 +2511,11 @@ public class CLIManager {
         String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills,
                 nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL);
         AIResponse response = ai.chat(sessions.get(player.getUniqueId()), systemPrompt);
-        
+
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
             handleAIResponse(player, response);
+            playFeedbackSound(player, "ai_complete");
         });
     }
 
@@ -2534,6 +2540,7 @@ public class CLIManager {
 
         TextComponent playerMsg = new TextComponent(ChatColor.GRAY + "◇ " + message);
         player.spigot().sendMessage(playerMsg);
+        playFeedbackSound(player, "user_input");
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + calculateTotalEstimatedTokens(player, session));
@@ -2614,6 +2621,7 @@ public class CLIManager {
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
+                    playFeedbackSound(player, "ai_error");
                     // 立即清除动作栏
                     player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                     // 移除导致失败的消息，防止污染后续对话
@@ -2644,6 +2652,7 @@ public class CLIManager {
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
+                    playFeedbackSound(player, "ai_error");
                     // 立即清除动作栏
                     player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                     // 移除导致失败的消息，防止污染后续对话
@@ -3342,6 +3351,7 @@ public class CLIManager {
                             AIResponse response = new AIResponse(completeText,
                                 (thought != null && !thought.isEmpty()) ? thought : null);
                             handleAIResponse(player, response, true);
+                            playFeedbackSound(player, "ai_complete");
                         });
                     });
 
@@ -3366,6 +3376,7 @@ public class CLIManager {
                             isGenerating.put(uuid, false);
                             generationStates.put(uuid, GenerationStatus.ERROR);
                             generationStartTimes.remove(uuid);
+                            playFeedbackSound(player, "ai_error");
                             player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                         });
                     });
@@ -3393,7 +3404,10 @@ public class CLIManager {
                         AIResponse response = new AIResponse(completeText,
                             (thought != null && !thought.isEmpty()) ? thought : null);
                         if (!plugin.isEnabled()) return;
-                        Bukkit.getScheduler().runTask(plugin, () -> handleAIResponse(player, response, true));
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            handleAIResponse(player, response, true);
+                            playFeedbackSound(player, "ai_complete");
+                        });
                     }
                 } else {
                     AIResponse response = ai.chat(session, systemPrompt);
@@ -3401,6 +3415,7 @@ public class CLIManager {
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         handleAIResponse(player, response);
+                        playFeedbackSound(player, "ai_complete");
                     });
                 }
             } catch (IOException e) {
@@ -3434,6 +3449,7 @@ public class CLIManager {
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
+                    playFeedbackSound(player, "ai_error");
                     // 立即清除动作栏
                     player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                     // 移除导致失败的消息，防止污染后续对话
@@ -3463,6 +3479,7 @@ public class CLIManager {
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
+                    playFeedbackSound(player, "ai_error");
                     // 立即清除动作栏
                     player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
                     // 移除导致失败的消息，防止污染后续对话
@@ -3686,6 +3703,23 @@ public class CLIManager {
      * 流式输出时，裁掉末尾未闭合的 Markdown 格式标记，
      * 防止 ** 等标记在闭合前就泄露给玩家。
      */
+    private void playFeedbackSound(Player player, String soundKey) {
+        if (!plugin.getConfigManager().isSoundEnabled()) return;
+        if (plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId())) return;
+        String sound;
+        switch (soundKey) {
+            case "ai_complete": sound = plugin.getConfigManager().getSoundAiComplete(); break;
+            case "ai_error": sound = plugin.getConfigManager().getSoundAiError(); break;
+            case "cli_enter": sound = plugin.getConfigManager().getSoundCliEnter(); break;
+            case "cli_exit": sound = plugin.getConfigManager().getSoundCliExit(); break;
+            case "user_input": sound = plugin.getConfigManager().getSoundUserInput(); break;
+            default: return;
+        }
+        if (sound != null && !sound.isEmpty() && !sound.equalsIgnoreCase("none")) {
+            player.playSound(player.getLocation(), sound, 0.5f, 1.0f);
+        }
+    }
+
     private String stripIncompleteFormatting(String text) {
         if (text == null || text.isEmpty()) return text;
         // 统计 ** 出现次数，奇数表示最后一个 ** 未闭合
