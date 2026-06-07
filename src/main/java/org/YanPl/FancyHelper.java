@@ -8,6 +8,7 @@ import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
 import org.YanPl.manager.PacketCaptureManager;
 import org.YanPl.manager.VerificationManager;
+import org.YanPl.mcp.McpManager;
 import org.YanPl.manager.EulaManager;
 import org.YanPl.manager.UpdateManager;
 import org.YanPl.manager.WorkspaceIndexer;
@@ -58,6 +59,7 @@ public final class FancyHelper extends JavaPlugin {
     private SkillManager skillManager;
     private SkillUpdateManager skillUpdateManager;
     private StatsManager statsManager;
+    private McpManager mcpManager;
 
     @Override
     public void onEnable() {
@@ -132,6 +134,10 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化 Metaso API
             metasoAPI = new MetasoAPI(this);
+
+            // 初始化 MCP 管理器
+            mcpManager = new McpManager(this);
+            mcpManager.initialize();
 
             CLICommand cliCommand = new CLICommand(this);
             PluginCommand command = getCommand("fancyhelper");
@@ -405,6 +411,11 @@ public final class FancyHelper extends JavaPlugin {
             instructionManager.shutdown();
         }
 
+        // 关闭 MCP 管理器
+        if (mcpManager != null) {
+            mcpManager.shutdown();
+        }
+
         // 保存统计数据
         if (statsManager != null) {
             statsManager.save();
@@ -490,6 +501,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public StatsManager getStatsManager() {
         return statsManager;
+    }
+
+    public McpManager getMcpManager() {
+        return mcpManager;
     }
 
     /**
