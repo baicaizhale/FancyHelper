@@ -649,6 +649,37 @@ public class ConfigManager {
         savePlayerData();
     }
 
+    // ========== MCP Client 配置 ==========
+
+    public boolean isMcpClientEnabled() {
+        return config.getBoolean("mcp.client.enabled", false);
+    }
+
+    public int getMcpClientCallTimeout() {
+        return config.getInt("mcp.client.call_timeout", 30);
+    }
+
+    public int getMcpClientConnectTimeout() {
+        return config.getInt("mcp.client.connect_timeout", 10);
+    }
+
+    public int getMcpClientReconnectInterval() {
+        return config.getInt("mcp.client.reconnect_interval", 5);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<?, ?>> getMcpClientServers() {
+        List<?> list = config.getList("mcp.client.servers");
+        if (list == null) return null;
+        List<Map<?, ?>> result = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map) {
+                result.add((Map<?, ?>) item);
+            }
+        }
+        return result;
+    }
+
     public void save() {
         try {
             config.save(new File(plugin.getDataFolder(), "config.yml"));

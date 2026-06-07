@@ -206,6 +206,15 @@ public class PromptManager {
         sb.append("    After #todo: end the response immediately. No other tools in the same response.\n");
         sb.append("    Example: #todo: [{\"id\":\"1\",\"task\":\"Create config\",\"status\":\"in_progress\"}]\n\n");
 
+        // 【MCP 外部工具】仅当全局启用时显示，全服一致不破坏缓存
+        if (plugin.getConfigManager().isMcpClientEnabled()) {
+            sb.append("[MCP External Tools]\n");
+            sb.append("  #mcp_tools                         - List all MCP external tools and their enable/disable status.\n");
+            sb.append("  #mcp: serverName.toolName|jsonArgs - Call an external MCP tool.\n");
+            sb.append("    Format: #mcp: server.tool|{\"arg1\":\"value1\"}\n");
+            sb.append("    Always use #mcp_tools first to check available tools and their status.\n\n");
+        }
+
         // ==================== Usage Guide / 使用指南 ====================
         // 【使用指南】核心操作流程，精简为 3 条原则
         sb.append("[Usage Guide]\n");
