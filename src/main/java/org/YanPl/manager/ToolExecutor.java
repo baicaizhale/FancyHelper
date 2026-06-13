@@ -8,6 +8,8 @@ import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.mcp.client.McpClientManager;
+import org.YanPl.mcp.core.McpTypes;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -146,7 +148,15 @@ public class ToolExecutor {
             case "#webread":
                 handleWebReaderTool(player, args, session);
                 break;
-            
+
+            // MCP 外部工具
+            case "#mcp_tools":
+                handleMcpToolsList(player);
+                break;
+            case "#mcp":
+                success = handleMcpTool(player, args, session);
+                break;
+
             default:
                 player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
                 String error = "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。";
@@ -236,7 +246,8 @@ public class ToolExecutor {
         } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") &&
             !lowerToolName.equals("#end") && !lowerToolName.equals("#list") &&
             !lowerToolName.equals("#read") && !lowerToolName.equals("#todo") &&
-            !lowerToolName.equals("#webread")) {
+            !lowerToolName.equals("#webread") && !lowerToolName.equals("#mcp") &&
+            !lowerToolName.equals("#mcp_tools")) {
             // 对 #webread 隐藏此显示，因为 #webread 会在 executeWebReader 中显示更详细的信息
             player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         }
@@ -1828,9 +1839,139 @@ public class ToolExecutor {
         String lower = toolName.toLowerCase().trim();
         return switch (lower) {
             case "#start", "#search", "#skill", "#unloadskill", "#webread",
-                 "#list", "#read", "#todo", "#ask", "#end", "#exit" -> true;
+                 "#list", "#read", "#todo", "#ask", "#end", "#exit",
+                 "#mcp_tools" -> true;
             default -> false;
         };
+    }
+
+    /**
+     * 处理 #mcp_tools — 列出所有 MCP 外部工具及其状态
+     */
+    private void handleMcpToolsList(Player player) {
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
+            cliManager.feedbackToAI(player, "#mcp_tools_result: MCP Client 未启用。请在 config.yml 中配置并启用 mcp.client。");
+            return;
+        }
+
+        List<McpClientManager.ExternalToolInfo> allTools = plugin.getMcpManager().getAllToolsWithState();
+
+        StringBuilder sb = new StringBuilder("[MCP Tools Status]\n\n");
+        if (allTools.isEmpty()) {
+            sb.append("没有配置的 MCP 服务器。\n");
+        } else {
+            Map<String, List<McpClientManager.ExternalToolInfo>> grouped = new java.util.LinkedHashMap<>();
+            for (McpClientManager.ExternalToolInfo info : allTools) {
+                grouped.computeIfAbsent(info.serverName, k -> new java.util.ArrayList<>()).add(info);
+            }
+
+            for (Map.Entry<String, List<McpClientManager.ExternalToolInfo>> entry : grouped.entrySet()) {
+                String serverName = entry.getKey();
+                List<McpClientManager.ExternalToolInfo> tools = entry.getValue();
+                McpClientManager.ExternalToolInfo first = tools.get(0);
+
+                if (!first.serverConnected) {
+                    sb.append(serverName).append(" (未连接)\n");
+                    continue;
+                }
+                sb.append(serverName).append(" (已连接):\n");
+
+                for (McpClientManager.ExternalToolInfo info : tools) {
+                    if (info.tool == null) continue;
+                    String icon = info.enabled ? "☑" : "☐";
+                    String desc = info.tool.description != null && !info.tool.description.isEmpty()
+                        ? " - " + info.tool.description : "";
+                    String disabled = info.enabled ? "" : " (已禁用)";
+                    sb.append("  ").append(icon).append(" ").append(info.tool.name).append(desc).append(disabled).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+        sb.append("Format: #mcp: serverName.toolName|{\"arg1\":\"value1\"}");
+
+        cliManager.feedbackToAI(player, "#mcp_tools_result: " + sb.toString());
+    }
+
+    /**
+     * 处理 #mcp — 调用外部 MCP 工具
+     * 格式: #mcp: serverName.toolName|{"arg1":"value1"}
+     */
+    private boolean handleMcpTool(Player player, String args, DialogueSession session) {
+        if (args == null || args.isEmpty()) {
+            cliManager.feedbackToAI(player, "#mcp_error: 需要指定工具名和参数，格式: #mcp: serverName.toolName|{\"arg1\":\"value1\"}");
+            return false;
+        }
+
+        if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
+            cliManager.feedbackToAI(player, "#mcp_error: MCP Client 未启用");
+            return false;
+        }
+
+        // 解析 serverName.toolName|jsonArgs
+        String toolPart;
+        String jsonArgs = "{}";
+        int pipeIdx = args.indexOf('|');
+        if (pipeIdx > 0) {
+            toolPart = args.substring(0, pipeIdx).trim();
+            jsonArgs = args.substring(pipeIdx + 1).trim();
+        } else {
+            toolPart = args.trim();
+        }
+
+        int dotIdx = toolPart.indexOf('.');
+        if (dotIdx <= 0) {
+            cliManager.feedbackToAI(player, "#mcp_error: 工具名格式错误，应为 serverName.toolName");
+            return false;
+        }
+
+        String serverName = toolPart.substring(0, dotIdx).trim();
+        String toolName = toolPart.substring(dotIdx + 1).trim();
+
+        player.sendMessage(ChatColor.GRAY + "⨁ MCP: " + serverName + "." + toolName);
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        // 解析 JSON 参数
+        com.google.gson.JsonObject arguments;
+        try {
+            arguments = gson.fromJson(jsonArgs, com.google.gson.JsonObject.class);
+            if (arguments == null) arguments = new com.google.gson.JsonObject();
+        } catch (Exception e) {
+            arguments = new com.google.gson.JsonObject();
+        }
+
+        // 检查是否被禁用
+        if (!plugin.getMcpManager().isToolEnabled(serverName, toolName)) {
+            cliManager.feedbackToAI(player, "#mcp_error: 工具 " + serverName + "." + toolName
+                    + " 已被管理员禁用。可用 #mcp_tools 查看所有可用 MCP 工具。");
+            return false;
+        }
+
+        final String fServerName = serverName;
+        final String fToolName = toolName;
+        final com.google.gson.JsonObject fArguments = arguments;
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            McpTypes.McpToolCallResult result = plugin.getMcpManager().callExternalTool(fServerName, fToolName, fArguments);
+
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (result == null) {
+                    cliManager.feedbackToAI(player, "#mcp_result: MCP 服务器无响应");
+                } else if (result.isError) {
+                    String errText = result.content != null && !result.content.isEmpty()
+                        ? result.content.get(0).text : "未知错误";
+                    cliManager.feedbackToAI(player, "#mcp_error: " + errText);
+                } else {
+                    String text = result.content != null && !result.content.isEmpty()
+                        ? result.content.get(0).text : "(空结果)";
+                    cliManager.feedbackToAI(player, "#mcp_result: " + text);
+                }
+                player.sendMessage(ChatColor.GRAY + "⇒ MCP 反馈已发送至 Fancy");
+            });
+        });
+        return true;
     }
 
     /**

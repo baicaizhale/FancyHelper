@@ -141,6 +141,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 return handleSkillCommand(sender, args);
+            case "mcp":
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+                    return true;
+                }
+                return handleMcpCommand((Player) sender, args);
             case "help":
                 sendHelp(sender);
                 return true;
@@ -187,6 +193,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7  §b/cli skill list §f: 列出所有 Skill");
         sender.sendMessage(" §7  §b/cli skill info <id> §f: 查看 Skill 详情");
         sender.sendMessage(" §7  §b/cli skill load <id> §f: 加载 Skill 到当前对话");
+        sender.sendMessage(" §7- §b/cli mcp tools §f: 查看 MCP 外部工具");
+        sender.sendMessage(" §7  §b/cli mcp tools <server> §f: 查看指定服务器的工具");
+        sender.sendMessage(" §7  §b/cli mcp toggle <server> <tool> §f: 切换工具启用/禁用");
     }
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
@@ -1001,6 +1010,165 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         });
     }
 
+    // ============================================================
+    //  MCP 子命令
+    // ============================================================
+
+    private boolean handleMcpCommand(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP 管理命令:"));
+            player.sendMessage(" §7- §b/cli mcp tools §f: 查看 MCP 外部工具");
+            player.sendMessage(" §7- §b/cli mcp tools <server> §f: 查看指定服务器的工具");
+            player.sendMessage(" §7- §b/cli mcp toggle <server> <tool> §f: 切换工具启用/禁用");
+            return true;
+        }
+
+        String subCommand = args[1].toLowerCase();
+        switch (subCommand) {
+            case "tools":
+                if (args.length >= 3) {
+                    handleMcpServerTools(player, args[2]);
+                } else {
+                    handleMcpToolsOverview(player);
+                }
+                break;
+            case "toggle":
+                if (args.length < 4) {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c用法: /cli mcp toggle <server> <tool>"));
+                } else {
+                    handleMcpToggle(player, args[2], args[3]);
+                }
+                break;
+            default:
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知 MCP 子命令: " + subCommand));
+                break;
+        }
+        return true;
+    }
+
+    private void handleMcpToolsOverview(Player player) {
+        if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Client 未启用。请先在 config.yml 中配置并启用 mcp.client。"));
+            return;
+        }
+
+        List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo> allTools = plugin.getMcpManager().getAllToolsWithState();
+
+        player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━ MCP 工具管理 ━━━━━━━━");
+
+        if (allTools.isEmpty()) {
+            player.sendMessage(ChatColor.GRAY + "  没有配置的 MCP 服务器或工具。");
+        } else {
+            // 按 serverName 分组
+            Map<String, List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo>> grouped = new java.util.LinkedHashMap<>();
+            for (org.YanPl.mcp.client.McpClientManager.ExternalToolInfo info : allTools) {
+                grouped.computeIfAbsent(info.serverName, k -> new java.util.ArrayList<>()).add(info);
+            }
+
+            for (Map.Entry<String, List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo>> entry : grouped.entrySet()) {
+                String serverName = entry.getKey();
+                List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo> tools = entry.getValue();
+
+                org.YanPl.mcp.client.McpClientManager.ExternalToolInfo first = tools.get(0);
+                String status;
+                if (!first.serverConnected) {
+                    status = ChatColor.RED + "(未连接)";
+                } else if (tools.isEmpty() || (tools.size() == 1 && first.tool == null)) {
+                    status = ChatColor.YELLOW + "(已连接，无工具)";
+                } else {
+                    long enabledCount = tools.stream().filter(t -> t.enabled).count();
+                    status = ChatColor.GREEN + "(已连接, 已启用 " + enabledCount + "/" + tools.size() + ")";
+                }
+
+                TextComponent line = new TextComponent("  " + ChatColor.WHITE + serverName + " " + status + "  ");
+                String colorHex = ColorUtil.getColorZ();
+                TextComponent viewBtn = new TextComponent("[查看工具]");
+                viewBtn.setColor(net.md_5.bungee.api.ChatColor.of(colorHex));
+                viewBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli mcp tools " + serverName));
+                viewBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "查看 " + serverName + " 的工具列表")));
+                line.addExtra(viewBtn);
+                player.spigot().sendMessage(line);
+            }
+        }
+
+        player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        player.sendMessage(ChatColor.GRAY + "提示: /cli mcp toggle <server> <tool> 快速切换");
+    }
+
+    private void handleMcpServerTools(Player player, String serverName) {
+        if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Client 未启用。"));
+            return;
+        }
+
+        List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo> allTools = plugin.getMcpManager().getAllToolsWithState();
+        List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo> serverTools = new java.util.ArrayList<>();
+        for (org.YanPl.mcp.client.McpClientManager.ExternalToolInfo info : allTools) {
+            if (info.serverName.equalsIgnoreCase(serverName)) {
+                serverTools.add(info);
+            }
+        }
+
+        if (serverTools.isEmpty()) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 MCP 服务器: " + serverName));
+            return;
+        }
+
+        org.YanPl.mcp.client.McpClientManager.ExternalToolInfo first = serverTools.get(0);
+        String connStatus = first.serverConnected ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未连接";
+
+        player.sendMessage(ChatColor.DARK_GRAY + "===== MCP 工具: " + serverName + " =====");
+        player.sendMessage(ChatColor.GRAY + "连接状态: " + connStatus);
+
+        int enabledCount = 0;
+        for (org.YanPl.mcp.client.McpClientManager.ExternalToolInfo info : serverTools) {
+            if (info.tool == null) continue;
+            boolean e = info.enabled;
+            if (e) enabledCount++;
+
+            String icon = e ? ChatColor.GREEN + "☑" : ChatColor.GRAY + "☐";
+            String toolName = e ? ChatColor.WHITE + info.tool.name : ChatColor.GRAY + info.tool.name;
+
+            TextComponent line = new TextComponent(icon + " " + toolName + "   ");
+            TextComponent toggleBtn = e
+                ? new TextComponent(ChatColor.GRAY + "[" + ChatColor.RED + "禁用" + ChatColor.GRAY + "]")
+                : new TextComponent(ChatColor.GRAY + "[" + ChatColor.GREEN + "启用" + ChatColor.GRAY + "]");
+            toggleBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli mcp toggle " + serverName + " " + info.tool.name));
+            toggleBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(e ? "点击禁用此工具" : "点击启用此工具")));
+            line.addExtra(toggleBtn);
+
+            player.spigot().sendMessage(line);
+
+            if (info.tool.description != null && !info.tool.description.isEmpty()) {
+                player.sendMessage(ChatColor.GRAY + "   " + info.tool.description);
+            }
+        }
+
+        player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        player.sendMessage(ChatColor.GRAY + "已启用: " + enabledCount + "/" + serverTools.stream().filter(t -> t.tool != null).count()
+                + "  服务器: " + serverName + " (" + connStatus + ChatColor.GRAY + ")");
+    }
+
+    private void handleMcpToggle(Player player, String serverName, String toolName) {
+        if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Client 未启用。"));
+            return;
+        }
+
+        if (plugin.getMcpManager().getClientManager() == null) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cMCP Client Manager 未初始化。"));
+            return;
+        }
+
+        plugin.getMcpManager().getClientManager().toggleTool(serverName, toolName);
+        boolean nowEnabled = plugin.getMcpManager().getClientManager().isToolEnabled(serverName, toolName);
+        String status = nowEnabled ? ChatColor.GREEN + "已启用" : ChatColor.GRAY + "已禁用";
+        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP 工具 §e" + serverName + "." + toolName + "§f " + status));
+
+        // 刷新工具列表 UI
+        handleMcpServerTools(player, serverName);
+    }
+
     private void handleNotice(CommandSender sender) {
         sender.sendMessage("§zFancyHelper§b§r §7> §f正在获取公告...");
         
@@ -1182,6 +1350,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
                 "stop", "exit", "download", "help", "lib", "compress", "skill", "sound"
             ));
+            subCommands.add("mcp");
             return subCommands.stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());
@@ -1231,6 +1400,19 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return plugin.getSkillManager().getSkillIdsForPrompt().stream()
                         .filter(s -> s.startsWith(args[2].toLowerCase()))
                         .collect(Collectors.toList());
+            }
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("mcp")) {
+            return Arrays.asList("tools", "toggle").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("mcp")) {
+            if (args[1].equalsIgnoreCase("tools") || args[1].equalsIgnoreCase("toggle")) {
+                // 返回 MCP 服务器名称列表
+                if (plugin.getMcpManager() != null && plugin.getMcpManager().getClientManager() != null) {
+                    return plugin.getMcpManager().getClientManager().getClients().keySet().stream()
+                            .filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase()))
+                            .collect(Collectors.toList());
+                }
             }
         }
         return new ArrayList<>();
