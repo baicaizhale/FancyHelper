@@ -399,6 +399,14 @@ public class PromptManager {
         sb.append("    Required: id, task. Optional: status (pending/in_progress/completed/cancelled).\n");
         sb.append("    After #todo: end the response immediately.\n\n");
 
+        // [MCP External Tools] — 仅当全局启用且处于 plan mode 时
+        if (plugin.getConfigManager().isMcpClientEnabled()) {
+            sb.append("[MCP External Tools]\n");
+            sb.append("  #mcp_tools  - List all MCP external tools and their enable/disable status.\n");
+            sb.append("    Use this to discover what external tools are available for your plan.\n");
+            sb.append("    Note: #mcp execution is NOT available in plan mode.\n\n");
+        }
+
         sb.append("[Plan Mode]\n");
         sb.append("  #start  - FINISH planning. Call when your plan is complete.\n");
         sb.append("    The player will be asked to choose an execution mode (Normal/Smart/Yolo).\n");

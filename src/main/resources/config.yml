@@ -145,20 +145,17 @@ sounds:
 
 # MCP (Model Context Protocol) Client 配置
 # 允许 FancyHelper 的 AI 连接到外部 MCP 服务器，调用外部工具扩展能力
+# 详见
 mcp:
   client:
     # 是否启用 MCP Client
     enabled: false
-
     # 工具调用超时时间（秒）
     call_timeout: 30
-
     # 连接超时时间（秒）
     connect_timeout: 10
-
     # 断开后自动重连间隔（分钟），0 表示不自动重连
     reconnect_interval: 5
-
     # 外部 MCP 服务器列表
     # 每个服务器需要配置 name (标识名)、url (JSON-RPC 端点)、api_key (可选认证密钥)
     # transport 可选值: "http" (直接 POST)、"sse" (先建立 SSE 连接)、"auto" (自动检测)

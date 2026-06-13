@@ -18,9 +18,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
-/**
- * 管理到多个外部 MCP 服务器的连接
- */
 public class McpClientManager {
 
     private static final Gson gson = new Gson();
@@ -28,14 +25,15 @@ public class McpClientManager {
 
     private final Logger logger;
     private final List<McpClientConfig> serverConfigs;
+    private final int connectTimeoutSeconds;
     private final Map<String, McpClient> clients = new ConcurrentHashMap<>();
-    /** serverName -> { toolName -> enabled } */
     private Map<String, Map<String, Boolean>> toolStates = new ConcurrentHashMap<>();
     private File toolStateFile;
     private boolean enabled = false;
 
-    public McpClientManager(List<McpClientConfig> serverConfigs, Logger logger) {
+    public McpClientManager(List<McpClientConfig> serverConfigs, int connectTimeoutSeconds, Logger logger) {
         this.serverConfigs = serverConfigs;
+        this.connectTimeoutSeconds = connectTimeoutSeconds;
         this.logger = logger;
     }
 
@@ -43,31 +41,26 @@ public class McpClientManager {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public Map<String, McpClient> getClients() { return Collections.unmodifiableMap(clients); }
 
-    /** 设置工具状态持久化文件路径 */
     public void setToolStateFile(File file) {
         this.toolStateFile = file;
     }
 
-    /**
-     * 连接所有已启用的服务器
-     */
     public void connectAll() {
         if (!enabled) return;
 
         for (McpClientConfig config : serverConfigs) {
             if (!config.isEnabled()) {
-                logger.info("[MCP] 跳过已禁用的服务器: " + config.getName());
+                logger.info("[MCP] 跳过已禁用的服务器 " + config.getName());
                 continue;
             }
             if (clients.containsKey(config.getName())) {
-                logger.info("[MCP] 服务器已连接，跳过: " + config.getName());
+                logger.fine("[MCP] 服务器已连接，跳过 " + config.getName());
                 continue;
             }
 
-            McpClient client = new McpClient(config, logger);
+            McpClient client = new McpClient(config, connectTimeoutSeconds, logger);
             if (client.connect()) {
                 clients.put(config.getName(), client);
-                // 新发现的工具默认启用
                 for (McpTypes.McpTool tool : client.getTools()) {
                     setToolEnabledIfAbsent(config.getName(), tool.name, true);
                 }
@@ -76,9 +69,22 @@ public class McpClientManager {
         saveToolStates();
     }
 
-    /**
-     * 获取所有已启用服务器的工具列表（含启用/禁用状态）
-     */
+    public boolean connectServer(McpClientConfig config) {
+        if (!enabled || !config.isEnabled()) return false;
+        if (clients.containsKey(config.getName())) return true;
+
+        McpClient client = new McpClient(config, connectTimeoutSeconds, logger);
+        if (client.connect()) {
+            clients.put(config.getName(), client);
+            for (McpTypes.McpTool tool : client.getTools()) {
+                setToolEnabledIfAbsent(config.getName(), tool.name, true);
+            }
+            saveToolStates();
+            return true;
+        }
+        return false;
+    }
+
     public List<ExternalToolInfo> getAllEnabledTools() {
         List<ExternalToolInfo> result = new ArrayList<>();
         for (Map.Entry<String, McpClient> entry : clients.entrySet()) {
@@ -96,7 +102,6 @@ public class McpClientManager {
         return result;
     }
 
-    /** 获取所有工具（含启用/禁用状态），用于 #mcp_tools 显示 */
     public List<ExternalToolInfo> getAllToolsWithState() {
         List<ExternalToolInfo> result = new ArrayList<>();
         for (Map.Entry<String, McpClient> entry : clients.entrySet()) {
@@ -109,7 +114,6 @@ public class McpClientManager {
                 result.add(new ExternalToolInfo(serverName, tool, toolEnabled, client.isConnected()));
             }
         }
-        // 添加已配置但未连接的服务器
         for (McpClientConfig config : serverConfigs) {
             if (!config.isEnabled()) continue;
             if (!clients.containsKey(config.getName())) {
@@ -119,23 +123,17 @@ public class McpClientManager {
         return result;
     }
 
-    /**
-     * 调用外部工具
-     */
     public McpTypes.McpToolCallResult callExternalTool(String serverName, String toolName, JsonObject arguments) {
         McpClient client = clients.get(serverName);
         if (client == null) {
             return McpTypes.McpToolCallResult.error("MCP 服务器未连接: " + serverName);
         }
         if (!isToolEnabled(serverName, toolName)) {
-            return McpTypes.McpToolCallResult.error("工具已被管理员禁用: " + serverName + "." + toolName);
+            return McpTypes.McpToolCallResult.error("工具已被管理员禁用 " + serverName + "." + toolName);
         }
         return client.callTool(toolName, arguments);
     }
 
-    /**
-     * 断开所有连接
-     */
     public void disconnectAll() {
         for (McpClient client : clients.values()) {
             client.disconnect();
@@ -143,7 +141,28 @@ public class McpClientManager {
         clients.clear();
     }
 
-    // ── 工具启用/禁用管理 ──
+    public boolean reconnectClient(String serverName) {
+        McpClient old = clients.remove(serverName);
+        if (old != null) {
+            old.disconnect();
+        }
+        for (McpClientConfig cfg : serverConfigs) {
+            if (cfg.getName().equals(serverName) && cfg.isEnabled()) {
+                return connectServer(cfg);
+            }
+        }
+        return false;
+    }
+
+    public List<McpClientConfig> getDisconnectedServers() {
+        List<McpClientConfig> result = new ArrayList<>();
+        for (McpClientConfig cfg : serverConfigs) {
+            if (cfg.isEnabled() && !clients.containsKey(cfg.getName())) {
+                result.add(cfg);
+            }
+        }
+        return result;
+    }
 
     public boolean isToolEnabled(String serverName, String toolName) {
         Map<String, Boolean> serverStates = toolStates.get(serverName);
@@ -168,8 +187,6 @@ public class McpClientManager {
         setToolEnabled(serverName, toolName, !current);
     }
 
-    // ── 持久化 ──
-
     public void loadToolStates() {
         if (toolStateFile == null || !toolStateFile.exists()) return;
         try {
@@ -179,7 +196,7 @@ public class McpClientManager {
                 toolStates = new ConcurrentHashMap<>(loaded);
             }
         } catch (Exception e) {
-            logger.warning("[MCP] 加载工具状态文件失败: " + e.getMessage());
+            logger.warning("[MCP] 加载工具状态文件失败 " + e.getMessage());
         }
     }
 
@@ -190,21 +207,16 @@ public class McpClientManager {
             String json = gson.toJson(toolStates, TOOL_STATE_TYPE);
             Files.write(toolStateFile.toPath(), json.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            logger.warning("[MCP] 保存工具状态文件失败: " + e.getMessage());
+            logger.warning("[MCP] 保存工具状态文件失败 " + e.getMessage());
         }
     }
 
-    /**
-     * 根据完整工具名（serverName.toolName）查找对应的 McpClient
-     */
     public McpClient findClientForTool(String fullToolName) {
         int dotIndex = fullToolName.indexOf('.');
         if (dotIndex <= 0) return null;
         String serverName = fullToolName.substring(0, dotIndex);
         return clients.get(serverName);
     }
-
-    // ── 数据类 ──
 
     public static class ExternalToolInfo {
         public final String serverName;
