@@ -54,7 +54,7 @@ public class McpClientManager {
                 continue;
             }
             if (clients.containsKey(config.getName())) {
-                logger.info("[MCP] 服务器已连接，跳过 " + config.getName());
+                logger.fine("[MCP] 服务器已连接，跳过 " + config.getName());
                 continue;
             }
 

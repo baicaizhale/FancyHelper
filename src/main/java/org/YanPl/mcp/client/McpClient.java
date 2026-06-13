@@ -63,7 +63,7 @@ public class McpClient {
                     logger.warning("[MCP] " + config.getName() + ": SSE 会话建立失败");
                     return false;
                 }
-                logger.info("[MCP] " + config.getName() + ": SSE 会话已建立");
+                logger.fine("[MCP] " + config.getName() + ": SSE 会话已建立");
             } else {
                 postEndpoint = endpoint;
             }
@@ -87,7 +87,7 @@ public class McpClient {
             JsonObject result = initResp.result != null ? initResp.result.getAsJsonObject() : null;
             if (result != null && result.has("protocolVersion")) {
                 String serverVersion = result.get("protocolVersion").getAsString();
-                logger.info("[MCP] " + config.getName() + ": 协议版本 " + serverVersion);
+                logger.fine("[MCP] " + config.getName() + ": 协议版本 " + serverVersion);
             }
 
             sendNotification("notifications/initialized", null);
@@ -113,12 +113,18 @@ public class McpClient {
 
     private boolean setupSseSession(String sseUrl) {
         try {
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder sseBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(sseUrl))
-                    .timeout(Duration.ZERO)
                     .header("Accept", "text/event-stream")
-                    .GET()
-                    .build();
+                    .timeout(Duration.ofSeconds(config.getCallTimeout()))
+                    .GET();
+
+            String apiKey = config.getApiKey();
+            if (apiKey != null && !apiKey.isEmpty()) {
+                sseBuilder.header("Authorization", "Bearer " + apiKey);
+            }
+
+            HttpRequest request = sseBuilder.build();
 
             HttpResponse<java.io.InputStream> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofInputStream());
@@ -168,7 +174,6 @@ public class McpClient {
             McpTypes.ToolsListResult listResult = JsonRpcHandler.parseResult(resp.result, McpTypes.ToolsListResult.class);
             if (listResult != null && listResult.tools != null) {
                 tools = listResult.tools;
-                logger.info("[MCP] " + config.getName() + ": 发现 " + tools.size() + " 个工具");
             }
         } catch (Exception e) {
             logger.warning("[MCP] " + config.getName() + ": 解析工具列表失败 - " + e.getMessage());
@@ -248,10 +253,10 @@ public class McpClient {
             if (response.statusCode() != 200 && response.statusCode() != 202) {
                 String respBody = response.body();
                 if (respBody != null && respBody.length() > 200) respBody = respBody.substring(0, 200);
-                logger.warning("[MCP] " + config.getName() + " 通知 " + method + " 返回 HTTP " + response.statusCode() + ": " + respBody);
+                logger.fine("[MCP] " + config.getName() + " 通知 " + method + " 返回 HTTP " + response.statusCode() + ": " + respBody);
             }
         } catch (Exception e) {
-            logger.warning("[MCP] " + config.getName() + " 通知 " + method + " 发送失败: " + e.getMessage());
+            logger.fine("[MCP] " + config.getName() + " 通知 " + method + " 发送失败: " + e.getMessage());
         }
     }
 
@@ -279,7 +284,7 @@ public class McpClient {
                     JsonObject params = new JsonObject();
                     sendRequest("ping", params);
                 } catch (InterruptedException e) { break; }
-                catch (Exception e) { logger.warning("[MCP] " + config.getName() + " ping 失败: " + e.getMessage()); }
+                catch (Exception e) { logger.fine("[MCP] " + config.getName() + " ping 异常: " + e.getMessage()); }
             }
         }, "mcp-ping-" + config.getName());
         t.setDaemon(true);
@@ -287,7 +292,7 @@ public class McpClient {
     }
 
     public boolean reconnect() {
-        logger.info("[MCP] " + config.getName() + ": 正在重连...");
+        logger.fine("[MCP] " + config.getName() + ": 正在重连...");
         disconnect();
         try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         return connect();

@@ -5,6 +5,7 @@ import org.YanPl.FancyHelper;
 import org.YanPl.mcp.client.McpClientManager;
 import org.YanPl.mcp.client.McpClientConfig;
 import org.YanPl.mcp.core.McpTypes;
+import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.File;
@@ -45,9 +46,13 @@ public class McpManager {
         clientManager.setEnabled(enabled);
         clientManager.setToolStateFile(new File(plugin.getDataFolder(), "mcp_tools.json"));
         clientManager.loadToolStates();
-        clientManager.connectAll();
 
-        logger.info("[MCP] MCP Client 初始化完成，已连接 " + clientManager.getClients().size() + " 个服务器");
+        // 异步连接，不阻塞主线程（SSE 模式需要阻塞读取事件流）
+        logger.info("[MCP] 正在连接 " + serverConfigs.size() + " 个 MCP 服务器...");
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            clientManager.connectAll();
+            logger.info("[MCP] MCP Client 初始化完成，已连接 " + clientManager.getClients().size() + " 个服务器");
+        });
 
         startReconnectTask();
     }
@@ -69,16 +74,18 @@ public class McpManager {
                 }
                 List<McpClientConfig> disconnected = clientManager.getDisconnectedServers();
                 if (!disconnected.isEmpty()) {
-                    logger.info("[MCP] 检测到 " + disconnected.size() + " 个服务器断线，尝试重连...");
-                    for (McpClientConfig cfg : disconnected) {
-                        logger.info("[MCP] 正在重连 " + cfg.getName() + "...");
-                        boolean ok = clientManager.connectServer(cfg);
-                        if (ok) {
-                            logger.info("[MCP] " + cfg.getName() + " 重连成功");
-                        } else {
-                            logger.warning("[MCP] " + cfg.getName() + " 重连失败，下次重试");
+                    logger.fine("[MCP] 检测到 " + disconnected.size() + " 个服务器断线，尝试重连...");
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                        for (McpClientConfig cfg : disconnected) {
+                            logger.fine("[MCP] 正在重连 " + cfg.getName() + "...");
+                            boolean ok = clientManager.connectServer(cfg);
+                            if (ok) {
+                                logger.fine("[MCP] " + cfg.getName() + " 重连成功");
+                            } else {
+                                logger.warning("[MCP] " + cfg.getName() + " 重连失败，下次重试");
+                            }
                         }
-                    }
+                    });
                 }
             }
         };
