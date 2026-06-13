@@ -1961,14 +1961,15 @@ public class ToolExecutor {
                     cliManager.feedbackToAI(player, "#mcp_result: MCP 服务器无响应");
                 } else if (result.isError) {
                     String errText = result.content != null && !result.content.isEmpty()
+                            && result.content.get(0).text != null
                         ? result.content.get(0).text : "未知错误";
                     cliManager.feedbackToAI(player, "#mcp_error: " + errText);
                 } else {
                     String text = result.content != null && !result.content.isEmpty()
+                            && result.content.get(0).text != null
                         ? result.content.get(0).text : "(空结果)";
                     cliManager.feedbackToAI(player, "#mcp_result: " + text);
                 }
-                player.sendMessage(ChatColor.GRAY + "⇒ MCP 反馈已发送至 Fancy");
             });
         });
         return true;

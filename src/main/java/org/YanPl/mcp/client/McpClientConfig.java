@@ -10,6 +10,7 @@ public class McpClientConfig {
     private boolean enabled = true;
     private String transport = "auto";
     private int callTimeout = 30;
+    private String sessionId;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -28,4 +29,7 @@ public class McpClientConfig {
 
     public int getCallTimeout() { return callTimeout > 0 ? callTimeout : 30; }
     public void setCallTimeout(int callTimeout) { this.callTimeout = callTimeout; }
+
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 }

@@ -16,6 +16,7 @@ worker/
 frontend/
 node_modules/
 .claude/
+test-mcp
 # IntelliJ
 out/
 

@@ -6,6 +6,8 @@ import org.YanPl.mcp.core.JsonRpcHandler;
 import org.YanPl.mcp.core.JsonRpcMessage;
 import org.YanPl.mcp.core.McpTypes;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -16,9 +18,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
 
-/**
- * 单个 MCP 服务器的 HTTP 连接客户端
- */
 public class McpClient {
 
     private static final Gson gson = new Gson();
@@ -27,16 +26,17 @@ public class McpClient {
     private final McpClientConfig config;
     private final HttpClient httpClient;
     private final Logger logger;
-    private List<McpTypes.McpTool> tools = new ArrayList<>();
-    private boolean connected = false;
-    /** SSE 模式下的会话 ID，用于后续 POST 请求 */
-    private String sessionId;
+    private volatile List<McpTypes.McpTool> tools = new ArrayList<>();
+    private volatile boolean connected = false;
+    private volatile String postEndpoint;
+    private volatile boolean running = false;
 
-    public McpClient(McpClientConfig config, Logger logger) {
+    public McpClient(McpClientConfig config, int connectTimeoutSeconds, Logger logger) {
         this.config = config;
         this.logger = logger;
+        int timeout = connectTimeoutSeconds > 0 ? connectTimeoutSeconds : 10;
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(timeout))
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
@@ -45,18 +45,30 @@ public class McpClient {
     public boolean isConnected() { return connected; }
     public List<McpTypes.McpTool> getTools() { return Collections.unmodifiableList(tools); }
 
-    /**
-     * 连接并完成 MCP 握手
-     */
     public boolean connect() {
+        running = true;
         try {
+            String transport = config.getTransport();
+            boolean isSse = "sse".equalsIgnoreCase(transport);
+
             String endpoint = resolveEndpoint();
             if (endpoint == null) {
                 logger.warning("[MCP] " + config.getName() + ": 无法解析端点 URL");
                 return false;
             }
 
-            // 1. initialize 握手
+            // SSE 模式：先建立 SSE 连接获取消息端点
+            if (isSse) {
+                if (!setupSseSession(endpoint)) {
+                    logger.warning("[MCP] " + config.getName() + ": SSE 会话建立失败");
+                    return false;
+                }
+                logger.info("[MCP] " + config.getName() + ": SSE 会话已建立");
+            } else {
+                postEndpoint = endpoint;
+            }
+
+            // 现在 postEndpoint 已设置，发送握手请求到正确的端点
             JsonObject initParams = new JsonObject();
             initParams.addProperty("protocolVersion", MCP_PROTOCOL_VERSION);
             JsonObject clientInfo = new JsonObject();
@@ -72,50 +84,78 @@ public class McpClient {
                 return false;
             }
 
-            // 验证协议版本
             JsonObject result = initResp.result != null ? initResp.result.getAsJsonObject() : null;
             if (result != null && result.has("protocolVersion")) {
                 String serverVersion = result.get("protocolVersion").getAsString();
                 logger.info("[MCP] " + config.getName() + ": 协议版本 " + serverVersion);
             }
 
-            // 2. 发送 initialized 通知
             sendNotification("notifications/initialized", null);
 
-            // 3. 标记已连接
             connected = true;
 
-            // 4. 发现工具
             if (!discoverTools()) {
                 logger.warning("[MCP] " + config.getName() + ": 工具发现失败");
             }
             logger.info("[MCP] " + config.getName() + ": 连接成功，已发现 " + tools.size() + " 个工具");
+
+            if (!isSse) {
+                startPing();
+            }
             return true;
 
         } catch (Exception e) {
+            running = false;
             logger.warning("[MCP] " + config.getName() + ": 连接失败 - " + e.getMessage());
             return false;
         }
     }
 
-    /**
-     * 解析端点 URL
-     */
-    private String resolveEndpoint() {
-        String url = config.getUrl();
-        if (url == null || url.isEmpty()) return null;
+    private boolean setupSseSession(String sseUrl) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(sseUrl))
+                    .timeout(Duration.ZERO)
+                    .header("Accept", "text/event-stream")
+                    .GET()
+                    .build();
 
-        // 如果以 /mcp 结尾，直接用
-        if (url.endsWith("/mcp")) return url;
-        // 如果以 /sse 结尾，去掉 /sse
-        if (url.endsWith("/sse")) return url.substring(0, url.length() - 4) + "/mcp";
-        // 否则追加重试，假设服务器暴露 /mcp 端点
-        return url.endsWith("/") ? url + "mcp" : url + "/mcp";
+            HttpResponse<java.io.InputStream> response = httpClient.send(request,
+                    HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() != 200) {
+                logger.warning("[MCP] " + config.getName() + ": SSE 连接返回 HTTP " + response.statusCode());
+                response.body().close();
+                return false;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("data: ")) {
+                        String data = line.substring(6).trim();
+                        if (data.startsWith("{")) {
+                            com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(data).getAsJsonObject();
+                            if (json.has("uri")) postEndpoint = json.get("uri").getAsString();
+                            if (json.has("sessionId")) config.setSessionId(json.get("sessionId").getAsString());
+                        } else {
+                            postEndpoint = data;
+                        }
+                        if (postEndpoint != null && !postEndpoint.isEmpty()) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (java.io.IOException e) {
+                logger.warning("[MCP] " + config.getName() + ": SSE 流读取异常 - " + e.getMessage());
+            }
+            return false;
+        } catch (Exception e) {
+            logger.warning("[MCP] " + config.getName() + ": SSE 会话异常 - " + e.getMessage());
+            return false;
+        }
     }
 
-    /**
-     * 发现工具列表
-     */
     public boolean discoverTools() {
         JsonRpcMessage.Response resp = sendRequest("tools/list", null);
         if (resp == null || resp.error != null) {
@@ -137,9 +177,6 @@ public class McpClient {
         return true;
     }
 
-    /**
-     * 调用工具
-     */
     public McpTypes.McpToolCallResult callTool(String toolName, JsonObject arguments) {
         if (!connected) return McpTypes.McpToolCallResult.error("MCP 服务器未连接: " + config.getName());
 
@@ -162,15 +199,16 @@ public class McpClient {
         }
     }
 
-    /**
-     * 断开连接
-     */
     public void disconnect() {
+        running = false;
         connected = false;
-        tools.clear();
+        tools = new ArrayList<>();
+        postEndpoint = null;
     }
 
-    // ── 内部 HTTP 方法 ──
+    private String getPostEndpoint() {
+        return postEndpoint != null ? postEndpoint : resolveEndpoint();
+    }
 
     private JsonRpcMessage.Response sendRequest(String method, JsonObject params) {
         try {
@@ -191,19 +229,38 @@ public class McpClient {
 
     private void sendNotification(String method, JsonObject params) {
         try {
+            String ep = getPostEndpoint();
+            if (ep == null) return;
+
             String body = JsonRpcHandler.buildNotificationJson(method, params);
-            HttpRequest request = buildHttpRequest(body);
-            httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(ep))
+                    .timeout(Duration.ofSeconds(config.getCallTimeout()))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body));
+
+            String apiKey = config.getApiKey();
+            if (apiKey != null && !apiKey.isEmpty()) {
+                builder.header("Authorization", "Bearer " + apiKey);
+            }
+
+            HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200 && response.statusCode() != 202) {
+                String respBody = response.body();
+                if (respBody != null && respBody.length() > 200) respBody = respBody.substring(0, 200);
+                logger.warning("[MCP] " + config.getName() + " 通知 " + method + " 返回 HTTP " + response.statusCode() + ": " + respBody);
+            }
         } catch (Exception e) {
-            logger.fine("[MCP] " + config.getName() + " 通知发送失败: " + e.getMessage());
+            logger.warning("[MCP] " + config.getName() + " 通知 " + method + " 发送失败: " + e.getMessage());
         }
     }
 
     private HttpRequest buildHttpRequest(String body) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(resolveEndpoint()))
+                .uri(URI.create(getPostEndpoint()))
                 .timeout(Duration.ofSeconds(config.getCallTimeout()))
                 .header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
 
         String apiKey = config.getApiKey();
@@ -212,4 +269,34 @@ public class McpClient {
         }
         return builder.build();
     }
+
+    private void startPing() {
+        Thread t = new Thread(() -> {
+            while (running && connected) {
+                try {
+                    Thread.sleep(30_000);
+                    if (!running || !connected) break;
+                    JsonObject params = new JsonObject();
+                    sendRequest("ping", params);
+                } catch (InterruptedException e) { break; }
+                catch (Exception e) { logger.warning("[MCP] " + config.getName() + " ping 失败: " + e.getMessage()); }
+            }
+        }, "mcp-ping-" + config.getName());
+        t.setDaemon(true);
+        t.start();
+    }
+
+    public boolean reconnect() {
+        logger.info("[MCP] " + config.getName() + ": 正在重连...");
+        disconnect();
+        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        return connect();
+    }
+
+    private String resolveEndpoint() {
+        String url = config.getUrl();
+        if (url == null || url.trim().isEmpty()) return null;
+        return url.trim();
+    }
+
 }

@@ -667,7 +667,6 @@ public class ConfigManager {
         return config.getInt("mcp.client.reconnect_interval", 5);
     }
 
-    @SuppressWarnings("unchecked")
     public List<Map<?, ?>> getMcpClientServers() {
         List<?> list = config.getList("mcp.client.servers");
         if (list == null) return null;

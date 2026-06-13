@@ -5,6 +5,7 @@ import org.YanPl.FancyHelper;
 import org.YanPl.mcp.client.McpClientManager;
 import org.YanPl.mcp.client.McpClientConfig;
 import org.YanPl.mcp.core.McpTypes;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -12,24 +13,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-/**
- * MCP 总管理器，负责初始化和生命周期管理
- */
 public class McpManager {
 
     private final FancyHelper plugin;
     private final Logger logger;
     private McpClientManager clientManager;
     private boolean enabled;
+    private BukkitRunnable reconnectTask;
 
     public McpManager(FancyHelper plugin) {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
     }
 
-    /**
-     * 根据配置初始化 MCP Client
-     */
     public void initialize() {
         this.enabled = plugin.getConfigManager().isMcpClientEnabled();
         if (!enabled) {
@@ -43,13 +39,50 @@ public class McpManager {
             return;
         }
 
-        clientManager = new McpClientManager(serverConfigs, logger);
+        int connectTimeout = plugin.getConfigManager().getMcpClientConnectTimeout();
+
+        clientManager = new McpClientManager(serverConfigs, connectTimeout, logger);
         clientManager.setEnabled(enabled);
         clientManager.setToolStateFile(new File(plugin.getDataFolder(), "mcp_tools.json"));
         clientManager.loadToolStates();
         clientManager.connectAll();
 
         logger.info("[MCP] MCP Client 初始化完成，已连接 " + clientManager.getClients().size() + " 个服务器");
+
+        startReconnectTask();
+    }
+
+    private void startReconnectTask() {
+        int intervalMinutes = plugin.getConfigManager().getMcpClientReconnectInterval();
+        if (intervalMinutes <= 0) {
+            logger.info("[MCP] 自动重连已关闭（reconnect_interval <= 0）");
+            return;
+        }
+
+        long intervalTicks = intervalMinutes * 60L * 20L;
+        reconnectTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (clientManager == null || !enabled) {
+                    cancel();
+                    return;
+                }
+                List<McpClientConfig> disconnected = clientManager.getDisconnectedServers();
+                if (!disconnected.isEmpty()) {
+                    logger.info("[MCP] 检测到 " + disconnected.size() + " 个服务器断线，尝试重连...");
+                    for (McpClientConfig cfg : disconnected) {
+                        logger.info("[MCP] 正在重连 " + cfg.getName() + "...");
+                        boolean ok = clientManager.connectServer(cfg);
+                        if (ok) {
+                            logger.info("[MCP] " + cfg.getName() + " 重连成功");
+                        } else {
+                            logger.warning("[MCP] " + cfg.getName() + " 重连失败，下次重试");
+                        }
+                    }
+                }
+            }
+        };
+        reconnectTask.runTaskTimer(plugin, intervalTicks, intervalTicks);
     }
 
     @SuppressWarnings("unchecked")
@@ -87,34 +120,30 @@ public class McpManager {
         return configs;
     }
 
-    // ── 委托方法 ──
-
     public McpClientManager getClientManager() { return clientManager; }
     public boolean isEnabled() { return enabled && clientManager != null; }
 
-    /** 检查工具是否启用 */
     public boolean isToolEnabled(String serverName, String toolName) {
         if (clientManager == null) return false;
         return clientManager.isToolEnabled(serverName, toolName);
     }
 
-    /** 获取所有工具状态（用于 #mcp_tools 工具） */
     public List<McpClientManager.ExternalToolInfo> getAllToolsWithState() {
         if (clientManager == null) return List.of();
         return clientManager.getAllToolsWithState();
     }
 
-    /** 调用外部工具 */
     public McpTypes.McpToolCallResult callExternalTool(String serverName, String toolName, JsonObject arguments) {
         if (clientManager == null)
             return McpTypes.McpToolCallResult.error("MCP Client 未启用");
         return clientManager.callExternalTool(serverName, toolName, arguments);
     }
 
-    /**
-     * 关闭所有 MCP 资源
-     */
     public void shutdown() {
+        if (reconnectTask != null) {
+            reconnectTask.cancel();
+            reconnectTask = null;
+        }
         if (clientManager != null) {
             clientManager.disconnectAll();
         }
