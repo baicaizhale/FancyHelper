@@ -1,6 +1,5 @@
 package org.YanPl.mcp.client;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.YanPl.mcp.core.JsonRpcHandler;
 import org.YanPl.mcp.core.JsonRpcMessage;
@@ -20,7 +19,6 @@ import java.util.logging.Logger;
 
 public class McpClient {
 
-    private static final Gson gson = new Gson();
     private static final String MCP_PROTOCOL_VERSION = "2024-11-05";
 
     private final McpClientConfig config;

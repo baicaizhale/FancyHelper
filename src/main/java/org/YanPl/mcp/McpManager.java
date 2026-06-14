@@ -92,7 +92,6 @@ public class McpManager {
         reconnectTask.runTaskTimer(plugin, intervalTicks, intervalTicks);
     }
 
-    @SuppressWarnings("unchecked")
     private List<McpClientConfig> loadServerConfigs() {
         List<McpClientConfig> configs = new ArrayList<>();
         List<Map<?, ?>> serversRaw = plugin.getConfigManager().getMcpClientServers();
