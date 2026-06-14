@@ -70,20 +70,11 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 
 ### Configure AI (Optional, defaults to CloudFlare)
 
-**CloudFlare Workers AI (Default):**
-Obtain an API Key from the CloudFlare console or a shared key provider, then edit `plugins/FancyHelper/config.yml`:
-
-```yaml
-cloudflare:
-  cf_key: YOUR_CLOUDFLARE_API_KEY
-  model: "@cf/openai/gpt-oss-120b"
-```
-
-After editing, run `/fancyhelper reload` in-game to apply.
+**CloudFlare Workers AI:**
+Tutorial: [![blog](https://img.shields.io/badge/CF%20Key%20Setup%20Guide-Blog-blue)](https://blog.baicaizhale.top/post/create-cf-key-for-fhai)
 
 **OpenAI Compatible API:**
-
-[![AI Providers](https://img.shields.io/badge/OpenAI%20Compatible-Providers-blue?logo=openai)](https://blog.baicaizhale.top/post/openai-compatible-providers)
+Tutorial: [![blog](https://img.shields.io/badge/OpenAI%20Compatible%20Providers-Blog-blue)](https://blog.baicaizhale.top/post/openai-compatible-providers)
 
 ### Usage
 

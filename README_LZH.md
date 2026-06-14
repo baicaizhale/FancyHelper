@@ -70,20 +70,11 @@
 
 ### 配置 AI（可选，默认用 CloudFlare）
 
-**CloudFlare Workers AI（默认）：**
-往 CloudFlare 控制台或 Key 共享站取得 API Key，随后更易 `plugins/FancyHelper/config.yml`：
-
-```yaml
-cloudflare:
-  cf_key: 你的_CLOUDFLARE_API_KEY
-  model: "@cf/openai/gpt-oss-120b"
-```
-
-更易后于境中输入 `/fancyhelper reload` 重载。
+**CloudFlare Workers AI：**
+教程详见 [![blog](https://img.shields.io/badge/兼容端点配置指南-Blog-blue)](https://blog.baicaizhale.top/post/create-cf-key-for-fhai)
 
 **OpenAI 兼容 API：**
-
-[![AI Providers](https://img.shields.io/badge/OpenAI%20Compatible-Providers-blue?logo=openai)](https://blog.baicaizhale.top/post/openai-compatible-providers)
+教程详见 [![blog](https://img.shields.io/badge/创建Cloudflare的AI访问密钥-Blog-blue)](https://blog.baicaizhale.top/post/openai-compatible-providers)
 
 ### 开用
 
