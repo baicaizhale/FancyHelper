@@ -15,6 +15,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class McpClient {
@@ -28,6 +30,8 @@ public class McpClient {
     private volatile boolean connected = false;
     private volatile String postEndpoint;
     private volatile boolean running = false;
+    private volatile CountDownLatch sseEndpointLatch;
+    private volatile Thread sseReaderThread;
 
     public McpClient(McpClientConfig config, int connectTimeoutSeconds, Logger logger) {
         this.config = config;
@@ -57,7 +61,18 @@ public class McpClient {
 
             // SSE 模式：先建立 SSE 连接获取消息端点
             if (isSse) {
-                if (!setupSseSession(endpoint)) {
+                sseEndpointLatch = new CountDownLatch(1);
+                startSseReader(endpoint);
+                try {
+                    if (!sseEndpointLatch.await(config.getCallTimeout(), TimeUnit.SECONDS)) {
+                        logger.warning("[MCP] " + config.getName() + ": SSE 端点获取超时");
+                        return false;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+                if (postEndpoint == null) {
                     logger.warning("[MCP] " + config.getName() + ": SSE 会话建立失败");
                     return false;
                 }
@@ -109,55 +124,67 @@ public class McpClient {
         }
     }
 
-    private boolean setupSseSession(String sseUrl) {
-        try {
-            HttpRequest.Builder sseBuilder = HttpRequest.newBuilder()
-                    .uri(URI.create(sseUrl))
-                    .header("Accept", "text/event-stream")
-                    .timeout(Duration.ofSeconds(config.getCallTimeout()))
-                    .GET();
+    private void startSseReader(String sseUrl) {
+        Thread t = new Thread(() -> {
+            try {
+                HttpRequest.Builder sseBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(sseUrl))
+                        .header("Accept", "text/event-stream")
+                        .timeout(Duration.ofSeconds(config.getCallTimeout()))
+                        .GET();
 
-            String apiKey = config.getApiKey();
-            if (apiKey != null && !apiKey.isEmpty()) {
-                sseBuilder.header("Authorization", "Bearer " + apiKey);
-            }
+                String apiKey = config.getApiKey();
+                if (apiKey != null && !apiKey.isEmpty()) {
+                    sseBuilder.header("Authorization", "Bearer " + apiKey);
+                }
 
-            HttpRequest request = sseBuilder.build();
+                HttpRequest request = sseBuilder.build();
+                HttpResponse<java.io.InputStream> response = httpClient.send(request,
+                        HttpResponse.BodyHandlers.ofInputStream());
 
-            HttpResponse<java.io.InputStream> response = httpClient.send(request,
-                    HttpResponse.BodyHandlers.ofInputStream());
+                if (response.statusCode() != 200) {
+                    logger.warning("[MCP] " + config.getName() + ": SSE 连接返回 HTTP " + response.statusCode());
+                    response.body().close();
+                    return;
+                }
 
-            if (response.statusCode() != 200) {
-                logger.warning("[MCP] " + config.getName() + ": SSE 连接返回 HTTP " + response.statusCode());
-                response.body().close();
-                return false;
-            }
-
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), java.nio.charset.StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("data: ")) {
-                        String data = line.substring(6).trim();
-                        if (data.startsWith("{")) {
-                            com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(data).getAsJsonObject();
-                            if (json.has("uri")) postEndpoint = json.get("uri").getAsString();
-                            if (json.has("sessionId")) config.setSessionId(json.get("sessionId").getAsString());
-                        } else {
-                            postEndpoint = data;
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(response.body(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while (running && (line = reader.readLine()) != null) {
+                        if (line.startsWith("data: ")) {
+                            String data = line.substring(6).trim();
+                            if (data.startsWith("{")) {
+                                JsonObject json = com.google.gson.JsonParser.parseString(data)
+                                        .getAsJsonObject();
+                                if (json.has("uri")) {
+                                    postEndpoint = json.get("uri").getAsString();
+                                    sseEndpointLatch.countDown();
+                                }
+                                if (json.has("sessionId")) {
+                                    config.setSessionId(json.get("sessionId").getAsString());
+                                }
+                            } else {
+                                postEndpoint = data;
+                                sseEndpointLatch.countDown();
+                            }
                         }
-                        if (postEndpoint != null && !postEndpoint.isEmpty()) {
-                            return true;
-                        }
+                        // 忽略 SSE 注释（keep-alive 等）
+                    }
+                } catch (java.io.IOException e) {
+                    if (running) {
+                        logger.warning("[MCP] " + config.getName() + ": SSE 流读取异常 - " + e.getMessage());
                     }
                 }
-            } catch (java.io.IOException e) {
-                logger.warning("[MCP] " + config.getName() + ": SSE 流读取异常 - " + e.getMessage());
+            } catch (Exception e) {
+                if (running) {
+                    logger.warning("[MCP] " + config.getName() + ": SSE 会话异常 - " + e.getMessage());
+                }
             }
-            return false;
-        } catch (Exception e) {
-            logger.warning("[MCP] " + config.getName() + ": SSE 会话异常 - " + e.getMessage());
-            return false;
-        }
+        }, "mcp-sse-" + config.getName());
+        t.setDaemon(true);
+        sseReaderThread = t;
+        t.start();
     }
 
     public boolean discoverTools() {
@@ -207,6 +234,11 @@ public class McpClient {
         connected = false;
         tools = new ArrayList<>();
         postEndpoint = null;
+        Thread t = sseReaderThread;
+        if (t != null) {
+            sseReaderThread = null;
+            t.interrupt();
+        }
     }
 
     private String getPostEndpoint() {
