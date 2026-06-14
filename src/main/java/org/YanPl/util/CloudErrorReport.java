@@ -142,7 +142,7 @@ public class CloudErrorReport {
                     if (line.endsWith("\r")) {
                         line = line.substring(0, line.length() - 1);
                     }
-                    writer.write(line);
+                    writer.write(maskSensitiveData(line));
                     writer.newLine();
                 }
             } else {
@@ -202,7 +202,7 @@ public class CloudErrorReport {
                  java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.FileWriter(tempLogFile, java.nio.charset.StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    writer.write(line);
+                    writer.write(maskSensitiveData(line));
                     writer.newLine();
                 }
             }
@@ -232,7 +232,7 @@ public class CloudErrorReport {
                  java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.FileWriter(tempConfig, java.nio.charset.StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    writer.write(line);
+                    writer.write(maskSensitiveData(line));
                     writer.newLine();
                 }
             }
@@ -325,5 +325,34 @@ public class CloudErrorReport {
             sb.append("Caused by: " ).append(getStackTraceString(t.getCause()));
         }
         return sb.toString();
+    }
+
+    /**
+     * 对上报内容进行脱敏处理
+     *
+     * @param line 原始行
+     * @return 脱敏后的行
+     */
+    private String maskSensitiveData(String line) {
+        if (line == null || line.isEmpty()) return line;
+
+        // 脱敏配置文件中的 API 密钥/令牌 (带引号)
+        line = line.replaceAll(
+            "(cf_key|api_key|api_token|upload_token|builds_key)\\s*:\\s*\"[^\"]*\"",
+            "$1: \"***MASKED***\""
+        );
+        // 脱敏配置文件中的 API 密钥/令牌 (不带引号)
+        line = line.replaceAll(
+            "(cf_key|api_key|api_token|upload_token|builds_key)\\s*:\\s*\\S+",
+            "$1: ***MASKED***"
+        );
+
+        // 脱敏日志中的 IPv4 地址
+        line = line.replaceAll(
+            "(?<![0-9])(\\d{1,3})\\.(\\d{1,3})\\.\\d{1,3}\\.\\d{1,3}(?![0-9])",
+            "$1.$2.*.*"
+        );
+
+        return line;
     }
 }
