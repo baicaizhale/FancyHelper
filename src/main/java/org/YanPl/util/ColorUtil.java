@@ -127,10 +127,10 @@ public class ColorUtil {
                 char code = legacy.charAt(i + 1);
                 i += 2;
 
-                if (code == 'x' && i + 10 <= legacy.length()) {
+                if (code == 'x' && i + 12 <= legacy.length()) {
                     // §x§R§R§G§G§B§B → {#RRGGBB}
                     StringBuilder hex = new StringBuilder("#");
-                    for (int j = 0; j < 5; j++) {
+                    for (int j = 0; j < 6; j++) {
                         hex.append(legacy.charAt(i + 1));
                         i += 2;
                     }
