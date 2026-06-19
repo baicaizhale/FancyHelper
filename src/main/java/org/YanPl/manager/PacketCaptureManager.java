@@ -7,10 +7,9 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.WrappedChatComponent;
 import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.chat.ComponentSerializer;
 import org.YanPl.FancyHelper;
-import org.bukkit.ChatColor;
+import org.YanPl.util.ColorUtil;
 import org.bukkit.entity.Player;
 
 import java.util.Map;
@@ -27,7 +26,7 @@ public class PacketCaptureManager {
 
     /**
      * 初始化数据包捕获管理器
-     * 
+     *
      * @param plugin 插件实例
      */
     public PacketCaptureManager(FancyHelper plugin) {
@@ -56,17 +55,17 @@ public class PacketCaptureManager {
                 public void onPacketSending(PacketEvent event) {
                     Player player = event.getPlayer();
                     if (player == null) return;
-                    
+
                     UUID uuid = player.getUniqueId();
                     if (captureBuffers.containsKey(uuid)) {
                         String message = extractMessage(event.getPacket());
                         if (message != null && !message.isEmpty()) {
-                            // 过滤掉插件自身的提示消息，避免循环反馈或干扰 AI
-                            String stripped = ChatColor.stripColor(message).trim();
-                            if (stripped.isEmpty() || 
-                                stripped.startsWith("⇒") || 
-                                stripped.startsWith("◇") || 
-                                stripped.startsWith("◆") || 
+                            // 用 stripToPlainText 去除 [marker] 和 § 码后再过滤
+                            String stripped = ColorUtil.stripToPlainText(message).trim();
+                            if (stripped.isEmpty() ||
+                                stripped.startsWith("⇒") ||
+                                stripped.startsWith("◇") ||
+                                stripped.startsWith("◆") ||
                                 stripped.contains("FancyHelper") ||
                                 stripped.equals("....") ||
                                 stripped.equals("...") ||
@@ -79,18 +78,17 @@ public class PacketCaptureManager {
                                 return;
                             }
 
-                            // 关键修复：过滤掉明显的玩家聊天消息，防止多玩家环境下上下文混淆
-                            // 匹配标准聊天格式 <PlayerName> Message 或 [World] <PlayerName> Message
-                            if (stripped.matches("^<[^>]+>.*") || 
+                            // 过滤掉明显的玩家聊天消息
+                            if (stripped.matches("^<[^>]+>.*") ||
                                 stripped.matches("^\\[.*\\]\\s*<[^>]+>.*") ||
-                                stripped.matches("^\\* [^ ]+ .*")) { // /me 命令格式
+                                stripped.matches("^\\* [^ ]+ .*")) {
                                 return;
                             }
 
                             StringBuilder buffer = captureBuffers.get(uuid);
                             synchronized (buffer) {
                                 if (buffer.length() > 0) buffer.append("\n");
-                                buffer.append(stripped);
+                                buffer.append(message);
                             }
                         }
                     }
@@ -100,47 +98,44 @@ public class PacketCaptureManager {
     }
 
     /**
-     * 从数据包中提取文本消息
-     * 
-     * @param packet 数据包容器
-     * @return 提取出的文本内容，如果无法提取则返回 null
+     * 从数据包中提取文本消息，颜色信息转为 AI 可读格式。
+     * <p>
+     * 输出的颜色标记格式：{@code [green]}、{@code [#FF5500]}、{@code [bold]}。
+     * 不含任何 {@code §} legacy 码，AI 可以直接理解。
      */
     private String extractMessage(PacketContainer packet) {
         try {
             if (packet.getType() == PacketType.Play.Server.SYSTEM_CHAT) {
-                // 1.19+ 系统聊天消息
-                // 字段 0 可能是 JSON 字符串或 BaseComponent
                 Object content = packet.getModifier().read(0);
                 if (content instanceof String) {
                     try {
-                        return TextComponent.toPlainText(net.md_5.bungee.chat.ComponentSerializer.parse((String) content));
+                        return ColorUtil.componentsToReadable(ComponentSerializer.parse((String) content));
                     } catch (Exception e) {
                         return (String) content;
                     }
                 } else if (content instanceof BaseComponent) {
-                    return TextComponent.toPlainText((BaseComponent) content);
+                    return ColorUtil.componentToReadable((BaseComponent) content);
                 } else if (content instanceof BaseComponent[]) {
-                    return TextComponent.toPlainText((BaseComponent[]) content);
+                    return ColorUtil.componentsToReadable((BaseComponent[]) content);
                 } else if (content instanceof WrappedChatComponent) {
                     String json = ((WrappedChatComponent) content).getJson();
-                    return TextComponent.toPlainText(ComponentSerializer.parse(json));
+                    return ColorUtil.componentsToReadable(ComponentSerializer.parse(json));
                 }
                 Object fallback = packet.getChatComponents().read(0);
                 if (fallback instanceof WrappedChatComponent) {
                     String json = ((WrappedChatComponent) fallback).getJson();
-                    return TextComponent.toPlainText(ComponentSerializer.parse(json));
+                    return ColorUtil.componentsToReadable(ComponentSerializer.parse(json));
                 }
             } else if (packet.getType() == PacketType.Play.Server.CHAT) {
-                // 旧版本或 1.18 聊天消息
                 Object content = packet.getChatComponents().read(0);
                 if (content != null) {
                     if (content instanceof BaseComponent[]) {
-                        return TextComponent.toPlainText((BaseComponent[]) content);
+                        return ColorUtil.componentsToReadable((BaseComponent[]) content);
                     } else if (content instanceof BaseComponent) {
-                        return TextComponent.toPlainText((BaseComponent) content);
+                        return ColorUtil.componentToReadable((BaseComponent) content);
                     } else if (content instanceof WrappedChatComponent) {
                         String json = ((WrappedChatComponent) content).getJson();
-                        return TextComponent.toPlainText(ComponentSerializer.parse(json));
+                        return ColorUtil.componentsToReadable(ComponentSerializer.parse(json));
                     }
                 }
             } else if (packet.getType() == PacketType.Play.Server.SET_ACTION_BAR_TEXT
@@ -149,23 +144,21 @@ public class PacketCaptureManager {
                 Object content = packet.getChatComponents().read(0);
                 if (content instanceof WrappedChatComponent) {
                     String json = ((WrappedChatComponent) content).getJson();
-                    return TextComponent.toPlainText(ComponentSerializer.parse(json));
+                    return ColorUtil.componentsToReadable(ComponentSerializer.parse(json));
                 } else if (content instanceof BaseComponent[]) {
-                    return TextComponent.toPlainText((BaseComponent[]) content);
+                    return ColorUtil.componentsToReadable((BaseComponent[]) content);
                 } else if (content instanceof BaseComponent) {
-                    return TextComponent.toPlainText((BaseComponent) content);
+                    return ColorUtil.componentToReadable((BaseComponent) content);
                 }
             }
         } catch (Exception e) {
-            // 忽略提取错误，可能是由于版本差异导致字段索引不同
+            // 忽略提取错误
         }
         return null;
     }
 
     /**
      * 开始为指定玩家捕获数据包
-     * 
-     * @param player 目标玩家
      */
     public void startCapture(Player player) {
         if (!enabled) return;
@@ -174,9 +167,6 @@ public class PacketCaptureManager {
 
     /**
      * 停止为指定玩家捕获数据包并返回捕获的内容
-     * 
-     * @param player 目标玩家
-     * @return 捕获到的所有消息合并后的字符串
      */
     public String stopCapture(Player player) {
         if (!enabled) return "";
@@ -186,9 +176,6 @@ public class PacketCaptureManager {
 
     /**
      * 检查是否正在为该玩家捕获数据包
-     * 
-     * @param player 目标玩家
-     * @return 如果正在捕获则返回 true
      */
     public boolean isCapturing(Player player) {
         return captureBuffers.containsKey(player.getUniqueId());
@@ -196,9 +183,6 @@ public class PacketCaptureManager {
 
     /**
      * 获取当前捕获的内容（不清除）
-     * 
-     * @param player 目标玩家
-     * @return 当前捕获的内容，如果未开始捕获则返回空字符串
      */
     public String peekCapture(Player player) {
         if (!enabled) return "";

@@ -951,7 +951,7 @@ public class ToolExecutor {
      */
     private String buildCommandResult(String command, String packetOutput, String proxyOutput, boolean success) {
         if (!proxyOutput.isEmpty()) {
-            return proxyOutput;
+            return ColorUtil.legacyToReadable(proxyOutput);
         }
         if (!packetOutput.isEmpty()) {
             return packetOutput;
@@ -1014,9 +1014,9 @@ public class ToolExecutor {
         if (args[0] instanceof String) {
             String msg = (String) args[0];
             if (output.length() > 0) output.append("\n");
-            output.append(ChatColor.stripColor(msg));
+            output.append(msg);
             if (methodName.equals("sendActionBar")) {
-                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, 
+                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
                     new net.md_5.bungee.api.chat.TextComponent(msg));
             } else {
                 player.sendMessage(msg);
@@ -1024,13 +1024,13 @@ public class ToolExecutor {
         } else if (args[0] instanceof String[]) {
             for (String msg : (String[]) args[0]) {
                 if (output.length() > 0) output.append("\n");
-                output.append(ChatColor.stripColor(msg));
+                output.append(msg);
                 player.sendMessage(msg);
             }
         } else if (args.length > 1 && args[0] instanceof java.util.UUID && args[1] instanceof String) {
             String msg = (String) args[1];
             if (output.length() > 0) output.append("\n");
-            output.append(ChatColor.stripColor(msg));
+            output.append(msg);
             player.sendMessage(msg);
         } else {
             handleComponentMessage(player, output, args[0], methodName);
@@ -1058,14 +1058,16 @@ public class ToolExecutor {
             }
 
             if (component != null) {
-                java.lang.reflect.Method plainTextMethod = Class.forName("net.kyori.adventure.text.serializer.plain.PlainComponentSerializer").getMethod("plain");
-                Object serializer = plainTextMethod.invoke(null);
-                java.lang.reflect.Method serializeMethod = serializer.getClass().getMethod("serialize", componentClass);
-                String extracted = (String) serializeMethod.invoke(serializer, component);
+                // 使用 LegacyComponentSerializer 保留颜色信息（输出 § 码）
+                Class<?> legacySerializerClass = Class.forName("net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer");
+                java.lang.reflect.Method legacySection = legacySerializerClass.getMethod("legacySection");
+                Object legacySerializer = legacySection.invoke(null);
+                java.lang.reflect.Method serializeMethod = legacySerializer.getClass().getMethod("serialize", componentClass);
+                String extracted = (String) serializeMethod.invoke(legacySerializer, component);
 
                 if (extracted != null && !extracted.isEmpty()) {
                     if (output.length() > 0) output.append("\n");
-                    output.append(ChatColor.stripColor(extracted));
+                    output.append(extracted);
 
                     if (methodName.equals("sendActionBar")) {
                         try {
@@ -1118,7 +1120,7 @@ public class ToolExecutor {
                 if (component == null) return;
                 String legacyText = net.md_5.bungee.api.chat.TextComponent.toLegacyText(component);
                 if (output.length() > 0) output.append("\n");
-                output.append(ChatColor.stripColor(legacyText));
+                output.append(legacyText);
                 player.spigot().sendMessage(component);
             }
 
