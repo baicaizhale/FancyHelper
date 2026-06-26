@@ -164,14 +164,12 @@ public class PromptManager {
         // #read: 读取文件内容，返回带行号的内容，供 #edit 定位使用
         // #edit: 修改文件内容，必须先 #read 获取行号，自动保留缩进和注释
         sb.append("[File Tools] (Results not visible to players)\n");
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
-            sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
-        }
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+            sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
             sb.append("  #read: <path> [start-end]  - Read file with line numbers. Example: #read: config.yml 1-50\n");
             sb.append("    Line numbers in output are used to target #edit precisely.\n");
         }
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "edit")) {
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
             sb.append("  #edit: <path>|<range>|<original>|<replacement>  - Edit file by matching original text.\n");
             sb.append("    Workflow: #read first → note line numbers → #edit with exact range.\n");
             sb.append("    Indentation and comments are auto-preserved.\n");
@@ -182,7 +180,7 @@ public class PromptManager {
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
             sb.append("  #write: <path>|<content>  - Completely overwrite a file with new content.\n");
             sb.append("    For existing files: you MUST #read the file first in the same session.\n");
-            sb.append("    Content after the first | is written as-is. Use \\n for newlines OR put content on next line.\n");
+            sb.append("    Use \\n for newlines, \\\\n for literal \\n.\n");
             sb.append("    Example: #write: config.yml|enabled: true\\nsetting: value\n");
             sb.append("    Constraint: #write must be the last part of response. No #end after it.\n");
         }
@@ -393,10 +391,8 @@ public class PromptManager {
         sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
 
         sb.append("[File Tools]\n");
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
-            sb.append("  #list: <path>    - List directory.\n");
-        }
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+            sb.append("  #list: <path>    - List directory.\n");
             sb.append("  #read: <path> [start-end]  - Read file with line numbers.\n");
         }
         sb.append("  Note: #edit and #write are NOT available in plan mode.\n\n");

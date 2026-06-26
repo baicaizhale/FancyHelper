@@ -1608,6 +1608,8 @@ public class CLIManager {
         player.spigot().sendMessage(message);
     }
 
+    private static final java.util.Set<String> FILE_OP_TYPES = java.util.Set.of("LS", "READ", "EDIT", "DIFF", "WRITE");
+
     public void handleConfirm(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -1620,11 +1622,11 @@ public class CLIManager {
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
                 generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
-                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:") || cmd.startsWith("EDIT:")) {
-                    String[] parts = cmd.split(":", 2);
-                    String type = parts[0].toLowerCase();
-                    String args = parts[1];
-                    // 将内部类型映射到配置中的工具名称
+                int colonIdx = cmd.indexOf(':');
+                String prefix = colonIdx > 0 ? cmd.substring(0, colonIdx).toUpperCase() : "";
+                if (FILE_OP_TYPES.contains(prefix)) {
+                    String type = cmd.substring(0, colonIdx).toLowerCase();
+                    String args = cmd.substring(colonIdx + 1);
                     String toolName = mapTypeToToolName(type);
                     checkVerificationAndExecute(player, type, toolName, args);
                 } else {
@@ -1654,16 +1656,14 @@ public class CLIManager {
     }
 
     /**
-     * 将内部类型映射到配置中的工具名称
-     * @param type 内部类型（ls, read, edit, diff）
-     * @return 配置中的工具名称（ls, read, edit）
+     * 将内部类型映射到配置中的工具名称（read/write 两大权限组）
+     * @param type 内部类型（ls, read, edit, diff, write）
+     * @return 配置中的工具名称（read, write）
      */
     private String mapTypeToToolName(String type) {
         return switch (type.toLowerCase()) {
-            case "ls" -> "ls";
-            case "read" -> "read";
-            case "edit", "diff" -> "edit";
-            case "write" -> "write";
+            case "ls", "read" -> "read";
+            case "edit", "diff", "write" -> "write";
             default -> type;
         };
     }

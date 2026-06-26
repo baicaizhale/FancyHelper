@@ -486,7 +486,6 @@ public class ToolExecutor {
                 final String finalViewUrl = viewUrl;
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
                     displayFileOperationResult(player, type, finalResult);
                     cliManager.feedbackToAI(player, "#" + type + "_result: " + finalResult);
 
@@ -514,6 +513,10 @@ public class ToolExecutor {
         if (pipeIdx == -1) return null;
         String path = args.substring(0, pipeIdx).trim();
         String content = args.substring(pipeIdx + 1);
+        // AI 用 \n 表示换行，\\n 表示字面 \n
+        content = content.replace("\\\\n", "");
+        content = content.replace("\\n", "\n");
+        content = content.replace("", "\\n");
 
         final String baseUrl = "https://view-fancy.baicaizhale.top";
 
@@ -936,7 +939,10 @@ public class ToolExecutor {
             parentDir.mkdirs();
         }
 
-        // 写入文件
+        // \\n → 字面 \n, \n → 真实换行
+        content = content.replace("\\\\n", "");
+        content = content.replace("\\n", "\n");
+        content = content.replace("", "\\n");
         Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
         return "成功写入文件: " + path + " (" + content.length() + " 字符)";
@@ -1053,7 +1059,6 @@ public class ToolExecutor {
                         }
                     }
                     String finalResult = buildCommandResult(command, finalPacketOutput, currentProxyOutput, finalSuccess);
-                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
                     cliManager.feedbackToAI(player, "#run_result: " + finalResult);
                     return;
                 }
@@ -1068,7 +1073,6 @@ public class ToolExecutor {
                     }
                     
                     String finalResult = buildCommandResult(command, delayedPacketOutput, output.toString(), finalSuccess);
-                    player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
                     cliManager.feedbackToAI(player, "#run_result: " + finalResult);
                 }, 100L);
 
@@ -1929,10 +1933,8 @@ public class ToolExecutor {
      */
     private String mapTypeToToolName(String type) {
         return switch (type.toLowerCase()) {
-            case "ls" -> "ls";
-            case "read" -> "read";
-            case "edit", "diff" -> "edit";
-            case "write" -> "write";
+            case "ls", "read" -> "read";
+            case "edit", "diff", "write" -> "write";
             default -> type;
         };
     }
