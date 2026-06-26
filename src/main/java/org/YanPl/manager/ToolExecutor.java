@@ -108,6 +108,9 @@ public class ToolExecutor {
             case "#read":
                 handleFileTool(player, "read", args, session);
                 break;
+            case "#write":
+                handleFileTool(player, "write", args, session);
+                break;
             case "#edit":
                 handleFileTool(player, "edit", args, session);
                 break;
@@ -227,15 +230,11 @@ public class ToolExecutor {
             manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
-        } else if (lowerToolName.equals("#edit")) {
-            String[] parts = args.split("\\|", 4);
+        } else if (lowerToolName.equals("#edit") || lowerToolName.equals("#write")) {
+            String[] parts = args.split("\\|", lowerToolName.equals("#edit") ? 4 : 2);
             String path = parts.length > 0 ? parts[0].trim() : "";
-            player.sendMessage(ChatColor.GRAY + "〇 正在修改文件: " + ChatColor.WHITE + path);
-            if (parts.length >= 4) {
-                player.sendMessage(ChatColor.GRAY + "行号范围: " + ChatColor.WHITE + parts[1]);
-                player.sendMessage(ChatColor.GRAY + "原始内容: " + ChatColor.WHITE + parts[2]);
-                player.sendMessage(ChatColor.GRAY + "修改为: " + ChatColor.WHITE + parts[3]);
-            }
+            String label = lowerToolName.equals("#edit") ? "修改" : "覆写";
+            player.sendMessage(ChatColor.GRAY + "〇 正在" + label + "文件: " + ChatColor.WHITE + path);
         } else if (lowerToolName.equals("#exit")) {
             player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
         } else if (lowerToolName.equals("#skill")) {
@@ -356,11 +355,13 @@ public class ToolExecutor {
     private void handleFileTool(Player player, String type, String args, DialogueSession session) {
         UUID uuid = player.getUniqueId();
 
+        // 提取路径用于显示和 read 跟踪
+        String pathArg = args == null ? "" : args.trim();
+
         // #ls 和 #read 不需要确认，直接执行
         if ("ls".equals(type) || "read".equals(type)) {
             // 显示工具调用信息
             String displayType = type.equals("ls") ? "ListDir" : "ReadFile";
-            String pathArg = args == null ? "" : args.trim();
             String[] parts = pathArg.split("\\s+");
             String displayPath = parts.length > 0 ? parts[0] : "";
             player.sendMessage(ChatColor.GRAY + ">> " + ChatColor.WHITE + displayType + " " + displayPath);
@@ -377,19 +378,54 @@ public class ToolExecutor {
             String toolName = mapTypeToToolName(type);
             if (plugin.getConfigManager().isPlayerToolEnabled(player, toolName)) {
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+                // 记录已读取的文件（用于 #write 的 read-before-write 检查），规范化路径
+                if ("read".equals(type) && session != null && !displayPath.isEmpty()) {
+                    String normalized = displayPath.replace('\\', '/');
+                    if (normalized.startsWith("./")) normalized = normalized.substring(2);
+                    session.addReadFile(normalized);
+                }
                 executeFileOperation(player, type, args);
             } else {
                 player.sendMessage(ChatColor.YELLOW + "检测到调用 " + toolName + "，但该工具尚未完成首次验证。");
                 plugin.getVerificationManager().startVerification(player, toolName, () -> {
                     plugin.getConfigManager().setPlayerToolEnabled(player, toolName, true);
                     cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+                    if ("read".equals(type) && session != null && !displayPath.isEmpty()) {
+                        String normalized = displayPath.replace('\\', '/');
+                        if (normalized.startsWith("./")) normalized = normalized.substring(2);
+                        session.addReadFile(normalized);
+                    }
                     executeFileOperation(player, type, args);
                 });
             }
             return;
         }
 
-        // #edit 需要确认（YOLO模式除外，SMART模式也不特殊处理，与NORMAL一致）
+        // #write 的 read-before-write 检查
+        if ("write".equals(type)) {
+            String writePath = pathArg.contains("|") ? pathArg.substring(0, pathArg.indexOf("|")).trim() : pathArg.trim();
+            if (!writePath.isEmpty()) {
+                File root = Bukkit.getWorldContainer();
+                File targetFile = new File(root, writePath);
+                if (targetFile.exists()) {
+                    // 规范化路径用于对比
+                    String normalizedPath;
+                    try {
+                        normalizedPath = root.toPath().relativize(targetFile.toPath()).toString().replace('\\', '/');
+                    } catch (Exception e) {
+                        normalizedPath = writePath.replace('\\', '/');
+                    }
+                    if (session == null || !session.hasReadFile(normalizedPath)) {
+                        String errorMsg = "错误：文件 " + normalizedPath + " 已存在。请先使用 #read 读取该文件后再使用 #write。";
+                        cliManager.feedbackToAI(player, "#write_result: " + errorMsg);
+                        player.sendMessage(ChatColor.RED + errorMsg);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // #edit 和 #write 需要确认（YOLO模式除外，SMART模式也不特殊处理，与NORMAL一致）
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             String pendingStr = type.toUpperCase() + ":" + args;
             cliManager.setPendingCommand(uuid, pendingStr);
@@ -440,12 +476,28 @@ public class ToolExecutor {
                 File root = Bukkit.getWorldContainer();
                 String result = executeFileOperationInternal(root, type, args);
 
+                // #write 成功后异步推送到 view-fancy
+                String viewUrl = null;
+                if ("write".equals(type) && result.startsWith("成功写入文件:")) {
+                    viewUrl = submitToViewFancy(args);
+                }
+
                 final String finalResult = result;
+                final String finalViewUrl = viewUrl;
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     player.sendMessage(ChatColor.GRAY + "⇒ 反馈已发送至 Fancy");
                     displayFileOperationResult(player, type, finalResult);
                     cliManager.feedbackToAI(player, "#" + type + "_result: " + finalResult);
+
+                    if (finalViewUrl != null) {
+                        TextComponent link = new TextComponent(ChatColor.GRAY + "📄 在线查看: ");
+                        TextComponent urlComp = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + finalViewUrl);
+                        urlComp.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, finalViewUrl));
+                        urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击在浏览器中查看")));
+                        link.addExtra(urlComp);
+                        player.spigot().sendMessage(link);
+                    }
                 });
             } catch (Exception e) {
                 plugin.getCloudErrorReport().report(e);
@@ -455,6 +507,38 @@ public class ToolExecutor {
                 });
             }
         });
+    }
+
+    private String submitToViewFancy(String args) {
+        int pipeIdx = args.indexOf("|");
+        if (pipeIdx == -1) return null;
+        String path = args.substring(0, pipeIdx).trim();
+        String content = args.substring(pipeIdx + 1);
+
+        final String baseUrl = "https://view-fancy.baicaizhale.top";
+
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            String json = new com.google.gson.Gson().toJson(java.util.Map.of("path", path, "content", content));
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(baseUrl + "/api/submit"))
+                .header("Content-Type", "application/json")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                .timeout(java.time.Duration.ofSeconds(10))
+                .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(response.body()).getAsJsonObject();
+                String id = obj.get("id").getAsString();
+                return baseUrl + "/" + id;
+            }
+        } catch (Exception e) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().warning("[ViewFancy] 推送失败: " + e.getMessage());
+            }
+        }
+        return null;
     }
 
     /**
@@ -472,6 +556,8 @@ public class ToolExecutor {
             return executeReadOperation(root, pathArg);
         } else if (type.equals("edit")) {
             return executeDiffOperation(root, pathArg);
+        } else if (type.equals("write")) {
+            return executeWriteOperation(root, pathArg);
         }
 
         return "错误: 未知操作类型";
@@ -816,6 +902,47 @@ public class ToolExecutor {
     }
 
     /**
+     * 执行 write 操作 — 完全覆写文件内容
+     * 格式：#write: <path>|<content>
+     * 对于已存在的文件，必须先 #read 才能 #write
+     */
+    private String executeWriteOperation(File root, String pathArg) throws IOException {
+        int pipeIndex = pathArg.indexOf("|");
+        if (pipeIndex == -1) {
+            return "错误: #write 格式不正确，正确格式：#write: path|content";
+        }
+
+        String path = pathArg.substring(0, pipeIndex).trim();
+        String content = pathArg.substring(pipeIndex + 1);
+
+        if (path.isEmpty()) {
+            return "错误: 文件路径不能为空";
+        }
+
+        // 处理路径前缀
+        if (path.startsWith("/") || path.startsWith("\\")) {
+            path = path.substring(1);
+        }
+
+        File file = new File(root, path);
+
+        if (!isWithinRoot(root, file)) {
+            return "错误: 路径超出服务器目录限制";
+        }
+
+        // 确保父目录存在
+        File parentDir = file.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            parentDir.mkdirs();
+        }
+
+        // 写入文件
+        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+
+        return "成功写入文件: " + path + " (" + content.length() + " 字符)";
+    }
+
+    /**
      * 检查路径是否在根目录内
      */
     private boolean isWithinRoot(File root, File file) {
@@ -863,6 +990,9 @@ public class ToolExecutor {
                     player.sendMessage(ChatColor.GRAY + "─────────────────────────────────");
                 }
             }
+        } else if (type.equals("write")) {
+            player.sendMessage(ChatColor.GRAY + "〇 已成功写入文件。");
+            // 路径信息已在 submitToViewFancy 的链接中体现
         }
     }
 
@@ -1794,14 +1924,15 @@ public class ToolExecutor {
 
     /**
      * 将内部类型映射到配置中的工具名称
-     * @param type 内部类型（ls, read, edit, diff）
-     * @return 配置中的工具名称（ls, read, edit）
+     * @param type 内部类型（ls, read, edit, diff, write）
+     * @return 配置中的工具名称（ls, read, edit, write）
      */
     private String mapTypeToToolName(String type) {
         return switch (type.toLowerCase()) {
             case "ls" -> "ls";
             case "read" -> "read";
             case "edit", "diff" -> "edit";
+            case "write" -> "write";
             default -> type;
         };
     }
@@ -1846,6 +1977,8 @@ public class ToolExecutor {
             default -> false;
         };
     }
+
+    /**
 
     /**
      * 处理 #mcp_tools — 列出所有 MCP 外部工具及其状态

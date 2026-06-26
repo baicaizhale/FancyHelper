@@ -1663,6 +1663,7 @@ public class CLIManager {
             case "ls" -> "ls";
             case "read" -> "read";
             case "edit", "diff" -> "edit";
+            case "write" -> "write";
             default -> type;
         };
     }
@@ -2759,7 +2760,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -2919,7 +2920,7 @@ public class CLIManager {
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
         
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
