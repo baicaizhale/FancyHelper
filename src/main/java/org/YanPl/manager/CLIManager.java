@@ -2768,14 +2768,11 @@ public class CLIManager {
             int hashIndex = cleanResponse.indexOf("#", currentPos);
             if (hashIndex == -1) break;
 
-            // 检查是否为有效的工具调用起始位置
-            // 为了增加鲁棒性，不再强制要求必须在行首，但要求前面不能是字母或数字（防止误触发，如 CSS#id）
-            boolean isValidStart = true;
-            if (hashIndex > 0) {
+            // 只认行首 #，防止 AI 在对话中提到 #tool_name 时误触发
+            boolean isValidStart = hashIndex == 0;
+            if (!isValidStart) {
                 char prev = cleanResponse.charAt(hashIndex - 1);
-                if (Character.isLetterOrDigit(prev)) {
-                    isValidStart = false;
-                }
+                isValidStart = prev == '\n' || prev == '\r';
             }
 
             if (isValidStart) {
@@ -2927,12 +2924,11 @@ public class CLIManager {
             int hashIndex = cleanResponse.indexOf("#", currentPos);
             if (hashIndex == -1) break;
 
-            boolean isValidStart = true;
-            if (hashIndex > 0) {
+            // 只认行首 #，防止 AI 在对话中提到 #tool_name 时误触发
+            boolean isValidStart = hashIndex == 0;
+            if (!isValidStart) {
                 char prev = cleanResponse.charAt(hashIndex - 1);
-                if (Character.isLetterOrDigit(prev)) {
-                    isValidStart = false;
-                }
+                isValidStart = prev == '\n' || prev == '\r';
             }
 
             if (isValidStart) {
