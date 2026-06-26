@@ -593,13 +593,45 @@ public class ConfigManager {
     }
 
     public boolean isPlayerToolEnabled(org.bukkit.entity.Player player, String tool) {
-        String path = player.getUniqueId() + "." + tool;
-        return playerData.getBoolean(path, false);
+        String uuid = player.getUniqueId().toString();
+        String lower = tool.toLowerCase();
+
+        // 映射到 read/write 两大权限组
+        String group = switch (lower) {
+            case "ls", "read" -> "read";
+            case "edit", "diff", "write" -> "write";
+            default -> lower;
+        };
+
+        // write 权限隐含 read
+        if ("read".equals(group) && playerData.getBoolean(uuid + ".write", false)) {
+            return true;
+        }
+
+        // 检查组权限
+        if (playerData.getBoolean(uuid + "." + group, false)) return true;
+
+        // 旧版兼容：检查独立工具条目
+        return playerData.getBoolean(uuid + "." + lower, false);
     }
 
     public void setPlayerToolEnabled(org.bukkit.entity.Player player, String tool, boolean enabled) {
-        String path = player.getUniqueId() + "." + tool;
-        playerData.set(path, enabled);
+        String uuid = player.getUniqueId().toString();
+        String lower = tool.toLowerCase();
+
+        // 映射到 read/write 两大权限组
+        String group = switch (lower) {
+            case "ls", "read" -> "read";
+            case "edit", "diff", "write" -> "write";
+            default -> lower;
+        };
+
+        if ("write".equals(group) && enabled) {
+            // write 同时授予 read
+            playerData.set(uuid + ".read", true);
+        }
+
+        playerData.set(uuid + "." + group, enabled);
         savePlayerData();
     }
 

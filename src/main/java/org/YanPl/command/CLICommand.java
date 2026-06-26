@@ -254,7 +254,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "toggle":
                 if (args.length > 1) {
                     String tool = args[1].toLowerCase();
-                    if (tool.equals("ls") || tool.equals("read") || tool.equals("edit")) {
+                    // 接受新分组名 (read/write) 和旧版独立名 (ls/edit) 的兼容
+                    if (tool.equals("read") || tool.equals("write") || tool.equals("ls") || tool.equals("edit")) {
                         boolean currentState = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
                         if (currentState) {
                             plugin.getConfigManager().setPlayerToolEnabled(player, tool, false);
@@ -561,16 +562,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
         player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Tool Permissions"));
         player.sendMessage("");
-        
-        // LS Tool
-        sendToolLine(player, "ls", "列出目录(ls)", plugin.getConfigManager().isPlayerToolEnabled(player, "ls"));
-        
-        // READ Tool
-        sendToolLine(player, "read", "读取文件(read)", plugin.getConfigManager().isPlayerToolEnabled(player, "read"));
-        
-        // EDIT Tool
-        sendToolLine(player, "edit", "编辑文件(edit)", plugin.getConfigManager().isPlayerToolEnabled(player, "edit"));
-        
+
+        // READ 权限（包含 #list #read）
+        sendToolLine(player, "read", "读取(read)", plugin.getConfigManager().isPlayerToolEnabled(player, "read"));
+
+        // WRITE 权限（包含 #edit #write，自动授予 read）
+        sendToolLine(player, "write", "写入(write)", plugin.getConfigManager().isPlayerToolEnabled(player, "write"));
+
         player.sendMessage("");
         player.sendMessage(ChatColor.GRAY + "  点击按钮切换工具权限。");
         player.sendMessage(ChatColor.GRAY + "  重新启用需要验证。");

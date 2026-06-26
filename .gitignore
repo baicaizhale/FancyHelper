@@ -17,6 +17,8 @@ frontend/
 node_modules/
 .claude/
 test-mcp
+view-fancy/
+
 # IntelliJ
 out/
 

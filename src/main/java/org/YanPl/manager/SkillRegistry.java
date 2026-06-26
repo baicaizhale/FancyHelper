@@ -203,7 +203,7 @@ public class SkillRegistry {
                 .filter(entry -> entry.getValue() >= 30)
                 .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
                 .limit(limit)
-                .map(AbstractMap.SimpleEntry::getKey)
+                .map(entry -> entry.getKey())
                 .collect(Collectors.toList());
     }
 
@@ -225,7 +225,7 @@ public class SkillRegistry {
      */
     public List<Skill> getUpdatableSkills() {
         return allSkills.stream()
-                .filter(Skill::isUpdatable)
+                .filter(skill -> skill.isUpdatable())
                 .collect(Collectors.toList());
     }
 

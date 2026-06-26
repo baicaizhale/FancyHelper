@@ -164,20 +164,25 @@ public class PromptManager {
         // #read: 读取文件内容，返回带行号的内容，供 #edit 定位使用
         // #edit: 修改文件内容，必须先 #read 获取行号，自动保留缩进和注释
         sb.append("[File Tools] (Results not visible to players)\n");
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
-            sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
-        }
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+            sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
             sb.append("  #read: <path> [start-end]  - Read file with line numbers. Example: #read: config.yml 1-50\n");
             sb.append("    Line numbers in output are used to target #edit precisely.\n");
         }
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "edit")) {
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
             sb.append("  #edit: <path>|<range>|<original>|<replacement>  - Edit file by matching original text.\n");
             sb.append("    Workflow: #read first → note line numbers → #edit with exact range.\n");
             sb.append("    Indentation and comments are auto-preserved.\n");
             sb.append("    Formats: path|10-10|old|new  OR  path|auto|old|new\n");
             sb.append("    Example: #edit: config.yml|10-10|enabled: true|enabled: false\n");
             sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
+        }
+        if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
+            sb.append("  #write: <path>|<content>  - Completely overwrite a file with new content.\n");
+            sb.append("    For existing files: you MUST #read the file first in the same session.\n");
+            sb.append("    Use \\n for newlines, \\\\n for literal \\n.\n");
+            sb.append("    Example: #write: config.yml|enabled: true\\nsetting: value\n");
+            sb.append("    Constraint: #write must be the last part of response. No #end after it.\n");
         }
         // 禁止用 #read 访问 Skill 文件，必须用 #skill
         sb.append("  Note: Use #skill for Skill modules, NOT #read.\n\n");
@@ -289,7 +294,7 @@ public class PromptManager {
         
         // 获取已加载的 Skill IDs
         java.util.Set<String> loadedSkillIds = loadedSkills != null 
-            ? loadedSkills.stream().map(Skill::getId).map(String::toLowerCase).collect(java.util.stream.Collectors.toSet())
+            ? loadedSkills.stream().map(s -> s.getId()).map(s -> s.toLowerCase()).collect(java.util.stream.Collectors.toSet())
             : java.util.Collections.emptySet();
         
         if (skillSummaries.isEmpty()) {
@@ -386,13 +391,11 @@ public class PromptManager {
         sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
 
         sb.append("[File Tools]\n");
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "ls")) {
-            sb.append("  #list: <path>    - List directory.\n");
-        }
         if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+            sb.append("  #list: <path>    - List directory.\n");
             sb.append("  #read: <path> [start-end]  - Read file with line numbers.\n");
         }
-        sb.append("  Note: #edit is NOT available in plan mode.\n\n");
+        sb.append("  Note: #edit and #write are NOT available in plan mode.\n\n");
 
         sb.append("[Task Management]\n");
         sb.append("  #todo: <json>  - Create/update task list.\n");
@@ -417,7 +420,7 @@ public class PromptManager {
         sb.append("1. Design a thorough plan before calling #start.\n");
         sb.append("2. Use #search and #skill to gather necessary knowledge.\n");
         sb.append("3. Use #todo to organize your plan into clear, ordered steps.\n");
-        sb.append("4. NEVER call #run or #edit in plan mode — these are blocked.\n");
+        sb.append("4. NEVER call #run, #edit, or #write in plan mode — these are blocked.\n");
         sb.append("5. Call #start only when your plan is complete and ready to execute.\n");
         sb.append("6. The player will choose the execution mode after #start.\n\n");
 

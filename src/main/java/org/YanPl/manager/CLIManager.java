@@ -1608,6 +1608,8 @@ public class CLIManager {
         player.spigot().sendMessage(message);
     }
 
+    private static final java.util.Set<String> FILE_OP_TYPES = java.util.Set.of("LS", "READ", "EDIT", "DIFF", "WRITE");
+
     public void handleConfirm(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -1620,11 +1622,11 @@ public class CLIManager {
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
                 generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
-                if (cmd.startsWith("LS:") || cmd.startsWith("READ:") || cmd.startsWith("DIFF:") || cmd.startsWith("EDIT:")) {
-                    String[] parts = cmd.split(":", 2);
-                    String type = parts[0].toLowerCase();
-                    String args = parts[1];
-                    // 将内部类型映射到配置中的工具名称
+                int colonIdx = cmd.indexOf(':');
+                String prefix = colonIdx > 0 ? cmd.substring(0, colonIdx).toUpperCase() : "";
+                if (FILE_OP_TYPES.contains(prefix)) {
+                    String type = cmd.substring(0, colonIdx).toLowerCase();
+                    String args = cmd.substring(colonIdx + 1);
                     String toolName = mapTypeToToolName(type);
                     checkVerificationAndExecute(player, type, toolName, args);
                 } else {
@@ -1654,15 +1656,14 @@ public class CLIManager {
     }
 
     /**
-     * 将内部类型映射到配置中的工具名称
-     * @param type 内部类型（ls, read, edit, diff）
-     * @return 配置中的工具名称（ls, read, edit）
+     * 将内部类型映射到配置中的工具名称（read/write 两大权限组）
+     * @param type 内部类型（ls, read, edit, diff, write）
+     * @return 配置中的工具名称（read, write）
      */
     private String mapTypeToToolName(String type) {
         return switch (type.toLowerCase()) {
-            case "ls" -> "ls";
-            case "read" -> "read";
-            case "edit", "diff" -> "edit";
+            case "ls", "read" -> "read";
+            case "edit", "diff", "write" -> "write";
             default -> type;
         };
     }
@@ -2759,7 +2760,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -2767,14 +2768,11 @@ public class CLIManager {
             int hashIndex = cleanResponse.indexOf("#", currentPos);
             if (hashIndex == -1) break;
 
-            // 检查是否为有效的工具调用起始位置
-            // 为了增加鲁棒性，不再强制要求必须在行首，但要求前面不能是字母或数字（防止误触发，如 CSS#id）
-            boolean isValidStart = true;
-            if (hashIndex > 0) {
+            // 只认行首 #，防止 AI 在对话中提到 #tool_name 时误触发
+            boolean isValidStart = hashIndex == 0;
+            if (!isValidStart) {
                 char prev = cleanResponse.charAt(hashIndex - 1);
-                if (Character.isLetterOrDigit(prev)) {
-                    isValidStart = false;
-                }
+                isValidStart = prev == '\n' || prev == '\r';
             }
 
             if (isValidStart) {
@@ -2919,19 +2917,18 @@ public class CLIManager {
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
         
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
             int hashIndex = cleanResponse.indexOf("#", currentPos);
             if (hashIndex == -1) break;
 
-            boolean isValidStart = true;
-            if (hashIndex > 0) {
+            // 只认行首 #，防止 AI 在对话中提到 #tool_name 时误触发
+            boolean isValidStart = hashIndex == 0;
+            if (!isValidStart) {
                 char prev = cleanResponse.charAt(hashIndex - 1);
-                if (Character.isLetterOrDigit(prev)) {
-                    isValidStart = false;
-                }
+                isValidStart = prev == '\n' || prev == '\r';
             }
 
             if (isValidStart) {
@@ -3851,7 +3848,7 @@ public class CLIManager {
         TextComponent space = new TextComponent(" ");
         line1.addExtra(space);
 
-        TextComponent settingsBtn = new TextComponent("[⚙]");
+        TextComponent settingsBtn = new TextComponent("[🔧]");
         settingsBtn.setColor(net.md_5.bungee.api.ChatColor.GRAY);
         settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打开设置")));
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));

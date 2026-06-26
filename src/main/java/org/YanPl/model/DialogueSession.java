@@ -55,6 +55,20 @@ public class DialogueSession {
     private boolean verboseLogging = false;
     private boolean systemPromptLogged = false;
     private int lastLoggedMessageCount = 0;
+    private final Set<String> readFiles = new java.util.HashSet<>();
+
+    public void addReadFile(String path) {
+        readFiles.add(path);
+    }
+
+    public boolean hasReadFile(String path) {
+        return readFiles.contains(path);
+    }
+
+    public void clearReadFiles() {
+        readFiles.clear();
+    }
+
     private final Map<Long, ThoughtSnapshot> thoughtSnapshots = new LinkedHashMap<Long, ThoughtSnapshot>(64, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, ThoughtSnapshot> eldest) {
