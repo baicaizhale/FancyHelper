@@ -289,7 +289,7 @@ public class PromptManager {
         
         // 获取已加载的 Skill IDs
         java.util.Set<String> loadedSkillIds = loadedSkills != null 
-            ? loadedSkills.stream().map(Skill::getId).map(String::toLowerCase).collect(java.util.stream.Collectors.toSet())
+            ? loadedSkills.stream().map(s -> s.getId()).map(s -> s.toLowerCase()).collect(java.util.stream.Collectors.toSet())
             : java.util.Collections.emptySet();
         
         if (skillSummaries.isEmpty()) {

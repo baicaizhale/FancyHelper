@@ -3851,7 +3851,7 @@ public class CLIManager {
         TextComponent space = new TextComponent(" ");
         line1.addExtra(space);
 
-        TextComponent settingsBtn = new TextComponent("[⚙]");
+        TextComponent settingsBtn = new TextComponent("[🔧]");
         settingsBtn.setColor(net.md_5.bungee.api.ChatColor.GRAY);
         settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打开设置")));
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
