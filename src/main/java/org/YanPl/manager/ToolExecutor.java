@@ -230,11 +230,6 @@ public class ToolExecutor {
             manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
-        } else if (lowerToolName.equals("#edit") || lowerToolName.equals("#write")) {
-            String[] parts = args.split("\\|", lowerToolName.equals("#edit") ? 4 : 2);
-            String path = parts.length > 0 ? parts[0].trim() : "";
-            String label = lowerToolName.equals("#edit") ? "修改" : "覆写";
-            player.sendMessage(ChatColor.GRAY + "〇 正在" + label + "文件: " + ChatColor.WHITE + path);
         } else if (lowerToolName.equals("#exit")) {
             player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
         } else if (lowerToolName.equals("#skill")) {
@@ -434,11 +429,25 @@ public class ToolExecutor {
             return;
         }
 
-        // NORMAL 和 SMART 模式：都使用普通确认
+        // NORMAL 和 SMART 模式：显示文件路径 + 确认按钮在一行
         String pendingStr = type.toUpperCase() + ":" + args;
         cliManager.setPendingCommand(uuid, pendingStr);
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
-        sendConfirmButtons(player, "");
+
+        String[] parts = args.split("\\|", "edit".equals(type) ? 4 : 2);
+        String filePath = parts.length > 0 ? parts[0].trim() : "";
+        String label = "edit".equals(type) ? "修改" : "覆写";
+        TextComponent msg = new TextComponent(ChatColor.GRAY + "✍ 正在" + label + "文件 " + ChatColor.WHITE + filePath + "    ");
+        TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔");
+        yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
+        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "确认执行操作")));
+        msg.addExtra(yBtn);
+        msg.addExtra(new TextComponent(" / "));
+        TextComponent nBtn = new TextComponent(ChatColor.RED + "✘");
+        nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli cancel"));
+        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "取消执行")));
+        msg.addExtra(nBtn);
+        player.spigot().sendMessage(msg);
     }
 
     /**
@@ -470,34 +479,34 @@ public class ToolExecutor {
      */
     public void executeFileOperation(Player player, String type, String args) {
         if (!plugin.isEnabled()) return;
-        
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 File root = Bukkit.getWorldContainer();
                 String result = executeFileOperationInternal(root, type, args);
 
-                // #write 成功后异步推送到 view-fancy
-                String viewUrl = null;
-                if ("write".equals(type) && result.startsWith("成功写入文件:")) {
-                    viewUrl = submitToViewFancy(args);
-                }
-
-                final String finalResult = result;
-                final String finalViewUrl = viewUrl;
                 if (!plugin.isEnabled()) return;
+                // 先展示文件操作结果，不等待 view-fancy 上传
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    displayFileOperationResult(player, type, finalResult);
-                    cliManager.feedbackToAI(player, "#" + type + "_result: " + finalResult);
-
-                    if (finalViewUrl != null) {
-                        TextComponent link = new TextComponent(ChatColor.GRAY + "📄 在线查看: ");
-                        TextComponent urlComp = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + finalViewUrl);
-                        urlComp.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, finalViewUrl));
-                        urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击在浏览器中查看")));
-                        link.addExtra(urlComp);
-                        player.spigot().sendMessage(link);
-                    }
+                    displayFileOperationResult(player, type, result);
+                    cliManager.feedbackToAI(player, "#" + type + "_result: " + result);
                 });
+
+                // #write 成功后异步推送到 view-fancy，不阻塞结果展示
+                if ("write".equals(type) && result.startsWith("成功写入文件:")) {
+                    String viewUrl = submitToViewFancy(args);
+                    if (viewUrl != null && plugin.isEnabled()) {
+                        final String fViewUrl = viewUrl;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            TextComponent link = new TextComponent(ChatColor.GRAY + "📄 在线查看: ");
+                            TextComponent urlComp = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + fViewUrl);
+                            urlComp.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, fViewUrl));
+                            urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击在浏览器中查看")));
+                            link.addExtra(urlComp);
+                            player.spigot().sendMessage(link);
+                        });
+                    }
+                }
             } catch (Exception e) {
                 plugin.getCloudErrorReport().report(e);
                 if (!plugin.isEnabled()) return;
@@ -997,8 +1006,7 @@ public class ToolExecutor {
                 }
             }
         } else if (type.equals("write")) {
-            player.sendMessage(ChatColor.GRAY + "〇 已成功写入文件。");
-            // 路径信息已在 submitToViewFancy 的链接中体现
+            // 写入完成后静默，无需额外消息
         }
     }
 
