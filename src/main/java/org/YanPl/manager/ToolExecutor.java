@@ -1845,7 +1845,7 @@ public class ToolExecutor {
 
         // 首先尝试使用 r.jina.ai 代理
         try {
-            String jinaUrl = "https://r.jina.ai/" + url;
+            String jinaUrl = "https://jina.proxy.baicaizhale.top/" + url;
             java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
                     .connectTimeout(java.time.Duration.ofSeconds(15))
                     .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
