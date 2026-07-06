@@ -2760,7 +2760,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -2917,7 +2917,7 @@ public class CLIManager {
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
         
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webread", "#mcp_tools", "#mcp");
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
@@ -3129,7 +3129,7 @@ public class CLIManager {
                     // 仍然显示本次工具调用
                     String toolName = toolCall.split(":", 2)[0];
                     String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
-                    if ("#webread".equals(toolName)) {
+                    if ("#webfetch".equals(toolName)) {
                         player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + args.trim());
                     } else {
                         player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
@@ -3161,7 +3161,7 @@ public class CLIManager {
                 // 仍然显示本次工具调用
                 String toolName = toolCall.split(":", 2)[0];
                 String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
-                if ("#webread".equals(toolName)) {
+                if ("#webfetch".equals(toolName)) {
                     player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + args.trim());
                 } else {
                     player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
