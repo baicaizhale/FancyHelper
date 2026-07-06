@@ -428,7 +428,7 @@ public class ToolExecutor {
         cliManager.setPendingCommand(uuid, pendingStr);
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
 
-        String[] parts = args.split("\\|", "edit".equals(type) ? 4 : 2);
+        String[] parts = pathArg.split("\\|", "edit".equals(type) ? 4 : 2);
         String filePath = parts.length > 0 ? parts[0].trim() : "";
         String label = "edit".equals(type) ? "修改" : "覆写";
         TextComponent msg = new TextComponent(ChatColor.GRAY + "✍ 正在" + label + "文件 " + ChatColor.WHITE + filePath + "    ");
