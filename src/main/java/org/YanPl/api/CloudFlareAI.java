@@ -1230,7 +1230,7 @@ public class CloudFlareAI {
                     .uri(URI.create(url))
                     .header("Authorization", "Bearer " + cfKey)
                     .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
@@ -1309,7 +1309,7 @@ public class CloudFlareAI {
                     .uri(URI.create(apiUrl))
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 

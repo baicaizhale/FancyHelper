@@ -1523,10 +1523,19 @@ public class CLIManager {
         sendExitMessage(player);
         playFeedbackSound(player, "cli_exit");
 
-        // 保存会话历史到持久化存储
+        // 保存会话历史到持久化存储（只有有用户消息时才保存）
         DialogueSession session = sessions.get(uuid);
-        if (session != null && session.getHistory().size() > 0) {
-            saveSessionToHistory(uuid, session);
+        if (session != null) {
+            boolean hasUserMessage = false;
+            for (DialogueSession.Message msg : session.getHistory()) {
+                if ("user".equals(msg.getRole())) {
+                    hasUserMessage = true;
+                    break;
+                }
+            }
+            if (hasUserMessage) {
+                saveSessionToHistory(uuid, session);
+            }
         }
         
         activeCLIPayers.remove(uuid);
