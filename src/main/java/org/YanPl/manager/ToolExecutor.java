@@ -521,7 +521,7 @@ public class ToolExecutor {
         content = content.replace("\\n", "\n");
         content = content.replace("", "\\n");
 
-        final String baseUrl = "https://view-fancy.baicaizhale.top";
+        final String baseUrl = "https://view.fancy.baicaizhale.top";
 
         try {
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
