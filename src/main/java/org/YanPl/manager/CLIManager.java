@@ -424,10 +424,6 @@ public class CLIManager {
      * 加载所有可用的会话历史
      * 在插件启动时自动检测并加载有效的会话历史文件
      */
-    /**
-     * 清理旧格式的会话历史文件（temp/history 目录）
-     * 现在使用新的存储格式（sessions/玩家名/UUID.json），此方法仅用于清理旧文件
-     */
     private void loadAvailableSessionHistories() {
         try {
             Path historyDir = plugin.getDataFolder().toPath().resolve("temp").resolve("history");
@@ -444,16 +440,15 @@ public class CLIManager {
                     try {
                         String fileName = path.getFileName().toString();
                         String uuidStr = fileName.substring(0, fileName.length() - 5); // 去掉.json后缀
-
+                        
                         try {
-                            // 验证文件名是否是有效的UUID格式
-                            UUID.fromString(uuidStr);
-
+                            UUID uuid = UUID.fromString(uuidStr);
+                            
                             // 读取并解析JSON
                             Gson gson = new Gson();
                             String json = Files.readString(path, StandardCharsets.UTF_8);
                             Map<String, Object> sessionData = gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
-
+                            
                             // 检查时间戳
                             Object timestampObj = sessionData.getOrDefault("timestamp", 0);
                             long timestamp;
@@ -466,23 +461,68 @@ public class CLIManager {
                             } else {
                                 timestamp = 0;
                             }
-
-                            // 删除过期或无效的文件
-                            if (now - timestamp > thirtyMinutesMs) {
+                            
+                            // 检查是否在30分钟内
+                            if (now - timestamp <= thirtyMinutesMs) {
+                                // 创建新会话并恢复数据
+                                DialogueSession session = new DialogueSession();
+                                
+                                // 恢复对话模式
+                                String modeStr = (String) sessionData.getOrDefault("mode", "NORMAL");
+                                try {
+                                    DialogueSession.Mode mode = DialogueSession.Mode.valueOf(modeStr);
+                                    session.setMode(mode);
+                                } catch (IllegalArgumentException e) {
+                                    session.setMode(DialogueSession.Mode.NORMAL);
+                                }
+                                
+                                // 恢复对话历史
+                                Object messagesObj = sessionData.getOrDefault("messages", new ArrayList<>());
+                                if (messagesObj instanceof List<?>) {
+                                    List<?> messagesList = (List<?>) messagesObj;
+                                    for (Object msgObj : messagesList) {
+                                        if (msgObj instanceof Map<?, ?>) {
+                                            Map<?, ?> msgMap = (Map<?, ?>) msgObj;
+                                            Object roleObj = msgMap.get("role");
+                                            String role = roleObj != null ? roleObj.toString() : "user";
+                                            Object contentObj = msgMap.get("content");
+                                            String content = contentObj != null ? contentObj.toString() : "";
+                                            Object thoughtObj = msgMap.get("thought");
+                                            String thought = thoughtObj != null ? thoughtObj.toString() : null;
+                                            session.addMessage(role, content, thought);
+                                        }
+                                    }
+                                }
+                                
+                                // 恢复工具调用历史
+                                Object toolCallsObj = sessionData.getOrDefault("toolCalls", new ArrayList<>());
+                                if (toolCallsObj instanceof List<?>) {
+                                    List<?> toolCallsList = (List<?>) toolCallsObj;
+                                    for (Object toolCallObj : toolCallsList) {
+                                        if (toolCallObj instanceof String) {
+                                            session.addToolCall((String) toolCallObj);
+                                        }
+                                    }
+                                }
+                                
+                                // 将会话存储到内存中，等待玩家上线时恢复
+                                sessions.put(uuid, session);
+                                
+                                if (plugin.getConfigManager().isDebug()) {
+                                    plugin.getLogger().info("[CLI] 已预加载会话历史: " + path.getFileName());
+                                }
+                                
+                                // 加载完成后删除历史文件
                                 Files.deleteIfExists(path);
                                 if (plugin.getConfigManager().isDebug()) {
-                                    plugin.getLogger().info("[CLI] 已删除过期的旧格式会话历史文件: " + path.getFileName());
+                                    plugin.getLogger().info("[CLI] 已删除会话历史文件: " + path.getFileName());
                                 }
                             } else {
-                                // 不再自动恢复会话，但保留文件让玩家通过其他方式访问
-                                // 或者可以考虑迁移到新格式
-                                if (plugin.getConfigManager().isDebug()) {
-                                    plugin.getLogger().info("[CLI] 发现旧格式会话历史文件: " + path.getFileName() + "（不再自动恢复）");
-                                }
+                                // 超过30分钟，删除过期文件
+                                Files.deleteIfExists(path);
                             }
                         } catch (IllegalArgumentException e) {
                             // UUID解析失败，删除无效文件
-                            Files.deleteIfExists(path);
                             if (plugin.getConfigManager().isDebug()) {
                                 plugin.getLogger().warning("[CLI] 无效的历史文件名: " + fileName);
                             }
@@ -1297,7 +1337,7 @@ public class CLIManager {
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在进入 FancyHelper。");
         }
-
+        
         // 检查用户协议
         if (!agreedPlayers.contains(uuid)) {
             if (plugin.getConfigManager().isDebug()) {
@@ -3153,7 +3193,7 @@ public class CLIManager {
             // 检查响应是否被截断
             if (aiResponse.isTruncated()) {
                 // 显示截断提示
-                player.sendMessage(ChatColor.YELLOW + "● 响应被截断，正在继续生成...");
+                player.sendMessage(ChatColor.YELLOW + "⨀ 响应被截断，正在继续生成...");
                 // 自动继续生成（streamedOutputTokens 不清除，延续到下一轮）
                 continueGeneration(player, session);
             } else {
@@ -3332,7 +3372,7 @@ public class CLIManager {
                     } else if (errorMsg != null && errorMsg.startsWith("FancyHelper > ")) {
                         player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f" + errorMsg.substring("FancyHelper > ".length())));
                     } else {
-                        player.sendMessage(ChatColor.RED + "● 继续生成失败: " + errorMsg);
+                        player.sendMessage(ChatColor.RED + "⨀ 继续生成失败: " + errorMsg);
                     }
                     // 控制台日志已在 CloudFlareAI.java 中输出
                     isGenerating.put(uuid, false);
