@@ -55,6 +55,7 @@ public class DialogueSession {
     private boolean verboseLogging = false;
     private boolean systemPromptLogged = false;
     private int lastLoggedMessageCount = 0;
+    private String sessionUUID = null; // 持久化标识，首次创建时分配
     private final Set<String> readFiles = new java.util.HashSet<>();
 
     public void addReadFile(String path) {
@@ -672,6 +673,20 @@ public class DialogueSession {
             return "";
         }
         return skill.getFormattedContent();
+    }
+
+    /**
+     * 获取会话的持久化 UUID
+     */
+    public String getSessionUUID() {
+        return sessionUUID;
+    }
+
+    /**
+     * 设置会话的持久化 UUID
+     */
+    public void setSessionUUID(String sessionUUID) {
+        this.sessionUUID = sessionUUID;
     }
 
     public static class Message {
