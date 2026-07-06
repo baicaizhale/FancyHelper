@@ -242,7 +242,7 @@ jobs:
           done
 
   # ==================== AI 生成发行注记 ====================
-  # 需要配置 CLOUDFLARE_API_KEY 密钥，该密钥需要有 Workers AI 权限
+  # 使用 Moonshot API (kimi-k2.6 模型)
   generate-overview:
     name: AI 生成发行注记
     runs-on: ubuntu-latest
@@ -255,16 +255,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 调用 Cloudflare AI 生成内容
+      - name: 调用 Moonshot AI 生成内容
         id: ai_gen
         env:
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}  # 需要Workers AI权限
-          CLOUDFLARE_ACCOUNT_ID: "70032e1e52c2d1a525a431169c4a86c7"
+          MOONSHOT_API_KEY: sk-xDtYOn9HUBoB2I6hM5TZxy9MFmHlME9LVCInHTllx7xe3nxQ
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.build.outputs.RELEASE_VERSION }}
         run: |
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          
+
           # 获取变更信息
           if [[ -n "$LAST_TAG" ]]; then
             COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"- %s" --no-merges)
@@ -301,29 +300,20 @@ jobs:
           echo "" >> /tmp/prompt.txt
           echo "请生成发行注记 Overview：" >> /tmp/prompt.txt
 
-          # 获取 Cloudflare Account ID
-          ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
-          if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "null" ]]; then
-            echo "未配置 CloudFlare Account ID，跳过生成 Overview"
-            echo "## Overview" > /tmp/overview.md
-            echo "* 自动生成的版本 v$VERSION 发行说明" >> /tmp/overview.md
-            exit 0
-          fi
-
-          echo "Account ID: $ACCOUNT_ID"
-
-          # 构建请求体
           PROMPT_CONTENT=$(cat /tmp/prompt.txt)
+
+          # 构建 Anthropic 格式请求体 (Moonshot 兼容)
           REQUEST_BODY=$(jq -n \
-            --arg model "@cf/meta/llama-3-8b-instruct" \
+            --arg model "kimi-k2.6" \
             --arg prompt "$PROMPT_CONTENT" \
             '{
               "model": $model,
+              "max_tokens": 2048,
+              "temperature": 0.3,
+              "thinking": {
+                "type": "disabled"
+              },
               "messages": [
-                {
-                  "role": "system",
-                  "content": "你是一个专业的技术文档撰写助手。请生成简洁、专业的发行说明 Overview 部分。"
-                },
                 {
                   "role": "user",
                   "content": $prompt
@@ -331,20 +321,23 @@ jobs:
               ]
             }')
 
-          # 调用 Cloudflare AI API
+          echo "调用 Moonshot API..."
+
+          # 调用 Moonshot API
           RESPONSE=$(curl -s -X POST \
-            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/@cf/meta/llama-3-8b-instruct" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+            "https://api.moonshot.cn/anthropic/v1/messages" \
+            -H "Authorization: Bearer $MOONSHOT_API_KEY" \
             -H "Content-Type: application/json" \
+            -H "Anthropic-Version: 2023-06-01" \
             -d "$REQUEST_BODY")
 
           echo "API 响应:"
           echo "$RESPONSE" | head -c 2000
           echo ""
 
-          # 解析响应
-          AI_CONTENT=$(echo "$RESPONSE" | jq -r '.result.response // empty')
-          
+          # 解析 Anthropic 格式响应
+          AI_CONTENT=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
+
           if [[ -n "$AI_CONTENT" ]]; then
             echo "$AI_CONTENT" > /tmp/overview.md
             echo "AI 生成内容已写入 /tmp/overview.md"
@@ -353,7 +346,7 @@ jobs:
             echo "## Overview" > /tmp/overview.md
             echo "* 自动生成的版本 v$VERSION 发行说明" >> /tmp/overview.md
           fi
-          
+
           # 获取 GitHub 自动生成的 Notes 作为补充
           gh api "repos/${{ github.repository }}/releases/generate-notes" \
             -f tag_name="v$VERSION" \
