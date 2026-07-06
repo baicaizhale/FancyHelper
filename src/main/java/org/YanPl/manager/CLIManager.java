@@ -1287,6 +1287,9 @@ public class CLIManager {
             }
             DialogueSession session = sessions.get(uuid);
             if (session != null && session.getHistory().size() > 0) {
+                // 保存到旧格式（用于插件重启恢复）
+                saveSessionHistory(uuid, session);
+                // 保存到新格式（用于历史对话列表）
                 saveSessionToHistory(uuid, session);
             }
             sessions.remove(uuid);
@@ -1348,40 +1351,56 @@ public class CLIManager {
             return;
         }
 
-        // 始终创建新会话（历史会话通过 /cli resume 恢复）
-        DialogueSession session = new DialogueSession();
-        // 恢复上次的模式
-        if (yoloModePlayers.contains(uuid)) {
-            session.setMode(DialogueSession.Mode.YOLO);
-        } else if (smartModePlayers.contains(uuid)) {
-            session.setMode(DialogueSession.Mode.SMART);
-        } else if (planModePlayers.contains(uuid)) {
-            session.setMode(DialogueSession.Mode.PLAN);
+        // 检查是否已经有预加载的会话（插件重启恢复）
+        DialogueSession session = sessions.get(uuid);
+        // 如果没有预加载的会话，尝试加载历史会话
+        if (session == null) {
+            session = loadSessionHistory(uuid);
         }
 
-        // 先将会话放入 Map，确保后续操作能获取到正确的模式
-        sessions.put(uuid, session);
-
-        // 创建日志文件
-        try {
-            Path logDir = plugin.getDataFolder().toPath().resolve("logs");
-            Files.createDirectories(logDir);
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
-            String logFileName = timestamp + ".log";
-            Path logFilePath = logDir.resolve(logFileName);
-            session.setLogFilePath(logFilePath.toString());
-            // 根据调试模式设置详细日志级别
-            session.setVerboseLogging(plugin.getConfigManager().isDebug());
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+        // 如果仍然没有会话，创建新会话
+        if (session == null) {
+            session = new DialogueSession();
+            // 恢复上次的模式
+            if (yoloModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.YOLO);
+            } else if (smartModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.SMART);
+            } else if (planModePlayers.contains(uuid)) {
+                session.setMode(DialogueSession.Mode.PLAN);
             }
-        } catch (IOException e) {
-            plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
-        }
 
-        // 发送进入消息和问候
-        sendEnterMessage(player);
-        triggerGreeting(player);
+            // 先将会话放入 Map，确保后续操作能获取到正确的模式
+            sessions.put(uuid, session);
+
+            // 创建日志文件
+            try {
+                Path logDir = plugin.getDataFolder().toPath().resolve("logs");
+                Files.createDirectories(logDir);
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+                String logFileName = timestamp + ".log";
+                Path logFilePath = logDir.resolve(logFileName);
+                session.setLogFilePath(logFilePath.toString());
+                // 根据调试模式设置详细日志级别
+                session.setVerboseLogging(plugin.getConfigManager().isDebug());
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
+                }
+            } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
+            }
+
+            // 发送进入消息和问候
+            sendEnterMessage(player);
+            triggerGreeting(player);
+        } else {
+            // 有预加载的会话（插件重启恢复），静默进入CLI模式
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 静默进入CLI模式，会话已恢复");
+            }
+            // 显示恢复提示
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"));
+        }
 
         activeCLIPayers.add(uuid);
         plugin.getStatsManager().incrementCliEntry();
