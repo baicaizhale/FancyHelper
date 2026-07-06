@@ -573,7 +573,7 @@ public class ToolExecutor {
      * 执行 ls 操作
      */
     private String executeLsOperation(File root, String pathArg, String args) {
-        File dir = new File(root, pathArg.isEmpty() ? "." : pathArg);
+        File dir = resolvePathCaseInsensitive(root, pathArg.isEmpty() ? "." : pathArg);
         
         if (!isWithinRoot(root, dir)) {
             return "错误: 路径超出服务器目录限制";
@@ -633,7 +633,7 @@ public class ToolExecutor {
             } catch (NumberFormatException ignored) {}
         }
 
-        File file = new File(root, path);
+        File file = resolvePathCaseInsensitive(root, path);
         
         if (!isWithinRoot(root, file)) {
             return "错误: 路径超出服务器目录限制";
@@ -742,7 +742,7 @@ public class ToolExecutor {
             }
         }
 
-        File file = new File(root, path);
+        File file = resolvePathCaseInsensitive(root, path);
         
         if (!isWithinRoot(root, file)) {
             return "错误: 路径超出服务器目录限制";
@@ -930,7 +930,7 @@ public class ToolExecutor {
             path = path.substring(1);
         }
 
-        File file = new File(root, path);
+        File file = resolvePathCaseInsensitive(root, path);
 
         if (!isWithinRoot(root, file)) {
             return "错误: 路径超出服务器目录限制";
@@ -949,6 +949,49 @@ public class ToolExecutor {
         Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
         return "成功写入文件: " + path + " (" + content.length() + " 字符)";
+    }
+
+    /**
+     * 尝试不区分大小写解析路径
+     * 先尝试精确路径（兼容 Windows 和 Linux 精确输入），
+     * 不命中时逐层扫描目录进行大小写不敏感匹配
+     */
+    private File resolvePathCaseInsensitive(File root, String path) {
+        File exact = new File(root, path);
+        if (exact.exists()) {
+            return exact;
+        }
+
+        String[] components = path.replace("\\", "/").split("/");
+        File current = root;
+
+        for (int i = 0; i < components.length; i++) {
+            String component = components[i];
+            if (component.isEmpty()) continue;
+
+            File[] children = current.listFiles();
+            if (children == null) break;
+
+            File match = null;
+            for (File child : children) {
+                if (child.getName().equalsIgnoreCase(component)) {
+                    match = child;
+                    break;
+                }
+            }
+
+            if (match != null) {
+                current = match;
+            } else {
+                StringBuilder remaining = new StringBuilder(component);
+                for (int j = i + 1; j < components.length; j++) {
+                    remaining.append("/").append(components[j]);
+                }
+                return new File(current, remaining.toString());
+            }
+        }
+
+        return current;
     }
 
     /**
