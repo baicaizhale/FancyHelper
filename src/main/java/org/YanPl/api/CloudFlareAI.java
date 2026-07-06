@@ -1178,6 +1178,172 @@ public class CloudFlareAI {
     }
 
     /**
+     * 使用小模型生成对话标题
+     * @param firstMessage 第一条用户消息
+     * @return 生成的标题（不超过15字）
+     */
+    public String generateTitle(String firstMessage) throws IOException {
+        String provider = plugin.getConfigManager().getCompressionModelProvider();
+
+        if ("openai".equalsIgnoreCase(provider)) {
+            return generateTitleWithOpenAI(firstMessage);
+        } else {
+            return generateTitleWithCloudFlare(firstMessage);
+        }
+    }
+
+    /**
+     * 使用 CloudFlare 生成标题
+     */
+    private String generateTitleWithCloudFlare(String firstMessage) throws IOException {
+        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
+        String model = plugin.getConfigManager().getCompressionCloudflareModel();
+        String accountId = fetchAccountId();
+
+        if (cfKey == null || cfKey.isEmpty()) {
+            throw new IOException("未配置 CloudFlare API Key");
+        }
+
+        String url = String.format(API_COMPLETIONS_URL, accountId);
+
+        // 标题生成提示
+        String userPrompt = "请用一句简洁的中文概括以下对话的主题，不超过15个字。直接输出标题，不要有引号或解释。\n\n对话内容：\n" + firstMessage + "\n\n标题：";
+
+        // 构建消息数组
+        JsonArray messagesArray = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体 - 使用更少的 token
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 50);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + cfKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[标题生成] CloudFlare API 错误: " + response.statusCode());
+                throw new IOException("标题生成失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                String title = aiResponse.getContent().trim();
+                // 去除可能的引号
+                if (title.startsWith("\"") && title.endsWith("\"")) {
+                    title = title.substring(1, title.length() - 1);
+                }
+                if (title.startsWith("'") && title.endsWith("'")) {
+                    title = title.substring(1, title.length() - 1);
+                }
+                return title;
+            }
+
+            throw new IOException("无法解析标题生成响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("标题生成被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 OpenAI 兼容 API 生成标题
+     */
+    private String generateTitleWithOpenAI(String firstMessage) throws IOException {
+        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
+        String model = plugin.getConfigManager().getCompressionOpenAiModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未配置 OpenAI API Key");
+        }
+
+        // 自动补全 API 路径
+        if (!apiUrl.contains("/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "chat/completions";
+            } else {
+                apiUrl += "/chat/completions";
+            }
+        }
+
+        // 标题生成提示
+        String userPrompt = "请用一句简洁的中文概括以下对话的主题，不超过15个字。直接输出标题，不要有引号或解释。\n\n对话内容：\n" + firstMessage + "\n\n标题：";
+
+        // 构建消息数组
+        JsonArray messagesArray = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体 - 使用更少的 token
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 50);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[标题生成] OpenAI API 错误: " + response.statusCode());
+                throw new IOException("标题生成失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                String title = aiResponse.getContent().trim();
+                // 去除可能的引号
+                if (title.startsWith("\"") && title.endsWith("\"")) {
+                    title = title.substring(1, title.length() - 1);
+                }
+                if (title.startsWith("'") && title.endsWith("'")) {
+                    title = title.substring(1, title.length() - 1);
+                }
+                return title;
+            }
+
+            throw new IOException("无法解析标题生成响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("标题生成被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 使用流式输出进行对话
      * @param session 对话会话
      * @param systemPrompt 系统提示

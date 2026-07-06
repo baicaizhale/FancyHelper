@@ -7,6 +7,7 @@ import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.manager.InstructionManager;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.SessionRecord;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -122,6 +123,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "smart_deny":
             case "smart_never":
             case "compress":
+            case "resume":
+            case "resume_confirm":
+            case "resume_delete":
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
                     return true;
@@ -189,6 +193,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
         sender.sendMessage(" §7- §b/cli streaming §f: 切换流式输出开关");
         sender.sendMessage(" §7- §b/cli sound §f: 切换声音反馈开关");
+        sender.sendMessage(" §7- §b/cli resume §f: 查看历史对话列表");
         sender.sendMessage(" §7- §b/cli skill §f: Skill 管理命令");
         sender.sendMessage(" §7  §b/cli skill list §f: 列出所有 Skill");
         sender.sendMessage(" §7  §b/cli skill info <id> §f: 查看 Skill 详情");
@@ -331,6 +336,19 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "compress":
                 plugin.getCliManager().compressContext(player, args.length > 1 ? args[1] : null);
+                return true;
+            case "resume":
+                showSessionList(player);
+                return true;
+            case "resume_confirm":
+                if (args.length > 1) {
+                    plugin.getCliManager().resumeSession(player, args[1]);
+                }
+                return true;
+            case "resume_delete":
+                if (args.length > 1) {
+                    handleSessionDelete(player, args[1]);
+                }
                 return true;
             case "sound":
                 boolean disabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
@@ -650,6 +668,96 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     showMemoryList(player);
                     break;
             }
+        }
+    }
+
+    /**
+     * 显示历史对话列表
+     */
+    private void showSessionList(Player player) {
+        List<SessionRecord> records = plugin.getCliManager().getSessionHistory(player.getUniqueId());
+
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Resume"));
+        player.sendMessage("");
+
+        if (records.isEmpty()) {
+            player.sendMessage(ChatColor.GRAY + "  暂无历史对话。");
+            player.sendMessage(ChatColor.GRAY + "  退出 CLI 时会自动保存对话历史。");
+        } else {
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+            for (int i = 0; i < records.size(); i++) {
+                SessionRecord record = records.get(i);
+                String sessionUUID = record.getSessionUUID();
+                String title = record.getTitle() != null ? record.getTitle() : "无标题";
+                String timeStr = java.time.Instant.ofEpochMilli(record.getTimestamp())
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .format(formatter);
+
+                // 检查是否是待删除状态
+                String pendingDelete = plugin.getCliManager().getPendingDeleteSession(player.getUniqueId());
+                boolean isPendingDelete = sessionUUID.equals(pendingDelete);
+
+                // 标题行
+                TextComponent line = new TextComponent("  ");
+
+                TextComponent dot = new TextComponent(ChatColor.GRAY + "● ");
+                line.addExtra(dot);
+
+                TextComponent titleText = new TextComponent(ColorUtil.translateCustomColors("&f" + title));
+                if (!isPendingDelete) {
+                    // 点击恢复
+                    titleText.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_confirm " + sessionUUID));
+                    titleText.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击恢复此对话")));
+                }
+                line.addExtra(titleText);
+
+                TextComponent timeText = new TextComponent(ColorUtil.translateCustomColors(" &8(" + timeStr + ")"));
+                line.addExtra(timeText);
+
+                // 删除按钮
+                line.addExtra("    ");
+
+                if (isPendingDelete) {
+                    TextComponent confirmDelBtn = new TextComponent(ChatColor.RED + "✘ 确认删除");
+                    confirmDelBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID));
+                    confirmDelBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击确认删除此对话")));
+                    line.addExtra(confirmDelBtn);
+                } else {
+                    TextComponent delBtn = new TextComponent(ChatColor.RED + "✘");
+                    delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID));
+                    delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击删除此对话")));
+                    line.addExtra(delBtn);
+                }
+
+                player.spigot().sendMessage(line);
+                player.sendMessage(""); // 间距
+            }
+        }
+
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+    }
+
+    /**
+     * 处理会话删除（二次确认）
+     */
+    private void handleSessionDelete(Player player, String sessionUUID) {
+        String pendingDelete = plugin.getCliManager().getPendingDeleteSession(player.getUniqueId());
+
+        if (sessionUUID.equals(pendingDelete)) {
+            // 二次确认，执行删除
+            plugin.getCliManager().deleteSession(player.getUniqueId(), sessionUUID);
+            plugin.getCliManager().clearPendingDeleteSession(player.getUniqueId());
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f对话已删除。"));
+            // 刷新列表
+            showSessionList(player);
+        } else {
+            // 设置待删除状态
+            plugin.getCliManager().setPendingDeleteSession(player.getUniqueId(), sessionUUID);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e再次点击 ✘ 确认删除。"));
+            // 刷新列表以显示确认按钮
+            showSessionList(player);
         }
     }
 
@@ -1346,7 +1454,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
-                "stop", "exit", "download", "help", "lib", "compress", "skill", "sound"
+                "stop", "exit", "download", "help", "lib", "compress", "skill", "sound", "resume"
             ));
             subCommands.add("mcp");
             return subCommands.stream()
