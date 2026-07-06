@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+
 /**
  * 工具执行器，负责处理 AI 发起的各类工具调用
  * 从 CLIManager 中提取出来以降低复杂度
@@ -237,13 +238,6 @@ public class ToolExecutor {
             org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
             String skillName = skill != null ? skill.getDisplayName() : args;
             player.sendMessage(ChatColor.GRAY + "◌ Run Skill: " + skillName);
-        } else if (!lowerToolName.equals("#search") && !lowerToolName.equals("#run") &&
-            !lowerToolName.equals("#end") && !lowerToolName.equals("#list") &&
-            !lowerToolName.equals("#read") && !lowerToolName.equals("#todo") &&
-            !lowerToolName.equals("#webread") && !lowerToolName.equals("#mcp") &&
-            !lowerToolName.equals("#mcp_tools")) {
-            // 对 #webread 隐藏此显示，因为 #webread 会在 executeWebReader 中显示更详细的信息
-            player.sendMessage(ChatColor.GRAY + "〇 " + toolName);
         }
     }
 
