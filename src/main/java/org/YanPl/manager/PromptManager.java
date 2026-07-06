@@ -140,7 +140,7 @@ public class PromptManager {
         // #search: 在互联网搜索（优先 Wiki，若无则全网搜索）。添加 widely 关键词强制全网搜索
         // #skill: 加载 Skill 知识模块。处理任务时优先检查相关 Skill（使用前先检查列表）
         // #ask: 让玩家做选择，每次只能问一个问题
-        // #webread: 读取网页内容
+        // #webfetch: 读取网页内容
         sb.append("[Query]\n");
         sb.append("  #search: <args>      - Internet search (Wiki priority). Add 'widely' to force general web search.\n");
         sb.append("  #skill: <id>         - Load Skill knowledge module. Always check Available Skills list first.\n");
@@ -148,7 +148,7 @@ public class PromptManager {
         sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
         sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
         sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
-        sb.append("  #webread: <url>      - Fetch and parse a web page.\n\n");
+        sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n\n");
 
         // 【执行类工具】
         // #run: 以玩家身份执行 Minecraft 命令，一次只能执行一条，且只能是游戏内命令
@@ -386,7 +386,7 @@ public class PromptManager {
         sb.append("  #search: <args>      - Internet/Wiki search.\n");
         sb.append("  #skill: <id>         - Load Skill knowledge module.\n");
         sb.append("  #unloadskill: <id>   - Unload a loaded Skill.\n");
-        sb.append("  #webread: <url>      - Fetch and parse a web page.\n");
+        sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n");
         sb.append("  #ask: <json>         - Ask player a question.\n");
         sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
 
@@ -427,7 +427,7 @@ public class PromptManager {
         // ==================== Usage Guide ====================
         sb.append("[Usage Guide]\n");
         sb.append("1. Analyze: understand the player's request thoroughly.\n");
-        sb.append("2. Research: use #search, #skill, or #webread to gather information.\n");
+        sb.append("2. Research: use #search, #skill, or #webfetch to gather information.\n");
         sb.append("3. Plan: use #todo to break the task into clear steps.\n");
         sb.append("4. Start: call #start when the plan is ready.\n\n");
 

@@ -149,8 +149,8 @@ public class ToolExecutor {
                 break;
             
             // 网页阅读工具
-            case "#webread":
-                handleWebReaderTool(player, args, session);
+            case "#webfetch":
+                handleWebFetchTool(player, args, session);
                 break;
 
             // MCP 外部工具
@@ -1772,16 +1772,16 @@ public class ToolExecutor {
     }
 
     /**
-     * 处理 #webread 工具 - 读取网页内容
-     * 格式: #webread: https://example.com
+     * 处理 #webfetch 工具 - 读取网页内容
+     * 格式: #webfetch: https://example.com
      */
-    private void handleWebReaderTool(Player player, String args, DialogueSession session) {
+    private void handleWebFetchTool(Player player, String args, DialogueSession session) {
         UUID uuid = player.getUniqueId();
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
 
         if (args == null || args.trim().isEmpty()) {
-            player.sendMessage(ChatColor.RED + "错误: #webread 工具需要提供URL参数");
-            cliManager.feedbackToAI(player, "#webread_result: error - 需要提供URL参数，例如 #webread: https://example.com");
+            player.sendMessage(ChatColor.RED + "错误: #webfetch 工具需要提供URL参数");
+            cliManager.feedbackToAI(player, "#webfetch_result: error - 需要提供URL参数，例如 #webfetch: https://example.com");
             return;
         }
 
@@ -1802,15 +1802,15 @@ public class ToolExecutor {
         url = url.trim();
 
         // 直接执行网页阅读，不需要验证
-        executeWebReader(player, url);
+        executeWebFetch(player, url);
     }
 
     /**
      * 执行网页阅读操作
      */
-    private void executeWebReader(Player player, String url) {
+    private void executeWebFetch(Player player, String url) {
         // 显示工具调用信息
-        player.sendMessage(ChatColor.GRAY + ">> " + ChatColor.WHITE + "WebRead " + url);
+        player.sendMessage(ChatColor.GRAY + ">> " + ChatColor.WHITE + "WebFetch " + url);
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -1818,13 +1818,13 @@ public class ToolExecutor {
                 final String finalResult = result;
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    cliManager.feedbackToAI(player, "#webread_result: " + finalResult);
+                    cliManager.feedbackToAI(player, "#webfetch_result: " + finalResult);
                 });
             } catch (Exception e) {
                 plugin.getCloudErrorReport().report(e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    String errorMessage = "#webread_result: 错误 - " + e.getMessage();
+                    String errorMessage = "#webfetch_result: 错误 - " + e.getMessage();
                     cliManager.feedbackToAI(player, errorMessage);
                     player.sendMessage(ChatColor.RED + "读取网页失败: " + e.getMessage());
                 });
@@ -1834,6 +1834,8 @@ public class ToolExecutor {
 
     /**
      * 获取网页内容并解析
+     * 优先使用 r.jina.ai 代理获取纯文本内容
+     * 如果失败则回退到直接获取并清理HTML
      */
     protected String fetchWebPage(String url) throws Exception {
         // 验证URL格式
@@ -1841,58 +1843,78 @@ public class ToolExecutor {
             throw new IllegalArgumentException("URL必须以http://或https://开头");
         }
 
-        // 创建HTTP客户端
+        // 首先尝试使用 r.jina.ai 代理
+        try {
+            String jinaUrl = "https://r.jina.ai/" + url;
+            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(15))
+                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                    .build();
+
+            java.net.http.HttpRequest jinaRequest = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(jinaUrl))
+                    .timeout(java.time.Duration.ofSeconds(20))
+                    .header("Accept", "text/plain, text/html, */*")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .GET()
+                    .build();
+
+            java.net.http.HttpResponse<String> jinaResponse = httpClient.send(jinaRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (jinaResponse.statusCode() == 200) {
+                String jinaText = jinaResponse.body().trim();
+                if (jinaText.length() > 8000) {
+                    jinaText = jinaText.substring(0, 8000) + "\n... (内容已截断)";
+                }
+                return jinaText;
+            }
+        } catch (Exception e) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[WebFetch] Jina.ai 请求失败，回退到直接获取: " + e.getMessage());
+            }
+        }
+
+        // 回退到原有的直接获取逻辑
         java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(java.time.Duration.ofSeconds(30))
                 .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
                 .build();
 
-        // 构造真实用户的请求头，按照真实浏览器的顺序和内容
         java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create(url))
                 .timeout(java.time.Duration.ofSeconds(45))
-                // 基础头信息
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
                 .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
                 .header("Accept-Encoding", "gzip, deflate")
-                // 安全相关头
                 .header("Sec-Ch-Ua", "\"Google Chrome\";v=\"135\", \"Not:A-Brand\";v=\"99\", \"Chromium\";v=\"135\"")
                 .header("Sec-Ch-Ua-Mobile", "?0")
                 .header("Sec-Ch-Ua-Platform", "\"Windows\"")
-                // 浏览行为头
                 .header("Upgrade-Insecure-Requests", "1")
                 .header("Sec-Fetch-Dest", "document")
                 .header("Sec-Fetch-Mode", "navigate")
                 .header("Sec-Fetch-Site", "none")
                 .header("Sec-Fetch-User", "?1")
-                // 缓存和引用头
                 .header("Cache-Control", "max-age=0")
                 .header("Referer", "https://www.google.com/")
                 .header("DNT", "1")
                 .GET()
                 .build();
 
-        // 发送请求
         java.net.http.HttpResponse<byte[]> response = httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray());
-
         if (response.statusCode() != 200) {
             throw new Exception("HTTP请求失败，状态码: " + response.statusCode());
         }
 
-        // 等待5秒，确保网页完全加载
         try {
             Thread.sleep(5000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
 
-        // 处理响应内容，自动检测编码和压缩
         byte[] bodyBytes = response.body();
         String contentType = response.headers().firstValue("Content-Type").orElse("text/html");
         String contentEncoding = response.headers().firstValue("Content-Encoding").orElse("identity");
-        
-        // 处理压缩内容
+
         byte[] decompressedBytes = bodyBytes;
         try {
             if (contentEncoding.contains("gzip")) {
@@ -1921,47 +1943,35 @@ public class ToolExecutor {
                 decompressedBytes = bos.toByteArray();
             }
         } catch (Exception e) {
-            // 解压失败，使用原始字节
             decompressedBytes = bodyBytes;
         }
-        
-        // 尝试从Content-Type中提取编码
-        String charset = "UTF-8"; // 默认编码
+
+        String charset = "UTF-8";
         if (contentType.contains("charset=")) {
             int charsetIndex = contentType.indexOf("charset=");
             charset = contentType.substring(charsetIndex + 8).trim();
-            // 移除可能的引号
             if (charset.startsWith("\"")) {
                 charset = charset.substring(1, charset.length() - 1);
             }
         }
-        
-        // 将字节数组转换为字符串
+
         String htmlContent;
         try {
             htmlContent = new String(decompressedBytes, charset);
         } catch (java.io.UnsupportedEncodingException e) {
-            // 如果编码不支持，回退到UTF-8
             htmlContent = new String(decompressedBytes, java.nio.charset.StandardCharsets.UTF_8);
         }
 
-        // 解析HTML内容
         org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(htmlContent);
-
-        // 提取标题
         String title = doc.title();
-
-        // 提取正文内容，去除脚本和样式
         doc.select("script, style").remove();
         String bodyText = doc.body().text();
 
-        // 限制内容长度
         final int MAX_CONTENT_LENGTH = 5000;
         if (bodyText.length() > MAX_CONTENT_LENGTH) {
             bodyText = bodyText.substring(0, MAX_CONTENT_LENGTH) + "... (内容过长，已截断)";
         }
 
-        // 构建结果
         StringBuilder result = new StringBuilder();
         result.append("网页标题: ").append(title).append("\n");
         result.append("网页URL: ").append(url).append("\n");
@@ -2018,7 +2028,7 @@ public class ToolExecutor {
     private boolean isPlanModeTool(String toolName) {
         String lower = toolName.toLowerCase().trim();
         return switch (lower) {
-            case "#start", "#search", "#skill", "#unloadskill", "#webread",
+            case "#start", "#search", "#skill", "#unloadskill", "#webfetch",
                  "#list", "#read", "#todo", "#ask", "#end", "#exit",
                  "#mcp_tools" -> true;
             default -> false;
