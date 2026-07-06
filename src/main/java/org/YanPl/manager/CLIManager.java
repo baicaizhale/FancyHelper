@@ -446,7 +446,8 @@ public class CLIManager {
                         String uuidStr = fileName.substring(0, fileName.length() - 5); // 去掉.json后缀
 
                         try {
-                            UUID uuid = UUID.fromString(uuidStr);
+                            // 验证文件名是否是有效的UUID格式
+                            UUID.fromString(uuidStr);
 
                             // 读取并解析JSON
                             Gson gson = new Gson();
