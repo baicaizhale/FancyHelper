@@ -987,7 +987,14 @@ public class CLIManager {
                         updateSessionTitle(playerUUID, sessionUUID, title);
                     });
                 } else {
-                    plugin.getLogger().warning("[CLI] AI 返回空标题");
+                    // 连续两次失败，提醒用户
+                    plugin.getLogger().warning("[CLI] 标题生成失败：模型未能正确输出 JSON");
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        Player player = Bukkit.getPlayer(playerUUID);
+                        if (player != null && player.isOnline()) {
+                            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e提示：当前配置的 AI 模型理解能力较弱，可能无法很好地完成复杂任务。建议在配置文件中更换为能力更强的模型。"));
+                        }
+                    });
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("[CLI] 生成会话标题失败: " + e.getMessage());
