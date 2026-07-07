@@ -1206,22 +1206,28 @@ public class CloudFlareAI {
 
         String url = String.format(API_COMPLETIONS_URL, accountId);
 
-        // 标题生成提示
-        String userPrompt = "请用一句简洁的中文概括以下对话的主题，不超过15个字。直接输出标题，不要有引号或解释。\n\n对话内容：\n" + firstMessage + "\n\n标题：";
-
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
+
+        // system 消息
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", "Based on the user's message, generate a conversation title in the corresponding language. The title must not exceed 15 characters. Your response should contain ONLY the title itself with no additional characters.");
+        messagesArray.add(systemMsg);
+
+        // user 消息
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
+        userMsg.addProperty("content", firstMessage);
         messagesArray.add(userMsg);
 
-        // 构建请求体 - 使用更少的 token
+        // 构建请求体 - 使用更少的 token，禁用思考
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
+        bodyJson.addProperty("reasoning_effort", "none");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1285,22 +1291,28 @@ public class CloudFlareAI {
             }
         }
 
-        // 标题生成提示
-        String userPrompt = "请用一句简洁的中文概括以下对话的主题，不超过15个字。直接输出标题，不要有引号或解释。\n\n对话内容：\n" + firstMessage + "\n\n标题：";
-
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
+
+        // system 消息
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", "Based on the user's message, generate a conversation title in the corresponding language. The title must not exceed 15 characters. Your response should contain ONLY the title itself with no additional characters.");
+        messagesArray.add(systemMsg);
+
+        // user 消息
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
+        userMsg.addProperty("content", firstMessage);
         messagesArray.add(userMsg);
 
-        // 构建请求体 - 使用更少的 token
+        // 构建请求体 - 使用更少的 token，禁用思考
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
+        bodyJson.addProperty("reasoning_effort", "none");
 
         String bodyString = gson.toJson(bodyJson);
 
