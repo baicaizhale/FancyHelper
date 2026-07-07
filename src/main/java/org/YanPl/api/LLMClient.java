@@ -1254,10 +1254,10 @@ public class LLMClient {
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
 
-        // system 消息 - 强调直接输出，不要思考
+        // system 消息 - 要求 JSON 格式输出
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Generate a short title (5-10 chars) summarizing the user's message. Use the same language as the user. Output ONLY the title, no quotes, no explanation, no thinking.");
+        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with ONLY a JSON object: {\"title\": \"your title here\"}. No other text.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1324,10 +1324,10 @@ public class LLMClient {
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
 
-        // system 消息 - 强调直接输出，不要思考
+        // system 消息 - 要求 JSON 格式输出
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Generate a short title (5-10 chars) summarizing the user's message. Use the same language as the user. Output ONLY the title, no quotes, no explanation, no thinking.");
+        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with ONLY a JSON object: {\"title\": \"your title here\"}. No other text.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1395,34 +1395,31 @@ public class LLMClient {
             return null;
         }
 
-        // 直接取第一行作为标题
-        String title = content;
-        if (title.contains("\n")) {
-            title = title.substring(0, title.indexOf("\n")).trim();
+        // 从 JSON 中提取 title
+        try {
+            int jsonStart = content.indexOf("{");
+            int jsonEnd = content.lastIndexOf("}");
+            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                String jsonStr = content.substring(jsonStart, jsonEnd + 1);
+                JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
+                if (titleJson.has("title")) {
+                    String title = titleJson.get("title").getAsString().trim();
+                    // 截取前15个字符
+                    if (title.length() > 15) {
+                        title = title.substring(0, 15);
+                    }
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[标题生成] 从 JSON 提取成功: " + title);
+                    }
+                    return title;
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("[标题生成] JSON 解析失败: " + e.getMessage());
         }
 
-        // 去除可能的引号
-        if (title.startsWith("\"") && title.endsWith("\"")) {
-            title = title.substring(1, title.length() - 1);
-        }
-        if (title.startsWith("'") && title.endsWith("'")) {
-            title = title.substring(1, title.length() - 1);
-        }
-
-        // 截取前15个字符
-        if (title.length() > 15) {
-            title = title.substring(0, 15);
-        }
-
-        if (title.isEmpty()) {
-            return null;
-        }
-
-        if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[标题生成] 解析成功: " + title);
-        }
-
-        return title;
+        plugin.getLogger().warning("[标题生成] 未找到有效的 JSON 标题");
+        return null;
     }
 
     /**
