@@ -379,7 +379,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             plugin.getConfigManager().loadPlayerData();
             plugin.getWorkspaceIndexer().indexAll();
             plugin.getEulaManager().reload();
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置、玩家数据、工作区与 EULA 已重新加载。"));
+            plugin.getSkillManager().reloadSkills();
+            if (plugin.getMcpManager() != null) {
+                plugin.getMcpManager().reload();
+            }
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置、玩家数据、工作区、EULA、Skill 与 MCP 已重新加载。"));
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {
@@ -394,10 +398,20 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             } else if (target.equals("eula")) {
                 plugin.getEulaManager().reload();
                 sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fEULA 文件已重新加载。"));
+            } else if (target.equals("skill")) {
+                plugin.getSkillManager().reloadSkills();
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fSkill 已重新加载，共 " + plugin.getSkillManager().getSkillCount() + " 个。"));
+            } else if (target.equals("mcp")) {
+                if (plugin.getMcpManager() != null) {
+                    plugin.getMcpManager().reload();
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP 已重新连接。"));
+                } else {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Manager 未初始化。"));
+                }
             } else if (target.equals("deeply") || target.equals("deep")) {
                 handleDeepReload(sender);
             } else {
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f用法: /fancy reload [workspace|config|playerdata|eula|deeply]"));
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f用法: /fancy reload [workspace|config|playerdata|eula|skill|mcp|deeply]"));
             }
         }
     }
@@ -1520,7 +1534,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("reload")) {
-            return Arrays.asList("workspace", "config", "eula", "deeply").stream()
+            return Arrays.asList("workspace", "config", "playerdata", "eula", "skill", "mcp", "deeply").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
