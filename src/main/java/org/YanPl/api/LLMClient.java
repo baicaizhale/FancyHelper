@@ -1254,10 +1254,10 @@ public class LLMClient {
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
 
-        // system 消息 - 要求 JSON 格式输出
+        // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with ONLY a JSON object: {\"title\": \"your title here\"}. No other text.");
+        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with a JSON object: {\"title\": \"your title here\"}. You may also include other text before or after the JSON.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1266,13 +1266,17 @@ public class LLMClient {
         userMsg.addProperty("content", firstMessage);
         messagesArray.add(userMsg);
 
-        // 构建请求体 - 使用主模型，不限制 token
+        // 构建请求体
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 请求体: " + bodyString);
+        }
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -1285,6 +1289,10 @@ public class LLMClient {
 
             HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[标题生成] 响应 (" + response.statusCode() + "): " + responseBody);
+            }
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[标题生成] CloudFlare API 错误: " + response.statusCode());
@@ -1322,10 +1330,10 @@ public class LLMClient {
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
 
-        // system 消息 - 要求 JSON 格式输出
+        // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with ONLY a JSON object: {\"title\": \"your title here\"}. No other text.");
+        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with a JSON object: {\"title\": \"your title here\"}. You may also include other text before or after the JSON.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1334,14 +1342,17 @@ public class LLMClient {
         userMsg.addProperty("content", firstMessage);
         messagesArray.add(userMsg);
 
-        // 构建请求体 - 使用更少的 token，禁用思考
+        // 构建请求体
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 请求体: " + bodyString);
+        }
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -1354,6 +1365,10 @@ public class LLMClient {
 
             HttpResponse<String> response = sendWithRetry(request);
             String responseBody = response.body();
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[标题生成] 响应 (" + response.statusCode() + "): " + responseBody);
+            }
 
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[标题生成] OpenAI API 错误: " + response.statusCode());
