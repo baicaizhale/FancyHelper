@@ -338,7 +338,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getCliManager().compressContext(player, args.length > 1 ? args[1] : null);
                 return true;
             case "resume":
-                showSessionList(player);
+                int resumePage = 0;
+                if (args.length > 1) {
+                    try { resumePage = Integer.parseInt(args[1]) - 1; } catch (NumberFormatException e) {}
+                }
+                showSessionList(player, resumePage);
                 return true;
             case "resume_confirm":
                 if (args.length > 1) {
@@ -672,9 +676,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * 显示历史对话列表
+     * 显示历史对话列表（分页）
+     * @param page 0-indexed 页码
      */
-    private void showSessionList(Player player) {
+    private void showSessionList(Player player, int page) {
         List<SessionRecord> records = plugin.getCliManager().getSessionHistory(player.getUniqueId());
 
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -685,10 +690,18 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             player.sendMessage(ChatColor.GRAY + "  暂无历史对话。");
             player.sendMessage(ChatColor.GRAY + "  退出 CLI 时会自动保存对话历史。");
         } else {
+            int totalPages = Math.max(1, (int) Math.ceil(records.size() / 6.0));
+            if (page < 0) page = 0;
+            if (page >= totalPages) page = totalPages - 1;
+
+            int startIdx = page * 6;
+            int endIdx = Math.min(startIdx + 6, records.size());
+            List<SessionRecord> pageRecords = records.subList(startIdx, endIdx);
+
             java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-            for (int i = 0; i < records.size(); i++) {
-                SessionRecord record = records.get(i);
+            for (int i = 0; i < pageRecords.size(); i++) {
+                SessionRecord record = pageRecords.get(i);
                 String sessionUUID = record.getSessionUUID();
                 String title = record.getTitle() != null ? record.getTitle() : "无标题";
                 String timeStr = java.time.Instant.ofEpochMilli(record.getTimestamp())
@@ -714,6 +727,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 line.addExtra(titleText);
 
                 TextComponent timeText = new TextComponent(ColorUtil.translateCustomColors(" &8(" + timeStr + ")"));
+                if (!isPendingDelete) {
+                    timeText.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_confirm " + sessionUUID));
+                    timeText.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击恢复此对话")));
+                }
                 line.addExtra(timeText);
 
                 // 删除按钮
@@ -734,6 +751,44 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 player.spigot().sendMessage(line);
                 player.sendMessage(""); // 间距
             }
+
+            // 分页导航
+            if (totalPages > 1) {
+                player.sendMessage("");
+                TextComponent navLine = new TextComponent("  ");
+
+                // 上一页按钮
+                if (page > 0) {
+                    TextComponent prevBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &f◀ 上一页 &8]"));
+                    prevBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume " + page)); // page 是1-indexed显示
+                    prevBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "第 " + page + " 页")));
+                    navLine.addExtra(prevBtn);
+                } else {
+                    TextComponent prevBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7◀ 上一页 &8]"));
+                    navLine.addExtra(prevBtn);
+                }
+
+                navLine.addExtra(new TextComponent("    "));
+
+                // 页码指示
+                TextComponent pageInfo = new TextComponent(ColorUtil.translateCustomColors("&7第 " + (page + 1) + "/" + totalPages + " 页"));
+                navLine.addExtra(pageInfo);
+
+                navLine.addExtra(new TextComponent("    "));
+
+                // 下一页按钮
+                if (page < totalPages - 1) {
+                    TextComponent nextBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &f下一页 ▶ &8]"));
+                    nextBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume " + (page + 2))); // 1-indexed
+                    nextBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "第 " + (page + 2) + " 页")));
+                    navLine.addExtra(nextBtn);
+                } else {
+                    TextComponent nextBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7下一页 ▶ &8]"));
+                    navLine.addExtra(nextBtn);
+                }
+
+                player.spigot().sendMessage(navLine);
+            }
         }
 
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -750,14 +805,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             plugin.getCliManager().deleteSession(player.getUniqueId(), sessionUUID);
             plugin.getCliManager().clearPendingDeleteSession(player.getUniqueId());
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f对话已删除。"));
-            // 刷新列表
-            showSessionList(player);
+            // 刷新列表（回到第1页）
+            showSessionList(player, 0);
         } else {
             // 设置待删除状态
             plugin.getCliManager().setPendingDeleteSession(player.getUniqueId(), sessionUUID);
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e再次点击 ✘ 确认删除。"));
-            // 刷新列表以显示确认按钮
-            showSessionList(player);
+            // 刷新列表以显示确认按钮（回到第1页）
+            showSessionList(player, 0);
         }
     }
 

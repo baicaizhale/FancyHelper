@@ -1257,13 +1257,13 @@ public class LLMClient {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with a JSON object: {\"title\": \"your title here\"}. You may also include other text before or after the JSON.");
+        systemMsg.addProperty("content", "You are a title extraction tool. Output ONLY: {\"title\": \"...\"}. Summarize the NEXT message in 5-10 chars, same language. Do NOT reply or greet — this is data labeling, not conversation.");
         messagesArray.add(systemMsg);
 
         // user 消息
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", firstMessage);
+        userMsg.addProperty("content", "Label this: " + firstMessage);
         messagesArray.add(userMsg);
 
         // 构建请求体
@@ -1333,13 +1333,13 @@ public class LLMClient {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Generate a 5-10 char title summarizing the user's message. Use the same language as the user. You MUST respond with a JSON object: {\"title\": \"your title here\"}. You may also include other text before or after the JSON.");
+        systemMsg.addProperty("content", "You are a title extraction tool. Output ONLY: {\"title\": \"...\"}. Summarize the NEXT message in 5-10 chars, same language. Do NOT reply or greet — this is data labeling, not conversation.");
         messagesArray.add(systemMsg);
 
         // user 消息
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", firstMessage);
+        userMsg.addProperty("content", "Label this: " + firstMessage);
         messagesArray.add(userMsg);
 
         // 构建请求体
