@@ -1411,8 +1411,22 @@ public class CLIManager {
                 session.setMode(DialogueSession.Mode.PLAN);
             }
 
+            // 为新会话分配 UUID
+            String sessionUUID = UUID.randomUUID().toString();
+            session.setSessionUUID(sessionUUID);
+
             // 先将会话放入 Map，确保后续操作能获取到正确的模式
             sessions.put(uuid, session);
+
+            // 创建初始会话文件（这样标题生成后能立即更新）
+            try {
+                saveSessionToHistory(uuid, session);
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 创建初始会话文件: " + sessionUUID);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("[CLI] 创建初始会话文件失败: " + e.getMessage());
+            }
 
             // 创建日志文件
             try {
@@ -2915,15 +2929,10 @@ public class CLIManager {
 
         session.addMessage("user", message);
 
-        // 为新会话生成 UUID 并触发标题生成
-        if (session.getSessionUUID() == null) {
-            String newUUID = UUID.randomUUID().toString();
-            session.setSessionUUID(newUUID);
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 为新会话分配 UUID: " + newUUID);
-            }
+        // 触发标题生成（UUID已在 enterCLI 中分配）
+        if (session.getSessionUUID() != null) {
+            generateSessionTitle(uuid, session);
         }
-        generateSessionTitle(uuid, session);
 
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);

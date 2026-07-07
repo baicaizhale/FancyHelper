@@ -1393,7 +1393,7 @@ public class LLMClient {
         try {
             // 匹配 "可能的标题" 或 "标题是" 等模式后面的内容
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-                "(?:可能的标题[是有：:]*|标题[是：:]*)\\s*[\"']?([^\"',，。\n]{2,15})[\"']?",
+                "(?:可能的标题[是有：:]*|标题[是：:]*)\\s*[\"']([^\"']+)[\"']",
                 java.util.regex.Pattern.CASE_INSENSITIVE
             );
             java.util.regex.Matcher matcher = pattern.matcher(content);
