@@ -1194,9 +1194,53 @@ public class LLMClient {
     }
 
     /**
-     * 使用 CloudFlare 生成标题
+     * 使用 CloudFlare 生成标题（带重试）
      */
     private String generateTitleWithCloudFlare(String firstMessage) throws IOException {
+        return generateTitleWithRetry(firstMessage, true);
+    }
+
+    /**
+     * 使用 OpenAI 兼容 API 生成标题（带重试）
+     */
+    private String generateTitleWithOpenAI(String firstMessage) throws IOException {
+        return generateTitleWithRetry(firstMessage, false);
+    }
+
+    /**
+     * 生成标题的通用逻辑（带重试）
+     * @param firstMessage 第一条用户消息
+     * @param useCloudFlare 是否使用 CloudFlare
+     * @return 标题，如果失败返回 null
+     */
+    private String generateTitleWithRetry(String firstMessage, boolean useCloudFlare) throws IOException {
+        int maxRetries = 2;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String title = useCloudFlare ?
+                    generateTitleFromCloudFlare(firstMessage) :
+                    generateTitleFromOpenAI(firstMessage);
+
+                if (title != null) {
+                    return title;
+                }
+
+                // title 为 null 表示 JSON 解析失败
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试 JSON 解析失败");
+            } catch (Exception e) {
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试失败: " + e.getMessage());
+            }
+        }
+
+        // 连续两次失败，返回特殊标记让调用方处理
+        return null;
+    }
+
+    /**
+     * 使用 CloudFlare 生成标题（单次尝试）
+     */
+    private String generateTitleFromCloudFlare(String firstMessage) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCompressionCloudflareModel();
         String accountId = fetchAccountId();
@@ -1249,39 +1293,7 @@ public class LLMClient {
                 throw new IOException("标题生成失败: " + response.statusCode());
             }
 
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                String content = aiResponse.getContent().trim();
-                // 从 JSON 中提取 title
-                try {
-                    // 尝试找到 JSON 块
-                    int jsonStart = content.indexOf("{");
-                    int jsonEnd = content.lastIndexOf("}");
-                    if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                        String jsonStr = content.substring(jsonStart, jsonEnd + 1);
-                        JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
-                        if (titleJson.has("title")) {
-                            String title = titleJson.get("title").getAsString().trim();
-                            // 截取前15个字符
-                            if (title.length() > 15) {
-                                title = title.substring(0, 15);
-                            }
-                            return title;
-                        }
-                    }
-                } catch (Exception e) {
-                    plugin.getLogger().warning("[标题生成] JSON 解析失败: " + e.getMessage());
-                }
-                // 如果 JSON 解析失败，返回原文截取
-                if (content.length() > 15) {
-                    content = content.substring(0, 15);
-                }
-                return content;
-            }
-
-            throw new IOException("无法解析标题生成响应");
+            return parseTitleFromResponse(responseBody);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("标题生成被中断: " + e.getMessage(), e);
@@ -1289,9 +1301,9 @@ public class LLMClient {
     }
 
     /**
-     * 使用 OpenAI 兼容 API 生成标题
+     * 使用 OpenAI 兼容 API 生成标题（单次尝试）
      */
-    private String generateTitleWithOpenAI(String firstMessage) throws IOException {
+    private String generateTitleFromOpenAI(String firstMessage) throws IOException {
         String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
         String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getCompressionOpenAiModel();
@@ -1351,43 +1363,46 @@ public class LLMClient {
                 throw new IOException("标题生成失败: " + response.statusCode());
             }
 
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                String content = aiResponse.getContent().trim();
-                // 从 JSON 中提取 title
-                try {
-                    // 尝试找到 JSON 块
-                    int jsonStart = content.indexOf("{");
-                    int jsonEnd = content.lastIndexOf("}");
-                    if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                        String jsonStr = content.substring(jsonStart, jsonEnd + 1);
-                        JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
-                        if (titleJson.has("title")) {
-                            String title = titleJson.get("title").getAsString().trim();
-                            // 截取前15个字符
-                            if (title.length() > 15) {
-                                title = title.substring(0, 15);
-                            }
-                            return title;
-                        }
-                    }
-                } catch (Exception e) {
-                    plugin.getLogger().warning("[标题生成] JSON 解析失败: " + e.getMessage());
-                }
-                // 如果 JSON 解析失败，返回原文截取
-                if (content.length() > 15) {
-                    content = content.substring(0, 15);
-                }
-                return content;
-            }
-
-            throw new IOException("无法解析标题生成响应");
+            return parseTitleFromResponse(responseBody);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("标题生成被中断: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 从 API 响应中解析标题
+     * @return 标题，如果 JSON 解析失败返回 null
+     */
+    private String parseTitleFromResponse(String responseBody) {
+        JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+        AIResponse aiResponse = responseParser.parseResponse(responseJson);
+
+        if (aiResponse != null && aiResponse.getContent() != null) {
+            String content = aiResponse.getContent().trim();
+            // 从 JSON 中提取 title
+            try {
+                // 尝试找到 JSON 块
+                int jsonStart = content.indexOf("{");
+                int jsonEnd = content.lastIndexOf("}");
+                if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                    String jsonStr = content.substring(jsonStart, jsonEnd + 1);
+                    JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
+                    if (titleJson.has("title")) {
+                        String title = titleJson.get("title").getAsString().trim();
+                        // 截取前15个字符
+                        if (title.length() > 15) {
+                            title = title.substring(0, 15);
+                        }
+                        return title;
+                    }
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("[标题生成] JSON 解析异常: " + e.getMessage());
+            }
+        }
+        // JSON 解析失败
+        return null;
     }
 
     /**
