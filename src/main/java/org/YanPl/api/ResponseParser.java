@@ -130,6 +130,10 @@ public class ResponseParser {
         // 处理 reasoning_content 字段（OpenAI 格式）
         if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
             content.thought = message.get("reasoning_content").getAsString();
+            // 如果 content 为空，将 reasoning_content 作为 content
+            if (content.text == null || content.text.isEmpty()) {
+                content.text = content.thought;
+            }
         }
 
         // 处理 reasoning 字段（Kimi K2.5 等模型格式）
