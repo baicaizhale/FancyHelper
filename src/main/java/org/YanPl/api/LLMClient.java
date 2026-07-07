@@ -1386,7 +1386,29 @@ public class LLMClient {
         String content = aiResponse.getContent().trim();
 
         if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[标题生成] AI 原始返回: " + content);
+            plugin.getLogger().info("[标题生成] AI 原始返回 (" + content.length() + " chars): " + content);
+        }
+
+        // 策略0：尝试从思考过程中提取模型给出的标题（如"可能的标题有xxx"）
+        try {
+            // 匹配 "可能的标题" 或 "标题是" 等模式后面的内容
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "(?:可能的标题[是有：:]*|标题[是：:]*)\\s*[\"']?([^\"',，。\n]{2,15})[\"']?",
+                java.util.regex.Pattern.CASE_INSENSITIVE
+            );
+            java.util.regex.Matcher matcher = pattern.matcher(content);
+            if (matcher.find()) {
+                String title = matcher.group(1).trim();
+                if (title.length() > 15) {
+                    title = title.substring(0, 15);
+                }
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[标题生成] 从思考过程提取成功: " + title);
+                }
+                return title;
+            }
+        } catch (Exception e) {
+            // 继续尝试其他策略
         }
 
         // 策略1：尝试解析 JSON 格式 {"title": "xxx"}

@@ -101,7 +101,7 @@ public class CLIManager {
     private final Map<UUID, StreamingHandler> activeStreamingHandlers = new ConcurrentHashMap<>();
 
     // 会话历史持久化相关字段
-    private final Set<String> titleGeneratedSessions = ConcurrentHashMap.newKeySet();
+    private final Map<String, String> generatedTitles = new ConcurrentHashMap<>(); // sessionUUID -> title
     private final Map<UUID, String> pendingDeleteSessions = new ConcurrentHashMap<>(); // 待删除确认
     private static final String SESSIONS_DIR = "sessions";
     private static final int MAX_SESSIONS_PER_PLAYER = 40;
@@ -871,6 +871,12 @@ public class CLIManager {
             // 创建新的会话记录
             SessionRecord newRecord = SessionRecord.fromSession(session, sessionUUID);
 
+            // 如果有生成的标题，设置到记录中
+            String generatedTitle = generatedTitles.get(sessionUUID);
+            if (generatedTitle != null) {
+                newRecord.setTitle(generatedTitle);
+            }
+
             // 写入文件
             String json = gson.toJson(newRecord);
             Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -941,7 +947,7 @@ public class CLIManager {
             plugin.getLogger().warning("[CLI] generateSessionTitle: sessionUUID is null");
             return;
         }
-        if (titleGeneratedSessions.contains(sessionUUID)) {
+        if (generatedTitles.containsKey(sessionUUID)) {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] generateSessionTitle: 标题已生成，跳过: " + sessionUUID);
             }
@@ -949,7 +955,7 @@ public class CLIManager {
         }
 
         // 标记为已触发
-        titleGeneratedSessions.add(sessionUUID);
+        generatedTitles.put(sessionUUID, null);
 
         // 获取第一条用户消息
         String firstMessage = null;
@@ -982,6 +988,8 @@ public class CLIManager {
                     if (plugin.getConfigManager().isDebug()) {
                         plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
                     }
+                    // 存储标题
+                    generatedTitles.put(sessionUUID, title);
                     // 直接更新文件中的标题（不检查session是否还在map中）
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         updateSessionTitle(playerUUID, sessionUUID, title);
@@ -1010,28 +1018,37 @@ public class CLIManager {
             // 获取玩家名
             Player player = Bukkit.getPlayer(playerUUID);
             if (player == null) {
+                // 玩家离线，跳过
                 return;
             }
             String playerName = player.getName();
 
-            Path sessionFile = plugin.getDataFolder().toPath().resolve(SESSIONS_DIR).resolve(playerName).resolve(sessionUUID + ".json");
-            if (!Files.exists(sessionFile)) {
+            Path playerDir = plugin.getDataFolder().toPath().resolve(SESSIONS_DIR).resolve(playerName);
+            Path sessionFile = playerDir.resolve(sessionUUID + ".json");
+
+            SessionRecord record;
+            if (Files.exists(sessionFile)) {
+                // 文件已存在，读取并更新
+                Gson gson = new Gson();
+                String json = Files.readString(sessionFile, StandardCharsets.UTF_8);
+                record = gson.fromJson(json, SessionRecord.class);
+                if (record == null) {
+                    return;
+                }
+                record.setTitle(title);
+            } else {
+                // 文件不存在，可能会话还没有保存，跳过
+                // （会在 exitCLI 时保存，届时标题会丢失，但这是可以接受的）
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 会话文件不存在，跳过标题更新: " + sessionUUID);
+                }
                 return;
             }
-
-            Gson gson = new Gson();
-            String json = Files.readString(sessionFile, StandardCharsets.UTF_8);
-            SessionRecord record = gson.fromJson(json, SessionRecord.class);
-
-            if (record == null) {
-                return;
-            }
-
-            record.setTitle(title);
 
             // 写回文件（使用美化输出）
             Gson prettyGson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
-            json = prettyGson.toJson(record);
+            String json = prettyGson.toJson(record);
+            Files.createDirectories(playerDir);
             Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
             if (plugin.getConfigManager().isDebug()) {
@@ -1142,8 +1159,8 @@ public class CLIManager {
             // 删除文件
             Files.delete(sessionFile);
 
-            // 清理标题生成记录
-            titleGeneratedSessions.remove(sessionUUID);
+            // 清理标题记录
+            generatedTitles.remove(sessionUUID);
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 已删除会话: " + playerName + "/" + sessionUUID + ".json");
