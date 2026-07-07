@@ -942,36 +942,68 @@ public class CLIManager {
      * @param session 对话会话
      */
     public void generateSessionTitle(UUID playerUUID, DialogueSession session) {
+        generateSessionTitle(playerUUID, session, false, false);
+    }
+
+    public void generateSessionTitle(UUID playerUUID, DialogueSession session, boolean force, boolean useAllMessages) {
         String sessionUUID = session.getSessionUUID();
         if (sessionUUID == null) {
             plugin.getLogger().warning("[CLI] generateSessionTitle: sessionUUID is null");
             return;
         }
-        if (generatedTitles.containsKey(sessionUUID)) {
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] generateSessionTitle: 标题已生成，跳过: " + sessionUUID);
+        if (!force) {
+            if (generatedTitles.containsKey(sessionUUID)) {
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] generateSessionTitle: 标题已生成，跳过: " + sessionUUID);
+                }
+                return;
             }
-            return;
+        } else {
+            // 强制模式：如果正在生成中则跳过，避免并发
+            String current = generatedTitles.get(sessionUUID);
+            if ("".equals(current)) {
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] generateSessionTitle: 标题正在生成中，跳过: " + sessionUUID);
+                }
+                return;
+            }
         }
 
-        // 标记为已触发（使用空字符串作为占位符，ConcurrentHashMap不允许null）
+        // 标记为正在生成（使用空字符串作为占位符，ConcurrentHashMap不允许null）
         generatedTitles.put(sessionUUID, "");
 
-        // 获取第一条用户消息
-        String firstMessage = null;
-        for (DialogueSession.Message msg : session.getHistory()) {
-            if ("user".equals(msg.getRole())) {
-                firstMessage = msg.getContent();
-                break;
+        // 收集用户消息
+        String textToSummarize;
+        if (useAllMessages) {
+            StringBuilder sb = new StringBuilder();
+            for (DialogueSession.Message msg : session.getHistory()) {
+                if ("user".equals(msg.getRole())) {
+                    if (sb.length() > 0) sb.append("\n");
+                    sb.append(msg.getContent());
+                }
             }
+            textToSummarize = sb.toString();
+            if (textToSummarize.isEmpty()) {
+                plugin.getLogger().warning("[CLI] generateSessionTitle: 未找到用户消息");
+                return;
+            }
+        } else {
+            // 只取第一条用户消息（原有逻辑）
+            String firstMessage = null;
+            for (DialogueSession.Message msg : session.getHistory()) {
+                if ("user".equals(msg.getRole())) {
+                    firstMessage = msg.getContent();
+                    break;
+                }
+            }
+            if (firstMessage == null || firstMessage.isEmpty()) {
+                plugin.getLogger().warning("[CLI] generateSessionTitle: firstMessage is null or empty");
+                return;
+            }
+            textToSummarize = firstMessage;
         }
 
-        if (firstMessage == null || firstMessage.isEmpty()) {
-            plugin.getLogger().warning("[CLI] generateSessionTitle: firstMessage is null or empty");
-            return;
-        }
-
-        final String messageToSummarize = firstMessage;
+        final String messageToSummarize = textToSummarize;
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 正在异步生成会话标题，会话: " + sessionUUID + "，消息: " + messageToSummarize.substring(0, Math.min(20, messageToSummarize.length())) + "...");
@@ -2924,7 +2956,18 @@ public class CLIManager {
 
         // 触发标题生成（UUID已在 enterCLI 中分配）
         if (session.getSessionUUID() != null) {
-            generateSessionTitle(uuid, session);
+            // 统计用户消息数（只计 role=user）
+            int userMsgCount = 0;
+            for (DialogueSession.Message msg : session.getHistory()) {
+                if ("user".equals(msg.getRole())) userMsgCount++;
+            }
+            if (userMsgCount == 1) {
+                // 第一条消息：初始生成
+                generateSessionTitle(uuid, session);
+            } else if (userMsgCount > 1 && userMsgCount % 6 == 0) {
+                // 每 6 条用户消息重新生成标题（使用所有用户消息）
+                generateSessionTitle(uuid, session, true, true);
+            }
         }
 
         isGenerating.put(uuid, true);
