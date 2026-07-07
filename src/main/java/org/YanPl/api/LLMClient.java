@@ -1254,10 +1254,10 @@ public class LLMClient {
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
 
-        // system 消息
+        // system 消息 - 强调直接输出，不要思考
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "You are a title generator. Based on the user's message, generate a short conversation title (max 15 chars) in the same language as the user's message. You MUST respond with ONLY a JSON object in this exact format: {\"title\": \"your title here\"}. No other text.");
+        systemMsg.addProperty("content", "Generate a short title (5-10 chars) summarizing the user's message. Use the same language as the user. Output ONLY the title, no quotes, no explanation, no thinking.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1324,10 +1324,10 @@ public class LLMClient {
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
 
-        // system 消息
+        // system 消息 - 强调直接输出，不要思考
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "You are a title generator. Based on the user's message, generate a short conversation title (max 15 chars) in the same language as the user's message. You MUST respond with ONLY a JSON object in this exact format: {\"title\": \"your title here\"}. No other text.");
+        systemMsg.addProperty("content", "Generate a short title (5-10 chars) summarizing the user's message. Use the same language as the user. Output ONLY the title, no quotes, no explanation, no thinking.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1389,119 +1389,40 @@ public class LLMClient {
             plugin.getLogger().info("[标题生成] AI 原始返回 (" + content.length() + " chars): " + content);
         }
 
-        // 策略0：尝试从思考过程中提取模型给出的标题（如"可能的标题有xxx"）
-        try {
-            // 匹配 "可能的标题" 或 "标题是" 等模式后面的内容
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-                "(?:可能的标题[是有：:]*|标题[是：:]*)\\s*[\"']([^\"']+)[\"']",
-                java.util.regex.Pattern.CASE_INSENSITIVE
-            );
-            java.util.regex.Matcher matcher = pattern.matcher(content);
-            if (matcher.find()) {
-                String title = matcher.group(1).trim();
-                if (title.length() > 15) {
-                    title = title.substring(0, 15);
-                }
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[标题生成] 从思考过程提取成功: " + title);
-                }
-                return title;
-            }
-        } catch (Exception e) {
-            // 继续尝试其他策略
+        // 如果内容为空，返回 null
+        if (content.isEmpty()) {
+            plugin.getLogger().warning("[标题生成] AI 返回空内容");
+            return null;
         }
 
-        // 策略1：尝试解析 JSON 格式 {"title": "xxx"}
-        try {
-            int jsonStart = content.indexOf("{");
-            int jsonEnd = content.lastIndexOf("}");
-            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                String jsonStr = content.substring(jsonStart, jsonEnd + 1);
-                JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
-                if (titleJson.has("title")) {
-                    String title = titleJson.get("title").getAsString().trim();
-                    if (title.length() > 15) {
-                        title = title.substring(0, 15);
-                    }
-                    if (plugin.getConfigManager().isDebug()) {
-                        plugin.getLogger().info("[标题生成] 从 JSON 提取成功: " + title);
-                    }
-                    return title;
-                }
-            }
-        } catch (Exception e) {
-            // JSON 解析失败，继续尝试其他策略
+        // 直接取第一行作为标题
+        String title = content;
+        if (title.contains("\n")) {
+            title = title.substring(0, title.indexOf("\n")).trim();
         }
 
-        // 策略2：尝试匹配 "title": "xxx" 或 "title":"xxx" 格式（可能在文本中）
-        try {
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"title\"\\s*:\\s*\"([^\"]+)\"");
-            java.util.regex.Matcher matcher = pattern.matcher(content);
-            if (matcher.find()) {
-                String title = matcher.group(1).trim();
-                if (title.length() > 15) {
-                    title = title.substring(0, 15);
-                }
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[标题生成] 从正则匹配提取成功: " + title);
-                }
-                return title;
-            }
-        } catch (Exception e) {
-            // 正则匹配失败，继续尝试其他策略
+        // 去除可能的引号
+        if (title.startsWith("\"") && title.endsWith("\"")) {
+            title = title.substring(1, title.length() - 1);
+        }
+        if (title.startsWith("'") && title.endsWith("'")) {
+            title = title.substring(1, title.length() - 1);
         }
 
-        // 策略3：尝试匹配 title: xxx 格式（不带引号）
-        try {
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(?i)title\\s*:\\s*(.+?)(?:\\n|$)");
-            java.util.regex.Matcher matcher = pattern.matcher(content);
-            if (matcher.find()) {
-                String title = matcher.group(1).trim();
-                // 去除可能的引号
-                if (title.startsWith("\"") && title.endsWith("\"")) {
-                    title = title.substring(1, title.length() - 1);
-                }
-                if (title.length() > 15) {
-                    title = title.substring(0, 15);
-                }
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[标题生成] 从 key-value 提取成功: " + title);
-                }
-                return title;
-            }
-        } catch (Exception e) {
-            // 解析失败，继续尝试其他策略
+        // 截取前15个字符
+        if (title.length() > 15) {
+            title = title.substring(0, 15);
         }
 
-        // 策略4：直接取第一行作为标题（去除 *、- 等符号）
-        try {
-            String[] lines = content.split("\n");
-            for (String line : lines) {
-                line = line.trim();
-                // 跳过空行和明显的非标题行
-                if (line.isEmpty() || line.startsWith("*") || line.startsWith("-") || line.startsWith("#")) {
-                    continue;
-                }
-                // 去除可能的引号
-                if (line.startsWith("\"") && line.endsWith("\"")) {
-                    line = line.substring(1, line.length() - 1);
-                }
-                if (line.length() > 15) {
-                    line = line.substring(0, 15);
-                }
-                if (!line.isEmpty()) {
-                    if (plugin.getConfigManager().isDebug()) {
-                        plugin.getLogger().info("[标题生成] 从纯文本提取成功: " + line);
-                    }
-                    return line;
-                }
-            }
-        } catch (Exception e) {
-            // 提取失败
+        if (title.isEmpty()) {
+            return null;
         }
 
-        plugin.getLogger().warning("[标题生成] 所有解析策略都失败");
-        return null;
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 解析成功: " + title);
+        }
+
+        return title;
     }
 
     /**
