@@ -992,7 +992,7 @@ public class CLIManager {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         Player player = Bukkit.getPlayer(playerUUID);
                         if (player != null && player.isOnline()) {
-                            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e提示：当前配置的 AI 模型理解能力较弱，可能无法很好地完成复杂任务。建议在配置文件中更换为能力更强的模型。"));
+                            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e当前配置的 AI 模型理解能力较弱，可能无法很好地完成复杂任务。建议在配置文件中更换为能力更强的模型。"));
                         }
                     });
                 }
