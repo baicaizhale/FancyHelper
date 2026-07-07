@@ -66,6 +66,16 @@ public class LLMClient {
     }
 
     /**
+     * 检查配置文件是否加载成功，若加载失败则提前抛出明确错误，
+     * 避免下游因配置项取到默认空值而产生误导性报错（如 "请设置 API Key" 而实际是 config.yml 格式错误）。
+     */
+    private void checkConfigLoaded() throws IOException {
+        if (plugin.getConfigManager().isConfigLoadFailed()) {
+            throw new IOException("§zFancyHelper§b§r §7> §fconfig.yml 格式错误，无法加载配置文件，请检查控制台输出。");
+        }
+    }
+
+    /**
      * 发送 HTTP 请求并带有重试机制
      * 解决 java.io.IOException: HTTP/1.1 header parser received no bytes 等偶发性网络问题
      */
@@ -348,6 +358,8 @@ public class LLMClient {
     }
 
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
+        checkConfigLoaded();
+
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(session, systemPrompt);
@@ -864,6 +876,8 @@ public class LLMClient {
      * @return AI响应
      */
     public AIResponse chatSimple(String prompt) throws IOException {
+        checkConfigLoaded();
+
         DialogueSession tempSession = new DialogueSession();
         tempSession.addMessage("user", prompt);
         return chat(tempSession, "你是一个得力的助手。");
@@ -1029,6 +1043,8 @@ public class LLMClient {
      * @throws IOException 当 API 调用失败时
      */
     public String compressContext(String context) throws IOException {
+        checkConfigLoaded();
+
         String provider = plugin.getConfigManager().getCompressionModelProvider();
         
         if ("openai".equalsIgnoreCase(provider)) {
@@ -1183,6 +1199,8 @@ public class LLMClient {
      * @return 生成的标题（不超过15字）
      */
     public String generateTitle(String firstMessage) throws IOException {
+        checkConfigLoaded();
+
         // 使用主模型的配置，而不是压缩模型
         String provider = plugin.getConfigManager().getProvider();
 
@@ -1444,6 +1462,8 @@ public class LLMClient {
      * @return 完整的响应文本
      */
     public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        checkConfigLoaded();
+
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
         }
