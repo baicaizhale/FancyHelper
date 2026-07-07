@@ -1378,28 +1378,45 @@ public class LLMClient {
         JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
         AIResponse aiResponse = responseParser.parseResponse(responseJson);
 
-        if (aiResponse != null && aiResponse.getContent() != null) {
-            String content = aiResponse.getContent().trim();
-            // 从 JSON 中提取 title
-            try {
-                // 尝试找到 JSON 块
-                int jsonStart = content.indexOf("{");
-                int jsonEnd = content.lastIndexOf("}");
-                if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                    String jsonStr = content.substring(jsonStart, jsonEnd + 1);
-                    JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
-                    if (titleJson.has("title")) {
-                        String title = titleJson.get("title").getAsString().trim();
-                        // 截取前15个字符
-                        if (title.length() > 15) {
-                            title = title.substring(0, 15);
-                        }
-                        return title;
-                    }
+        if (aiResponse == null || aiResponse.getContent() == null) {
+            plugin.getLogger().warning("[标题生成] AI 响应内容为 null");
+            return null;
+        }
+
+        String content = aiResponse.getContent().trim();
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] AI 原始返回: " + content);
+        }
+
+        // 从 JSON 中提取 title
+        try {
+            // 尝试找到 JSON 块
+            int jsonStart = content.indexOf("{");
+            int jsonEnd = content.lastIndexOf("}");
+            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                String jsonStr = content.substring(jsonStart, jsonEnd + 1);
+
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[标题生成] 提取的 JSON: " + jsonStr);
                 }
-            } catch (Exception e) {
-                plugin.getLogger().warning("[标题生成] JSON 解析异常: " + e.getMessage());
+
+                JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
+                if (titleJson.has("title")) {
+                    String title = titleJson.get("title").getAsString().trim();
+                    // 截取前15个字符
+                    if (title.length() > 15) {
+                        title = title.substring(0, 15);
+                    }
+                    return title;
+                } else {
+                    plugin.getLogger().warning("[标题生成] JSON 中没有 'title' 字段");
+                }
+            } else {
+                plugin.getLogger().warning("[标题生成] 未找到 JSON 块");
             }
+        } catch (Exception e) {
+            plugin.getLogger().warning("[标题生成] JSON 解析异常: " + e.getMessage());
         }
         // JSON 解析失败
         return null;
