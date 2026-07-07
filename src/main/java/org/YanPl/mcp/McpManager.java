@@ -145,6 +145,11 @@ public class McpManager {
         return clientManager.callExternalTool(serverName, toolName, arguments);
     }
 
+    public void reload() {
+        shutdown();
+        initialize();
+    }
+
     public void shutdown() {
         if (reconnectTask != null) {
             reconnectTask.cancel();
