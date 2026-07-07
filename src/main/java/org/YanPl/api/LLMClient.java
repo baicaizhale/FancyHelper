@@ -1266,13 +1266,11 @@ public class LLMClient {
         userMsg.addProperty("content", firstMessage);
         messagesArray.add(userMsg);
 
-        // 构建请求体 - 使用更少的 token，禁用思考
+        // 构建请求体 - 使用主模型，不限制 token
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("reasoning_effort", "low");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1395,12 +1393,13 @@ public class LLMClient {
             return null;
         }
 
-        // 从 JSON 中提取 title
+        // 从最后一个 JSON 中提取 title（避免思考过程中的示例）
         try {
-            int jsonStart = content.indexOf("{");
-            int jsonEnd = content.lastIndexOf("}");
-            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                String jsonStr = content.substring(jsonStart, jsonEnd + 1);
+            // 找所有 JSON 块，取最后一个
+            int lastJsonStart = content.lastIndexOf("{");
+            int lastJsonEnd = content.lastIndexOf("}");
+            if (lastJsonStart >= 0 && lastJsonEnd > lastJsonStart) {
+                String jsonStr = content.substring(lastJsonStart, lastJsonEnd + 1);
                 JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
                 if (titleJson.has("title")) {
                     String title = titleJson.get("title").getAsString().trim();
@@ -1409,7 +1408,7 @@ public class LLMClient {
                         title = title.substring(0, 15);
                     }
                     if (plugin.getConfigManager().isDebug()) {
-                        plugin.getLogger().info("[标题生成] 从 JSON 提取成功: " + title);
+                        plugin.getLogger().info("[标题生成] 从最后一个 JSON 提取成功: " + title);
                     }
                     return title;
                 }
