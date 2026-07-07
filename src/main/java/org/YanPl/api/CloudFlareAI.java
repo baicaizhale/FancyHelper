@@ -1212,7 +1212,7 @@ public class CloudFlareAI {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Based on the user's message, generate a conversation title in the corresponding language. The title must not exceed 15 characters. Your response should contain ONLY the title itself with no additional characters.");
+        systemMsg.addProperty("content", "You are a title generator. Based on the user's message, generate a short conversation title (max 15 chars) in the same language as the user's message. You MUST respond with ONLY a JSON object in this exact format: {\"title\": \"your title here\"}. No other text.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1252,15 +1252,32 @@ public class CloudFlareAI {
             AIResponse aiResponse = responseParser.parseResponse(responseJson);
 
             if (aiResponse != null && aiResponse.getContent() != null) {
-                String title = aiResponse.getContent().trim();
-                // 去除可能的引号
-                if (title.startsWith("\"") && title.endsWith("\"")) {
-                    title = title.substring(1, title.length() - 1);
+                String content = aiResponse.getContent().trim();
+                // 从 JSON 中提取 title
+                try {
+                    // 尝试找到 JSON 块
+                    int jsonStart = content.indexOf("{");
+                    int jsonEnd = content.lastIndexOf("}");
+                    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                        String jsonStr = content.substring(jsonStart, jsonEnd + 1);
+                        JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
+                        if (titleJson.has("title")) {
+                            String title = titleJson.get("title").getAsString().trim();
+                            // 截取前15个字符
+                            if (title.length() > 15) {
+                                title = title.substring(0, 15);
+                            }
+                            return title;
+                        }
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("[标题生成] JSON 解析失败: " + e.getMessage());
                 }
-                if (title.startsWith("'") && title.endsWith("'")) {
-                    title = title.substring(1, title.length() - 1);
+                // 如果 JSON 解析失败，返回原文截取
+                if (content.length() > 15) {
+                    content = content.substring(0, 15);
                 }
-                return title;
+                return content;
             }
 
             throw new IOException("无法解析标题生成响应");
@@ -1297,7 +1314,7 @@ public class CloudFlareAI {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Based on the user's message, generate a conversation title in the corresponding language. The title must not exceed 15 characters. Your response should contain ONLY the title itself with no additional characters.");
+        systemMsg.addProperty("content", "You are a title generator. Based on the user's message, generate a short conversation title (max 15 chars) in the same language as the user's message. You MUST respond with ONLY a JSON object in this exact format: {\"title\": \"your title here\"}. No other text.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1337,15 +1354,32 @@ public class CloudFlareAI {
             AIResponse aiResponse = responseParser.parseResponse(responseJson);
 
             if (aiResponse != null && aiResponse.getContent() != null) {
-                String title = aiResponse.getContent().trim();
-                // 去除可能的引号
-                if (title.startsWith("\"") && title.endsWith("\"")) {
-                    title = title.substring(1, title.length() - 1);
+                String content = aiResponse.getContent().trim();
+                // 从 JSON 中提取 title
+                try {
+                    // 尝试找到 JSON 块
+                    int jsonStart = content.indexOf("{");
+                    int jsonEnd = content.lastIndexOf("}");
+                    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                        String jsonStr = content.substring(jsonStart, jsonEnd + 1);
+                        JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
+                        if (titleJson.has("title")) {
+                            String title = titleJson.get("title").getAsString().trim();
+                            // 截取前15个字符
+                            if (title.length() > 15) {
+                                title = title.substring(0, 15);
+                            }
+                            return title;
+                        }
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("[标题生成] JSON 解析失败: " + e.getMessage());
                 }
-                if (title.startsWith("'") && title.endsWith("'")) {
-                    title = title.substring(1, title.length() - 1);
+                // 如果 JSON 解析失败，返回原文截取
+                if (content.length() > 15) {
+                    content = content.substring(0, 15);
                 }
-                return title;
+                return content;
             }
 
             throw new IOException("无法解析标题生成响应");

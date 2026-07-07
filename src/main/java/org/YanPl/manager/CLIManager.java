@@ -982,13 +982,9 @@ public class CLIManager {
                     if (plugin.getConfigManager().isDebug()) {
                         plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
                     }
-                    // 更新会话的标题并保存
+                    // 直接更新文件中的标题（不检查session是否还在map中）
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        DialogueSession currentSession = sessions.get(playerUUID);
-                        if (currentSession != null && sessionUUID.equals(currentSession.getSessionUUID())) {
-                            // 读取现有记录并更新标题
-                            updateSessionTitle(playerUUID, sessionUUID, title);
-                        }
+                        updateSessionTitle(playerUUID, sessionUUID, title);
                     });
                 } else {
                     plugin.getLogger().warning("[CLI] AI 返回空标题");
