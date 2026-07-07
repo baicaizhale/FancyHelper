@@ -1,18 +1,18 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
-import org.YanPl.api.CloudFlareAI;
+import org.YanPl.api.LLMClient;
 import org.YanPl.model.AIResponse;
 
 import java.io.IOException;
 
 public class RiskAssessmentManager {
     private final FancyHelper plugin;
-    private final CloudFlareAI ai;
+    private final LLMClient ai;
 
     public RiskAssessmentManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.ai = new CloudFlareAI(plugin);
+        this.ai = new LLMClient(plugin);
     }
 
     /**

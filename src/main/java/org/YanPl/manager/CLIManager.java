@@ -5,7 +5,7 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
-import org.YanPl.api.CloudFlareAI;
+import org.YanPl.api.LLMClient;
 import org.YanPl.api.StreamingHandler;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  */
 public class CLIManager {
     private final FancyHelper plugin;
-    private final CloudFlareAI ai;
+    private final LLMClient ai;
     private final PromptManager promptManager;
     private final ToolExecutor toolExecutor;
     private final Set<UUID> activeCLIPayers = new HashSet<>();
@@ -148,7 +148,7 @@ public class CLIManager {
 
     public CLIManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.ai = new CloudFlareAI(plugin);
+        this.ai = new LLMClient(plugin);
         this.promptManager = new PromptManager(plugin);
         this.toolExecutor = new ToolExecutor(plugin, this);
         this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
@@ -2370,7 +2370,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ AI 调用失败（重试）: " + errorMsg);
                     }
-                    // 控制台日志已在 CloudFlareAI.java 中输出
+                    // 控制台日志已在 LLMClient.java 中输出
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");
@@ -2977,7 +2977,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + errorMsg);
                     }
-                    // 控制台日志已在 CloudFlareAI.java 中输出
+                    // 控制台日志已在 LLMClient.java 中输出
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");
@@ -3423,7 +3423,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ 继续生成失败: " + errorMsg);
                     }
-                    // 控制台日志已在 CloudFlareAI.java 中输出
+                    // 控制台日志已在 LLMClient.java 中输出
                     isGenerating.put(uuid, false);
                     generationStates.put(uuid, GenerationStatus.ERROR);
                     generationStartTimes.remove(uuid);
@@ -3801,7 +3801,7 @@ public class CLIManager {
                     } else {
                         player.sendMessage(ChatColor.RED + "⨀ AI 调用出错: " + errorMsg);
                     }
-                    // 控制台日志已在 CloudFlareAI.java 中输出
+                    // 控制台日志已在 LLMClient.java 中输出
 
                     // 显示重试按钮（与报错信息同一行）
                     TextComponent retryBtn = new TextComponent(ChatColor.WHITE + "(");

@@ -21,10 +21,11 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 /**
- * CloudFlare AI API 封装类
+ * LLM API 客户端
+ * 支持 CloudFlare AI、OpenAI 兼容 API 等多种 provider
  * 负责构建请求、解析响应，以及管理 HttpClient 的生命周期
  */
-public class CloudFlareAI {
+public class LLMClient {
     private static final String API_COMPLETIONS_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/chat/completions";
     private static final String API_RESPONSES_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/responses";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
@@ -36,7 +37,7 @@ public class CloudFlareAI {
     private String cachedAccountId = null;
     private BiConsumer<Integer, String> retryCallback = null;
 
-    public CloudFlareAI(FancyHelper plugin) {
+    public LLMClient(FancyHelper plugin) {
         this.plugin = plugin;
         int timeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
         this.httpClient = HttpClient.newBuilder()
@@ -96,7 +97,7 @@ public class CloudFlareAI {
     public void shutdown() {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
-        plugin.getLogger().info("[CloudFlareAI] HTTP 客户端已完成关闭（java.net.http.HttpClient 无需特殊操作）。");
+        plugin.getLogger().info("[LLMClient] HTTP 客户端已完成关闭（java.net.http.HttpClient 无需特殊操作）。");
     }
 
     /**
