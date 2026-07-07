@@ -351,7 +351,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "resume_delete":
                 if (args.length > 1) {
-                    handleSessionDelete(player, args[1]);
+                    int returnPage = 0;
+                    if (args.length > 2) {
+                        try { returnPage = Integer.parseInt(args[2]) - 1; } catch (NumberFormatException e) {}
+                    }
+                    handleSessionDelete(player, args[1], returnPage);
                 }
                 return true;
             case "sound":
@@ -738,12 +742,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
                 if (isPendingDelete) {
                     TextComponent confirmDelBtn = new TextComponent(ChatColor.RED + "✘ 确认删除");
-                    confirmDelBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID));
+                    confirmDelBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID + " " + (page + 1)));
                     confirmDelBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击确认删除此对话")));
                     line.addExtra(confirmDelBtn);
                 } else {
                     TextComponent delBtn = new TextComponent(ChatColor.RED + "✘");
-                    delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID));
+                    delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID + " " + (page + 1)));
                     delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击删除此对话")));
                     line.addExtra(delBtn);
                 }
@@ -797,7 +801,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     /**
      * 处理会话删除（二次确认）
      */
-    private void handleSessionDelete(Player player, String sessionUUID) {
+    private void handleSessionDelete(Player player, String sessionUUID, int returnPage) {
         String pendingDelete = plugin.getCliManager().getPendingDeleteSession(player.getUniqueId());
 
         if (sessionUUID.equals(pendingDelete)) {
@@ -805,14 +809,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             plugin.getCliManager().deleteSession(player.getUniqueId(), sessionUUID);
             plugin.getCliManager().clearPendingDeleteSession(player.getUniqueId());
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f对话已删除。"));
-            // 刷新列表（回到第1页）
-            showSessionList(player, 0);
+            // 刷新列表（保持当前页）
+            showSessionList(player, returnPage);
         } else {
             // 设置待删除状态
             plugin.getCliManager().setPendingDeleteSession(player.getUniqueId(), sessionUUID);
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e再次点击 ✘ 确认删除。"));
-            // 刷新列表以显示确认按钮（回到第1页）
-            showSessionList(player, 0);
+            // 刷新列表以显示确认按钮（保持当前页）
+            showSessionList(player, returnPage);
         }
     }
 
