@@ -411,7 +411,6 @@ public class LLMClient {
 
         // 对于支持推理参数的模型（如 deepseek-reasoner、o1、qwen-max 等），添加推理参数
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
-            bodyJson.addProperty("reasoning_effort", "medium");
         }
 
         String bodyString = gson.toJson(bodyJson);
@@ -690,7 +689,6 @@ public class LLMClient {
         } else {
             bodyJson.add("messages", messagesArray);
             if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
-                bodyJson.addProperty("reasoning_effort", "medium");
             }
         }
 
@@ -1143,6 +1141,7 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 300);
         bodyJson.addProperty("temperature", 0.3);
+        bodyJson.addProperty("reasoning_effort", "low");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1273,7 +1272,7 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("reasoning_effort", "disable");
+        bodyJson.addProperty("reasoning_effort", "low");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1343,7 +1342,6 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("reasoning_effort", "disable");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1531,7 +1529,6 @@ public class LLMClient {
         bodyJson.addProperty("stream", true);
 
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
-            bodyJson.addProperty("reasoning_effort", "medium");
         }
 
         String bodyString = gson.toJson(bodyJson);
@@ -1607,7 +1604,6 @@ public class LLMClient {
             bodyJson.addProperty("stream", true);
             bodyJson.add("messages", messagesArray);
             if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
-                bodyJson.addProperty("reasoning_effort", "medium");
             }
         }
 
