@@ -873,7 +873,7 @@ public class CLIManager {
 
             // 如果有生成的标题，设置到记录中
             String generatedTitle = generatedTitles.get(sessionUUID);
-            if (generatedTitle != null) {
+            if (generatedTitle != null && !generatedTitle.isEmpty()) {
                 newRecord.setTitle(generatedTitle);
             }
 
@@ -954,8 +954,8 @@ public class CLIManager {
             return;
         }
 
-        // 标记为已触发
-        generatedTitles.put(sessionUUID, null);
+        // 标记为已触发（使用空字符串作为占位符，ConcurrentHashMap不允许null）
+        generatedTitles.put(sessionUUID, "");
 
         // 获取第一条用户消息
         String firstMessage = null;
