@@ -866,7 +866,7 @@ public class CLIManager {
 
             // 会话文件路径
             Path sessionFile = playerDir.resolve(sessionUUID + ".json");
-            Gson gson = new Gson();
+            Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
 
             // 创建新的会话记录
             SessionRecord newRecord = SessionRecord.fromSession(session, sessionUUID);
@@ -937,7 +937,14 @@ public class CLIManager {
      */
     public void generateSessionTitle(UUID playerUUID, DialogueSession session) {
         String sessionUUID = session.getSessionUUID();
-        if (sessionUUID == null || titleGeneratedSessions.contains(sessionUUID)) {
+        if (sessionUUID == null) {
+            plugin.getLogger().warning("[CLI] generateSessionTitle: sessionUUID is null");
+            return;
+        }
+        if (titleGeneratedSessions.contains(sessionUUID)) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] generateSessionTitle: 标题已生成，跳过: " + sessionUUID);
+            }
             return;
         }
 
@@ -954,16 +961,27 @@ public class CLIManager {
         }
 
         if (firstMessage == null || firstMessage.isEmpty()) {
+            plugin.getLogger().warning("[CLI] generateSessionTitle: firstMessage is null or empty");
             return;
         }
 
         final String messageToSummarize = firstMessage;
 
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 正在异步生成会话标题，会话: " + sessionUUID + "，消息: " + messageToSummarize.substring(0, Math.min(20, messageToSummarize.length())) + "...");
+        }
+
         // 异步调用小模型生成标题
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 开始调用 AI 生成标题...");
+                }
                 String title = ai.generateTitle(messageToSummarize);
                 if (title != null && !title.isEmpty()) {
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
+                    }
                     // 更新会话的标题并保存
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         DialogueSession currentSession = sessions.get(playerUUID);
@@ -972,6 +990,8 @@ public class CLIManager {
                             updateSessionTitle(playerUUID, sessionUUID, title);
                         }
                     });
+                } else {
+                    plugin.getLogger().warning("[CLI] AI 返回空标题");
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("[CLI] 生成会话标题失败: " + e.getMessage());
@@ -1006,8 +1026,9 @@ public class CLIManager {
 
             record.setTitle(title);
 
-            // 写回文件
-            json = gson.toJson(record);
+            // 写回文件（使用美化输出）
+            Gson prettyGson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
+            json = prettyGson.toJson(record);
             Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
             if (plugin.getConfigManager().isDebug()) {
@@ -2876,7 +2897,11 @@ public class CLIManager {
 
         // 为新会话生成 UUID 并触发标题生成
         if (session.getSessionUUID() == null) {
-            session.setSessionUUID(UUID.randomUUID().toString());
+            String newUUID = UUID.randomUUID().toString();
+            session.setSessionUUID(newUUID);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 为新会话分配 UUID: " + newUUID);
+            }
         }
         generateSessionTitle(uuid, session);
 
