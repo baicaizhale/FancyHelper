@@ -19,6 +19,8 @@ public class ConfigManager {
     private FileConfiguration config;
     private FileConfiguration playerData;
     private File playerDataFile;
+    private boolean configLoadFailed = false;
+    private String configLoadError = "";
 
     private static final String SKILL_PRIMARY_MIRROR = "https://fancy-skill.baicaizhale.top/";
     private static final String SKILL_REPO_BASE = "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/";
@@ -197,11 +199,16 @@ public class ConfigManager {
     }
 
     public void loadConfig() {
+        configLoadFailed = false;
+        configLoadError = "";
+
         // 确保存在默认配置并读取
         plugin.saveDefaultConfig();
         try {
             plugin.reloadConfig();
         } catch (Exception e) {
+            configLoadFailed = true;
+            configLoadError = e.getMessage();
             plugin.getLogger().severe("config.yml 格式错误，无法加载配置文件: " + e.getMessage());
             if (config == null) {
                 // 首次加载失败时，回退到默认空配置
@@ -709,6 +716,14 @@ public class ConfigManager {
             }
         }
         return result;
+    }
+
+    public boolean isConfigLoadFailed() {
+        return configLoadFailed;
+    }
+
+    public String getConfigLoadError() {
+        return configLoadError;
     }
 
     public void save() {
