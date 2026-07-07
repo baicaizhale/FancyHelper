@@ -1179,12 +1179,13 @@ public class LLMClient {
     }
 
     /**
-     * 使用小模型生成对话标题
+     * 使用主模型生成对话标题（不用压缩模型）
      * @param firstMessage 第一条用户消息
      * @return 生成的标题（不超过15字）
      */
     public String generateTitle(String firstMessage) throws IOException {
-        String provider = plugin.getConfigManager().getCompressionModelProvider();
+        // 使用主模型的配置，而不是压缩模型
+        String provider = plugin.getConfigManager().getProvider();
 
         if ("openai".equalsIgnoreCase(provider)) {
             return generateTitleWithOpenAI(firstMessage);
@@ -1238,11 +1239,11 @@ public class LLMClient {
     }
 
     /**
-     * 使用 CloudFlare 生成标题（单次尝试）
+     * 使用 CloudFlare 生成标题（单次尝试，使用主模型）
      */
     private String generateTitleFromCloudFlare(String firstMessage) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
-        String model = plugin.getConfigManager().getCompressionCloudflareModel();
+        String model = plugin.getConfigManager().getCloudflareModel(); // 使用主模型
         String accountId = fetchAccountId();
 
         if (cfKey == null || cfKey.isEmpty()) {
@@ -1272,7 +1273,7 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("reasoning_effort", "none");
+        bodyJson.addProperty("reasoning_effort", "disable");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1301,12 +1302,12 @@ public class LLMClient {
     }
 
     /**
-     * 使用 OpenAI 兼容 API 生成标题（单次尝试）
+     * 使用 OpenAI 兼容 API 生成标题（单次尝试，使用主模型）
      */
     private String generateTitleFromOpenAI(String firstMessage) throws IOException {
         String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
         String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getCompressionOpenAiModel();
+        String model = plugin.getConfigManager().getOpenAiModel(); // 使用主模型
 
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("未配置 OpenAI API Key");
@@ -1342,7 +1343,7 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 50);
         bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("reasoning_effort", "none");
+        bodyJson.addProperty("reasoning_effort", "disable");
 
         String bodyString = gson.toJson(bodyJson);
 
@@ -1372,7 +1373,8 @@ public class LLMClient {
 
     /**
      * 从 API 响应中解析标题
-     * @return 标题，如果 JSON 解析失败返回 null
+     * 支持多种格式：JSON、key-value、纯文本
+     * @return 标题，如果完全失败返回 null
      */
     private String parseTitleFromResponse(String responseBody) {
         JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
@@ -1389,36 +1391,96 @@ public class LLMClient {
             plugin.getLogger().info("[标题生成] AI 原始返回: " + content);
         }
 
-        // 从 JSON 中提取 title
+        // 策略1：尝试解析 JSON 格式 {"title": "xxx"}
         try {
-            // 尝试找到 JSON 块
             int jsonStart = content.indexOf("{");
             int jsonEnd = content.lastIndexOf("}");
             if (jsonStart >= 0 && jsonEnd > jsonStart) {
                 String jsonStr = content.substring(jsonStart, jsonEnd + 1);
-
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[标题生成] 提取的 JSON: " + jsonStr);
-                }
-
                 JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
                 if (titleJson.has("title")) {
                     String title = titleJson.get("title").getAsString().trim();
-                    // 截取前15个字符
                     if (title.length() > 15) {
                         title = title.substring(0, 15);
                     }
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[标题生成] 从 JSON 提取成功: " + title);
+                    }
                     return title;
-                } else {
-                    plugin.getLogger().warning("[标题生成] JSON 中没有 'title' 字段");
                 }
-            } else {
-                plugin.getLogger().warning("[标题生成] 未找到 JSON 块");
             }
         } catch (Exception e) {
-            plugin.getLogger().warning("[标题生成] JSON 解析异常: " + e.getMessage());
+            // JSON 解析失败，继续尝试其他策略
         }
-        // JSON 解析失败
+
+        // 策略2：尝试匹配 "title": "xxx" 或 "title":"xxx" 格式（可能在文本中）
+        try {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"title\"\\s*:\\s*\"([^\"]+)\"");
+            java.util.regex.Matcher matcher = pattern.matcher(content);
+            if (matcher.find()) {
+                String title = matcher.group(1).trim();
+                if (title.length() > 15) {
+                    title = title.substring(0, 15);
+                }
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[标题生成] 从正则匹配提取成功: " + title);
+                }
+                return title;
+            }
+        } catch (Exception e) {
+            // 正则匹配失败，继续尝试其他策略
+        }
+
+        // 策略3：尝试匹配 title: xxx 格式（不带引号）
+        try {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(?i)title\\s*:\\s*(.+?)(?:\\n|$)");
+            java.util.regex.Matcher matcher = pattern.matcher(content);
+            if (matcher.find()) {
+                String title = matcher.group(1).trim();
+                // 去除可能的引号
+                if (title.startsWith("\"") && title.endsWith("\"")) {
+                    title = title.substring(1, title.length() - 1);
+                }
+                if (title.length() > 15) {
+                    title = title.substring(0, 15);
+                }
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[标题生成] 从 key-value 提取成功: " + title);
+                }
+                return title;
+            }
+        } catch (Exception e) {
+            // 解析失败，继续尝试其他策略
+        }
+
+        // 策略4：直接取第一行作为标题（去除 *、- 等符号）
+        try {
+            String[] lines = content.split("\n");
+            for (String line : lines) {
+                line = line.trim();
+                // 跳过空行和明显的非标题行
+                if (line.isEmpty() || line.startsWith("*") || line.startsWith("-") || line.startsWith("#")) {
+                    continue;
+                }
+                // 去除可能的引号
+                if (line.startsWith("\"") && line.endsWith("\"")) {
+                    line = line.substring(1, line.length() - 1);
+                }
+                if (line.length() > 15) {
+                    line = line.substring(0, 15);
+                }
+                if (!line.isEmpty()) {
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[标题生成] 从纯文本提取成功: " + line);
+                    }
+                    return line;
+                }
+            }
+        } catch (Exception e) {
+            // 提取失败
+        }
+
+        plugin.getLogger().warning("[标题生成] 所有解析策略都失败");
         return null;
     }
 
