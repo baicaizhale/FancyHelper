@@ -153,9 +153,9 @@ mvn clean package
 
 <a href="https://www.star-history.com/?repos=baicaizhale%2FFancyHelper&type=date&logscale=&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=baicaizhale/FancyHelper&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=baicaizhale/FancyHelper&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=baicaizhale/FancyHelper&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=baicaizhale/FancyHelper&type=date&theme=dark&logscale&legend=top-left&sealed_token=Zt6iAK46pATWMDeqZIpfXEgszyp5_mTnV_N9xkOmfVlF18zhpPgVugnF_J5v2A59qjiIhVeEnBShHL1jUh_KW_Vr9Aqk70Bs_uD--nfVNad42tvhdjbG5Q" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=baicaizhale/FancyHelper&type=date&logscale&legend=top-left&sealed_token=Zt6iAK46pATWMDeqZIpfXEgszyp5_mTnV_N9xkOmfVlF18zhpPgVugnF_J5v2A59qjiIhVeEnBShHL1jUh_KW_Vr9Aqk70Bs_uD--nfVNad42tvhdjbG5Q" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=baicaizhale/FancyHelper&type=date&logscale&legend=top-left&sealed_token=Zt6iAK46pATWMDeqZIpfXEgszyp5_mTnV_N9xkOmfVlF18zhpPgVugnF_J5v2A59qjiIhVeEnBShHL1jUh_KW_Vr9Aqk70Bs_uD--nfVNad42tvhdjbG5Q" />
  </picture>
 </a>
 
