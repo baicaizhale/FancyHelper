@@ -1231,10 +1231,15 @@ public class CLIManager {
         }
     }
 
+    public void enterCLI(Player player) {
+        enterCLI(player, false);
+    }
+
     /**
      * 进入 CLI 模式
+     * @param autoResume 是否为服务器重启后的自动恢复，为 true 时才从磁盘加载会话
      */
-    public void enterCLI(Player player) {
+    public void enterCLI(Player player, boolean autoResume) {
         UUID uuid = player.getUniqueId();
 
         // 已在 CLI 模式中，避免重复进入（启动时双入口可能触发）
@@ -1269,8 +1274,8 @@ public class CLIManager {
         // 检查是否已经有预加载的会话（插件重启恢复）
         DialogueSession session = sessions.get(uuid);
 
-        // 如果没有活跃会话，尝试从持久化存储恢复最近的会话
-        if (session == null) {
+        // 如果没有活跃会话，仅在自动恢复时尝试从持久化存储加载
+        if (session == null && autoResume) {
             session = loadLatestPlayerSession(player);
         }
 
@@ -1585,22 +1590,18 @@ public class CLIManager {
             return;
         }
 
-        // 尝试从持久化存储恢复最近的会话
-        session = loadLatestPlayerSession(player);
+        // ensureInCLI 不从磁盘自动恢复，直接创建新会话
+        session = new DialogueSession();
+        // 恢复上次的模式
+        if (yoloModePlayers.contains(uuid)) {
+            session.setMode(DialogueSession.Mode.YOLO);
+        } else if (smartModePlayers.contains(uuid)) {
+            session.setMode(DialogueSession.Mode.SMART);
+        } else if (planModePlayers.contains(uuid)) {
+            session.setMode(DialogueSession.Mode.PLAN);
+        }
 
-        // 创建新会话
-        if (session == null) {
-            session = new DialogueSession();
-            // 恢复上次的模式
-            if (yoloModePlayers.contains(uuid)) {
-                session.setMode(DialogueSession.Mode.YOLO);
-            } else if (smartModePlayers.contains(uuid)) {
-                session.setMode(DialogueSession.Mode.SMART);
-            } else if (planModePlayers.contains(uuid)) {
-                session.setMode(DialogueSession.Mode.PLAN);
-            }
-
-            sessions.put(uuid, session);
+        sessions.put(uuid, session);
 
             // 创建日志文件
             try {
@@ -1614,21 +1615,6 @@ public class CLIManager {
             } catch (IOException e) {
                 plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
             }
-        } else {
-            sessions.put(uuid, session);
-            // 恢复的会话也需要创建日志文件
-            try {
-                Path logDir = plugin.getDataFolder().toPath().resolve("logs");
-                Files.createDirectories(logDir);
-                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
-                String logFileName = timestamp + ".log";
-                Path logFilePath = logDir.resolve(logFileName);
-                session.setLogFilePath(logFilePath.toString());
-                session.setVerboseLogging(plugin.getConfigManager().isDebug());
-            } catch (IOException e) {
-                plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
-            }
-        }
 
         activeCLIPayers.add(uuid);
     }
@@ -2357,125 +2343,6 @@ public class CLIManager {
         });
     }
 
-    /**
-     * 使用AI智能压缩上下文
-     * @param player 玩家
-     * @param session 对话会话
-     */
-    private void compressContextWithAI(Player player, DialogueSession session) {
-        compressContextWithAI(player, session, false);
-    }
-
-    private void compressContextWithAI(Player player, DialogueSession session, boolean force) {
-        try {
-            // 准备要压缩的上下文
-            List<DialogueSession.Message> history = session.getHistory();
-            int keepRecent = 10;
-
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 开始压缩上下文 - 总消息数: " + history.size() + ", 保留最近: " + keepRecent + ", 强制模式: " + force);
-            }
-
-            if (!force && history.size() <= keepRecent * 2) {
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[CLI] 消息数量不足，跳过压缩 (需要 > " + (keepRecent * 2) + ")");
-                }
-                return; // 消息数量不足，不需要压缩
-            }
-
-            // 提取要压缩的旧消息
-            List<DialogueSession.Message> oldMessages = new ArrayList<>(history.subList(0, history.size() - keepRecent));
-            List<DialogueSession.Message> recentMessages = new ArrayList<>(history.subList(history.size() - keepRecent, history.size()));
-
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 待压缩消息数: " + oldMessages.size() + ", 保留消息数: " + recentMessages.size());
-            }
-
-            // 构建压缩输入
-            StringBuilder contextBuilder = new StringBuilder();
-            for (DialogueSession.Message msg : oldMessages) {
-                if (msg.getRole().equals("user")) {
-                    contextBuilder.append("用户: ").append(msg.getContent()).append("\n");
-                } else if (msg.getRole().equals("assistant")) {
-                    contextBuilder.append("助手: ").append(msg.getContent()).append("\n");
-                }
-            }
-
-            String contextToCompress = contextBuilder.toString();
-
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 正在使用AI压缩上下文，原始长度: " + contextToCompress.length() + " 字符");
-                plugin.getLogger().info("[CLI] 压缩输入预览: " + (contextToCompress.length() > 200 ? contextToCompress.substring(0, 200) + "..." : contextToCompress));
-            }
-
-            // 调用AI进行压缩
-            String compressedSummary = ai.compressContext(contextToCompress);
-
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] AI返回摘要长度: " + compressedSummary.length() + " 字符");
-                plugin.getLogger().info("[CLI] 摘要内容: " + (compressedSummary.length() > 200 ? compressedSummary.substring(0, 200) + "..." : compressedSummary));
-            }
-
-            // 执行压缩
-            session.compressContextWithSummary(keepRecent, compressedSummary);
-
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[CLI] 已使用AI压缩上下文，新的历史记录大小: " + session.getHistory().size());
-                // 显示压缩后的历史记录结构
-                List<DialogueSession.Message> newHistory = session.getHistory();
-                for (int i = 0; i < newHistory.size(); i++) {
-                    DialogueSession.Message msg = newHistory.get(i);
-                    String content = msg.getContent();
-                    if (content.length() > 100) {
-                        content = content.substring(0, 100) + "...";
-                    }
-                    plugin.getLogger().info("[CLI] 历史记录[" + i + "] role=" + msg.getRole() + ": " + content);
-                }
-            }
-
-        } catch (IOException e) {
-            // 压缩失败时记录日志并抛出运行时异常
-            plugin.getLogger().warning("[CLI] AI压缩失败: " + e.getMessage());
-            throw new RuntimeException("AI压缩失败: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 手动压缩上下文（供玩家通过命令调用）
-     * @param player 玩家
-     */
-    public void compressContext(Player player, String mode) {
-        UUID uuid = player.getUniqueId();
-        DialogueSession session = sessions.get(uuid);
-
-        if (session == null) {
-            player.sendMessage(ChatColor.RED + "你没有活跃的CLI会话，无法压缩上下文。");
-            return;
-        }
-
-        int historySize = session.getHistory().size();
-        if (historySize <= 10) {
-            player.sendMessage(ChatColor.YELLOW + "当前会话消息数量较少（" + historySize + "条），无需压缩。");
-            return;
-        }
-
-        player.sendMessage(ChatColor.AQUA + "正在使用AI压缩上下文，当前历史记录: " + historySize + " 条消息...");
-
-        // 使用AI智能压缩（强制模式）
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                compressContextWithAI(player, session, true);
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.sendMessage(ChatColor.GREEN + "✓ AI智能压缩完成！新的历史记录大小: " + session.getHistory().size() + " 条消息");
-                });
-            } catch (Exception e) {
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.sendMessage(ChatColor.RED + "✗ AI压缩失败: " + e.getMessage());
-                });
-            }
-        });
-    }
-
     private void processStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -2860,11 +2727,6 @@ public class CLIManager {
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 会话 " + player.getName() + " - 历史记录大小: " + session.getHistory().size() + ", 预计 Token: " + calculateTotalEstimatedTokens(player, session));
-        }
-
-        // 检查并压缩上下文
-        if (session.getHistory().size() > 15) {
-            compressContextWithAI(player, session);
         }
 
         if (!plugin.isEnabled()) return;

@@ -191,7 +191,7 @@ public final class FancyHelper extends JavaPlugin {
                     if (getConfigManager().isDebug()) {
                         getLogger().info("[FancyHelper] 玩家 " + player.getName() + " 有预加载的会话，自动进入CLI模式");
                     }
-                    cliManager.enterCLI(player);
+                    cliManager.enterCLI(player, true);
                 }
             }
         }, 20L); // 延迟1秒执行，确保插件完全加载

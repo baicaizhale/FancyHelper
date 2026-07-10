@@ -334,9 +334,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "mem":
                 handleMemory(player, args);
                 return true;
-            case "compress":
-                plugin.getCliManager().compressContext(player, args.length > 1 ? args[1] : null);
-                return true;
             case "resume":
                 int resumePage = 0;
                 if (args.length > 1) {
