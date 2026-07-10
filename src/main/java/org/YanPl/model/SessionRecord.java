@@ -17,6 +17,16 @@ public class SessionRecord {
     private String mode;
     private List<Map<String, Object>> messages;
     private List<String> toolCalls;
+    private List<String> loadedSkillIds;
+    private List<String> readFiles;
+    private int thoughtTokens;
+    private long totalThinkingTimeMs;
+    private int toolSuccessCount;
+    private int toolFailureCount;
+    private long nextMessageId;
+    private boolean antiLoopExempted;
+    private String lastThought;
+    private String lastError;
 
     public SessionRecord() {
     }
@@ -47,6 +57,28 @@ public class SessionRecord {
         // 工具调用历史
         record.toolCalls = new ArrayList<>(session.getToolCallHistory());
 
+        // 已加载的 Skill ID 列表
+        record.loadedSkillIds = new ArrayList<>(session.getLoadedSkillIds());
+
+        // 已读取的文件列表
+        record.readFiles = new ArrayList<>(session.getReadFiles());
+
+        // 思考相关统计
+        record.thoughtTokens = session.getThoughtTokens();
+        record.totalThinkingTimeMs = session.getTotalThinkingTimeMs();
+
+        // 工具调用统计
+        record.toolSuccessCount = session.getToolSuccessCount();
+        record.toolFailureCount = session.getToolFailureCount();
+
+        // 消息 ID 计数器（用于恢复后保持 ID 连续性）
+        record.nextMessageId = session.getNextMessageId();
+
+        // 其他会话状态
+        record.antiLoopExempted = session.isAntiLoopExempted();
+        record.lastThought = session.getLastThought();
+        record.lastError = session.getLastError();
+
         return record;
     }
 
@@ -74,6 +106,44 @@ public class SessionRecord {
                 session.addToolCall(toolCall);
             }
         }
+
+        // 恢复已加载的 Skill ID
+        if (loadedSkillIds != null) {
+            for (String skillId : loadedSkillIds) {
+                session.addLoadedSkillId(skillId);
+            }
+        }
+
+        // 恢复已读取的文件
+        if (readFiles != null) {
+            for (String file : readFiles) {
+                session.addReadFile(file);
+            }
+        }
+
+        // 恢复 Token 统计
+        session.addInputTokens(totalInputTokens);
+        session.addOutputTokens(totalOutputTokens);
+
+        // 恢复思考相关统计
+        if (thoughtTokens > 0) session.addThoughtTokens(thoughtTokens);
+        if (totalThinkingTimeMs > 0) session.addThinkingTime(totalThinkingTimeMs);
+
+        // 恢复工具调用统计
+        for (int i = 0; i < toolSuccessCount; i++) session.incrementToolSuccess();
+        for (int i = 0; i < toolFailureCount; i++) session.incrementToolFailure();
+        // 重置工具链计数（恢复后不应从之前工具链继续）
+        session.resetToolChain();
+
+        // 恢复消息 ID 计数器（在 addMessage 之后覆盖，保持连续性）
+        if (nextMessageId > 0) {
+            session.setNextMessageId(nextMessageId);
+        }
+
+        // 恢复其他状态
+        session.setAntiLoopExempted(antiLoopExempted);
+        if (lastThought != null) session.setLastThought(lastThought);
+        if (lastError != null) session.setLastError(lastError);
 
         return session;
     }

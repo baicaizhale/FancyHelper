@@ -66,6 +66,16 @@ public class LLMClient {
     }
 
     /**
+     * 检查配置文件是否加载成功，若加载失败则提前抛出明确错误，
+     * 避免下游因配置项取到默认空值而产生误导性报错（如 "请设置 API Key" 而实际是 config.yml 格式错误）。
+     */
+    private void checkConfigLoaded() throws IOException {
+        if (plugin.getConfigManager().isConfigLoadFailed()) {
+            throw new IOException("§zFancyHelper§b§r §7> §fconfig.yml 格式错误，无法加载配置文件，请检查控制台输出。");
+        }
+    }
+
+    /**
      * 发送 HTTP 请求并带有重试机制
      * 解决 java.io.IOException: HTTP/1.1 header parser received no bytes 等偶发性网络问题
      */
@@ -348,6 +358,8 @@ public class LLMClient {
     }
 
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
+        checkConfigLoaded();
+
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(session, systemPrompt);
@@ -489,6 +501,12 @@ public class LLMClient {
             logInteraction(session, bodyString, responseBody);
 
             if (statusCode != 200) {
+                // 特殊处理 Content Exists Risk（内容风控）
+                if (statusCode == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
+                    plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                }
+
                 String errorPrompt = getErrorPrompt(statusCode);
                 String errorLogMsg = getErrorLogMessage(statusCode);
                 String errorMsg;
@@ -505,7 +523,7 @@ public class LLMClient {
 
             JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
             AIResponse aiResponse = responseParser.parseResponse(responseJson);
-            
+
             if (aiResponse != null && aiResponse.getContent() != null) {
                 String thoughtContent = aiResponse.getThought();
                 if (thoughtContent != null && !thoughtContent.isEmpty()) {
@@ -732,6 +750,12 @@ public class LLMClient {
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 响应体: " + responseBody);
 
+                // 特殊处理 Content Exists Risk（内容风控），不进行重试
+                if (response.statusCode() == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
+                    plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                }
+
                 // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
                 if ((response.statusCode() == 400 || response.statusCode() == 500) && responseBody != null) {
                     plugin.getLogger().warning("[AI] 检测到 CF API 错误 " + response.statusCode() + "，正在尝试使用简化载荷重试...");
@@ -864,6 +888,8 @@ public class LLMClient {
      * @return AI响应
      */
     public AIResponse chatSimple(String prompt) throws IOException {
+        checkConfigLoaded();
+
         DialogueSession tempSession = new DialogueSession();
         tempSession.addMessage("user", prompt);
         return chat(tempSession, "你是一个得力的助手。");
@@ -1029,6 +1055,8 @@ public class LLMClient {
      * @throws IOException 当 API 调用失败时
      */
     public String compressContext(String context) throws IOException {
+        checkConfigLoaded();
+
         String provider = plugin.getConfigManager().getCompressionModelProvider();
         
         if ("openai".equalsIgnoreCase(provider)) {
@@ -1183,6 +1211,8 @@ public class LLMClient {
      * @return 生成的标题（不超过15字）
      */
     public String generateTitle(String firstMessage) throws IOException {
+        checkConfigLoaded();
+
         // 使用主模型的配置，而不是压缩模型
         String provider = plugin.getConfigManager().getProvider();
 
@@ -1444,6 +1474,8 @@ public class LLMClient {
      * @return 完整的响应文本
      */
     public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        checkConfigLoaded();
+
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
         }
@@ -1500,9 +1532,14 @@ public class LLMClient {
                     .build();
 
             HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            
+
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                // 特殊处理 Content Exists Risk（内容风控）
+                if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
+                    plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                }
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
@@ -1579,6 +1616,11 @@ public class LLMClient {
                 // gpt-oss 模型使用非流式请求，通过 responseParser 解析
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200) {
+                    // 特殊处理 Content Exists Risk（内容风控）
+                    if (response.statusCode() == 400 && response.body() != null && response.body().contains("Content Exists Risk")) {
+                        plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
+                        throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                    }
                     throw new IOException("非流式请求失败: " + response.statusCode() + " - " + response.body());
                 }
                 JsonObject responseJson = gson.fromJson(response.body(), JsonObject.class);
@@ -1593,6 +1635,11 @@ public class LLMClient {
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                // 特殊处理 Content Exists Risk（内容风控）
+                if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
+                    plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                }
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
