@@ -70,6 +70,10 @@ public class DialogueSession {
         readFiles.clear();
     }
 
+    public Set<String> getReadFiles() {
+        return readFiles;
+    }
+
     private final Map<Long, ThoughtSnapshot> thoughtSnapshots = new LinkedHashMap<Long, ThoughtSnapshot>(64, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, ThoughtSnapshot> eldest) {
@@ -526,6 +530,10 @@ public class DialogueSession {
         return nextMessageId;
     }
 
+    public void setNextMessageId(long nextMessageId) {
+        this.nextMessageId = nextMessageId;
+    }
+
     public String getLastError() {
         return lastError;
     }
@@ -626,6 +634,16 @@ public class DialogueSession {
      */
     public Set<String> getLoadedSkillIds() {
         return Collections.unmodifiableSet(loadedSkillIds);
+    }
+
+    /**
+     * 直接添加 Skill ID 到已加载集合（不操作消息历史）
+     * 用于反序列化恢复时使用
+     */
+    public void addLoadedSkillId(String skillId) {
+        if (skillId != null) {
+            loadedSkillIds.add(skillId.toLowerCase());
+        }
     }
 
     /**
