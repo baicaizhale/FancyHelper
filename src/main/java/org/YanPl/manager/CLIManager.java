@@ -2571,6 +2571,7 @@ public class CLIManager {
                     }
                     streamedOutputTokens.remove(uuid);
                     checkTokenWarning(player, session);
+                    autoCompressContext(player, session);
                     playFeedbackSound(player, "ai_complete");
                 }
             });
@@ -2661,6 +2662,7 @@ public class CLIManager {
                     executeTool(player, toolCall);
                 } else {
                     checkTokenWarning(player, session);
+                    autoCompressContext(player, session);
                 }
                 playFeedbackSound(player, "ai_complete");
             });
@@ -3063,6 +3065,7 @@ public class CLIManager {
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 checkTokenWarning(player, session);
+                autoCompressContext(player, session);
             }
         }
     }
@@ -3249,6 +3252,114 @@ public class CLIManager {
         if (remaining < plugin.getConfigManager().getContextWindowWarningThreshold()) {
             player.sendMessage(ChatColor.YELLOW + "⨀ 剩余上下文长度不足 ，Fancy 可能会遗忘较早的对话内容来保证对话继续。");
         }
+    }
+
+    /**
+     * 手动触发上下文压缩（/cli compress）
+     */
+    public void compressContext(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        if (session == null) {
+            player.sendMessage(ChatColor.RED + "你没有活跃的 CLI 会话。");
+            return;
+        }
+        if (session.getHistory().size() <= 12) {
+            player.sendMessage(ChatColor.GRAY + "当前对话消息较少，无需压缩。");
+            return;
+        }
+        player.sendMessage(ChatColor.GRAY + "正在压缩上下文...");
+        autoCompressContext(player, session, true);
+    }
+
+    /**
+     * CC 风格自动上下文压缩：接近上下文窗口上限时，用 AI 总结旧消息，保留最近对话
+     */
+    private void autoCompressContext(Player player, DialogueSession session) {
+        autoCompressContext(player, session, false);
+    }
+
+    private void autoCompressContext(Player player, DialogueSession session, boolean force) {
+        int estimatedTokens = calculateTotalEstimatedTokens(player, session);
+        int maxTokens = plugin.getConfigManager().getContextWindowLimit();
+        double threshold = 0.8;
+        int keepRecent = 10;
+
+        if (!force && estimatedTokens <= maxTokens * threshold) return;
+        if (session.getHistory().size() <= keepRecent + 2) return; // 太少无法压缩
+
+        int oldCount = session.getHistory().size() - keepRecent;
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 触发自动压缩 - Token: " + estimatedTokens + "/" + maxTokens + ", 压缩 " + oldCount + " 条旧消息");
+        }
+
+        // 异步执行压缩，不阻塞主线程
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                // 序列化旧消息为文本
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < oldCount && i < session.getHistory().size(); i++) {
+                    DialogueSession.Message msg = session.getHistory().get(i);
+                    String role = "user".equals(msg.getRole()) ? "用户" : "助手";
+                    sb.append(role).append(": ").append(msg.getContent()).append("\n\n");
+                }
+
+                String compressPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息、用户意图和上下文。"
+                        + "直接输出摘要内容，不要有任何解释或分析。摘要应该简明扼要，不超过500字。\n\n"
+                        + "对话历史：\n" + sb + "\n摘要：";
+
+                DialogueSession tempSession = new DialogueSession();
+                tempSession.addMessage("user", compressPrompt);
+                AIResponse compressResponse = ai.chat(
+                        tempSession,
+                        "你是一个对话摘要助手。请将对话历史压缩成简洁的摘要，保留关键信息、用户意图和上下文。直接输出摘要内容，不要有任何解释或分析。摘要应该简明扼要，不超过500字。"
+                );
+                String summary = compressResponse.getContent();
+
+                if (summary == null || summary.trim().isEmpty()) {
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().warning("[CLI] 压缩模型返回空结果，跳过压缩");
+                    }
+                    return;
+                }
+
+                // 在主线程中替换历史
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!plugin.isEnabled() || !player.isOnline()) return;
+                    DialogueSession currentSession = sessions.get(player.getUniqueId());
+                    if (currentSession == null || currentSession != session) return;
+
+                    List<DialogueSession.Message> newHistory = new ArrayList<>();
+                    // 添加摘要消息
+                    newHistory.add(new DialogueSession.Message("system", "[上下文摘要] " + summary.trim()));
+                    // 保留最近的消息
+                    int startIdx = Math.max(0, session.getHistory().size() - keepRecent);
+                    for (int i = startIdx; i < session.getHistory().size(); i++) {
+                        newHistory.add(session.getHistory().get(i));
+                    }
+
+                    session.replaceHistory(newHistory);
+
+                    // 异步保存到磁存
+                    UUID uuid = player.getUniqueId();
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                        saveSessionToHistory(uuid, session);
+                    });
+
+                    player.sendMessage(ColorUtil.translateCustomColors(
+                            "§zFancyHelper§b§r §7> §f上下文已压缩，保留了最近 " + keepRecent + " 条对话"));
+
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[CLI] 自动压缩完成 - 新历史大小: " + session.getHistory().size() + " 条");
+                    }
+                });
+            } catch (Exception e) {
+                plugin.getLogger().warning("[CLI] 自动压缩失败: " + e.getMessage());
+                if (plugin.getConfigManager().isDebug()) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     /**

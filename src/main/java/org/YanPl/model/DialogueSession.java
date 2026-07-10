@@ -318,6 +318,12 @@ public class DialogueSession {
         }
     }
 
+    public synchronized void replaceHistory(List<Message> newHistory) {
+        history.clear();
+        history.addAll(newHistory);
+        thoughtSnapshots.clear();
+    }
+
     public int getToolSuccessCount() {
         return toolSuccessCount;
     }
