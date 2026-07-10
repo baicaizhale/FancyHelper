@@ -1238,6 +1238,14 @@ public class CLIManager {
     public void enterCLI(Player player) {
         UUID uuid = player.getUniqueId();
 
+        // 已在 CLI 模式中，避免重复进入（启动时双入口可能触发）
+        if (activeCLIPayers.contains(uuid)) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 已在 CLI 模式，跳过重复进入。");
+            }
+            return;
+        }
+
         // 检查 EULA 文件状态
         if (!plugin.getEulaManager().isEulaValid()) {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"));
@@ -1310,6 +1318,21 @@ public class CLIManager {
             // 有预加载的会话（插件重启恢复），静默进入CLI模式
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 静默进入CLI模式，会话已恢复");
+            }
+            // 恢复的会话也需要创建新的日志文件，以便记录恢复后的对话
+            try {
+                Path logDir = plugin.getDataFolder().toPath().resolve("logs");
+                Files.createDirectories(logDir);
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+                String logFileName = timestamp + ".log";
+                Path logFilePath = logDir.resolve(logFileName);
+                session.setLogFilePath(logFilePath.toString());
+                session.setVerboseLogging(plugin.getConfigManager().isDebug());
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 为恢复会话创建日志文件: " + logFileName);
+                }
+            } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
             }
             // 显示恢复提示
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"));
@@ -1594,6 +1617,18 @@ public class CLIManager {
             }
         } else {
             sessions.put(uuid, session);
+            // 恢复的会话也需要创建日志文件
+            try {
+                Path logDir = plugin.getDataFolder().toPath().resolve("logs");
+                Files.createDirectories(logDir);
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+                String logFileName = timestamp + ".log";
+                Path logFilePath = logDir.resolve(logFileName);
+                session.setLogFilePath(logFilePath.toString());
+                session.setVerboseLogging(plugin.getConfigManager().isDebug());
+            } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
+            }
         }
 
         activeCLIPayers.add(uuid);
