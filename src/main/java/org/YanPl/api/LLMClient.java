@@ -1480,9 +1480,9 @@ public class LLMClient {
                 JsonObject titleJson = gson.fromJson(jsonStr, JsonObject.class);
                 if (titleJson.has("title")) {
                     String title = titleJson.get("title").getAsString().trim();
-                    // 截取前15个字符
-                    if (title.length() > 15) {
-                        title = title.substring(0, 15);
+                    // 截取前30个字符
+                    if (title.length() > 30) {
+                        title = title.substring(0, 30);
                     }
                     if (plugin.getConfigManager().isDebug()) {
                         plugin.getLogger().info("[标题生成] 从最后一个 JSON 提取成功: " + title);
