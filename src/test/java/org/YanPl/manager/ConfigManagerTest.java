@@ -92,6 +92,36 @@ class ConfigManagerTest {
     }
 
     @Test
+    @DisplayName("getCompressionModelProvider 应返回主 provider")
+    void testGetCompressionModelProvider_FollowsMainProvider() {
+        when(config.getString("provider", "cloudflare")).thenReturn("openai");
+
+        String result = configManager.getCompressionModelProvider();
+
+        assertEquals("openai", result);
+    }
+
+    @Test
+    @DisplayName("getCompressionCloudflareModel 应读取 cloudflare.co-model")
+    void testGetCompressionCloudflareModel_ReturnsConfigValue() {
+        when(config.getString("cloudflare.co-model", "@cf/google/gemma-4b-it")).thenReturn("@cf/meta/llama-4b-it");
+
+        String result = configManager.getCompressionCloudflareModel();
+
+        assertEquals("@cf/meta/llama-4b-it", result);
+    }
+
+    @Test
+    @DisplayName("getCompressionOpenAiModel 应读取 openai.co-model")
+    void testGetCompressionOpenAiModel_ReturnsConfigValue() {
+        when(config.getString("openai.co-model", "gpt-4o-mini")).thenReturn("gpt-4o");
+
+        String result = configManager.getCompressionOpenAiModel();
+
+        assertEquals("gpt-4o", result);
+    }
+
+    @Test
     @DisplayName("getProvider 应返回 cloudflare 当配置为 cloudflare")
     void testGetProvider_ReturnsCloudflare() {
         when(config.getString("provider", "cloudflare")).thenReturn("cloudflare");
