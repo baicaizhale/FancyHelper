@@ -2977,14 +2977,16 @@ public class CLIManager {
                             int splitIndex = remainingAfterTool.startsWith(":") ? 1 : 0;
                             remainingAfterTool = remainingAfterTool.substring(splitIndex).trim();
 
-                            // 对于 JSON 参数（如 #todo: [...]），需要找到匹配的闭合括号
-                            if (remainingAfterTool.startsWith("[")) {
+                            // 对于 JSON 参数（如 #todo: [...] 或 #ask: {...}），需要找到匹配的闭合括号
+                            if (remainingAfterTool.startsWith("[") || remainingAfterTool.startsWith("{")) {
+                                char openChar = remainingAfterTool.charAt(0);
+                                char closeChar = openChar == '[' ? ']' : '}';
                                 int bracketDepth = 0;
                                 int endIndex = -1;
                                 for (int i = 0; i < remainingAfterTool.length(); i++) {
                                     char c = remainingAfterTool.charAt(i);
-                                    if (c == '[') bracketDepth++;
-                                    else if (c == ']') bracketDepth--;
+                                    if (c == openChar) bracketDepth++;
+                                    else if (c == closeChar) bracketDepth--;
 
                                     if (bracketDepth == 0) {
                                         endIndex = i + 1;
@@ -3132,13 +3134,15 @@ public class CLIManager {
                             int splitIndex = remainingAfterTool.startsWith(":") ? 1 : 0;
                             remainingAfterTool = remainingAfterTool.substring(splitIndex).trim();
 
-                            if (remainingAfterTool.startsWith("[")) {
+                            if (remainingAfterTool.startsWith("[") || remainingAfterTool.startsWith("{")) {
+                                char openChar = remainingAfterTool.charAt(0);
+                                char closeChar = openChar == '[' ? ']' : '}';
                                 int bracketDepth = 0;
                                 int endIndex = -1;
                                 for (int i = 0; i < remainingAfterTool.length(); i++) {
                                     char c = remainingAfterTool.charAt(i);
-                                    if (c == '[') bracketDepth++;
-                                    else if (c == ']') bracketDepth--;
+                                    if (c == openChar) bracketDepth++;
+                                    else if (c == closeChar) bracketDepth--;
 
                                     if (bracketDepth == 0) {
                                         endIndex = i + 1;

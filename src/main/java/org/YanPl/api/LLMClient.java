@@ -170,13 +170,6 @@ public class LLMClient {
         }
     }
 
-    /**
-     * 为流式输出构建可读的响应日志条目
-     * 流式没有完整的 API 响应 JSON，用累积文本模拟
-     */
-    private String buildStreamingLogResponse(String fullText) {
-        return fullText + "\n\n[Streaming] Finish Reason: stop\n";
-    }
 
     /**
      * 解析请求 JSON 并格式化写入日志（流式和非流式共用）。
@@ -1583,7 +1576,6 @@ public class LLMClient {
             }
 
             String fullText = streamingHandler.processStream(response);
-            session.logAIResponse(buildStreamingLogResponse(fullText));
             return fullText;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -1666,7 +1658,6 @@ public class LLMClient {
                 AIResponse aiResponse = responseParser.parseResponse(responseJson);
                 String fullText = aiResponse != null ? aiResponse.getContent() : "";
                 streamingHandler.feedCompletedText(fullText);
-                session.logAIResponse(buildStreamingLogResponse(fullText));
                 return fullText;
             }
 
@@ -1683,7 +1674,6 @@ public class LLMClient {
             }
 
             String fullText = streamingHandler.processStream(response);
-            session.logAIResponse(buildStreamingLogResponse(fullText));
             return fullText;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
