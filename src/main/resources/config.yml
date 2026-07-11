@@ -20,7 +20,7 @@ settings:
   # 上下文窗口剩余警告阈值
   context_window_warning_threshold: 500
   # 上下文窗口大小上限
-  context_window_limit: 256000
+  context_window_limit: 200000
   # 是否启用匿名错误上报，帮助开发者改进插件
   auto_report: true  
   # 是否启用自动更新检查
