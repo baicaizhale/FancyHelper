@@ -2381,7 +2381,7 @@ public class CLIManager {
                 // 记录正确的思考耗时到 session，供成书使用
                 session.addThinkingTime(thinkingTimeMs);
 
-                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
+                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought t:" + reservedMessageId));
                 thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
                 double sec = thinkingTimeMs / 1000.0;
@@ -2549,7 +2549,7 @@ public class CLIManager {
                         thoughtMessageId = last.getId();
                         thoughtThinkingTimeMs = last.getThinkingTimeMs();
                     }
-                    TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
+                    TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                     String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
                     thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
                     thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
@@ -3632,6 +3632,7 @@ public class CLIManager {
                     // === 流式输出：工具反馈触发的 AI 回复 ===
                     StreamingHandler streamingHandler = new StreamingHandler(plugin, player);
                     activeStreamingHandlers.put(uuid, streamingHandler);
+                    final long reservedMessageId = session.getNextMessageId();
 
                     final StringBuilder fullResponseText = new StringBuilder();
                     final StringBuilder accumulatedText = new StringBuilder();
@@ -3643,6 +3644,27 @@ public class CLIManager {
                         if (reasoningChunk == null || reasoningChunk.isEmpty()) return;
                         streamedOutputTokens.put(uuid, streamedOutputTokens.getOrDefault(uuid, 0L)
                             + DialogueSession.calculateTokens(reasoningChunk));
+                    });
+
+                    // 思考结束回调：在工具反馈流中也显示思考按钮
+                    streamingHandler.setOnReasoningCompleteCallback((thinkingTimeMs) -> {
+                        if (!plugin.isEnabled() || !player.isOnline()) return;
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (!player.isOnline()) return;
+                            String currentThought = streamingHandler.getThoughtContent();
+                            if (currentThought == null || currentThought.isEmpty()) return;
+
+                            session.setLastThought(currentThought);
+                            session.addThinkingTime(thinkingTimeMs);
+
+                            TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
+                            thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought t:" + reservedMessageId));
+                            thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                            double sec = thinkingTimeMs / 1000.0;
+                            TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", sec) + "s)");
+                            thoughtBtn.addExtra(timeTag);
+                            player.spigot().sendMessage(thoughtBtn);
+                        });
                     });
 
                     streamingHandler.setOnChunkCallback((chunk) -> {
@@ -3720,6 +3742,27 @@ public class CLIManager {
                                 }
                             }
                             String thought = streamingHandler.getThoughtContent();
+
+                            // 流式模式也显示思考按钮（仅当 reasoning-complete 未触发时作为 fallback，如标签提取的思考）
+                            if (thought != null && !thought.isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
+                                long fbThoughtMessageId = -1;
+                                long fbThoughtThinkingTimeMs = session.getLastThinkingTimeMs();
+                                List<DialogueSession.Message> history = session.getHistory();
+                                if (!history.isEmpty()) {
+                                    DialogueSession.Message last = history.get(history.size() - 1);
+                                    fbThoughtMessageId = last.getId();
+                                    fbThoughtThinkingTimeMs = last.getThinkingTimeMs();
+                                }
+                                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
+                                String cmd = "/cli thought" + (fbThoughtMessageId != -1 ? " t:" + fbThoughtMessageId : "");
+                                thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
+                                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                                double lastSec = fbThoughtThinkingTimeMs / 1000.0;
+                                TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
+                                thoughtBtn.addExtra(timeTag);
+                                player.spigot().sendMessage(thoughtBtn);
+                            }
+
                             session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                             AIResponse response = new AIResponse(completeText,
                                 (thought != null && !thought.isEmpty()) ? thought : null);
@@ -3778,6 +3821,25 @@ public class CLIManager {
                             (thought != null && !thought.isEmpty()) ? thought : null);
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
+                            // 回退路径也显示思考按钮（reasoning-complete 未触发时的 fallback）
+                            if (thought != null && !thought.isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
+                                long fbThoughtMessageId = -1;
+                                long fbThoughtThinkingTimeMs = session.getLastThinkingTimeMs();
+                                List<DialogueSession.Message> history = session.getHistory();
+                                if (!history.isEmpty()) {
+                                    DialogueSession.Message last = history.get(history.size() - 1);
+                                    fbThoughtMessageId = last.getId();
+                                    fbThoughtThinkingTimeMs = last.getThinkingTimeMs();
+                                }
+                                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
+                                String cmd = "/cli thought" + (fbThoughtMessageId != -1 ? " t:" + fbThoughtMessageId : "");
+                                thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
+                                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                                double lastSec = fbThoughtThinkingTimeMs / 1000.0;
+                                TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
+                                thoughtBtn.addExtra(timeTag);
+                                player.spigot().sendMessage(thoughtBtn);
+                            }
                             handleAIResponse(player, response, true);
                             playFeedbackSound(player, "ai_complete");
                         });
@@ -3927,7 +3989,7 @@ public class CLIManager {
             }
             
             if (thoughtToShow != null) {
-                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ※ Thought");
+                TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                 // 传递 messageId 以便稳定地回放对应 Thought（避免历史裁剪导致索引漂移）
                 String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
