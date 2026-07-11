@@ -53,7 +53,7 @@ public class ChatListener implements Listener {
             // 延迟1秒后自动进入CLI模式，确保玩家完全加载
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!plugin.isEnabled() || !player.isOnline()) return;
-                plugin.getCliManager().enterCLI(player);
+                plugin.getCliManager().enterCLI(player, true);
             }, 20L); // 1秒 = 20 ticks
         }
         
