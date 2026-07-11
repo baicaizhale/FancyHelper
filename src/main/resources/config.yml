@@ -71,6 +71,8 @@ cloudflare:
   cf_key: "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0"
   # 使用的模型名称，不推荐更改，可以是任何一个Text-Generation模型
   model: "@cf/google/gemma-4-26b-a4b-it"
+  # 副模型设置（用于压缩等轻量级任务，使用主模型的 cf_key）
+  co-model: "@cf/google/gemma-4-26b-a4b-it"
 
 # OpenAI 兼容端点配置（provider 设为 openai 时使用）
 # 理论上支持所有兼容 OpenAI Chat Completions API 的服务商
@@ -82,20 +84,8 @@ openai:
   api_key: your-openai-api-key
   # 模型名称
   model: deepseek-v4-pro
-
-# 副模型设置
-# 注意：CloudFlare使用主模型的cf_key，OpenAI使用主模型的api_url和api_key
-co-model:
-  # 压缩模型提供商: cloudflare 或 openai
-  provider: cloudflare
-  # CloudFlare （仅配置模型名称，API-Key使用主模型配置）
-  cloudflare:
-    # 使用的模型名称，推荐使用轻量级模型以节省成本和提升速度
-    model: "@cf/google/gemma-4-26b-a4b-it"
-  # OpenAI 兼容 API （仅配置模型名称，APIURL和key使用主模型设置）
-  openai:
-    # 使用的模型名称，推荐使用轻量级模型
-    model: deepseek-v4-flash
+  # 副模型设置（用于压缩等轻量级任务，使用主模型的 api_url 和 api_key）
+  co-model: deepseek-v4-flash
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:

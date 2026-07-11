@@ -137,6 +137,23 @@ public class ConfigManager {
                 plugin.getLogger().info("已迁移旧配置 settings.token_warning_threshold=" + oldVal + " 到 settings.context_window_warning_threshold=" + oldVal);
             }
 
+            // 迁移旧版 co-model 结构到 cloudflare.co-model / openai.co-model
+            if (oldValues.containsKey("co-model.cloudflare.model")) {
+                Object oldCfCo = oldValues.get("co-model.cloudflare.model");
+                newConfig.set("cloudflare.co-model", oldCfCo);
+                plugin.getLogger().info("已迁移旧配置 co-model.cloudflare.model=" + oldCfCo + " 到 cloudflare.co-model=" + oldCfCo);
+            }
+            if (oldValues.containsKey("co-model.openai.model")) {
+                Object oldOpenAiCo = oldValues.get("co-model.openai.model");
+                newConfig.set("openai.co-model", oldOpenAiCo);
+                plugin.getLogger().info("已迁移旧配置 co-model.openai.model=" + oldOpenAiCo + " 到 openai.co-model=" + oldOpenAiCo);
+            }
+            // 清理旧版 co-model 顶层段落
+            if (newConfig.contains("co-model")) {
+                newConfig.set("co-model", null);
+                plugin.getLogger().info("已清除旧版 co-model 配置段落");
+            }
+
             try {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
@@ -240,11 +257,11 @@ public class ConfigManager {
     }
 
     /**
-     * 获取压缩模型提供商
+     * 获取压缩模型提供商（跟随主模型提供商）
      * @return 压缩模型提供商 (cloudflare 或 openai)
      */
     public String getCompressionModelProvider() {
-        return config.getString("co-model.provider", "cloudflare");
+        return getProvider();
     }
 
     /**
@@ -252,23 +269,7 @@ public class ConfigManager {
      * @return CloudFlare 压缩模型名称
      */
     public String getCompressionCloudflareModel() {
-        return config.getString("co-model.cloudflare.model", "@cf/google/gemma-4b-it");
-    }
-
-    /**
-     * 获取 OpenAI 压缩模型 API URL
-     * @return OpenAI 压缩模型 API URL
-     */
-    public String getCompressionOpenAiApiUrl() {
-        return config.getString("co-model.openai.api_url", "https://api.openai.com/v1/chat/completions");
-    }
-
-    /**
-     * 获取 OpenAI 压缩模型 API 密钥
-     * @return OpenAI 压缩模型 API 密钥
-     */
-    public String getCompressionOpenAiApiKey() {
-        return config.getString("co-model.openai.api_key", "");
+        return config.getString("cloudflare.co-model", "@cf/google/gemma-4b-it");
     }
 
     /**
@@ -276,7 +277,7 @@ public class ConfigManager {
      * @return OpenAI 压缩模型名称
      */
     public String getCompressionOpenAiModel() {
-        return config.getString("co-model.openai.model", "gpt-4o-mini");
+        return config.getString("openai.co-model", "gpt-4o-mini");
     }
 
     /**
