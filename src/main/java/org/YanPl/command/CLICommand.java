@@ -122,7 +122,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "smart_allow":
             case "smart_deny":
             case "smart_never":
-            case "compress":
+            case "compact":
             case "resume":
             case "resume_confirm":
             case "resume_delete":
@@ -190,7 +190,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
         sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
         sender.sendMessage(" §7- §b/cli exit §f: 退出 CLI 模式");
-        sender.sendMessage(" §7- §b/cli compress §f: 使用AI智能压缩当前会话上下文");
+        sender.sendMessage(" §7- §b/cli compact §f: 使用AI智能压缩当前会话上下文");
         sender.sendMessage(" §7- §b/cli streaming §f: 切换流式输出开关");
         sender.sendMessage(" §7- §b/cli sound §f: 切换声音反馈开关");
         sender.sendMessage(" §7- §b/cli resume §f: 查看历史对话列表");
@@ -334,8 +334,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "mem":
                 handleMemory(player, args);
                 return true;
-            case "compress":
-                plugin.getCliManager().compressContext(player);
+            case "compact":
+                plugin.getCliManager().compactContext(player);
                 return true;
             case "resume":
                 int resumePage = 0;
@@ -1527,7 +1527,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
-                "stop", "exit", "download", "help", "lib", "compress", "skill", "sound", "resume"
+                "stop", "exit", "download", "help", "lib", "compact", "skill", "sound", "resume"
             ));
             subCommands.add("mcp");
             return subCommands.stream()

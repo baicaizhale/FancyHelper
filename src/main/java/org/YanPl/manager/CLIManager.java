@@ -24,6 +24,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -83,14 +85,14 @@ public class CLIManager {
         "/cli retry 可以在 AI 调用失败后一键重新发起上一次请求",
         "/cli skill list 查看所有可用技能，/cli skill load <id> 加载技能到当前对话",
         "/cli settings 打开偏好设置面板，/cli tools 管理 ls/read/edit 文件工具权限",
-        "/cli compress 让 AI 自动压缩旧对话为摘要，释放 token 空间以继续长对话",
+        "/cli compact 让 AI 压缩旧对话为摘要，释放 token 空间以继续长对话",
         "/cli exempt_anti_loop 可临时豁免反循环检测，允许 AI 连续调用同类工具",
         "/cli streaming 切换流式输出开关，控制 AI 回复是逐字显示还是一次性完整显示",
         "/cli display 切换状态指示器位置：ActionBar（快捷栏上方）或 Subtitle（屏幕中央）",
         "/cli plan 进入规划模式，AI 只制定计划不执行，确认后用 /cli plan_start normal|smart|yolo 切换执行",
         "/cli memory add <内容> 添加持久化记忆，AI 每次对话都会记住；/cli memory 查看全部",
         "记忆支持分类标签，用 | 分隔：/cli memory add 偏好|我喜欢简约风格",
-        "/cli compress 自动压缩旧对话为摘要，释放上下文"
+        "/cli compact 压缩旧对话为摘要，释放上下文"
     };
     private static final net.md_5.bungee.api.ChatColor WORD_COLOR_BUNGEE = net.md_5.bungee.api.ChatColor.of("#FF5F00");
     private static final net.md_5.bungee.api.ChatColor STATS_COLOR = net.md_5.bungee.api.ChatColor.GRAY;
@@ -714,6 +716,15 @@ public class CLIManager {
             if (record == null) return null;
 
             DialogueSession session = record.toSession();
+
+            // 恢复标题到 generatedTitles
+            String savedTitle = record.getTitle();
+            if (savedTitle != null && !savedTitle.isEmpty()) {
+                generatedTitles.put(session.getSessionUUID(), savedTitle);
+            } else {
+                // 无标题的恢复会话，异步生成标题
+                generateSessionTitle(player.getUniqueId(), session);
+            }
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 已从持久化存储恢复会话: " + latestFile.getFileName());
@@ -3255,9 +3266,9 @@ public class CLIManager {
     }
 
     /**
-     * 手动触发上下文压缩（/cli compress）
+     * 手动触发上下文压缩（/cli compact）
      */
-    public void compressContext(Player player) {
+    public void compactContext(Player player) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) {
@@ -3296,25 +3307,59 @@ public class CLIManager {
         // 异步执行压缩，不阻塞主线程
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                // 序列化旧消息为文本
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < oldCount && i < session.getHistory().size(); i++) {
-                    DialogueSession.Message msg = session.getHistory().get(i);
-                    String role = "user".equals(msg.getRole()) ? "用户" : "助手";
-                    sb.append(role).append(": ").append(msg.getContent()).append("\n\n");
+                // 检查是否有之前的压缩摘要
+                boolean hasOldSummary = false;
+                String oldSummaryText = null;
+                if (oldCount > 0) {
+                    DialogueSession.Message first = session.getHistory().get(0);
+                    if ("system".equals(first.getRole()) && first.getContent() != null
+                            && !first.getContent().isEmpty()
+                            && !first.getContent().startsWith("[Skill Reference:")) {
+                        hasOldSummary = true;
+                        oldSummaryText = first.getContent().length() > 300 ? first.getContent().substring(0, 300) + "..." : first.getContent();
+                    }
                 }
 
-                String compressPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息、用户意图和上下文。"
-                        + "直接输出摘要内容，不要有任何解释或分析。摘要应该简明扼要，不超过500字。\n\n"
-                        + "对话历史：\n" + sb + "\n摘要：";
+                // 序列化旧消息，只保留 role + content，过滤掉思考内容
+                StringBuilder sb = new StringBuilder();
+                int serializeStart = hasOldSummary ? 1 : 0; // 跳过旧摘要，单独处理
+                for (int i = serializeStart; i < oldCount && i < session.getHistory().size(); i++) {
+                    DialogueSession.Message msg = session.getHistory().get(i);
+                    String role = msg.getRole();
+                    String content = msg.getContent();
+                    if (content == null || content.trim().isEmpty()) continue;
+                    // 截断过长内容，避免数数之类的大段无意义输出
+                    if (content.length() > 500) {
+                        content = content.substring(0, 500) + "...";
+                    }
+                    sb.append(role).append(": ").append(content).append("\n\n");
+                }
 
-                DialogueSession tempSession = new DialogueSession();
-                tempSession.addMessage("user", compressPrompt);
-                AIResponse compressResponse = ai.chat(
-                        tempSession,
-                        "你是一个对话摘要助手。请将对话历史压缩成简洁的摘要，保留关键信息、用户意图和上下文。直接输出摘要内容，不要有任何解释或分析。摘要应该简明扼要，不超过500字。"
-                );
-                String summary = compressResponse.getContent();
+                if (plugin.getConfigManager().isDebug()) {
+                    String inputPreview = sb.length() > 800 ? sb.substring(0, 800) + "..." : sb.toString();
+                    plugin.getLogger().info("[CLI] 压缩输入 (" + oldCount + " 条消息, " + sb.length() + " 字符):\n" + inputPreview);
+                }
+
+                StringBuilder fullPrompt = new StringBuilder();
+                // 如果有旧摘要，要求模型必须保留其内容，只在新消息基础上补充
+                if (hasOldSummary && oldSummaryText != null) {
+                    fullPrompt.append("以下是上一次压缩的摘要，你必须保留这些信息，并在此基础上添加新的内容：\n")
+                        .append(oldSummaryText).append("\n\n");
+                }
+                fullPrompt.append("需要压缩的对话：\n\n").append(sb);
+
+                String systemPrompt = "你的任务：阅读对话历史，逐条列出所有用户提出的需求、问题和未完成的工作。"
+                        + "不要遗漏任何信息，包括已执行的工具调用、用户反馈、搜索查询等。"
+                        + "输出 JSON: {\"summary\":\"对话概要\",\"needs\":[\"用户提出的每个需求/问题，逐条列出\",\"不要遗漏\"],\"done\":[\"已完成的事项\"],\"pending\":[\"待办事项\"]}";
+
+                String compactPrompt = fullPrompt.toString();
+
+                String summary = ai.chatWithCompressionModel(systemPrompt, compactPrompt);
+
+                if (plugin.getConfigManager().isDebug()) {
+                    String outputPreview = summary != null && summary.length() > 500 ? summary.substring(0, 500) + "..." : (summary != null ? summary : "null");
+                    plugin.getLogger().info("[CLI] 压缩模型原始返回:\n" + outputPreview);
+                }
 
                 if (summary == null || summary.trim().isEmpty()) {
                     if (plugin.getConfigManager().isDebug()) {
@@ -3329,10 +3374,47 @@ public class CLIManager {
                     DialogueSession currentSession = sessions.get(player.getUniqueId());
                     if (currentSession == null || currentSession != session) return;
 
+                    // 尝试解析 JSON，失败则用原始文本
+                    String compactText;
+                    boolean jsonParseSuccess = false;
+                    try {
+                        Gson gson = new Gson();
+                        JsonObject json = gson.fromJson(summary.trim(), JsonObject.class);
+                        StringBuilder pretty = new StringBuilder();
+                        if (json.has("summary")) pretty.append(json.get("summary").getAsString()).append("\n");
+                        if (json.has("needs")) {
+                            JsonArray arr = json.getAsJsonArray("needs");
+                            if (arr.size() > 0) {
+                                pretty.append("Needs:\n");
+                                for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                            }
+                        }
+                        if (json.has("done")) {
+                            JsonArray arr = json.getAsJsonArray("done");
+                            if (arr.size() > 0) {
+                                pretty.append("Done:\n");
+                                for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                            }
+                        }
+                        if (json.has("pending")) {
+                            JsonArray arr = json.getAsJsonArray("pending");
+                            if (arr.size() > 0) {
+                                pretty.append("Pending:\n");
+                                for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                            }
+                        }
+                        compactText = pretty.toString().trim();
+                        jsonParseSuccess = true;
+                    } catch (Exception e) {
+                        compactText = summary.trim();
+                    }
+
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[CLI] JSON 解析" + (jsonParseSuccess ? "成功" : "失败，使用原始文本") + ", 最终摘要长度: " + compactText.length());
+                    }
+
                     List<DialogueSession.Message> newHistory = new ArrayList<>();
-                    // 添加摘要消息
-                    newHistory.add(new DialogueSession.Message("system", "[上下文摘要] " + summary.trim()));
-                    // 保留最近的消息
+                    newHistory.add(new DialogueSession.Message("system", compactText));
                     int startIdx = Math.max(0, session.getHistory().size() - keepRecent);
                     for (int i = startIdx; i < session.getHistory().size(); i++) {
                         newHistory.add(session.getHistory().get(i));
@@ -3350,7 +3432,13 @@ public class CLIManager {
                             "§zFancyHelper§b§r §7> §f上下文已压缩，保留了最近 " + keepRecent + " 条对话"));
 
                     if (plugin.getConfigManager().isDebug()) {
-                        plugin.getLogger().info("[CLI] 自动压缩完成 - 新历史大小: " + session.getHistory().size() + " 条");
+                        String historyPreview = session.getHistory().stream()
+                            .limit(1)
+                            .map(m -> m.getContent())
+                            .filter(c -> c != null)
+                            .findFirst().orElse("");
+                        if (historyPreview.length() > 300) historyPreview = historyPreview.substring(0, 300) + "...";
+                        plugin.getLogger().info("[CLI] 自动压缩完成 - 新历史大小: " + session.getHistory().size() + " 条, 首条摘要:\n" + historyPreview);
                     }
                 });
             } catch (Exception e) {
