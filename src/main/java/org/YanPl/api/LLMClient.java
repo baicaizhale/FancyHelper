@@ -419,7 +419,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 4096);
+        bodyJson.addProperty("max_tokens", 10000);
 
         // 对于支持推理参数的模型（如 deepseek-reasoner、o1、qwen-max 等），添加推理参数
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
@@ -696,7 +696,7 @@ public class LLMClient {
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
-        bodyJson.addProperty("max_tokens", 4096);
+        bodyJson.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
             bodyJson.add("input", messagesArray);
@@ -814,7 +814,7 @@ public class LLMClient {
         // 构建简化的请求体
         JsonObject simpleBody = new JsonObject();
         simpleBody.addProperty("model", model);
-        simpleBody.addProperty("max_tokens", 4096);
+        simpleBody.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
             simpleBody.add("input", simpleInput);
@@ -1550,7 +1550,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 4096);
+        bodyJson.addProperty("max_tokens", 10000);
         bodyJson.addProperty("stream", true);
 
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
@@ -1621,7 +1621,7 @@ public class LLMClient {
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
-        bodyJson.addProperty("max_tokens", 4096);
+        bodyJson.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
             // gpt-oss 模型通过 Responses API 不支持流式，走非流式请求
