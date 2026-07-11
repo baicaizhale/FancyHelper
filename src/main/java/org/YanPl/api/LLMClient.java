@@ -903,8 +903,8 @@ public class LLMClient {
      * @throws IOException 当 API 调用失败时
      */
     public String chatWithCompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String provider = plugin.getConfigManager().getCompressionModelProvider();
-        
+        String provider = plugin.getConfigManager().getProvider();
+
         if ("openai".equalsIgnoreCase(provider)) {
             return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
         } else {
@@ -926,48 +926,71 @@ public class LLMClient {
 
         String url = String.format(API_COMPLETIONS_URL, accountId);
 
-        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
         JsonArray messagesArray = new JsonArray();
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            JsonObject sysMsg = new JsonObject();
+            sysMsg.addProperty("role", "system");
+            sysMsg.addProperty("content", systemPrompt);
+            messagesArray.add(sysMsg);
+        }
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
         userMsg.addProperty("content", userPrompt);
         messagesArray.add(userMsg);
 
-        // 构建请求体
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 500);
         bodyJson.addProperty("temperature", 0.3);
+        bodyJson.addProperty("stream", true);
+        JsonObject reasoning = new JsonObject();
+        reasoning.addProperty("effort", "low");
+        bodyJson.add("reasoning", reasoning);
 
         String bodyString = gson.toJson(bodyJson);
-
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Authorization", "Bearer " + cfKey)
                     .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = sendWithRetry(request);
-            String responseBody = response.body();
+            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[co-model] CloudFlare API 错误: " + response.statusCode());
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                plugin.getLogger().warning("[co-model] CloudFlare API 错误: " + response.statusCode() + " - " + errorBody);
                 throw new IOException("API调用失败: " + response.statusCode());
             }
 
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-            
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                return aiResponse.getContent().trim();
+            // 读取 SSE 流，累积 content
+            StringBuilder content = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data: ")) continue;
+                    String data = line.substring(6).trim();
+                    if ("[DONE]".equals(data)) break;
+                    try {
+                        JsonObject chunk = gson.fromJson(data, JsonObject.class);
+                        JsonArray choices = chunk.getAsJsonArray("choices");
+                        if (choices == null || choices.size() == 0) continue;
+                        JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
+                        if (delta != null && delta.has("content") && !delta.get("content").isJsonNull()) {
+                            content.append(delta.get("content").getAsString());
+                        }
+                    } catch (Exception ignored) {}
+                }
             }
 
-            throw new IOException("无法解析API响应");
+            String result = content.toString().trim();
+            if (result.isEmpty()) {
+                throw new IOException("co-model 返回空内容");
+            }
+            return result;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("API调用被中断: " + e.getMessage(), e);
@@ -978,8 +1001,8 @@ public class LLMClient {
      * 使用 OpenAI 兼容 co-model 进行对话
      */
     private String chatWithOpenAICompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String apiUrl = plugin.getConfigManager().getCompressionOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getCompressionOpenAiApiKey();
+        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
+        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getCompressionOpenAiModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
@@ -1011,37 +1034,53 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 500);
         bodyJson.addProperty("temperature", 0.3);
+        bodyJson.addProperty("stream", true);
+        bodyJson.addProperty("reasoning_effort", "low");
 
         String bodyString = gson.toJson(bodyJson);
-
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = sendWithRetry(request);
-            String responseBody = response.body();
+            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[co-model] OpenAI API 错误: " + response.statusCode());
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                plugin.getLogger().warning("[co-model] OpenAI API 错误: " + response.statusCode() + " - " + errorBody);
                 throw new IOException("API调用失败: " + response.statusCode());
             }
 
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-            
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                return aiResponse.getContent().trim();
+            StringBuilder content = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data: ")) continue;
+                    String data = line.substring(6).trim();
+                    if ("[DONE]".equals(data)) break;
+                    try {
+                        JsonObject chunk = gson.fromJson(data, JsonObject.class);
+                        JsonArray choices = chunk.getAsJsonArray("choices");
+                        if (choices == null || choices.size() == 0) continue;
+                        JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
+                        if (delta != null && delta.has("content") && !delta.get("content").isJsonNull()) {
+                            content.append(delta.get("content").getAsString());
+                        }
+                    } catch (Exception ignored) {}
+                }
             }
 
-            throw new IOException("无法解析API响应");
+            String result = content.toString().trim();
+            if (result.isEmpty()) {
+                throw new IOException("co-model 返回空内容");
+            }
+            return result;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("API调用被中断: " + e.getMessage(), e);
