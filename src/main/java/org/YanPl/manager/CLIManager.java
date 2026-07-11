@@ -672,6 +672,7 @@ public class CLIManager {
                     if (now - Files.getLastModifiedTime(file).toMillis() <= thirtyMinutesMs) {
                         // 检查是否显式退出的会话
                         try {
+                            Gson gson = new Gson();
                             String json = Files.readString(file, StandardCharsets.UTF_8);
                             JsonObject obj = gson.fromJson(json, JsonObject.class);
                             if (obj != null && obj.has("explicitExit") && obj.get("explicitExit").getAsBoolean()) {
@@ -2600,6 +2601,10 @@ public class CLIManager {
                 generationStartTimes.remove(uuid);
 
                 String toolCall = extractToolCall(response);
+                // 模型可能把 #run 放在 reasoning_content 而非 content 里
+                if (toolCall.isEmpty() && !thoughtContent.isEmpty()) {
+                    toolCall = extractToolCall(thoughtContent);
+                }
                 if (!toolCall.isEmpty()) {
                     // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
                     Long streamedThisCycle = streamedOutputTokens.get(uuid);
