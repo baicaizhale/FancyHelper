@@ -44,7 +44,7 @@ public class ChatListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        
+
         // 检查玩家是否有预加载的会话，如果有则静默进入CLI模式
         if (plugin.getCliManager().hasPreloadedSession(player.getUniqueId())) {
             if (plugin.getConfigManager().isDebug()) {
@@ -56,12 +56,12 @@ public class ChatListener implements Listener {
                 plugin.getCliManager().enterCLI(player, true);
             }, 20L); // 1秒 = 20 ticks
         }
-        
+
         // 检查配置是否启用公告显示
         if (!plugin.getConfigManager().isNoticeShowOnJoin()) {
             return;
         }
-        
+
         // 进服 8s 后发送公告
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -140,9 +140,9 @@ public class ChatListener implements Listener {
     private void registerPaperChatListener() {
         try {
             @SuppressWarnings("unchecked")
-            Class<? extends org.bukkit.event.Event> asyncChatEventClass = 
+            Class<? extends org.bukkit.event.Event> asyncChatEventClass =
                 (Class<? extends org.bukkit.event.Event>) Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
-            
+
             plugin.getServer().getPluginManager().registerEvent(
                 asyncChatEventClass,
                 this,
@@ -153,7 +153,7 @@ public class ChatListener implements Listener {
                         Method getPlayerMethod = event.getClass().getMethod("getPlayer");
                         Method messageMethod = event.getClass().getMethod("message");
                         Player player = (Player) getPlayerMethod.invoke(event);
-                        
+
                         // Paper 使用 Adventure Component, 需要提取纯文本
                         Object component = messageMethod.invoke(event);
                         Method plainTextMethod = Class.forName("net.kyori.adventure.text.serializer.plain.PlainComponentSerializer").getMethod("plain");

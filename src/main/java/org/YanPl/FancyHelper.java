@@ -66,7 +66,7 @@ public final class FancyHelper extends JavaPlugin {
         try {
             // 初始化云端错误上报
             cloudErrorReport = new CloudErrorReport(this);
-            
+
             // 初始化统一错误处理器
             errorHandler = new ErrorHandler(this);
 
@@ -78,10 +78,10 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化配置管理器
             configManager = new ConfigManager(this);
-            
+
             // 初始化验证管理器
             verificationManager = new VerificationManager(this);
-            
+
             // 检查 ProtocolLib 依赖并初始化数据包捕获管理器
             if (getServer().getPluginManager().isPluginEnabled("ProtocolLib")) {
                 initPacketCapture();
@@ -93,7 +93,7 @@ public final class FancyHelper extends JavaPlugin {
                 getLogger().warning("==================");
                 packetCaptureManager = null;
             }
-            
+
             // 异步索引服务器命令与预设文件
             workspaceIndexer = new WorkspaceIndexer(this);
             Bukkit.getScheduler().runTaskAsynchronously(this, () -> workspaceIndexer.indexAll());
@@ -163,15 +163,15 @@ public final class FancyHelper extends JavaPlugin {
             checkSpigotServer();
 
             // 打印启动 ASCII 艺术（模仿 LuckPerms 风格，包含颜色）
-            // 使用 ANSI 颜色代码：\u001B[38;5;81m 深青色, \u001B[38;5;208m 橙色, \u001B[36m 青色, \u001B[38;5;155m 灰色, \u001B[0m 重置
-            getLogger().info(" \u001B[38;5;81m_\u001B[0m       ");
-            getLogger().info("\u001B[38;5;81m|_\u001B[0m   \u001B[38;5;81m|_|\u001B[0m   \u001B[38;5;208mFancyHelper\u001B[0m \u001B[36mv" + getDescription().getVersion() + "\u001B[0m");
-            getLogger().info("\u001B[38;5;81m|\u001B[0m    \u001B[38;5;81m| |\u001B[0m   \u001B[38;5;155mRunning on Spigot - " + getServer().getName().split("-")[0] + "\u001B[0m");
+            // 使用 ANSI 颜色代码：[38;5;81m 深青色, [38;5;208m 橙色, [36m 青色, [38;5;155m 灰色, [0m 重置
+            getLogger().info(" [38;5;81m_[0m       ");
+            getLogger().info("[38;5;81m|_[0m   [38;5;81m|_|[0m   [38;5;208mFancyHelper[0m [36mv" + getDescription().getVersion() + "[0m");
+            getLogger().info("[38;5;81m|[0m    [38;5;81m| |[0m   [38;5;155mRunning on Spigot - " + getServer().getName().split("-")[0] + "[0m");
             getLogger().info("");
 
             // 尝试同步命令，修复热重载后的 Brigadier 缓存问题
             syncCommands();
-            
+
             // 检查在线玩家是否有预加载的会话，如果有则自动进入CLI模式
             checkOnlinePlayersForPreloadedSessions();
         } catch (Throwable e) {
@@ -197,7 +197,7 @@ public final class FancyHelper extends JavaPlugin {
         }, 20L); // 延迟1秒执行，确保插件完全加载
     }
 
-// 下面一些代码只是为了清理旧插件防止干扰，没有任何恶意
+    // 下面一些代码只是为了清理旧插件防止干扰，没有任何恶意
     private void cleanOldPluginFiles() {
         java.io.File pluginsDir = getDataFolder().getParentFile();
         if (pluginsDir == null || !pluginsDir.exists() || !pluginsDir.isDirectory()) {
@@ -219,7 +219,7 @@ public final class FancyHelper extends JavaPlugin {
 
         for (java.io.File target : targets) {
             java.io.File dest = new java.io.File(oldDir, target.getName());
-            
+
             // 如果目标已存在，先删除旧的以防移动失败
             if (dest.exists()) {
                 if (dest.isDirectory()) {
@@ -267,7 +267,7 @@ public final class FancyHelper extends JavaPlugin {
                 getLogger().warning("");
                 getLogger().warning("正在尝试自动禁用此功能...");
                 getLogger().warning("====================================================");
-                
+
                 // 尝试自动修改 server.properties
                 try {
                     java.io.File serverProperties = new java.io.File("server.properties");
@@ -275,7 +275,7 @@ public final class FancyHelper extends JavaPlugin {
                         java.util.List<String> lines = java.nio.file.Files.readAllLines(serverProperties.toPath());
                         boolean modified = false;
                         java.util.List<String> newLines = new java.util.ArrayList<>();
-                        
+
                         for (String line : lines) {
                             String trimmed = line.trim();
                             if (trimmed.toLowerCase().startsWith("enforce-secure-profile")) {
@@ -285,7 +285,7 @@ public final class FancyHelper extends JavaPlugin {
                                 newLines.add(line);
                             }
                         }
-                        
+
                         if (modified) {
                             java.nio.file.Files.write(serverProperties.toPath(), newLines);
                             getLogger().info("已成功将 server.properties 中的 enforce-secure-profile 设置为 false");
@@ -315,29 +315,29 @@ public final class FancyHelper extends JavaPlugin {
     private void checkSpigotServer() {
         String serverName = getServer().getName();
         String serverVersion = getServer().getVersion();
-        
+
         // 检测是否为 Paper 及其下游分支
         // Paper 服务端名称通常包含 "Paper"，下游分支如 Purpur、Pufferfish 等也基于 Paper
         boolean isPaperOrFork = false;
-        
+
         // 方法1：检查服务端名称
         String lowerName = serverName.toLowerCase();
-        if (lowerName.contains("paper") || lowerName.contains("purpur") || 
+        if (lowerName.contains("paper") || lowerName.contains("purpur") ||
             lowerName.contains("pufferfish") || lowerName.contains("airplane") ||
             lowerName.contains("tuinity") || lowerName.contains("empirecraft")) {
             isPaperOrFork = true;
         }
-        
+
         // 方法2：检查版本字符串
         if (!isPaperOrFork) {
             String lowerVersion = serverVersion.toLowerCase();
-            if (lowerVersion.contains("paper") || lowerVersion.contains("purpur") || 
+            if (lowerVersion.contains("paper") || lowerVersion.contains("purpur") ||
                 lowerVersion.contains("pufferfish") || lowerVersion.contains("airplane") ||
                 lowerVersion.contains("tuinity") || lowerVersion.contains("empirecraft")) {
                 isPaperOrFork = true;
             }
         }
-        
+
         // 方法3：通过反射检测 Paper 特有的类
         if (!isPaperOrFork) {
             try {
@@ -354,7 +354,7 @@ public final class FancyHelper extends JavaPlugin {
                 }
             }
         }
-        
+
         // 如果检测到是 Spigot（非 Paper 及下游），显示警告
         if (!isPaperOrFork && (lowerName.contains("spigot") || lowerName.contains("craftbukkit"))) {
             getLogger().warning("====================");

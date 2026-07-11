@@ -150,11 +150,6 @@ public class DialogueSession {
             }
         }
 
-        if (history.size() > 20) {
-            // 移除最早的两条，保持历史在一个较小范围
-            history.remove(0);
-            history.remove(0);
-        }
     }
 
     /**

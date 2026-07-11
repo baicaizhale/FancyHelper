@@ -271,13 +271,13 @@ class DialogueSessionTest {
     }
 
     @Test
-    @DisplayName("历史超过20条时应该自动裁剪")
+    @DisplayName("历史超过500条时应该自动裁剪")
     void testHistoryAutoTrim() {
-        for (int i = 0; i < 25; i++) {
+        for (int i = 0; i < 505; i++) {
             session.addMessage("user", "消息" + i);
         }
         
-        assertTrue(session.getHistory().size() <= 20);
+        assertTrue(session.getHistory().size() <= 500);
     }
 
     @Test
