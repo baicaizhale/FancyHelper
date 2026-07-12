@@ -1329,49 +1329,6 @@ public class ToolExecutor {
     }
 
     /**
-     * 处理 #skill 工具
-     */
-    private void handleSkillTool(Player player, String args, DialogueSession session) {
-        String skillId = args.trim().toLowerCase();
-        
-        if (skillId.isEmpty()) {
-            cliManager.feedbackToAI(player, "#skill_result: 错误 - 请提供 Skill ID");
-            return;
-        }
-        
-        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
-        
-        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
-        
-        if (skill == null) {
-            // 尝试搜索
-            List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
-            if (matches.isEmpty()) {
-                cliManager.feedbackToAI(player, "#skill_result: 错误 - 未找到 Skill: " + skillId);
-                return;
-            }
-            skill = matches.get(0);
-        }
-        
-        // 记录玩家已加载此 Skill
-        plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
-
-        // 将 Skill 内容加入对话上下文
-        boolean added = false;
-        if (session != null) {
-            added = session.addSkillContext(skill);
-        }
-        
-        // 反馈给 AI（支持模板变量）
-        String suffix = added ? "" : " (已存在)";
-        Map<String, String> templateContext = new HashMap<>();
-        templateContext.put("player", player.getName());
-        String result = "#skill_result: 已加载 Skill [" + skill.getMetadata().getName() + "]" + suffix + "\n\n"
-                + skill.getFormattedProcessedContent(templateContext);
-        cliManager.feedbackToAI(player, result);
-    }
-
-    /**
      * 处理 #unloadskill 工具
      */
     private void handleUnloadSkillTool(Player player, String args, DialogueSession session) {
@@ -1406,6 +1363,248 @@ public class ToolExecutor {
         } else {
             cliManager.feedbackToAI(player, "#unloadskill_result: Skill [" + skill.getMetadata().getName() + "] 未在加载列表中");
         }
+    }
+
+    // ==================== Skill Sidecar 文件工具 ====================
+
+    /**
+     * 处理 #skill 工具
+     * 支持子命令语法：
+     *   #skill: <id>              - 加载 Skill（自动读取 skill.md）
+     *   #skill: <id> list         - 列出 Skill 目录中的附属文件
+     *   #skill: <id> read <file>  - 读取 Skill 目录中的指定附属文件
+     */
+    private void handleSkillTool(Player player, String args, DialogueSession session) {
+        String trimmed = args.trim();
+        if (trimmed.isEmpty()) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 请提供 Skill ID");
+            return;
+        }
+
+        String[] tokens = trimmed.split("\\s+");
+        String skillId = tokens[0].toLowerCase();
+
+        // 仅当第二个 token 明确是 list / read 时才走子命令分支
+        if (tokens.length >= 2) {
+            String subcommand = tokens[1].toLowerCase();
+            if (subcommand.equals("list")) {
+                handleSkillList(player, skillId);
+                return;
+            }
+            if (subcommand.equals("read")) {
+                if (tokens.length < 3) {
+                    cliManager.feedbackToAI(player, "#skill_result: 错误 - 格式: #skill: <id> read <filename>");
+                    return;
+                }
+                String fileName = trimmed.substring(trimmed.toLowerCase().indexOf(" read ") + 6).trim();
+                handleSkillRead(player, skillId, fileName);
+                return;
+            }
+        }
+
+        // 默认行为：加载 Skill
+        handleSkillLoad(player, skillId, session);
+    }
+
+    /**
+     * 加载 Skill（原 #skill: <id> 行为）
+     * 加载后会在反馈末尾提示 AI 可以用 read 子命令读取更多文件
+     */
+    private void handleSkillLoad(Player player, String skillId, DialogueSession session) {
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+
+        if (skill == null) {
+            // 尝试搜索
+            List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
+            if (matches.isEmpty()) {
+                cliManager.feedbackToAI(player, "#skill_result: 错误 - 未找到 Skill: " + skillId);
+                return;
+            }
+            skill = matches.get(0);
+        }
+
+        // 记录玩家已加载此 Skill
+        plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
+
+        // 将 Skill 内容加入对话上下文
+        boolean added = false;
+        if (session != null) {
+            added = session.addSkillContext(skill);
+        }
+
+        // 反馈给 AI（支持模板变量）
+        String suffix = added ? "" : " (already loaded)";
+        Map<String, String> templateContext = new HashMap<>();
+        templateContext.put("player", player.getName());
+        StringBuilder result = new StringBuilder();
+        result.append("#skill_result: Loaded Skill [").append(skill.getMetadata().getName()).append("]").append(suffix).append("\n\n");
+        result.append(skill.getFormattedProcessedContent(templateContext));
+
+        // 提示 AI 可以读取附属文件
+        File skillDir = skill.getSkillDirectory();
+        if (skillDir != null) {
+            File[] files = skillDir.listFiles();
+            int sidecarCount = 0;
+            if (files != null) {
+                for (File f : files) {
+                    if (f.isFile() && !"skill.md".equalsIgnoreCase(f.getName())) {
+                        sidecarCount++;
+                    }
+                }
+            }
+            if (sidecarCount > 0) {
+                result.append("\n\n---\nThis Skill has ").append(sidecarCount)
+                      .append(" additional file(s) in its directory.\n")
+                      .append("Use `#skill: ").append(skill.getId()).append(" read <filename>` to read them.\n")
+                      .append("Use `#skill: ").append(skill.getId()).append(" list` to see available files.");
+            }
+        }
+
+        cliManager.feedbackToAI(player, result.toString());
+    }
+
+    /**
+     * 列出 Skill 目录中的附属文件
+     */
+    private void handleSkillList(Player player, String skillId) {
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+        if (skill == null) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 未找到 Skill: " + skillId);
+            return;
+        }
+
+        File skillDir = skill.getSkillDirectory();
+        if (skillDir == null) {
+            cliManager.feedbackToAI(player, "#skill_result: 该 Skill 为平面格式，无附加文件目录");
+            return;
+        }
+
+        File[] files = skillDir.listFiles();
+        if (files == null) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 无法读取 Skill 目录");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Skill [").append(skillDir.getName()).append("] directory contents:\n");
+
+        Arrays.sort(files, (f1, f2) -> {
+            if (f1.isDirectory() && !f2.isDirectory()) return -1;
+            if (!f1.isDirectory() && f2.isDirectory()) return 1;
+            return f1.getName().compareToIgnoreCase(f2.getName());
+        });
+
+        boolean hasExtra = false;
+        for (File f : files) {
+            if (f.isFile() && "skill.md".equalsIgnoreCase(f.getName())) {
+                sb.append("  [SKILL] skill.md (loaded)\n");
+            } else if (f.isDirectory()) {
+                sb.append("  [DIR] ").append(f.getName()).append("/\n");
+                hasExtra = true;
+            } else {
+                sb.append("  [FILE] ").append(f.getName())
+                  .append(" (").append(f.length() / 1024).append("KB)\n");
+                hasExtra = true;
+            }
+        }
+
+        if (!hasExtra) {
+            sb.append("  No additional files in this directory.\n");
+        }
+
+        sb.append("Use `#skill: ").append(skillId).append(" read <filename>` to read a file.");
+
+        cliManager.feedbackToAI(player, "#skill_result: " + sb.toString());
+    }
+
+    /**
+     * 读取 Skill 目录中的附属文件
+     * 安全: 使用 isWithinRoot() 防止路径遍历
+     */
+    private void handleSkillRead(Player player, String skillId, String fileName) {
+        cliManager.setGenerating(player.getUniqueId(), false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
+        if (skill == null) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 未找到 Skill: " + skillId);
+            return;
+        }
+
+        File skillDir = skill.getSkillDirectory();
+        if (skillDir == null) {
+            cliManager.feedbackToAI(player, "#skill_result: 该 Skill 为平面格式，无附加文件目录");
+            return;
+        }
+
+        // 安全：限制在 Skill 目录内
+        File resolvedFile = resolvePathCaseInsensitive(skillDir, fileName);
+        if (!isWithinRoot(skillDir, resolvedFile)) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 路径超出 Skill 目录限制");
+            return;
+        }
+
+        if (!resolvedFile.exists()) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 文件不存在: " + fileName);
+            return;
+        }
+        if (resolvedFile.isDirectory()) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - 这是一个目录，请使用 #skill: " + skillId + " list");
+            return;
+        }
+        if ("skill.md".equalsIgnoreCase(resolvedFile.getName())) {
+            cliManager.feedbackToAI(player, "#skill_result: 错误 - skill.md 已通过 #skill: " + skillId + " 加载，无需重复读取");
+            return;
+        }
+
+        // 异步读取
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                String content = readSkillSidecarFile(resolvedFile);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    cliManager.feedbackToAI(player, "#skill_result: " + content);
+                });
+            } catch (Exception e) {
+                plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    cliManager.feedbackToAI(player, "#skill_result: 错误 - " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    /**
+     * 读取 Skill 附属文件内容（带行号，限制大小）
+     */
+    private String readSkillSidecarFile(File file) throws IOException {
+        if (file.length() > 1024 * 1024) {
+            return "Error: file too large (" + (file.length() / 1024) + "KB), max 1MB.";
+        }
+
+        StringBuilder content = new StringBuilder();
+        content.append("--- ").append(file.getName()).append(" ---\n");
+
+        try (java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
+            String line;
+            int lineNum = 1;
+            int maxLines = 2000;
+
+            while ((line = reader.readLine()) != null) {
+                if (lineNum > maxLines) {
+                    content.append("\n... (truncated at ").append(maxLines).append(" lines) ...");
+                    break;
+                }
+                content.append(lineNum).append(": ").append(line).append("\n");
+                lineNum++;
+            }
+        }
+
+        return content.toString();
     }
 
     /**

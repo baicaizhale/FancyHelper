@@ -1,5 +1,6 @@
 package org.YanPl.manager;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -38,6 +39,9 @@ public class SkillUpdateManager implements Listener {
 
     // 待更新的 Skill（skillId -> 最新版本号）
     private final Map<String, String> pendingUpdates = new ConcurrentHashMap<>();
+
+    // 待更新 Skill 的附属文件列表（skillId -> [file1, file2, ...]）
+    private final Map<String, List<String>> pendingFiles = new ConcurrentHashMap<>();
 
     // 是否正在检查
     private boolean checking = false;
@@ -189,6 +193,12 @@ public class SkillUpdateManager implements Listener {
         String remoteVersion = getJsonString(skillsObj.getAsJsonObject(skillId), "version");
         notify(sender, "§f正在安装 §b" + skillId + " §fv" + (remoteVersion != null ? remoteVersion : "?") + "§f...");
 
+        // 记录附属文件列表
+        List<String> files = parseFilesList(skillsObj.getAsJsonObject(skillId));
+        if (files != null) {
+            pendingFiles.put(skillId, files);
+        }
+
         boolean success = downloadSkillFile(skillId);
         if (success) {
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -244,6 +254,11 @@ public class SkillUpdateManager implements Listener {
                 // 只要版本不同就更新，不比较高低
                 if (remoteVersion != null && !remoteVersion.equals(localVersion)) {
                     pendingUpdates.put(id, remoteVersion);
+                    // 记录附属文件列表
+                    List<String> files = parseFilesList(remoteSkill);
+                    if (files != null) {
+                        pendingFiles.put(id, files);
+                    }
                 }
                 checkedCount++;
             }
@@ -306,6 +321,7 @@ public class SkillUpdateManager implements Listener {
         Bukkit.getScheduler().runTask(plugin, () -> {
             skillManager.reloadSkills();
             pendingUpdates.clear();
+            pendingFiles.clear();
             hasUpdates = false;
 
             notify(sender, "§aSkill 更新完成！成功: §e" + finalSuccess + "§a, 失败: §c" + finalFailed);
@@ -314,40 +330,78 @@ public class SkillUpdateManager implements Listener {
     }
 
     /**
-     * 下载单个 Skill 文件到 skills 目录
+     * 下载单个 Skill 到 skills 目录
+     * 先下载 skill.md（必须成功），再按 manifest 中的 files 列表下载附属文件
      */
     private boolean downloadSkillFile(String skillId) {
-        String path = skillId + "/skill.md";
         SkillLoader loader = skillManager.getLoader();
+        String sanitizedId = loader.sanitizeFileName(skillId);
+        File skillDir = new File(loader.getSkillsDir(), sanitizedId);
+        if (!skillDir.exists()) {
+            skillDir.mkdirs();
+        }
 
+        // 1. skill.md 必须成功
+        if (!downloadUrlToFile(skillId + "/skill.md", new File(skillDir, "skill.md"))) {
+            return false;
+        }
+
+        // 2. 下载附属文件（失败不阻断）
+        List<String> extraFiles = pendingFiles.remove(skillId);
+        if (extraFiles != null) {
+            for (String fileName : extraFiles) {
+                if (fileName.equalsIgnoreCase("skill.md")) continue;
+                if (fileName.contains("/")) continue; // 暂不处理子目录
+                File targetFile = new File(skillDir, fileName);
+                if (downloadUrlToFile(skillId + "/" + fileName, targetFile)) {
+                    plugin.getLogger().info("[SkillUpdate] " + skillId + ": 已下载附属文件 " + fileName);
+                } else {
+                    plugin.getLogger().warning("[SkillUpdate] " + skillId + ": 附属文件 " + fileName + " 下载失败，跳过");
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 三级级联下载单个文件
+     */
+    private boolean downloadUrlToFile(String path, File targetFile) {
         try {
-            // 三级级联：主源 → 镜像(ghproxy) → 直连(GitHub)
             HttpResponse<InputStream> response = fetchInputStreamWithFallback(
                     getPrimaryUrl(path),
                     getMirrorUrl(path),
                     getDirectUrl(path));
             if (response == null || response.statusCode() != 200) {
-                int code = response != null ? response.statusCode() : 0;
-                plugin.getLogger().warning("[SkillUpdate] 下载 " + skillId + " 失败: HTTP " + code);
                 return false;
             }
-
-            String sanitizedId = loader.sanitizeFileName(skillId);
-            File skillDir = new File(loader.getSkillsDir(), sanitizedId);
-            if (!skillDir.exists()) {
-                skillDir.mkdirs();
-            }
-            File targetFile = new File(skillDir, "skill.md");
-
             try (InputStream is = response.body()) {
                 Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
-
             return true;
-
         } catch (IOException e) {
-            plugin.getLogger().warning("[SkillUpdate] 下载 " + skillId + " 失败: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * 解析 manifest 中 skill 节点的 files 字段（兼容不存在的旧格式）
+     * @return 文件名列表，无 files 字段返回 null
+     */
+    private List<String> parseFilesList(JsonObject skillEntry) {
+        if (!skillEntry.has("files") || skillEntry.get("files").isJsonNull()) {
+            return null;
+        }
+        try {
+            JsonArray arr = skillEntry.getAsJsonArray("files");
+            List<String> files = new ArrayList<>();
+            for (JsonElement el : arr) {
+                files.add(el.getAsString());
+            }
+            return files;
+        } catch (Exception e) {
+            return null;
         }
     }
 
