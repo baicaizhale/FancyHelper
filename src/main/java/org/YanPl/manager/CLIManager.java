@@ -2530,10 +2530,15 @@ public class CLIManager {
                 response = response.replaceAll("(?i)^Thought:.*?\n", "");
                 response = response.replaceAll("(?i)^思考过程:.*?\n", "");
                 response = response.trim();
-                
+
+                // 防止误判：如果思考内容与正文相同，说明不是真正的思考过程
+                if (!thoughtContent.isEmpty() && thoughtContent.trim().equals(response.trim())) {
+                    thoughtContent = "";
+                }
+
                 String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
                 session.setLastThought(finalThought);
-                
+
                 String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
                 formatted = ColorUtil.translateCustomColors(formatted);
                 
@@ -2696,7 +2701,12 @@ public class CLIManager {
             response = response.replaceAll("(?i)^Thought:.*?\n", "");
             response = response.replaceAll("(?i)^思考过程:.*?\n", "");
             response = response.trim();
-            
+
+            // 防止误判：如果思考内容与正文相同，说明不是真正的思考过程
+            if (!thoughtContent.isEmpty() && thoughtContent.trim().equals(response.trim())) {
+                thoughtContent = "";
+            }
+
             final String finalResponse = response;
             String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
             session.setLastThought(finalThought);
@@ -2981,6 +2991,11 @@ public class CLIManager {
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
         
+        // 防止误判：如果思考内容与正文相同，说明不是真正的思考过程
+        if (!thoughtContent.isEmpty() && thoughtContent.trim().equals(cleanResponse)) {
+            thoughtContent = "";
+        }
+
         // 更新 session 中的最后一次思考内容
         String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
         session.setLastThought(finalThought);
