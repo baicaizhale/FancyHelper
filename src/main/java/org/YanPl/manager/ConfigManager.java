@@ -248,6 +248,10 @@ public class ConfigManager {
         return config.getString("cloudflare.cf_key", "");
     }
 
+    public String getCloudflareProxyUrl() {
+        return config.getString("cloudflare.proxy_url", "");
+    }
+
     public String getCloudflareModel() {
         return config.getString("cloudflare.model", "@cf/openai/gpt-oss-120b");
     }

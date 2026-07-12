@@ -80,10 +80,24 @@ public class SkillLoader {
             return;
         }
 
+        // 检查此目录是否为目录格式 Skill（存在 skill.md）
+        boolean hasSkillFile = false;
+        for (File f : files) {
+            if (f.isFile() && "skill.md".equalsIgnoreCase(f.getName())) {
+                hasSkillFile = true;
+                break;
+            }
+        }
+
         for (File file : files) {
             if (file.isDirectory()) {
                 loadFromDirectoryRecursive(baseDir, file, isBuiltIn, isRemote, skills);
             } else if (file.getName().endsWith(".md")) {
+                // 目录格式 Skill 中，仅 skill.md 注册为 Skill
+                // 其他 .md 是 sidecar 文件，通过 #skill-read 加载
+                if (hasSkillFile && !"skill.md".equalsIgnoreCase(file.getName())) {
+                    continue;
+                }
                 try {
                     Skill skill = loadFromFile(file, isBuiltIn, isRemote);
                     if (skill != null) {

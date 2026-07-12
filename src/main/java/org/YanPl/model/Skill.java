@@ -368,6 +368,22 @@ public class Skill {
         return sourceFile;
     }
 
+    /**
+     * 获取 Skill 所在目录
+     * 仅目录格式（skills/<id>/skill.md）有效，平面格式返回 null
+     *
+     * @return Skill 目录，或 null
+     */
+    public File getSkillDirectory() {
+        if (sourceFile == null) {
+            return null;
+        }
+        if ("skill.md".equalsIgnoreCase(sourceFile.getName())) {
+            return sourceFile.getParentFile();
+        }
+        return null;
+    }
+
     public long getLastModified() {
         return lastModified;
     }

@@ -26,8 +26,6 @@ import java.util.function.BiConsumer;
  * 负责构建请求、解析响应，以及管理 HttpClient 的生命周期
  */
 public class LLMClient {
-    private static final String API_COMPLETIONS_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/chat/completions";
-    private static final String API_RESPONSES_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/responses";
     private static final String ACCOUNTS_URL = "https://api.cloudflare.com/client/v4/accounts";
     
     private final FancyHelper plugin;
@@ -350,6 +348,20 @@ public class LLMClient {
         }
     }
 
+    /**
+     * 构建 Cloudflare API 请求 URL
+     * 如果配置了 proxy_url，则直接使用代理地址，跳过 Account ID 解析
+     * 否则使用标准 Cloudflare API 地址
+     */
+    private String buildCloudflareApiUrl(String endpoint) throws IOException {
+        String proxyUrl = plugin.getConfigManager().getCloudflareProxyUrl();
+        if (proxyUrl != null && !proxyUrl.isEmpty()) {
+            return proxyUrl + "/v1/" + endpoint;
+        }
+        String accountId = fetchAccountId();
+        return String.format("https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/%s", accountId, endpoint);
+    }
+
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
         checkConfigLoaded();
 
@@ -669,21 +681,20 @@ public class LLMClient {
             plugin.getLogger().warning("[AI] 模型名称为空，已回退到默认值: " + model);
         }
 
-        String accountId;
+        String endpoint = model.contains("gpt-oss") ? "responses" : "chat/completions";
+        String url;
         try {
-            accountId = fetchAccountId();
+            url = buildCloudflareApiUrl(endpoint);
         } catch (IOException e) {
             plugin.getLogger().severe("[AI 错误] 获取 Account ID 失败: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
             throw e;
         }
-
-        boolean useResponsesApi = model.contains("gpt-oss");
-        String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[AI 请求] URL: " + url);
         }
 
+        boolean useResponsesApi = model.contains("gpt-oss");
         // 使用公共方法构建消息数组
         JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
 
@@ -911,13 +922,12 @@ public class LLMClient {
     private String chatWithCloudFlareCompressionModel(String systemPrompt, String userPrompt) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCompressionCloudflareModel();
-        String accountId = fetchAccountId();
 
         if (cfKey == null || cfKey.isEmpty()) {
             throw new IOException("未配置 CloudFlare API Key");
         }
 
-        String url = String.format(API_COMPLETIONS_URL, accountId);
+        String url = buildCloudflareApiUrl("chat/completions");
 
         JsonArray messagesArray = new JsonArray();
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
@@ -1104,13 +1114,12 @@ public class LLMClient {
     private String compressWithCloudFlare(String context) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCompressionCloudflareModel();
-        String accountId = fetchAccountId();
 
         if (cfKey == null || cfKey.isEmpty()) {
             throw new IOException("未配置 CloudFlare API Key");
         }
 
-        String url = String.format(API_COMPLETIONS_URL, accountId);
+        String url = buildCloudflareApiUrl("chat/completions");
 
         // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
         String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
@@ -1305,13 +1314,12 @@ public class LLMClient {
     private String generateTitleFromCloudFlare(String firstMessage) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel(); // 使用主模型
-        String accountId = fetchAccountId();
 
         if (cfKey == null || cfKey.isEmpty()) {
             throw new IOException("未配置 CloudFlare API Key");
         }
 
-        String url = String.format(API_COMPLETIONS_URL, accountId);
+        String url = buildCloudflareApiUrl("chat/completions");
 
         // 构建消息数组
         JsonArray messagesArray = new JsonArray();
@@ -1598,16 +1606,16 @@ public class LLMClient {
             model = "@cf/openai/gpt-oss-120b";
         }
 
-        String accountId;
+        String endpoint = model.contains("gpt-oss") ? "responses" : "chat/completions";
+        String url;
         try {
-            accountId = fetchAccountId();
+            url = buildCloudflareApiUrl(endpoint);
         } catch (IOException e) {
             plugin.getCloudErrorReport().report(e);
             throw e;
         }
 
         boolean useResponsesApi = model.contains("gpt-oss");
-        String url = String.format(useResponsesApi ? API_RESPONSES_URL : API_COMPLETIONS_URL, accountId);
 
         JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
 
