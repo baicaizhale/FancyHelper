@@ -258,7 +258,7 @@ jobs:
       - name: 调用 Moonshot AI 生成内容
         id: ai_gen
         env:
-          MOONSHOT_API_KEY: sk-xDtYOn9HUBoB2I6hM5TZxy9MFmHlME9LVCInHTllx7xe3nxQ
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.build.outputs.RELEASE_VERSION }}
         run: |
