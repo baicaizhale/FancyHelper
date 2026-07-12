@@ -2626,6 +2626,11 @@ public class CLIManager {
                     autoCompressContext(player, session);
                     playFeedbackSound(player, "ai_complete");
                 }
+
+                // 每次 AI 回复后保存会话到磁盘
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    saveSessionToHistory(uuid, session);
+                });
             });
         });
 
@@ -2717,6 +2722,11 @@ public class CLIManager {
                     autoCompressContext(player, session);
                 }
                 playFeedbackSound(player, "ai_complete");
+
+                // 每次 AI 回复后保存会话到磁盘
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    saveSessionToHistory(uuid, session);
+                });
             });
         }
     }
@@ -3187,6 +3197,11 @@ public class CLIManager {
                 checkTokenWarning(player, session);
                 autoCompressContext(player, session);
             }
+
+            // 每次 AI 回复后保存会话到磁盘
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                saveSessionToHistory(uuid, session);
+            });
         }
     }
 
