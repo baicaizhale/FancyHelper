@@ -142,10 +142,11 @@ public class ResponseParser {
             // 如果 content 为空，将 reasoning 作为 content（包含思考过程和工具调用）
             if (content.text == null || content.text.isEmpty()) {
                 content.text = reasoning;
-            }
-            // 同时保存到 thought 字段
-            if (content.thought == null) {
-                content.thought = reasoning;
+            } else {
+                // content 已有实际内容，reasoning 是真正的思考过程
+                if (content.thought == null) {
+                    content.thought = reasoning;
+                }
             }
         }
 
