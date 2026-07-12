@@ -3080,6 +3080,72 @@ public class CLIManager {
             currentPos = hashIndex + 1;
         }
 
+        // 模型可能把 #run 放在 reasoning_content 而非 content 里
+        if (toolCall.isEmpty() && cleanResponse.isEmpty() && !thoughtContent.isEmpty()) {
+            // 从 thoughtContent 中重新尝试提取工具调用
+            String thoughtToolCall = "";
+            int thoughtPos = 0;
+            while (thoughtPos < thoughtContent.length()) {
+                int hashIndex = thoughtContent.indexOf("#", thoughtPos);
+                if (hashIndex == -1) break;
+
+                boolean isValidStart = hashIndex == 0;
+                if (!isValidStart) {
+                    char prev = thoughtContent.charAt(hashIndex - 1);
+                    isValidStart = prev == '\n' || prev == '\r';
+                }
+
+                if (isValidStart) {
+                    String potentialToolPart = thoughtContent.substring(hashIndex).trim();
+                    for (String tool : knownTools) {
+                        if (potentialToolPart.toLowerCase().startsWith(tool)) {
+                            String remainingAfterTool = potentialToolPart.substring(tool.length()).trim();
+                            if (remainingAfterTool.startsWith(":") || remainingAfterTool.startsWith(" ")) {
+                                int splitIndex = remainingAfterTool.startsWith(":") ? 1 : 0;
+                                remainingAfterTool = remainingAfterTool.substring(splitIndex).trim();
+                                if (remainingAfterTool.startsWith("[") || remainingAfterTool.startsWith("{")) {
+                                    char openChar = remainingAfterTool.charAt(0);
+                                    char closeChar = openChar == '[' ? ']' : '}';
+                                    int bracketDepth = 0;
+                                    int endIndex = -1;
+                                    for (int i = 0; i < remainingAfterTool.length(); i++) {
+                                        char c = remainingAfterTool.charAt(i);
+                                        if (c == openChar) bracketDepth++;
+                                        else if (c == closeChar) bracketDepth--;
+                                        if (bracketDepth == 0) {
+                                            endIndex = i + 1;
+                                            break;
+                                        }
+                                    }
+                                    if (endIndex != -1) {
+                                        thoughtToolCall = tool + ":" + remainingAfterTool.substring(0, endIndex);
+                                    } else {
+                                        int lineEnd = remainingAfterTool.indexOf('\n');
+                                        thoughtToolCall = lineEnd != -1
+                                            ? tool + ":" + remainingAfterTool.substring(0, lineEnd)
+                                            : potentialToolPart;
+                                    }
+                                } else {
+                                    int lineEnd = remainingAfterTool.indexOf('\n');
+                                    thoughtToolCall = lineEnd != -1
+                                        ? tool + ":" + remainingAfterTool.substring(0, lineEnd)
+                                        : potentialToolPart;
+                                }
+                            } else {
+                                thoughtToolCall = tool;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (!thoughtToolCall.isEmpty()) break;
+                thoughtPos = hashIndex + 1;
+            }
+            if (!thoughtToolCall.isEmpty()) {
+                toolCall = thoughtToolCall;
+            }
+        }
+
         // 展示 Fancy 内容（流式输出已提前显示时跳过）
         if (!skipDisplay) {
             if (!content.isEmpty()) {
