@@ -344,7 +344,7 @@ jobs:
           else
             echo "AI 响应为空，使用默认内容"
             echo "## Overview" > /tmp/overview.md
-            echo "* 自动生成的版本 v$VERSION 发行说明" >> /tmp/overview.md
+            echo "* 暂时没有发行说明" >> /tmp/overview.md
           fi
 
           # 获取 GitHub 自动生成的 Notes 作为补充
@@ -393,6 +393,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: target/FancyHelper-*.jar
           tag_name: v${{ needs.build.outputs.RELEASE_VERSION }}
-          name: Release v${{ needs.build.outputs.RELEASE_VERSION }}
+          name: v${{ needs.build.outputs.RELEASE_VERSION }}
           body_path: ./release_body.md
           make_latest: false
