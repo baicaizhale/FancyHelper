@@ -27,6 +27,7 @@ public class SessionRecord {
     private boolean antiLoopExempted;
     private String lastThought;
     private String lastError;
+    private boolean explicitExit;
 
     public SessionRecord() {
     }
@@ -214,5 +215,13 @@ public class SessionRecord {
 
     public long getTotalTokens() {
         return totalInputTokens + totalOutputTokens;
+    }
+
+    public boolean isExplicitExit() {
+        return explicitExit;
+    }
+
+    public void setExplicitExit(boolean explicitExit) {
+        this.explicitExit = explicitExit;
     }
 }

@@ -670,6 +670,17 @@ public class CLIManager {
             try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(playerDir, "*.json")) {
                 for (Path file : stream) {
                     if (now - Files.getLastModifiedTime(file).toMillis() <= thirtyMinutesMs) {
+                        // 检查是否显式退出的会话
+                        try {
+                            Gson gson = new Gson();
+                            String json = Files.readString(file, StandardCharsets.UTF_8);
+                            JsonObject obj = gson.fromJson(json, JsonObject.class);
+                            if (obj != null && obj.has("explicitExit") && obj.get("explicitExit").getAsBoolean()) {
+                                continue;
+                            }
+                        } catch (Exception e) {
+                            // 解析失败就当正常文件处理
+                        }
                         return true;
                     }
                 }
@@ -714,6 +725,14 @@ public class CLIManager {
             String json = Files.readString(latestFile, StandardCharsets.UTF_8);
             SessionRecord record = gson.fromJson(json, SessionRecord.class);
             if (record == null) return null;
+
+            // 如果是显式退出的会话，不自动恢复
+            if (record.isExplicitExit()) {
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 跳过显式退出的会话: " + latestFile.getFileName());
+                }
+                return null;
+            }
 
             DialogueSession session = record.toSession();
 
@@ -1486,8 +1505,26 @@ public class CLIManager {
             }
             if (hasUserMessage) {
                 DialogueSession captured = session;
+                String playerName = player.getName();
+                String sessionUUID = session.getSessionUUID();
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                     saveSessionToHistory(uuid, captured);
+                    // 标记为显式退出，避免插件重载后自动恢复
+                    if (sessionUUID != null) {
+                        try {
+                            Path sessionFile = plugin.getDataFolder().toPath()
+                                .resolve(SESSIONS_DIR).resolve(playerName)
+                                .resolve(sessionUUID + ".json");
+                            if (Files.exists(sessionFile)) {
+                                Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
+                                JsonObject json = gson.fromJson(Files.newBufferedReader(sessionFile), JsonObject.class);
+                                json.addProperty("explicitExit", true);
+                                Files.writeString(sessionFile, gson.toJson(json), StandardCharsets.UTF_8);
+                            }
+                        } catch (Exception e) {
+                            // 标记失败不影响主流程
+                        }
+                    }
                 });
             }
         }
@@ -2564,6 +2601,10 @@ public class CLIManager {
                 generationStartTimes.remove(uuid);
 
                 String toolCall = extractToolCall(response);
+                // 模型可能把 #run 放在 reasoning_content 而非 content 里
+                if (toolCall.isEmpty() && !thoughtContent.isEmpty()) {
+                    toolCall = extractToolCall(thoughtContent);
+                }
                 if (!toolCall.isEmpty()) {
                     // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
                     Long streamedThisCycle = streamedOutputTokens.get(uuid);
@@ -3039,6 +3080,72 @@ public class CLIManager {
             currentPos = hashIndex + 1;
         }
 
+        // 模型可能把 #run 放在 reasoning_content 而非 content 里
+        if (toolCall.isEmpty() && cleanResponse.isEmpty() && !thoughtContent.isEmpty()) {
+            // 从 thoughtContent 中重新尝试提取工具调用
+            String thoughtToolCall = "";
+            int thoughtPos = 0;
+            while (thoughtPos < thoughtContent.length()) {
+                int hashIndex = thoughtContent.indexOf("#", thoughtPos);
+                if (hashIndex == -1) break;
+
+                boolean isValidStart = hashIndex == 0;
+                if (!isValidStart) {
+                    char prev = thoughtContent.charAt(hashIndex - 1);
+                    isValidStart = prev == '\n' || prev == '\r';
+                }
+
+                if (isValidStart) {
+                    String potentialToolPart = thoughtContent.substring(hashIndex).trim();
+                    for (String tool : knownTools) {
+                        if (potentialToolPart.toLowerCase().startsWith(tool)) {
+                            String remainingAfterTool = potentialToolPart.substring(tool.length()).trim();
+                            if (remainingAfterTool.startsWith(":") || remainingAfterTool.startsWith(" ")) {
+                                int splitIndex = remainingAfterTool.startsWith(":") ? 1 : 0;
+                                remainingAfterTool = remainingAfterTool.substring(splitIndex).trim();
+                                if (remainingAfterTool.startsWith("[") || remainingAfterTool.startsWith("{")) {
+                                    char openChar = remainingAfterTool.charAt(0);
+                                    char closeChar = openChar == '[' ? ']' : '}';
+                                    int bracketDepth = 0;
+                                    int endIndex = -1;
+                                    for (int i = 0; i < remainingAfterTool.length(); i++) {
+                                        char c = remainingAfterTool.charAt(i);
+                                        if (c == openChar) bracketDepth++;
+                                        else if (c == closeChar) bracketDepth--;
+                                        if (bracketDepth == 0) {
+                                            endIndex = i + 1;
+                                            break;
+                                        }
+                                    }
+                                    if (endIndex != -1) {
+                                        thoughtToolCall = tool + ":" + remainingAfterTool.substring(0, endIndex);
+                                    } else {
+                                        int lineEnd = remainingAfterTool.indexOf('\n');
+                                        thoughtToolCall = lineEnd != -1
+                                            ? tool + ":" + remainingAfterTool.substring(0, lineEnd)
+                                            : potentialToolPart;
+                                    }
+                                } else {
+                                    int lineEnd = remainingAfterTool.indexOf('\n');
+                                    thoughtToolCall = lineEnd != -1
+                                        ? tool + ":" + remainingAfterTool.substring(0, lineEnd)
+                                        : potentialToolPart;
+                                }
+                            } else {
+                                thoughtToolCall = tool;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (!thoughtToolCall.isEmpty()) break;
+                thoughtPos = hashIndex + 1;
+            }
+            if (!thoughtToolCall.isEmpty()) {
+                toolCall = thoughtToolCall;
+            }
+        }
+
         // 展示 Fancy 内容（流式输出已提前显示时跳过）
         if (!skipDisplay) {
             if (!content.isEmpty()) {
@@ -3298,7 +3405,7 @@ public class CLIManager {
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
         int maxTokens = plugin.getConfigManager().getContextWindowLimit();
         double threshold = 0.8;
-        int keepRecent = 10;
+        int keepRecent = 15;
 
         if (!force && estimatedTokens <= maxTokens * threshold) return;
         if (session.getHistory().size() <= keepRecent + 2) return; // 太少无法压缩
