@@ -1107,6 +1107,7 @@ public class CLIManager {
                 Path logFilePath = logDir.resolve(logFileName);
                 restoredSession.setLogFilePath(logFilePath.toString());
                 restoredSession.setVerboseLogging(plugin.getConfigManager().isDebug());
+                restoredSession.initLogFile(player.getName());
             } catch (IOException e) {
                 plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
             }
@@ -1342,6 +1343,7 @@ public class CLIManager {
                 session.setLogFilePath(logFilePath.toString());
                 // 根据调试模式设置详细日志级别
                 session.setVerboseLogging(plugin.getConfigManager().isDebug());
+                session.initLogFile(player.getName());
                 if (plugin.getConfigManager().isDebug()) {
                     plugin.getLogger().info("[CLI] 创建日志文件: " + logFileName);
                 }
@@ -1366,6 +1368,7 @@ public class CLIManager {
                 Path logFilePath = logDir.resolve(logFileName);
                 session.setLogFilePath(logFilePath.toString());
                 session.setVerboseLogging(plugin.getConfigManager().isDebug());
+                session.initLogFile(player.getName());
                 if (plugin.getConfigManager().isDebug()) {
                     plugin.getLogger().info("[CLI] 为恢复会话创建日志文件: " + logFileName);
                 }
@@ -1664,6 +1667,7 @@ public class CLIManager {
                 Path logFilePath = logDir.resolve(logFileName);
                 session.setLogFilePath(logFilePath.toString());
                 session.setVerboseLogging(plugin.getConfigManager().isDebug());
+                session.initLogFile(player.getName());
             } catch (IOException e) {
                 plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
             }

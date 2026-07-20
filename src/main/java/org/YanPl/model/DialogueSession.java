@@ -96,9 +96,34 @@ public class DialogueSession {
      */
     private static final Encoding DEFAULT_ENCODING = REGISTRY.getEncoding(EncodingType.CL100K_BASE);
 
+    private static final String SEPARATOR = "─".repeat(40);
+    private static final String HEADER_SEPARATOR = "═".repeat(40);
+
     public DialogueSession() {
         this.lastActivityTime = System.currentTimeMillis();
         this.startTime = System.currentTimeMillis();
+    }
+
+    /**
+     * 初始化日志文件，写入会话头信息（玩家、模式、时间等）
+     * 在 setLogFilePath 之后调用
+     */
+    public synchronized void initLogFile(String playerName) {
+        if (logFilePath == null) return;
+        try {
+            String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            StringBuilder sb = new StringBuilder();
+            sb.append(HEADER_SEPARATOR).append("\n");
+            sb.append("  Player: ").append(playerName != null ? playerName : "?").append("\n");
+            sb.append("  Mode: ").append(mode.name()).append("\n");
+            sb.append("  UUID: ").append(sessionUUID != null ? sessionUUID : "?").append("\n");
+            sb.append("  Started: ").append(now).append("\n");
+            sb.append(HEADER_SEPARATOR).append("\n\n");
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8),
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // 忽略日志写入错误
+        }
     }
 
     /**
@@ -178,17 +203,17 @@ public class DialogueSession {
      */
     public synchronized void appendLog(String type, String content) {
         if (logFilePath == null) return;
-        
+
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append("[").append(time).append("] [").append(type).append("] ");
+            sb.append("[").append(time).append("] [").append(type).append("]");
             if (content != null && !content.isEmpty()) {
-                sb.append(content);
+                sb.append(" ").append(content);
             }
             sb.append("\n");
-            
-            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 忽略日志写入错误，避免影响主流程
@@ -201,18 +226,18 @@ public class DialogueSession {
      */
     public synchronized void logSystemPrompt(String systemPrompt) {
         if (logFilePath == null || systemPromptLogged) return;
-        
+
         systemPromptLogged = true;
-        
+
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append("[").append(time).append("] [SYSTEM_PROMPT] \n");
-            sb.append(systemPrompt);
-            sb.append("\n");
-            sb.append("─".repeat(80)).append("\n");
-            
-            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+            sb.append(SEPARATOR).append("\n");
+            sb.append("[").append(time).append("] SYSTEM PROMPT\n\n");
+            sb.append(systemPrompt).append("\n");
+            sb.append(SEPARATOR).append("\n\n");
+
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 忽略日志写入错误
@@ -225,16 +250,17 @@ public class DialogueSession {
      */
     public synchronized void logAIRequest(String requestContent) {
         if (logFilePath == null) return;
-        
+
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append("[").append(time).append("] [AI_REQUEST] \n");
+            sb.append(SEPARATOR).append("\n");
+            sb.append("[").append(time).append("] AI REQUEST\n\n");
             sb.append(requestContent);
-            sb.append("\n");
-            sb.append("─".repeat(80)).append("\n");
-            
-            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+            if (!requestContent.endsWith("\n")) sb.append("\n");
+            sb.append(SEPARATOR).append("\n\n");
+
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 忽略日志写入错误
@@ -247,16 +273,17 @@ public class DialogueSession {
      */
     public synchronized void logAIResponse(String responseContent) {
         if (logFilePath == null) return;
-        
+
         try {
             String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append("[").append(time).append("] [AI_RESPONSE] \n");
+            sb.append(SEPARATOR).append("\n");
+            sb.append("[").append(time).append("] AI RESPONSE\n\n");
             sb.append(responseContent);
-            sb.append("\n");
-            sb.append("─".repeat(80)).append("\n");
-            
-            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8), 
+            if (!responseContent.endsWith("\n")) sb.append("\n");
+            sb.append(SEPARATOR).append("\n\n");
+
+            Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 忽略日志写入错误
