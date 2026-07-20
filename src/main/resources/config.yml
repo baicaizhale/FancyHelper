@@ -93,13 +93,13 @@ openai:
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:
   # 是否启用 Metaso AI 搜索（默认关闭，启用后将使用 Metaso API 进行 AI 搜索）
-  enabled: true
+  enabled: false
   # Metaso API 令牌，从 https://metaso.cn/search-api/api-keys 获取
   api_token: mk-A8D756FEDE5A65D47124446CDF97D728
   # 使用的模型名称（fast: 快速模型，pro: 专业模型）
-  model: fast
+  model: pro
   # 是否启用简洁摘要模式
-  concise_snippet: true
+  concise_snippet: false
 
 # Tavily 搜索 API 配置（用于增强全网搜索能力，优先级小于Metaso）
 tavily:

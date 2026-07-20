@@ -512,6 +512,13 @@ public class LLMClient {
                     throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                 }
 
+                // Cloudflare 429 Neurons 耗尽
+                if (statusCode == 429 && "cloudflare".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+                    String errorMsg = getCloudflare429Message();
+                    plugin.getLogger().warning("[AI] CF 429: Neurons 分配已耗尽");
+                    throw new IOException(errorMsg);
+                }
+
                 String errorPrompt = getErrorPrompt(statusCode);
                 String errorLogMsg = getErrorLogMessage(statusCode);
                 String errorMsg;
@@ -636,6 +643,19 @@ public class LLMClient {
             default:
                 return null;
         }
+    }
+
+    /**
+     * 获取 Cloudflare 429 错误的提示消息
+     * 根据是否使用默认 key 返回不同提示
+     */
+    private String getCloudflare429Message() {
+        String defaultKey = "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0";
+        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
+        if (defaultKey.equals(cfKey)) {
+            return "§zFancyHelper§b§r §7> §f默认配置的Neurons分配已耗尽，请换用您自己的key继续使用。参见https://blog.baicaizhale.top/post/create-cf-key-for-fhai";
+        }
+        return "§zFancyHelper§b§r §7> §f今天的Neurons配额已耗尽，明天再来？";
     }
 
     /**
@@ -1660,6 +1680,9 @@ public class LLMClient {
                         plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
                         throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                     }
+                    if (response.statusCode() == 429) {
+                        throw new IOException(getCloudflare429Message());
+                    }
                     throw new IOException("非流式请求失败: " + response.statusCode() + " - " + response.body());
                 }
                 JsonObject responseJson = gson.fromJson(response.body(), JsonObject.class);
@@ -1677,6 +1700,9 @@ public class LLMClient {
                 if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
                     throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                }
+                if (response.statusCode() == 429) {
+                    throw new IOException(getCloudflare429Message());
                 }
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
