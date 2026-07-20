@@ -1285,7 +1285,7 @@ public class LLMClient {
      * @return 标题，如果失败返回 null
      */
     private String generateTitleWithRetry(String firstMessage, boolean useCloudFlare) throws IOException {
-        int maxRetries = 2;
+        int maxRetries = 4;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {

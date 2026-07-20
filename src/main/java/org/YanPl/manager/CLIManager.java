@@ -103,6 +103,7 @@ public class CLIManager {
 
     // 会话历史持久化相关字段
     private final Map<String, String> generatedTitles = new ConcurrentHashMap<>(); // sessionUUID -> title
+    private final Map<String, Boolean> weakModelWarned = new ConcurrentHashMap<>(); // sessionUUID -> 是否已提示过模型能力弱
     private final Map<UUID, String> pendingDeleteSessions = new ConcurrentHashMap<>(); // 待删除确认
     private static final String SESSIONS_DIR = "sessions";
     private static final int MAX_SESSIONS_PER_PLAYER = 40;
@@ -992,14 +993,17 @@ public class CLIManager {
                         updateSessionTitle(playerUUID, sessionUUID, title);
                     });
                 } else {
-                    // 连续两次失败，提醒用户
+                    // 连续失败，提醒用户（仅一次）
                     plugin.getLogger().warning("[CLI] 标题生成失败：模型未能正确输出 JSON");
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        Player player = Bukkit.getPlayer(playerUUID);
-                        if (player != null && player.isOnline()) {
-                            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e当前配置的 AI 模型理解能力较弱，可能无法很好地完成复杂任务。建议在配置文件中更换为能力更强的模型。"));
-                        }
-                    });
+                    if (!weakModelWarned.containsKey(sessionUUID)) {
+                        weakModelWarned.put(sessionUUID, true);
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            Player player = Bukkit.getPlayer(playerUUID);
+                            if (player != null && player.isOnline()) {
+                                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e当前配置的 AI 模型理解能力较弱，可能无法很好地完成复杂任务。建议在配置文件中更换为能力更强的模型。"));
+                            }
+                        });
+                    }
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("[CLI] 生成会话标题失败: " + e.getMessage());
