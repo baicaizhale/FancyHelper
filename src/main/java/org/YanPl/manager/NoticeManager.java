@@ -24,9 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * 公告管理器：负责从远程获取公告并显示给管理员和玩家
- */
 public class NoticeManager {
     private static final String NOTICE_URL = "https://fcnotice.baicaizhale.top/v2/notice.json";
     private final FancyHelper plugin;
@@ -42,16 +39,12 @@ public class NoticeManager {
         startPeriodicFetch();
     }
 
-    /**
-     * 启动定期拉取公告任务
-     */
     public void startPeriodicFetch() {
         if (fetchTask != null) {
             fetchTask.cancel();
         }
 
         int interval = plugin.getConfigManager().getNoticeRefreshInterval();
-        // 转换为 tick (1分钟 = 1200 ticks)
         long ticks = (long) interval * 1200;
 
         if (!plugin.isEnabled()) return;
@@ -61,34 +54,21 @@ public class NoticeManager {
         }, 0L, ticks);
     }
 
-    /**
-     * 检查并更新公告内容
-     *
-     * @param newData 新的公告数据
-     */
     private void checkAndUpdateNotice(NoticeData newData) {
         FileConfiguration playerData = plugin.getConfigManager().getPlayerData();
         String localNoticeText = playerData.getString("notice.last_content", "");
 
         if (!newData.text.equals(localNoticeText)) {
-            // 公告内容已更新
             playerData.set("notice.last_content", newData.text);
-            // 清空已读列表
             playerData.set("notice.read_players", new ArrayList<String>());
             plugin.getConfigManager().savePlayerData();
             plugin.getLogger().info("检测到新公告，已更新本地存储并重置已读列表。");
             showNoticeToConsole(newData);
         } else if (currentNotice == null) {
-            // 首次启动且内容未变，也显示一次
             showNoticeToConsole(newData);
         }
     }
 
-    /**
-     * 将公告标记为已读
-     *
-     * @param player 玩家
-     */
     public void markAsRead(Player player) {
         FileConfiguration playerData = plugin.getConfigManager().getPlayerData();
         List<String> readPlayers = playerData.getStringList("notice.read_players");
@@ -100,34 +80,20 @@ public class NoticeManager {
             plugin.getConfigManager().savePlayerData();
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f已将公告标记为已读"));
         } else {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该公告被你标记为已读"));   
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该公告被你标记为已读"));
         }
     }
 
-    /**
-     * 检查玩家是否已阅读当前公告
-     *
-     * @param player 玩家
-     * @return 是否已读
-     */
     public boolean hasRead(Player player) {
         FileConfiguration playerData = plugin.getConfigManager().getPlayerData();
         List<String> readPlayers = playerData.getStringList("notice.read_players");
         return readPlayers.contains(player.getUniqueId().toString());
     }
 
-    /**
-     * 获取当前已缓存的公告数据
-     *
-     * @return 公告数据
-     */
     public NoticeData getCurrentNotice() {
         return currentNotice;
     }
 
-    /**
-     * 异步获取公告
-     */
     public CompletableFuture<NoticeData> fetchNoticeAsync() {
         CompletableFuture<NoticeData> future = new CompletableFuture<>();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -147,9 +113,6 @@ public class NoticeManager {
         return future;
     }
 
-    /**
-     * 同步获取公告
-     */
     public NoticeData fetchNotice() throws IOException {
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -177,11 +140,6 @@ public class NoticeManager {
         }
     }
 
-    /**
-     * 显示公告到控制台
-     *
-     * @param noticeData 公告数据
-     */
     public void showNoticeToConsole(NoticeData noticeData) {
         if (noticeData != null && noticeData.enabled) {
             String colorCode;
@@ -210,12 +168,6 @@ public class NoticeManager {
         }
     }
 
-    /**
-     * 显示公告给玩家
-     *
-     * @param player     玩家对象
-     * @param noticeData 公告数据
-     */
     public void showNoticeToPlayer(org.bukkit.entity.Player player, NoticeData noticeData) {
         if (noticeData != null && noticeData.enabled && player.hasPermission("fancyhelper.notice")) {
             String colorCode;
@@ -232,30 +184,28 @@ public class NoticeManager {
                     break;
             }
 
-            player.sendMessage("========================================");
-            player.sendMessage("§e【FancyHelper 公告】");
+            player.sendMessage("§e━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            player.sendMessage("§6  ✦ FancyHelper 公告");
+
+            player.sendMessage("§8  ────────────────────────");
             if (noticeData.text != null && !noticeData.text.isEmpty()) {
                 for (String line : noticeData.text.split("\\n")) {
-                    player.sendMessage(colorCode + line);
+                    player.sendMessage(colorCode + "  " + line);
                 }
             }
-            
-            // 如果玩家还没读过，显示“标为已读”按钮
+
             if (!hasRead(player)) {
-                TextComponent readButton = new TextComponent("§7[ §a✔ 标为已读 §7]");
+                TextComponent readButton = new TextComponent("§8  [§a✔ 标为已读§8]");
                 readButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("§7点击将此公告标记为已读")));
                 readButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/fancyhelper notice read"));
-                
+
                 player.spigot().sendMessage(readButton);
             }
-            
-            player.sendMessage("========================================");
+
+            player.sendMessage("§e━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         }
     }
 
-    /**
-     * 公告数据模型
-     */
     public static class NoticeData {
         public final boolean enabled;
         public final String text;
@@ -269,6 +219,5 @@ public class NoticeManager {
     }
 
     public void shutdown() {
-        // HttpClient 无需显式关闭
     }
 }

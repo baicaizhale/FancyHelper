@@ -428,10 +428,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 // 信号已发送, 立即在主线程自卸载
                 Bukkit.getPluginManager().disablePlugin(plugin);
             } else {
-                sender.sendMessage(ChatColor.RED + "深度重载失败: 无法连接到 ReloadService");
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f深度重载失败: 无法连接到 ReloadService"));
             }
         } catch (Exception e) {
-            sender.sendMessage(ChatColor.RED + "深度重载失败: " + e.getMessage());
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f深度重载失败: " + e.getMessage()));
             plugin.getCloudErrorReport().report(e);
         }
     }

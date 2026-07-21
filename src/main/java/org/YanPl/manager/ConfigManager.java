@@ -508,14 +508,6 @@ public class ConfigManager {
     }
 
     /**
-     * 获取公告是否在加入时显示
-     * @return 是否显示
-     */
-    public boolean isNoticeShowOnJoin() {
-        return config.getBoolean("notice.show_on_join", true);
-    }
-
-    /**
      * 获取补充系统提示词
      * @return 补充系统提示词
      */
