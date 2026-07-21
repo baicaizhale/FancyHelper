@@ -1434,11 +1434,13 @@ public class CLIManager {
             sessions.put(uuid, session);
         }
 
-        // 进 CLI 5s 后展示公告（如果未读）
+        // 进 CLI 1s 后展示公告（每次上线仅首次进入 CLI 时显示一次）
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
-            if (plugin.getNoticeManager().hasRead(player)) return;
+            if (plugin.getNoticeManager().hasBeenNotified(player)) return;
+
+            plugin.getNoticeManager().markNotified(player);
 
             NoticeManager.NoticeData cachedNotice = plugin.getNoticeManager().getCurrentNotice();
             if (cachedNotice != null) {
@@ -1450,7 +1452,7 @@ public class CLIManager {
                     }
                 });
             }
-        }, 5 * 20L); // 5s = 5 * 20 ticks
+        }, 1 * 20L); // 1s = 1 * 20 ticks
 
         playFeedbackSound(player, "cli_enter");
     }

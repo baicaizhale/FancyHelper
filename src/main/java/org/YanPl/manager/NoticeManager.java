@@ -21,7 +21,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -33,6 +36,7 @@ public class NoticeManager {
     private final HttpClient httpClient;
     private BukkitTask fetchTask;
     private NoticeData currentNotice;
+    private final Set<UUID> notifiedPlayers = new HashSet<>();
 
     public NoticeManager(FancyHelper plugin) {
         this.plugin = plugin;
@@ -119,6 +123,25 @@ public class NoticeManager {
      */
     public NoticeData getCurrentNotice() {
         return currentNotice;
+    }
+
+    /**
+     * 检查玩家本会话是否已被推送过公告（内存级，每人每次上线仅展示一次）
+     *
+     * @param player 玩家
+     * @return 是否已推送
+     */
+    public boolean hasBeenNotified(Player player) {
+        return notifiedPlayers.contains(player.getUniqueId());
+    }
+
+    /**
+     * 标记玩家本会话已推送公告
+     *
+     * @param player 玩家
+     */
+    public void markNotified(Player player) {
+        notifiedPlayers.add(player.getUniqueId());
     }
 
     /**
