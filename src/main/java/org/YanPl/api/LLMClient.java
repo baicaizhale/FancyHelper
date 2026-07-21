@@ -1306,6 +1306,7 @@ public class LLMClient {
      */
     private String generateTitleWithRetry(String firstMessage, boolean useCloudFlare) throws IOException {
         int maxRetries = 4;
+        boolean reachedApi = false; // 是否有至少一次成功请求到 API
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -1317,14 +1318,19 @@ public class LLMClient {
                     return title;
                 }
 
-                // title 为 null 表示 JSON 解析失败
+                // title 为 null 表示 JSON 解析失败，但 API 请求成功
+                reachedApi = true;
                 plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试 JSON 解析失败");
             } catch (Exception e) {
                 plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试失败: " + e.getMessage());
             }
         }
 
-        // 连续两次失败，返回特殊标记让调用方处理
+        if (reachedApi) {
+            // API 请求成功过，但模型始终没有按要求输出 JSON
+            return "";
+        }
+        // 全是网络/配置异常
         return null;
     }
 

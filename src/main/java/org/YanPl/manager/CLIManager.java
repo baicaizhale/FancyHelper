@@ -1040,8 +1040,8 @@ public class CLIManager {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         updateSessionTitle(playerUUID, sessionUUID, title);
                     });
-                } else {
-                    // 连续失败，提醒用户（仅一次）
+                } else if ("".equals(title)) {
+                    // API 请求成功但模型没有按要求输出 JSON — 提醒用户（仅一次）
                     plugin.getLogger().warning("[CLI] 标题生成失败：模型未能正确输出 JSON");
                     if (!weakModelWarned.containsKey(sessionUUID)) {
                         weakModelWarned.put(sessionUUID, true);
@@ -1052,6 +1052,9 @@ public class CLIManager {
                             }
                         });
                     }
+                } else {
+                    // title 为 null，全是网络/配置异常，不提示用户
+                    plugin.getLogger().warning("[CLI] 标题生成失败：网络或配置错误导致无法连接到 AI 服务");
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("[CLI] 生成会话标题失败: " + e.getMessage());
