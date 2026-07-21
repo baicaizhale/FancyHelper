@@ -66,12 +66,7 @@ public class APIRouter {
             return chatStreamingViaFancyConsole(session, systemPrompt, handler);
         }
         // BYOK：直连
-        try {
-            return plugin.getLlmClient().chatStreamingDirect(session, systemPrompt, handler);
-        } catch (IOException e) {
-            handler.onError("§zFancyHelper§b§r §7> §f" + e.getMessage());
-            return "";
-        }
+        return plugin.getLlmClient().chatStreamingDirect(session, systemPrompt, handler);
     }
 
     /**
@@ -227,8 +222,7 @@ public class APIRouter {
         String apiKey = getApiKey();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            handler.onError("§zFancyHelper§b§r §7> §f错误：FancyConsole API Key 未配置。");
-            return "";
+            throw new IOException("§zFancyHelper§b§r §7> §f错误：FancyConsole API Key 未配置。");
         }
 
         try {
@@ -250,15 +244,18 @@ public class APIRouter {
 
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() == 429) {
-                handler.onError("§zFancyHelper§b§r §7> §f今日 API 调用限额已用尽。");
-                return "";
+                throw new IOException("§zFancyHelper§b§r §7> §f今日 API 调用限额已用尽。");
             }
             if (response.statusCode() != 200) {
-                handler.onError("§zFancyHelper§b§r §7> §fFancyConsole 请求失败 (HTTP " + response.statusCode() + ")");
-                return "";
+                // 读取错误响应体
+                String errorBody;
+                try (java.io.InputStream is = response.body()) {
+                    errorBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+                throw new IOException("§zFancyHelper§b§r §7> §fFancyConsole 请求失败 (HTTP " + response.statusCode() + "): " + errorBody);
             }
 
-            return handler.handleStream(response, session, plugin.getConfigManager().isDebug());
+            return handler.processStream(response);
 
         } catch (IOException e) {
             throw e;

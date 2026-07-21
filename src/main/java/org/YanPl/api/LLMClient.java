@@ -937,28 +937,46 @@ public class LLMClient {
      * APIRouter 调用的简单直连入口（BYOK）
      */
     public AIResponse chatSimpleDirect(String prompt) throws IOException {
-        return chatSimple(prompt);
+        checkConfigLoaded();
+        DialogueSession tempSession = new DialogueSession();
+        tempSession.addMessage("user", prompt);
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatWithOpenAI(tempSession, "");
+        }
+        return chatWithCloudFlare(tempSession, "");
     }
 
     /**
      * APIRouter 调用的压缩模型直连入口（BYOK）
      */
     public String chatWithCompressionModelDirect(String systemPrompt, String userPrompt) throws IOException {
-        return chatWithCompressionModel(systemPrompt, userPrompt);
+        checkConfigLoaded();
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
+        }
+        return chatWithCloudFlareCompressionModel(systemPrompt, userPrompt);
     }
 
     /**
      * APIRouter 调用的上下文压缩直连入口（BYOK）
      */
     public String compressContextDirect(String context) throws IOException {
-        return compressContext(context);
+        checkConfigLoaded();
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return compressWithOpenAI(context);
+        }
+        return compressWithCloudFlare(context);
     }
 
     /**
      * APIRouter 调用的标题生成直连入口（BYOK）
      */
     public String generateTitleDirect(String firstMessage) throws IOException {
-        return generateTitle(firstMessage);
+        checkConfigLoaded();
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return generateTitleWithOpenAI(firstMessage);
+        }
+        return generateTitleWithCloudFlare(firstMessage);
     }
 
     /**
@@ -1172,16 +1190,8 @@ public class LLMClient {
     public String generateTitle(String firstMessage) throws IOException {
         return plugin.getApiRouter().generateTitle(firstMessage);
     }
-        checkConfigLoaded();
 
-        String provider = plugin.getConfigManager().getCompressionModelProvider();
-        
-        if ("openai".equalsIgnoreCase(provider)) {
-            return compressWithOpenAI(context);
-        } else {
-            return compressWithCloudFlare(context);
-        }
-    }
+    // ========== 以下是私有实现方法（不经过路由层，BYOK 直连入口直接调用）==========
 
     /**
      * 使用 CloudFlare 压缩模型进行上下文压缩
@@ -1318,24 +1328,6 @@ public class LLMClient {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("压缩被中断: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 使用主模型生成对话标题（不用压缩模型）
-     * @param firstMessage 第一条用户消息
-     * @return 生成的标题（不超过15字）
-     */
-    public String generateTitle(String firstMessage) throws IOException {
-        checkConfigLoaded();
-
-        // 使用主模型的配置，而不是压缩模型
-        String provider = plugin.getConfigManager().getProvider();
-
-        if ("openai".equalsIgnoreCase(provider)) {
-            return generateTitleWithOpenAI(firstMessage);
-        } else {
-            return generateTitleWithCloudFlare(firstMessage);
         }
     }
 
