@@ -22,8 +22,8 @@ import java.util.UUID;
 public class RegistrationManager {
 
     private static final String CLIENT_FILE = "client-fancy.yml";
-    private static final String DEFAULT_CONSOLE_API = "https://api.fancy.baicaizhale.top";
-    private static final String DEFAULT_CONSOLE_URL = "https://console.fancy.baicaizhale.top";
+    // private static final String DEFAULT_CONSOLE_API = "https://api.fancy.baicaizhale.top";
+    // private static final String DEFAULT_CONSOLE_URL = "https://console.fancy.baicaizhale.top";
 
     private final FancyHelper plugin;
     private final File clientFile;
