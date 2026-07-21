@@ -246,7 +246,7 @@ public class ToolExecutor {
      */
     private boolean handleRunTool(Player player, String command, DialogueSession session) {
         if (command.isEmpty()) {
-            player.sendMessage(ChatColor.RED + "错误: #run 工具需要提供命令参数");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f#run 工具需要提供命令参数"));
             String error = "#error: #run 工具需要提供命令参数，例如 #run: say hello";
             cliManager.feedbackToAI(player, error);
             if (session != null) {
@@ -407,7 +407,7 @@ public class ToolExecutor {
                     if (session == null || !session.hasReadFile(normalizedPath)) {
                         String errorMsg = "错误：文件 " + normalizedPath + " 已存在。请先使用 #read 读取该文件后再使用 #write。";
                         cliManager.feedbackToAI(player, "#write_result: " + errorMsg);
-                        player.sendMessage(ChatColor.RED + errorMsg);
+                        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f" + errorMsg));
                         return;
                     }
                 }
@@ -1646,7 +1646,7 @@ public class ToolExecutor {
             if (request.question != null && !request.question.isEmpty()) {
                 handleJsonAskTool(player, request);
             } else {
-                player.sendMessage(ChatColor.RED + "JSON 格式错误：缺少 question 字段");
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fJSON 格式错误：缺少 question 字段"));
             }
         } catch (Exception e) {
             player.sendMessage(ChatColor.RED + "JSON 解析失败: " + e.getMessage());

@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
+
 /**
  * 统一错误处理工具类
  * 提供标准化的错误处理和恢复机制
@@ -50,8 +51,8 @@ public class ErrorHandler {
     public void handleAsyncErrorWithMessage(Player player, String operation, Throwable error, String userMessage) {
         handleAsyncError(player, operation, error, () -> {
             if (player != null && player.isOnline()) {
-                String message = userMessage != null ? userMessage : 
-                    ChatColor.RED + "⨀ " + operation + " 失败: " + error.getMessage();
+                String message = userMessage != null ? userMessage :
+                    ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f" + operation + "失败: " + error.getMessage());
                 player.sendMessage(message);
             }
         });

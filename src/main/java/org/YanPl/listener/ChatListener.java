@@ -57,32 +57,6 @@ public class ChatListener implements Listener {
             }, 20L); // 1秒 = 20 ticks
         }
 
-        // 检查配置是否启用公告显示
-        if (!plugin.getConfigManager().isNoticeShowOnJoin()) {
-            return;
-        }
-
-        // 进服 8s 后发送公告
-        if (!plugin.isEnabled()) return;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!plugin.isEnabled() || !player.isOnline()) return;
-
-            // 检查玩家是否已读当前公告
-            if (plugin.getNoticeManager().hasRead(player)) {
-                return;
-            }
-
-            org.YanPl.manager.NoticeManager.NoticeData cachedNotice = plugin.getNoticeManager().getCurrentNotice();
-            if (cachedNotice != null) {
-                plugin.getNoticeManager().showNoticeToPlayer(player, cachedNotice);
-            } else {
-                plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
-                    if (noticeData != null && player.isOnline()) {
-                        plugin.getNoticeManager().showNoticeToPlayer(player, noticeData);
-                    }
-                });
-            }
-        }, 8 * 20L); // 8s = 8 * 20 ticks
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

@@ -394,16 +394,6 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("isNoticeShowOnJoin 应返回配置值")
-    void testIsNoticeShowOnJoin_ReturnsConfigValue() {
-        when(config.getBoolean("notice.show_on_join", true)).thenReturn(false);
-
-        boolean result = configManager.isNoticeShowOnJoin();
-
-        assertFalse(result);
-    }
-
-    @Test
     @DisplayName("getSupplementaryPrompt 应返回配置值")
     void testGetSupplementaryPrompt_ReturnsConfigValue() {
         when(config.getString("settings.supplementary_prompt", "")).thenReturn("custom prompt");
