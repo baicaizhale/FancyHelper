@@ -4438,8 +4438,10 @@ public class CLIManager {
 
         player.spigot().sendMessage(line1);
 
-        // ▌💡 Tips
-        player.sendMessage(ColorUtil.translateCustomColors("§8▌ §e💡 §f" + getRandomTip()));
+        // ▌💡 Tips整行悬停显示 "沉默的设计师"
+        TextComponent tipLine = new TextComponent("§8▌ §e💡 §f" + getRandomTip());
+        tipLine.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("沉默的设计师")));
+        player.spigot().sendMessage(tipLine);
         player.sendMessage("");
         player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
     }
