@@ -1,6 +1,7 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
+import org.YanPl.model.ProviderConfig;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -154,6 +155,50 @@ public class ConfigManager {
                 plugin.getLogger().info("已清除旧版 co-model 配置段落");
             }
 
+            // ====== v3.x → v4.0 迁移：provider 字段升级 ======
+            // 旧版: provider: "cloudflare"（字符串，选项: cloudflare/openai）
+            // 新版: provider.ai: "fancy"（段落，选项: fancy/openai/cloudflare）
+            String oldProvider = oldValues.get("provider") instanceof String ? (String) oldValues.get("provider") : null;
+            if (oldProvider != null && newConfig.contains("provider")) {
+                // 检测新格式是否已经是段落（避免重复迁移）
+                if (!newConfig.isConfigurationSection("provider")) {
+                    // 将旧字符串值迁移到新的 provider.ai
+                    String oldKey = oldValues.get("openai.api_key") instanceof String ? (String) oldValues.get("openai.api_key") : "";
+                    String oldCfKey = oldValues.get("cloudflare.cf_key") instanceof String ? (String) oldValues.get("cloudflare.cf_key") : "";
+
+                    // 判断是否是自定义 key（非占位符、非空）
+                    boolean isOpenAiCustom = !oldKey.isEmpty() && !oldKey.equals("your-openai-api-key") && !oldKey.startsWith("sk-xxxx");
+                    boolean isCfCustom = !oldCfKey.isEmpty() && !oldCfKey.equals("maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0") && !oldCfKey.startsWith("cfat_xxxx");
+
+                    String aiProvider;
+                    if (isOpenAiCustom) {
+                        aiProvider = "openai";
+                    } else if (isCfCustom) {
+                        aiProvider = "cloudflare";
+                    } else {
+                        aiProvider = "fancy";
+                    }
+
+                    newConfig.set("provider.ai", aiProvider);
+                    newConfig.set("provider.search", oldValues.getOrDefault("tavily.enabled", "true").toString().equals("true")
+                            ? "fancy-tavily" : "fancy-metaso");
+                    newConfig.set("provider.jina", "fancy");
+
+                    // 添加 console 段落
+                    if (!newConfig.contains("console.api_url")) {
+                        newConfig.set("console.api_url", "https://api.fancy.baicaizhale.top");
+                    }
+                    if (!newConfig.contains("console.console_url")) {
+                        newConfig.set("console.console_url", "https://console.fancy.baicaizhale.top");
+                    }
+
+                    // 移除旧的 provider 字符串字段
+                    newConfig.set("provider", null);
+
+                    plugin.getLogger().info("已迁移 provider 配置: ai=" + aiProvider);
+                }
+            }
+
             try {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
@@ -290,6 +335,36 @@ public class ConfigManager {
      */
     public String getProvider() {
         return config.getString("provider", "cloudflare");
+    }
+
+    // ========== v4.0+ 提供商配置 ==========
+
+    /**
+     * 获取 FancyConsole 相关配置的 ProviderConfig 对象
+     */
+    public ProviderConfig getProviderConfig() {
+        String ai = config.getString("provider.ai", "fancy");
+        String search = config.getString("provider.search", "fancy-tavily");
+        String jina = config.getString("provider.jina", "fancy");
+        return new ProviderConfig(
+            ProviderConfig.AIProvider.fromString(ai),
+            ProviderConfig.SearchProvider.fromString(search),
+            ProviderConfig.JinaProvider.fromString(jina)
+        );
+    }
+
+    /**
+     * 获取 FancyConsole API 地址
+     */
+    public String getConsoleApiUrl() {
+        return config.getString("console.api_url", "https://api.fancy.baicaizhale.top");
+    }
+
+    /**
+     * 获取 FancyConsole Web 控制台地址
+     */
+    public String getConsoleUrl() {
+        return config.getString("console.console_url", "https://console.fancy.baicaizhale.top");
     }
 
     /**

@@ -224,7 +224,7 @@ public class LLMClient {
     /**
      * 构建消息数组（OpenAI 和 CloudFlare API 通用）
      */
-    private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
+    public JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
         JsonArray messagesArray = new JsonArray();
 
         String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
@@ -364,13 +364,7 @@ public class LLMClient {
 
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
         checkConfigLoaded();
-
-        // 检测是否启用 OpenAI 模式
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAI(session, systemPrompt);
-        }
-        // 否则使用 CloudFlare Workers AI
-        return chatWithCloudFlare(session, systemPrompt);
+        return plugin.getApiRouter().chat(session, systemPrompt);
     }
 
     /**
@@ -912,11 +906,66 @@ public class LLMClient {
      * @return AI响应
      */
     public AIResponse chatSimple(String prompt) throws IOException {
-        checkConfigLoaded();
+        return plugin.getApiRouter().chatSimple(prompt);
+    }
 
-        DialogueSession tempSession = new DialogueSession();
-        tempSession.addMessage("user", prompt);
-        return chat(tempSession, "你是一个得力的助手。");
+    // ========== APIRouter 公开接口（BYOK 直连路径） ==========
+
+    /**
+     * APIRouter 调用的直连入口（BYOK），不走路由层
+     */
+    public AIResponse chatDirect(DialogueSession session, String systemPrompt) throws IOException {
+        checkConfigLoaded();
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatWithOpenAI(session, systemPrompt);
+        }
+        return chatWithCloudFlare(session, systemPrompt);
+    }
+
+    /**
+     * APIRouter 调用的流式直连入口（BYOK）
+     */
+    public String chatStreamingDirect(DialogueSession session, String systemPrompt, StreamingHandler handler) throws IOException {
+        checkConfigLoaded();
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatStreamingWithOpenAI(session, systemPrompt, handler);
+        }
+        return chatStreamingWithCloudFlare(session, systemPrompt, handler);
+    }
+
+    /**
+     * APIRouter 调用的简单直连入口（BYOK）
+     */
+    public AIResponse chatSimpleDirect(String prompt) throws IOException {
+        return chatSimple(prompt);
+    }
+
+    /**
+     * APIRouter 调用的压缩模型直连入口（BYOK）
+     */
+    public String chatWithCompressionModelDirect(String systemPrompt, String userPrompt) throws IOException {
+        return chatWithCompressionModel(systemPrompt, userPrompt);
+    }
+
+    /**
+     * APIRouter 调用的上下文压缩直连入口（BYOK）
+     */
+    public String compressContextDirect(String context) throws IOException {
+        return compressContext(context);
+    }
+
+    /**
+     * APIRouter 调用的标题生成直连入口（BYOK）
+     */
+    public String generateTitleDirect(String firstMessage) throws IOException {
+        return generateTitle(firstMessage);
+    }
+
+    /**
+     * 公开 ResponseParser 供 APIRouter 使用
+     */
+    public ResponseParser getResponseParser() {
+        return responseParser;
     }
 
     /**
@@ -927,13 +976,7 @@ public class LLMClient {
      * @throws IOException 当 API 调用失败时
      */
     public String chatWithCompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String provider = plugin.getConfigManager().getProvider();
-
-        if ("openai".equalsIgnoreCase(provider)) {
-            return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
-        } else {
-            return chatWithCloudFlareCompressionModel(systemPrompt, userPrompt);
-        }
+        return plugin.getApiRouter().chatWithCompressionModel(systemPrompt, userPrompt);
     }
 
     /**
@@ -1116,7 +1159,19 @@ public class LLMClient {
      * @return 压缩后的摘要
      * @throws IOException 当 API 调用失败时
      */
+    /**
+     * 压缩对话上下文（路由到 APIRouter）
+     */
     public String compressContext(String context) throws IOException {
+        return plugin.getApiRouter().compressContext(context);
+    }
+
+    /**
+     * 生成对话标题（路由到 APIRouter）
+     */
+    public String generateTitle(String firstMessage) throws IOException {
+        return plugin.getApiRouter().generateTitle(firstMessage);
+    }
         checkConfigLoaded();
 
         String provider = plugin.getConfigManager().getCompressionModelProvider();
@@ -1541,11 +1596,7 @@ public class LLMClient {
      */
     public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         checkConfigLoaded();
-
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
-        }
-        return chatStreamingWithCloudFlare(session, systemPrompt, streamingHandler);
+        return plugin.getApiRouter().chatStreaming(session, systemPrompt, streamingHandler);
     }
 
     /**

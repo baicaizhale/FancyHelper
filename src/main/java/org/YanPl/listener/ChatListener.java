@@ -68,6 +68,14 @@ public class ChatListener implements Listener {
 
         String message = event.getMessage();
         Player player = event.getPlayer();
+
+        // FancyConsole API Key 输入检测
+        if (message.startsWith("fc_") && !plugin.getRegistrationManager().isRegistered()) {
+            event.setCancelled(true);
+            handleApiKeyInput(player, message);
+            return;
+        }
+
         if (!plugin.getCliManager().handleChat(player, message)) {
             if (plugin.getCliManager().isInCLI(player)) {
                 if (message.startsWith("！")) {
@@ -80,6 +88,30 @@ public class ChatListener implements Listener {
         }
         event.getRecipients().clear();
         event.setCancelled(true);
+    }
+
+    /**
+     * 处理 FancyConsole API Key 输入（聊天框粘贴 fc_...）
+     */
+    private void handleApiKeyInput(Player player, String apiKey) {
+        player.sendMessage(ChatColor.GRAY + "⨁ 正在验证 FancyConsole API Key...");
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                boolean valid = plugin.getRegistrationManager().validateKey(apiKey);
+                if (valid) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        player.sendMessage(ChatColor.GREEN + "✓ API Key 验证成功！正在进入 CLI 模式...");
+                        plugin.getCliManager().enterCLI(player, false);
+                    });
+                }
+            } catch (Exception e) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ChatColor.RED + "✗ API Key 验证失败: " + e.getMessage());
+                    player.sendMessage(ChatColor.YELLOW + "请确认你已在浏览器完成注册，并复制了正确的 API Key。");
+                    player.sendMessage(ChatColor.YELLOW + "点击注册: " + plugin.getRegistrationManager().getRegistrationUrl());
+                });
+            }
+        });
     }
 
     /**

@@ -1750,12 +1750,7 @@ public class ToolExecutor {
      */
     private String performWideSearch(String query) {
         String q = query.replace("widely", "").trim();
-        if (plugin.getMetasoAPI().isAvailable()) {
-            return plugin.getMetasoAPI().search(q);
-        } else if (plugin.getConfigManager().isTavilyEnabled()) {
-            return plugin.getTavilyAPI().search(q);
-        }
-        return "搜索服务不可用，请在配置文件中启用 Metaso API 或 Tavily API。";
+        return plugin.getApiRouter().search(q);
     }
 
     /**
@@ -1764,12 +1759,7 @@ public class ToolExecutor {
     private String performWikiSearch(String query, Player player) {
         String result = fetchWikiResult(query);
         if (result.equals("未找到相关 Wiki 条目。")) {
-            if (plugin.getMetasoAPI().isAvailable()) {
-                return plugin.getMetasoAPI().search(query);
-            } else if (plugin.getConfigManager().isTavilyEnabled()) {
-                return plugin.getTavilyAPI().search(query);
-            }
-            return "搜索服务不可用，请在配置文件中启用 Metaso API 或 Tavily API。";
+            return plugin.getApiRouter().search(query);
         }
         return result;
     }
@@ -2013,7 +2003,7 @@ public class ToolExecutor {
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                String result = fetchWebPage(url);
+                String result = plugin.getApiRouter().webFetch(url);
                 final String finalResult = result;
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {

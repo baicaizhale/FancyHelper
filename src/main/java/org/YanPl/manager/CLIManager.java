@@ -150,7 +150,7 @@ public class CLIManager {
 
     public CLIManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.ai = new LLMClient(plugin);
+        this.ai = plugin.getLlmClient();
         this.promptManager = new PromptManager(plugin);
         this.toolExecutor = new ToolExecutor(plugin, this);
         this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
@@ -1340,6 +1340,24 @@ public class CLIManager {
         if (!plugin.getEulaManager().isEulaValid()) {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"));
             plugin.getLogger().warning("[CLI] 由于 EULA 文件无效，拒绝了 " + player.getName() + " 的访问。");
+            return;
+        }
+
+        // 检查 FancyConsole 注册状态（仅在未注册且 provider.ai=fancy 时提示）
+        boolean needsRegistration = !plugin.getRegistrationManager().isRegistered()
+            && plugin.getConfigManager().getProviderConfig().isAiFancy();
+        if (needsRegistration) {
+            String regUrl = plugin.getRegistrationManager().getRegistrationUrl();
+            player.sendMessage(ChatColor.GOLD + "§zFancyHelper§b§r §7> §f首次使用 FancyConsole？");
+            player.sendMessage(ChatColor.YELLOW + "点击下面链接注册（免费），然后在聊天框粘贴 API Key：");
+
+            TextComponent link = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + regUrl);
+            link.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, regUrl));
+            link.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                new Text("点击在浏览器中打开注册页面")));
+            player.spigot().sendMessage(link);
+
+            player.sendMessage(ChatColor.GRAY + "已有注册的 API Key？直接粘贴到聊天框即可（以 fc_ 开头）");
             return;
         }
 
