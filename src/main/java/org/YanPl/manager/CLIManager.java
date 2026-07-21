@@ -697,31 +697,6 @@ public class CLIManager {
     }
 
     /**
-     * 发送 AI 错误消息（含重试按钮）
-     */
-    private void sendAIError(Player player, UUID uuid, String errorMessage, String defaultContext,
-                             boolean saveRetry, String lastMessage, List<org.YanPl.model.Skill> matchedSkills) {
-        // 保存重试信息
-        if (saveRetry && lastMessage != null) {
-            retryInfoMap.put(uuid, new RetryInfo(sessions.get(uuid), lastMessage, true,
-                matchedSkills != null ? matchedSkills : Collections.emptyList()));
-        }
-
-        // 构建并发送错误消息 + 重试按钮
-        TextComponent fullMsg = buildErrorText(errorMessage, defaultContext);
-        fullMsg.addExtra(buildRetryButton(errorMessage));
-        player.spigot().sendMessage(fullMsg);
-
-        // 通用清理
-        isGenerating.put(uuid, false);
-        recordThinkingTime(uuid);
-        generationStates.put(uuid, GenerationStatus.ERROR);
-        generationStartTimes.remove(uuid);
-        playFeedbackSound(player, "ai_error");
-        player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new TextComponent(""));
-    }
-
-    /**
      * 检查玩家是否有预加载的会话
      * @param uuid 玩家UUID
      * @return 是否有预加载的会话
