@@ -1040,8 +1040,8 @@ public class CLIManager {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         updateSessionTitle(playerUUID, sessionUUID, title);
                     });
-                } else {
-                    // 连续失败，提醒用户（仅一次）
+                } else if ("".equals(title)) {
+                    // API 请求成功但模型没有按要求输出 JSON — 提醒用户（仅一次）
                     plugin.getLogger().warning("[CLI] 标题生成失败：模型未能正确输出 JSON");
                     if (!weakModelWarned.containsKey(sessionUUID)) {
                         weakModelWarned.put(sessionUUID, true);
@@ -1052,6 +1052,9 @@ public class CLIManager {
                             }
                         });
                     }
+                } else {
+                    // title 为 null，全是网络/配置异常，不提示用户
+                    plugin.getLogger().warning("[CLI] 标题生成失败：网络或配置错误导致无法连接到 AI 服务");
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("[CLI] 生成会话标题失败: " + e.getMessage());
@@ -1434,11 +1437,13 @@ public class CLIManager {
             sessions.put(uuid, session);
         }
 
-        // 进 CLI 5s 后展示公告（如果未读）
+        // 进 CLI 1s 后展示公告（每次上线仅首次进入 CLI 时显示一次）
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
-            if (plugin.getNoticeManager().hasRead(player)) return;
+            if (plugin.getNoticeManager().hasBeenNotified(player)) return;
+
+            plugin.getNoticeManager().markNotified(player);
 
             NoticeManager.NoticeData cachedNotice = plugin.getNoticeManager().getCurrentNotice();
             if (cachedNotice != null) {
@@ -1450,7 +1455,7 @@ public class CLIManager {
                     }
                 });
             }
-        }, 5 * 20L); // 5s = 5 * 20 ticks
+        }, 1 * 20L); // 1s = 1 * 20 ticks
 
         playFeedbackSound(player, "cli_enter");
     }
