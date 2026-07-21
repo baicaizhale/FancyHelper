@@ -4427,6 +4427,15 @@ public class CLIManager {
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
         line1.addExtra(settingsBtn);
 
+        TextComponent space2 = new TextComponent(" ");
+        line1.addExtra(space2);
+
+        TextComponent resumeBtn = new TextComponent("[⌚]");
+        resumeBtn.setColor(net.md_5.bungee.api.ChatColor.GRAY);
+        resumeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击恢复历史对话")));
+        resumeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume"));
+        line1.addExtra(resumeBtn);
+
         player.spigot().sendMessage(line1);
 
         // ▌💡 Tips
