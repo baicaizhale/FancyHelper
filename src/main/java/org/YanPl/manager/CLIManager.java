@@ -1442,6 +1442,8 @@ public class CLIManager {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
             if (plugin.getNoticeManager().hasBeenNotified(player)) return;
+            // 已手动标为已读的也不再自动展示，除非主动 /fancyhelper notice
+            if (plugin.getNoticeManager().hasRead(player)) return;
 
             plugin.getNoticeManager().markNotified(player);
 
