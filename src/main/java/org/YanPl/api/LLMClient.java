@@ -69,7 +69,7 @@ public class LLMClient {
      */
     private void checkConfigLoaded() throws IOException {
         if (plugin.getConfigManager().isConfigLoadFailed()) {
-            throw new IOException("§zFancyHelper§b§r §7> §fconfig.yml 格式错误，无法加载配置文件，请检查控制台输出。");
+            throw new IOException("config.yml 格式错误，无法加载配置文件，请检查控制台输出。");
         }
     }
 
@@ -313,7 +313,7 @@ public class LLMClient {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         if (cfKey.isEmpty()) {
             plugin.getLogger().severe("[AI 错误] 未配置 Cloudflare API Key");
-            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+            throw new IOException("API调用发生未知错误，请查看控制台");
         }
 
         try {
@@ -329,7 +329,7 @@ public class LLMClient {
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 获取 Account ID 失败: " + response.statusCode());
                 plugin.getLogger().warning("[AI 错误] 响应体: " + response.body());
-                throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+                throw new IOException("API调用发生未知错误，请查看控制台");
             }
 
             JsonObject resultJson = gson.fromJson(response.body(), JsonObject.class);
@@ -339,7 +339,7 @@ public class LLMClient {
                 return cachedAccountId;
             } else {
                 plugin.getLogger().warning("[AI 错误] 未找到关联的 CloudFlare 账户");
-                throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+                throw new IOException("API调用发生未知错误，请查看控制台");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -503,7 +503,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控）
                 if (statusCode == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("对话内容触发了风控，请新建对话后重试");
                 }
 
                 // Cloudflare 429 Neurons 耗尽
@@ -520,7 +520,7 @@ public class LLMClient {
                     errorMsg = errorPrompt;
                     plugin.getLogger().warning(errorLogMsg);
                 } else {
-                    errorMsg = "§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台";
+                    errorMsg = "API调用发生未知错误，请查看控制台";
                     plugin.getLogger().warning("状态码: " + statusCode);
                     plugin.getLogger().warning("响应体: " + responseBody);
                 }
@@ -541,7 +541,7 @@ public class LLMClient {
             }
 
             plugin.getLogger().warning("[AI 错误] 无法解析 OpenAI API 响应: " + responseBody);
-            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+            throw new IOException("API调用发生未知错误，请查看控制台");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             plugin.getLogger().warning("[AI 错误] OpenAI API 调用被中断: " + e.getMessage());
@@ -621,19 +621,19 @@ public class LLMClient {
     private String getErrorPrompt(int statusCode) {
         switch (statusCode) {
             case 400:
-                return "§zFancyHelper§b§r §7> §f构造的请求体有问题，请向开发者报告此错误";
+                return "构造的请求体有问题，请向开发者报告此错误";
             case 401:
-                return "§zFancyHelper§b§r §7> §fAPI-key填写不正确，请检查config.yml [https://blog.baicaizhale.top/post/whyusee2]";
+                return "API-key填写不正确，请检查config.yml [https://blog.baicaizhale.top/post/whyusee2]";
             case 402:
-                return "§zFancyHelper§b§r §7> §f开放平台显示您的余额不足，请检查您的开放平台余额";
+                return "开放平台显示您的余额不足，请检查您的开放平台余额";
             case 422:
-                return "§zFancyHelper§b§r §7> §f构造的请求体有问题，请向开发者报告此错误";
+                return "构造的请求体有问题，请向开发者报告此错误";
             case 429:
                 return null; // 429 错误会自动重试，不需要提示
             case 500:
-                return "§zFancyHelper§b§r §7> §f开放平台出现问题，请等待恢复";
+                return "开放平台出现问题，请等待恢复";
             case 503:
-                return "§zFancyHelper§b§r §7> §f开放平台出现问题，请等待恢复";
+                return "开放平台出现问题，请等待恢复";
             default:
                 return null;
         }
@@ -647,9 +647,9 @@ public class LLMClient {
         String defaultKey = "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0";
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         if (defaultKey.equals(cfKey)) {
-            return "§zFancyHelper§b§r §7> §f默认配置的Neurons分配已耗尽，请换用您自己的key继续使用。参见https://blog.baicaizhale.top/post/create-cf-key-for-fhai";
+            return "默认配置的Neurons分配已耗尽，请换用您自己的key继续使用。参见https://blog.baicaizhale.top/post/create-cf-key-for-fhai";
         }
-        return "§zFancyHelper§b§r §7> §f今天的Neurons配额已耗尽，明天再来？";
+        return "今天的Neurons配额已耗尽，明天再来？";
     }
 
     /**
@@ -738,7 +738,7 @@ public class LLMClient {
         if (bodyString.contains("\"content\":null") || bodyString.contains("\"role\":null")) {
             plugin.getLogger().severe("[AI 错误] 严重：载荷中包含空的 content 或 role！");
             plugin.getLogger().severe("[AI 错误] 完整载荷: " + bodyString);
-            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+            throw new IOException("API调用发生未知错误，请查看控制台");
         }
 
         if (bodyString.matches(".*\"content\":\\s*\"\"\\s*[,}].*")) {
@@ -771,7 +771,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控），不进行重试
                 if (response.statusCode() == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("对话内容触发了风控，请新建对话后重试");
                 }
 
                 // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
@@ -801,7 +801,7 @@ public class LLMClient {
             }
 
             plugin.getLogger().warning("[AI 错误] 无法解析响应: " + responseBody);
-            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+            throw new IOException("API调用发生未知错误，请查看控制台");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             plugin.getLogger().warning("[AI 错误] 调用被中断: " + e.getMessage());
@@ -873,7 +873,7 @@ public class LLMClient {
         if (simpleResp.statusCode() != 200) {
             plugin.getLogger().warning("[AI Error - Retry] 状态码: " + simpleResp.statusCode());
             plugin.getLogger().warning("[AI Error - Retry] 响应体: " + simpleRespBody);
-            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+            throw new IOException("API调用发生未知错误，请查看控制台");
         }
 
         JsonObject responseJson = gson.fromJson(simpleRespBody, JsonObject.class);
@@ -882,7 +882,7 @@ public class LLMClient {
             return retryResponse;
         }
         plugin.getLogger().warning("[AI 错误] 无法解析重试响应: " + simpleRespBody);
-        throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
+        throw new IOException("API调用发生未知错误，请查看控制台");
     }
 
     /**
@@ -1647,7 +1647,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控）
                 if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("对话内容触发了风控，请新建对话后重试");
                 }
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
@@ -1727,7 +1727,7 @@ public class LLMClient {
                     // 特殊处理 Content Exists Risk（内容风控）
                     if (response.statusCode() == 400 && response.body() != null && response.body().contains("Content Exists Risk")) {
                         plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                        throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                        throw new IOException("对话内容触发了风控，请新建对话后重试");
                     }
                     if (response.statusCode() == 429) {
                         throw new IOException(getCloudflare429Message());
@@ -1748,7 +1748,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控）
                 if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("对话内容触发了风控，请新建对话后重试");
                 }
                 if (response.statusCode() == 429) {
                     throw new IOException(getCloudflare429Message());

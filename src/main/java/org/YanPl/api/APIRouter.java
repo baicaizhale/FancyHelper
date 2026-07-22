@@ -350,7 +350,42 @@ public class APIRouter {
     }
 
     private String generateTitleViaFancyConsole(String firstMessage) throws IOException {
-        return chatViaFancyConsoleCompress("Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", firstMessage);
+        String content = chatViaFancyConsoleCompress("Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", firstMessage);
+        if (content == null || content.isEmpty()) return null;
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] FancyConsole 原始返回: " + content);
+        }
+
+        // 尝试从返回文本中提取 JSON title
+        try {
+            int jsonStart = content.lastIndexOf("{");
+            int jsonEnd = content.lastIndexOf("}");
+            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                JsonObject obj = gson.fromJson(content.substring(jsonStart, jsonEnd + 1), JsonObject.class);
+                if (obj.has("title")) {
+                    String title = obj.get("title").getAsString().trim();
+                    if (title.length() > 30) title = title.substring(0, 30);
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[标题生成] JSON 提取成功: " + title);
+                    }
+                    return title;
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("[标题生成] JSON 解析失败: " + e.getMessage());
+        }
+
+        // 没找到 JSON title，直接作为纯文本标题
+        String fallback = content.replaceAll("[\\n\\r]+", " ").trim();
+        if (fallback.length() > 30) fallback = fallback.substring(0, 30);
+        if (!fallback.isEmpty()) {
+            plugin.getLogger().warning("[标题生成] 模型未按格式输出 JSON，使用纯文本回退: " + fallback);
+            return fallback;
+        }
+
+        plugin.getLogger().warning("[标题生成] 模型输出为空");
+        return null;
     }
 
     /**

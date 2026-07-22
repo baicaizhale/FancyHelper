@@ -663,9 +663,9 @@ public class CLIManager {
     private TextComponent buildErrorText(String errorMessage, String defaultContext) {
         TextComponent msg = new TextComponent(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f"));
 
-        if (errorMessage != null && errorMessage.startsWith("§zFancyHelper§b§r §7> §f")) {
-            // 已经是友好消息，直接去掉前缀显示
-            msg.addExtra(new TextComponent(errorMessage.substring("§zFancyHelper§b§r §7> §f".length())));
+        if (errorMessage != null && !errorMessage.isEmpty()) {
+            // 直接显示错误信息（已去掉前缀），不再做前缀检测
+            msg.addExtra(new TextComponent(errorMessage));
             return msg;
         }
 
