@@ -12,7 +12,7 @@ settings:
   # 补充系统提示词（会自动追加到基础系统提示词后面，不加就留空；注意如果是角色扮演类提示词请关闭Meow模式）
   supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
-  timeout_minutes: 10
+  timeout_minutes: 60
   # API 请求超时时间（以秒为单位），推理模型（gpt-oss-120b、deepseek-reasoner 等）建议 120-300 秒，普通模型 60-120 秒
   api_timeout_seconds: 120
   # 上下文窗口剩余警告阈值
