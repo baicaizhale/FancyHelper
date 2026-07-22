@@ -183,6 +183,22 @@ public class ConfigManager {
                 newConfig.set("provider.jina", "fancy");
 
                 plugin.getLogger().info("已迁移 provider 配置: ai=" + aiProvider);
+
+                // v3→v4 迁移完成后，重新释放默认配置以确保格式和注释正确
+                Map<String, Object> v4Values = new HashMap<>();
+                for (String key : newConfig.getKeys(true)) {
+                    if (!key.equals("version") && !newConfig.isConfigurationSection(key)) {
+                        v4Values.put(key, newConfig.get(key));
+                    }
+                }
+                configFile.delete();
+                plugin.saveDefaultConfig();
+                newConfig = YamlConfiguration.loadConfiguration(configFile);
+                for (Map.Entry<String, Object> entry : v4Values.entrySet()) {
+                    if (newConfig.contains(entry.getKey())) {
+                        newConfig.set(entry.getKey(), entry.getValue());
+                    }
+                }
             }
 
             // v4.0 内升级：如果 provider 段落缺失（因早期迁移 bug），重建
@@ -192,6 +208,13 @@ public class ConfigManager {
                 newConfig.set("provider.search", "fancy-tavily");
                 newConfig.set("provider.jina", "fancy");
                 plugin.getLogger().info("已修复：重建缺失的 provider 配置段落");
+            }
+
+            // 如果 fancy 段落缺失（从旧版升级过来），补充默认值
+            if (!newConfig.contains("fancy") || !newConfig.isConfigurationSection("fancy")) {
+                newConfig.set("fancy.model", "default");
+                newConfig.set("fancy.co-model", "default-co");
+                plugin.getLogger().info("已补充默认 fancy 模型配置");
             }
 
             try {

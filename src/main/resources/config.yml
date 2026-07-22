@@ -76,7 +76,7 @@ fancy:
   # 可在 FancyConsole 管理后台的 "模型映射" 中自定义映射关系
   model: "default"
   # 副模型（用于压缩、标题生成等轻量级任务）
-  co-model: "default"
+  co-model: "default-co"
 
 # CloudFlare Workers AI 配置（provider.ai 为 cloudflare 时使用）
 cloudflare:
