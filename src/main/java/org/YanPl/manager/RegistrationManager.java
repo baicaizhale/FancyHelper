@@ -93,8 +93,7 @@ public class RegistrationManager {
      * 获取 FancyConsole 注册页面 URL（带 server-id 参数）
      */
     public String getRegistrationUrl() {
-        String consoleUrl = plugin.getConfigManager().getConsoleUrl();
-        return consoleUrl + "/register?server=" + serverId;
+        return "https://console.fancy.baicaizhale.top/register?server=" + serverId;
     }
 
     /**
@@ -115,7 +114,7 @@ public class RegistrationManager {
      * 获取 FancyConsole API 基础地址
      */
     public String getApiUrl() {
-        return plugin.getConfigManager().getConsoleApiUrl();
+        return "https://api.fancy.baicaizhale.top";
     }
 
     /**

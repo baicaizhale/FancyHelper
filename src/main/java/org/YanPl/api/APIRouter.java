@@ -152,8 +152,10 @@ public class APIRouter {
 
     // ============ FancyConsole 代理实现 ============
 
+    private final String API_BASE = "https://api.fancy.baicaizhale.top";
+
     private String getApiUrl() {
-        return configManager.getConsoleApiUrl();
+        return API_BASE;
     }
 
     private String getApiKey() {
@@ -178,7 +180,7 @@ public class APIRouter {
 
             JsonObject requestBody = new JsonObject();
             requestBody.add("messages", plugin.getLlmClient().buildMessagesArray(session, systemPrompt));
-            requestBody.addProperty("model", "default");
+            requestBody.addProperty("model", configManager.getFancyModel());
             requestBody.addProperty("max_tokens", 10000);
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -228,7 +230,7 @@ public class APIRouter {
         try {
             JsonObject requestBody = new JsonObject();
             requestBody.add("messages", plugin.getLlmClient().buildMessagesArray(session, systemPrompt));
-            requestBody.addProperty("model", "default");
+            requestBody.addProperty("model", configManager.getFancyModel());
             requestBody.addProperty("stream", true);
             requestBody.addProperty("max_tokens", 10000);
 
@@ -280,7 +282,7 @@ public class APIRouter {
             msg.addProperty("role", "user");
             msg.addProperty("content", prompt);
             body.add("messages", gson.toJsonTree(new JsonObject[]{msg}));
-            body.addProperty("model", "default");
+            body.addProperty("model", configManager.getFancyModel());
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
@@ -311,7 +313,7 @@ public class APIRouter {
             msg.addProperty("role", "user");
             msg.addProperty("content", systemPrompt + "\n\n" + userPrompt);
             body.add("messages", gson.toJsonTree(new JsonObject[]{msg}));
-            body.addProperty("model", "default");
+            body.addProperty("model", configManager.getFancyCoModel());
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
                     .header("Authorization", "Bearer " + apiKey)

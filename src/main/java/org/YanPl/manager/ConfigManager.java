@@ -182,14 +182,6 @@ public class ConfigManager {
                         ? "fancy-tavily" : "fancy-metaso");
                 newConfig.set("provider.jina", "fancy");
 
-                // 添加 console 段落
-                if (!newConfig.contains("console.api_url")) {
-                    newConfig.set("console.api_url", "https://api.fancy.baicaizhale.top");
-                }
-                if (!newConfig.contains("console.console_url")) {
-                    newConfig.set("console.console_url", "https://console.fancy.baicaizhale.top");
-                }
-
                 plugin.getLogger().info("已迁移 provider 配置: ai=" + aiProvider);
             }
 
@@ -359,17 +351,17 @@ public class ConfigManager {
     }
 
     /**
-     * 获取 FancyConsole API 地址
+     * 获取 FancyConsole 主模型名称
      */
-    public String getConsoleApiUrl() {
-        return config.getString("console.api_url", "https://api.fancy.baicaizhale.top");
+    public String getFancyModel() {
+        return config.getString("fancy.model", "default");
     }
 
     /**
-     * 获取 FancyConsole Web 控制台地址
+     * 获取 FancyConsole 副模型名称（压缩、标题生成）
      */
-    public String getConsoleUrl() {
-        return config.getString("console.console_url", "https://console.fancy.baicaizhale.top");
+    public String getFancyCoModel() {
+        return config.getString("fancy.co-model", "default");
     }
 
     /**

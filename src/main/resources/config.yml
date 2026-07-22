@@ -70,12 +70,13 @@ provider:
   # Jina Api    fancy  | none
   jina: fancy
 
-# FancyConsole 设置（provider.ai 为 fancy 时使用）
-console:
-  # FancyConsole API 地址
-  api_url: "https://api.fancy.baicaizhale.top"
-  # FancyConsole Web 控制台地址（用户注册、查看用量等）
-  console_url: "https://console.fancy.baicaizhale.top"
+# FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
+fancy:
+  # 主模型名称（发送给 FancyConsole API 的 model 字段，默认 "default"）
+  # 可在 FancyConsole 管理后台的 "模型映射" 中自定义映射关系
+  model: "default"
+  # 副模型（用于压缩、标题生成等轻量级任务）
+  co-model: "default"
 
 # CloudFlare Workers AI 配置（provider.ai 为 cloudflare 时使用）
 cloudflare:
