@@ -13,7 +13,7 @@ settings:
   supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
   timeout_minutes: 10
-  # API 请求超时时间（以秒为单位）
+  # API 请求超时时间（以秒为单位），推理模型（gpt-oss-120b、deepseek-reasoner 等）建议 120-300 秒，普通模型 60-120 秒
   api_timeout_seconds: 120
   # 上下文窗口剩余警告阈值
   context_window_warning_threshold: 500
@@ -25,18 +25,21 @@ settings:
   check_update: true
   # 是否在管理员进入服务器时提示更新
   op_update_notify: true
-  # 是否在检测到新版本时自动下载并安装更新，Paper及下游服务端推荐开启
+  # 是否在检测到新版本时自动下载并安装更新（Paper 及下游推荐开启，Spigot 及上游请关闭，目前还是会出 bug）
   auto_upgrade: true
   # 防循环检测的连续相似调用阈值
   anti_loop:
+    # 连续多少次相似调用触发中断
     threshold_count: 4
+    # 相似度阈值 (0.0 - 1.0)
     similarity_threshold: 0.95
+    # 单次对话中连续调用工具的最大次数（防止 AI 陷入逻辑循环或过度消耗）
     max_chain_count: 30
-  # SMART 模式风险阈值 (0-100)
+  # SMART 模式风险阈值 (0-100)，风险值高于此值时需要玩家确认
   smart_risk_threshold: 50
-  # 日志保留天数
+  # 日志保留天数，超过此天数的日志将被自动删除
   log_retention_days: 15
-  # YOLO 模式下需要手动确认的风险命令列表
+  # YOLO 模式下需要手动确认的风险命令列表（匹配前缀）
   yolo_risk_commands:
     - op
     - deop
@@ -56,64 +59,96 @@ settings:
     - scoreboard
     - tag
 
-# ====== 提供商配置（v4.0+） ======
-# fancy = 走 FancyConsole 代理（开箱即用没 key 的兜底方案）
-# openai / cloudflare = BYOK 直连（保留现有行为）
+# 提供商选择
+# provider 决定走 FancyConsole 代理还是 BYOK 直连
+#   ai:       fancy（控制台代理，开箱即用）| openai | cloudflare
+#   search:   fancy-metaso | fancy-tavily（控制台代理）| metaso | tavily（BYOK）
+#   jina:     fancy（控制台代理）| none
 provider:
-  ai: fancy              # fancy | openai | cloudflare
-  search: fancy-tavily   # fancy-metaso | fancy-tavily | metaso | tavily
-  jina: fancy            # fancy | none
+  ai: fancy
+  search: fancy-tavily
+  jina: fancy
 
-# FancyConsole 设置
+# FancyConsole 设置（provider.ai 为 fancy 时使用）
 console:
+  # FancyConsole API 地址
   api_url: "https://api.fancy.baicaizhale.top"
+  # FancyConsole Web 控制台地址（用户注册、查看用量等）
   console_url: "https://console.fancy.baicaizhale.top"
 
-# ====== BYOK 设置（aid/provider 不为 fancy 时使用） ======
-
-# CloudFlare Workers AI 配置
+# CloudFlare Workers AI 配置（provider.ai 为 cloudflare 时使用）
 cloudflare:
+  # API 密钥，FancyHelper 自动根据密钥获取对应的 account-id
+  # 创建密钥：https://blog.baicaizhale.top/post/create-cf-key-for-fhai
   cf_key: "cfat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # 代理地址（可选），所有请求会经过此代理转发，需兼容 /v1/chat/completions 和 /v1/responses 端点
   proxy_url: "https://ptc.fancy.baicaizhale.top"
+  # 主模型名称
   model: "@cf/google/gemma-4-26b-a4b-it"
+  # 副模型（用于压缩等轻量级任务，使用主模型的 cf_key）
   co-model: "@cf/google/gemma-4-26b-a4b-it"
 
-# OpenAI 兼容端点配置
+# OpenAI 兼容端点配置（provider.ai 为 openai 时使用）
+# 理论上支持所有兼容 OpenAI Chat Completions API 的服务商
+# 详细配置指南：https://blog.baicaizhale.top/post/openai-compatible-providers
 openai:
+  # API 地址
   api_url: https://api.deepseek.com/chat/completions
+  # API 密钥
   api_key: "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # 主模型名称
   model: deepseek-v4-pro
+  # 副模型（用于压缩等轻量级任务，使用主模型的 api_url 和 api_key）
   co-model: deepseek-v4-flash
 
-# Metaso AI 搜索配置（BYOK）
+# Metaso AI 搜索配置（provider.search 为 metaso 时使用，为 BYOK 直连）
 metaso:
+  # Metaso API 令牌，从 https://metaso.cn/search-api/api-keys 获取
   api_token: "mk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # 使用的模型名称（fast: 快速模型，pro: 专业模型）
   model: pro
 
-# Tavily 搜索 API 配置（BYOK）
+# Tavily 搜索 API 配置（provider.search 为 tavily 时使用，为 BYOK 直连）
 tavily:
+  # Tavily API 密钥，从 https://app.tavily.com/home 获取
   api_key: "tvly-dev-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # Tavily API 代理地址，用于解决国内网络访问问题，留空则使用官方地址
   proxy_url: "https://tavilyproxy.baicaizhale.top"
+  # 搜索结果数量限制（1-10）
   max_results: 7
 
 # 公告配置
 notice:
+  # 每隔多久从服务器拉取公告（单位：分钟）
   refresh_interval: 5
 
 # 声音反馈配置
 sounds:
+  # 全局开关，设为 false 则所有声音反馈都不播放
   enabled: true
+  # AI 回复完成时的音效
   ai_complete: "block.note_block.hat"
+  # AI 调用出错时的音效
   ai_error: "block.note_block.bass"
+  # 进入 CLI 模式时的音效
   cli_enter: "block.note_block.chime"
+  # 退出 CLI 模式时的音效
   cli_exit: "block.note_block.bell"
+  # 玩家发送消息时的音效
   user_input: "block.wooden_button.click_on"
 
 # MCP (Model Context Protocol) Client 配置
+# 允许 FancyHelper 的 AI 连接到外部 MCP 服务器，调用外部工具扩展能力
+# 教程详见 https://blog.baicaizhale.top/post/mcp-config
 mcp:
   client:
+    # 是否启用 MCP Client
     enabled: false
+    # 工具调用超时时间（秒）
     call_timeout: 30
+    # 连接超时时间（秒）
     connect_timeout: 10
+    # 断开后自动重连间隔（分钟），0 表示不自动重连
     reconnect_interval: 5
+    # 外部 MCP 服务器列表
     servers: []
