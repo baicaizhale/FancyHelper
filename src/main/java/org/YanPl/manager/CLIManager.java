@@ -1348,7 +1348,7 @@ public class CLIManager {
             && plugin.getConfigManager().getProviderConfig().isAiFancy();
         if (needsRegistration) {
             String regUrl = plugin.getRegistrationManager().getRegistrationUrl();
-            player.sendMessage(ChatColor.GOLD + "§zFancyHelper§b§r §7> §f首次使用 FancyConsole？");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f首次使用 FancyConsole？"));
             player.sendMessage(ChatColor.YELLOW + "点击下面链接注册（免费），然后在聊天框粘贴 API Key：");
 
             TextComponent link = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + regUrl);

@@ -312,8 +312,6 @@ public class APIRouter {
             msg.addProperty("content", systemPrompt + "\n\n" + userPrompt);
             body.add("messages", gson.toJsonTree(new JsonObject[]{msg}));
             body.addProperty("model", "default");
-            body.addProperty("max_tokens", 500);
-
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
                     .header("Authorization", "Bearer " + apiKey)
