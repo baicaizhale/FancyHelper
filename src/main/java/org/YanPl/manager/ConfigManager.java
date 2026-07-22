@@ -159,44 +159,47 @@ public class ConfigManager {
             // 旧版: provider: "cloudflare"（字符串，选项: cloudflare/openai）
             // 新版: provider.ai: "fancy"（段落，选项: fancy/openai/cloudflare）
             String oldProvider = oldValues.get("provider") instanceof String ? (String) oldValues.get("provider") : null;
-            if (oldProvider != null && newConfig.contains("provider")) {
-                // 检测新格式是否已经是段落（避免重复迁移）
-                if (!newConfig.isConfigurationSection("provider")) {
-                    // 将旧字符串值迁移到新的 provider.ai
-                    String oldKey = oldValues.get("openai.api_key") instanceof String ? (String) oldValues.get("openai.api_key") : "";
-                    String oldCfKey = oldValues.get("cloudflare.cf_key") instanceof String ? (String) oldValues.get("cloudflare.cf_key") : "";
+            if (oldProvider != null) {
+                // 判断 API Key 是否被自定义
+                String oldKey = oldValues.get("openai.api_key") instanceof String ? (String) oldValues.get("openai.api_key") : "";
+                String oldCfKey = oldValues.get("cloudflare.cf_key") instanceof String ? (String) oldValues.get("cloudflare.cf_key") : "";
 
-                    // 判断是否是自定义 key（非占位符、非空）
-                    boolean isOpenAiCustom = !oldKey.isEmpty() && !oldKey.equals("your-openai-api-key") && !oldKey.startsWith("sk-xxxx");
-                    boolean isCfCustom = !oldCfKey.isEmpty() && !oldCfKey.equals("maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0") && !oldCfKey.startsWith("cfat_xxxx");
+                boolean isOpenAiCustom = !oldKey.isEmpty() && !oldKey.equals("your-openai-api-key") && !oldKey.startsWith("sk-xxxx");
+                boolean isCfCustom = !oldCfKey.isEmpty() && !oldCfKey.equals("maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0") && !oldCfKey.startsWith("cfat_xxxx");
 
-                    String aiProvider;
-                    if (isOpenAiCustom) {
-                        aiProvider = "openai";
-                    } else if (isCfCustom) {
-                        aiProvider = "cloudflare";
-                    } else {
-                        aiProvider = "fancy";
-                    }
-
-                    newConfig.set("provider.ai", aiProvider);
-                    newConfig.set("provider.search", oldValues.getOrDefault("tavily.enabled", "true").toString().equals("true")
-                            ? "fancy-tavily" : "fancy-metaso");
-                    newConfig.set("provider.jina", "fancy");
-
-                    // 添加 console 段落
-                    if (!newConfig.contains("console.api_url")) {
-                        newConfig.set("console.api_url", "https://api.fancy.baicaizhale.top");
-                    }
-                    if (!newConfig.contains("console.console_url")) {
-                        newConfig.set("console.console_url", "https://console.fancy.baicaizhale.top");
-                    }
-
-                    // 移除旧的 provider 字符串字段
-                    newConfig.set("provider", null);
-
-                    plugin.getLogger().info("已迁移 provider 配置: ai=" + aiProvider);
+                String aiProvider;
+                if (isOpenAiCustom) {
+                    aiProvider = "openai";
+                } else if (isCfCustom) {
+                    aiProvider = "cloudflare";
+                } else {
+                    aiProvider = "fancy";
                 }
+
+                newConfig.set("provider", null); // 清除旧 format（无论是字符串还是段落）
+                newConfig.set("provider.ai", aiProvider);
+                newConfig.set("provider.search", oldValues.getOrDefault("tavily.enabled", "true").toString().equals("true")
+                        ? "fancy-tavily" : "fancy-metaso");
+                newConfig.set("provider.jina", "fancy");
+
+                // 添加 console 段落
+                if (!newConfig.contains("console.api_url")) {
+                    newConfig.set("console.api_url", "https://api.fancy.baicaizhale.top");
+                }
+                if (!newConfig.contains("console.console_url")) {
+                    newConfig.set("console.console_url", "https://console.fancy.baicaizhale.top");
+                }
+
+                plugin.getLogger().info("已迁移 provider 配置: ai=" + aiProvider);
+            }
+
+            // v4.0 内升级：如果 provider 段落缺失（因早期迁移 bug），重建
+            if (!newConfig.contains("provider") || !newConfig.isConfigurationSection("provider")) {
+                newConfig.set("provider", null);
+                newConfig.set("provider.ai", "fancy");
+                newConfig.set("provider.search", "fancy-tavily");
+                newConfig.set("provider.jina", "fancy");
+                plugin.getLogger().info("已修复：重建缺失的 provider 配置段落");
             }
 
             try {
@@ -330,10 +333,12 @@ public class ConfigManager {
     }
 
     /**
-     * 获取 AI 提供商
-     * @return AI 提供商名称 (cloudflare 或 openai)
+     * 获取提供商
+     * @return AI 提供商名称 (fancy/openai/cloudflare)
      */
     public String getProvider() {
+        String ai = config.getString("provider.ai");
+        if (ai != null && !ai.isEmpty()) return ai;
         return config.getString("provider", "cloudflare");
     }
 
