@@ -1349,7 +1349,7 @@ public class CLIManager {
         if (needsRegistration) {
             String regUrl = plugin.getRegistrationManager().getRegistrationUrl();
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f首次使用 FancyConsole？"));
-            player.sendMessage(ChatColor.YELLOW + "点击下面链接注册（免费），然后在聊天框粘贴 API Key：");
+            player.sendMessage(ColorUtil.translateCustomColors("§e点击下面链接注册（免费），然后在聊天框粘贴 API Key："));
 
             TextComponent link = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + regUrl);
             link.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, regUrl));
@@ -1357,7 +1357,7 @@ public class CLIManager {
                 new Text("点击在浏览器中打开注册页面")));
             player.spigot().sendMessage(link);
 
-            player.sendMessage(ChatColor.GRAY + "已有注册的 API Key？直接粘贴到聊天框即可（以 fc_ 开头）");
+            player.sendMessage(ColorUtil.translateCustomColors("§7已有注册的 API Key？直接粘贴到聊天框即可（以 fc_ 开头）"));
             return;
         }
 

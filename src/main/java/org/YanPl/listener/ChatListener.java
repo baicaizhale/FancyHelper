@@ -94,21 +94,21 @@ public class ChatListener implements Listener {
      * 处理 FancyConsole API Key 输入（聊天框粘贴 fc_...）
      */
     private void handleApiKeyInput(Player player, String apiKey) {
-        player.sendMessage(ChatColor.GRAY + "⨁ 正在验证 FancyConsole API Key...");
+        player.sendMessage("§zFancyHelper§b§r §7> §f正在验证 FancyConsole API Key...");
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 boolean valid = plugin.getRegistrationManager().validateKey(apiKey);
                 if (valid) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        player.sendMessage(ChatColor.GREEN + "✓ API Key 验证成功！正在进入 CLI 模式...");
+                        player.sendMessage("§zFancyHelper§b§r §a✓ API Key 验证成功！正在进入 CLI 模式...");
                         plugin.getCliManager().enterCLI(player, false);
                     });
                 }
             } catch (Exception e) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.sendMessage(ChatColor.RED + "✗ API Key 验证失败: " + e.getMessage());
-                    player.sendMessage(ChatColor.YELLOW + "请确认你已在浏览器完成注册，并复制了正确的 API Key。");
-                    player.sendMessage(ChatColor.YELLOW + "点击注册: " + plugin.getRegistrationManager().getRegistrationUrl());
+                    player.sendMessage("§zFancyHelper§b§r §c✗ API Key 验证失败: " + e.getMessage());
+                    player.sendMessage("§zFancyHelper§b§r §e请确认你已在浏览器完成注册，并复制了正确的 API Key。");
+                    player.sendMessage("§zFancyHelper§b§r §e点击注册: " + plugin.getRegistrationManager().getRegistrationUrl());
                 });
             }
         });
