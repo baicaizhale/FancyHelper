@@ -60,13 +60,14 @@ settings:
     - tag
 
 # 提供商选择
-# provider 决定走 FancyConsole 代理还是 BYOK 直连
-#   ai:       fancy（控制台代理，开箱即用）| openai | cloudflare
-#   search:   fancy-metaso | fancy-tavily（控制台代理）| metaso | tavily（BYOK）
-#   jina:     fancy（控制台代理）| none
+# provider 决定走 FancyConsole 还是 BYOK 
+  
 provider:
+  # AI提供商  fancy  | openai | cloudflare
   ai: fancy
+  # 搜索API提供商  fancy-metaso | fancy-tavily | metaso | tavily
   search: fancy-tavily
+  # Jina Api    fancy  | none
   jina: fancy
 
 # FancyConsole 设置（provider.ai 为 fancy 时使用）
