@@ -336,8 +336,16 @@ public class APIRouter {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
-                AIResponse aiResp = plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(response.body(), JsonObject.class));
-                return aiResp != null ? aiResp.getContent() : "";
+                String raw = response.body();
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[压缩请求] 原始响应: " + raw);
+                }
+                AIResponse aiResp = plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(raw, JsonObject.class));
+                String content = aiResp != null ? aiResp.getContent() : null;
+                if (plugin.getConfigManager().isDebug() && content != null) {
+                    plugin.getLogger().info("[压缩请求] 提取内容: " + content);
+                }
+                return content != null ? content : "";
             }
             return "";
         } catch (Exception e) {

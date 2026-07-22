@@ -1030,6 +1030,9 @@ public class CLIManager {
                     plugin.getLogger().info("[CLI] 开始调用 AI 生成标题...");
                 }
                 String title = ai.generateTitle(messageToSummarize);
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 标题生成返回: '" + title + "'");
+                }
                 if (title != null && !title.isEmpty()) {
                     if (plugin.getConfigManager().isDebug()) {
                         plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
