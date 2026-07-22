@@ -1,6 +1,7 @@
 package org.YanPl.api;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
 import org.YanPl.manager.ConfigManager;
@@ -53,7 +54,7 @@ public class APIRouter {
         try {
             return plugin.getLlmClient().chatDirect(session, systemPrompt);
         } catch (IOException e) {
-            return new AIResponse("§zFancyHelper§b§r §7> §f" + e.getMessage(), null, 0, 0, false);
+            return new AIResponse(e.getMessage(), null, 0, 0, false);
         }
     }
 
@@ -80,7 +81,7 @@ public class APIRouter {
         try {
             return plugin.getLlmClient().chatSimpleDirect(prompt);
         } catch (IOException e) {
-            return new AIResponse("§zFancyHelper§b§r §7> §f" + e.getMessage(), null, 0, 0, false);
+            return new AIResponse(e.getMessage(), null, 0, 0, false);
         }
     }
 
@@ -175,7 +176,7 @@ public class APIRouter {
             String apiKey = getApiKey();
 
             if (apiKey == null || apiKey.isEmpty()) {
-                return new AIResponse("§zFancyHelper§b§r §7> §f错误：FancyConsole API Key 未配置，请先注册。", null, 0, 0, false);
+                return new AIResponse("错误：FancyConsole API Key 未配置，请先注册。", null, 0, 0, false);
             }
 
             JsonObject requestBody = new JsonObject();
@@ -197,7 +198,7 @@ public class APIRouter {
             String responseBody = response.body();
 
             if (statusCode == 429) {
-                return new AIResponse("§zFancyHelper§b§r §7> §fFancyConsole API 调用次数已超今日限额，请明天再试或升级。", null, 0, 0, false);
+                return new AIResponse("FancyConsole API 调用次数已超今日限额，请明天再试或升级。", null, 0, 0, false);
             }
             if (statusCode != 200) {
                 String errorMsg = "FancyConsole API 请求失败 (HTTP " + statusCode + ")";
@@ -205,14 +206,14 @@ public class APIRouter {
                     JsonObject err = gson.fromJson(responseBody, JsonObject.class);
                     if (err.has("error")) errorMsg = err.get("error").getAsString();
                 } catch (Exception ignored) {}
-                return new AIResponse("§zFancyHelper§b§r §7> §f" + errorMsg, null, 0, 0, false);
+                return new AIResponse(errorMsg, null, 0, 0, false);
             }
 
             return plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(responseBody, JsonObject.class));
 
         } catch (Exception e) {
             plugin.getLogger().warning("[APIRouter] FancyConsole 对话请求失败: " + e.getMessage());
-            return new AIResponse("§zFancyHelper§b§r §7> §fFancyConsole 请求失败: " + e.getMessage(), null, 0, 0, false);
+            return new AIResponse("FancyConsole 请求失败: " + e.getMessage(), null, 0, 0, false);
         }
     }
 
@@ -224,7 +225,7 @@ public class APIRouter {
         String apiKey = getApiKey();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            throw new IOException("§zFancyHelper§b§r §7> §f错误：FancyConsole API Key 未配置。");
+            throw new IOException("FancyConsole API Key 未配置。");
         }
 
         try {
@@ -246,7 +247,7 @@ public class APIRouter {
 
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() == 429) {
-                throw new IOException("§zFancyHelper§b§r §7> §f今日 API 调用限额已用尽。");
+                throw new IOException("今日 API 调用限额已用尽。");
             }
             if (response.statusCode() != 200) {
                 // 读取错误响应体
@@ -254,7 +255,7 @@ public class APIRouter {
                 try (java.io.InputStream is = response.body()) {
                     errorBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
                 }
-                throw new IOException("§zFancyHelper§b§r §7> §fFancyConsole 请求失败 (HTTP " + response.statusCode() + "): " + errorBody);
+                throw new IOException("FancyConsole 请求失败 (HTTP " + response.statusCode() + "): " + errorBody);
             }
 
             return handler.processStream(response);
@@ -274,7 +275,7 @@ public class APIRouter {
             String apiUrl = getApiUrl() + "/v1/chat/completions";
             String apiKey = getApiKey();
             if (apiKey == null || apiKey.isEmpty()) {
-                return new AIResponse("§zFancyHelper§b§r §7> §f错误：FancyConsole API Key 未配置。", null, 0, 0, false);
+                return new AIResponse("FancyConsole API Key 未配置。", null, 0, 0, false);
             }
 
             JsonObject body = new JsonObject();
@@ -309,10 +310,21 @@ public class APIRouter {
 
         try {
             JsonObject body = new JsonObject();
-            JsonObject msg = new JsonObject();
-            msg.addProperty("role", "user");
-            msg.addProperty("content", systemPrompt + "\n\n" + userPrompt);
-            body.add("messages", gson.toJsonTree(new JsonObject[]{msg}));
+            JsonArray messages = new JsonArray();
+
+            // system 消息
+            JsonObject sysMsg = new JsonObject();
+            sysMsg.addProperty("role", "system");
+            sysMsg.addProperty("content", systemPrompt);
+            messages.add(sysMsg);
+
+            // user 消息
+            JsonObject usrMsg = new JsonObject();
+            usrMsg.addProperty("role", "user");
+            usrMsg.addProperty("content", userPrompt);
+            messages.add(usrMsg);
+
+            body.add("messages", messages);
             body.addProperty("model", configManager.getFancyCoModel());
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
@@ -338,7 +350,7 @@ public class APIRouter {
     }
 
     private String generateTitleViaFancyConsole(String firstMessage) throws IOException {
-        return chatViaFancyConsoleCompress("为以下对话生成一个简短标题（15字以内）：", firstMessage);
+        return chatViaFancyConsoleCompress("Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", firstMessage);
     }
 
     /**

@@ -72,8 +72,8 @@ provider:
 
 # FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
 fancy:
-  # 主模型名称（发送给 FancyConsole API 的 model 字段，默认 "default"）
-  # 可在 FancyConsole 管理后台的 "模型映射" 中自定义映射关系
+  # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表】
+  # 主模型名称
   model: "default"
   # 副模型（用于压缩、标题生成等轻量级任务）
   co-model: "default-co"

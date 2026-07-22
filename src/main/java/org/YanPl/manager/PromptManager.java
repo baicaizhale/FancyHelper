@@ -89,6 +89,7 @@ public class PromptManager {
         // 3. 【工具位置】工具调用必须另起一行，不得在正文或注释中调用
         // 4. 【格式规范】工具名和冒号之间不要有空格，命令参数不要带斜杠 /
         // 5. 【禁止猜测命令】没有搜索结果时，禁止执行命令，必须先搜索
+        // 改这里一定要三思！！！一定要确认！！！
         sb.append("[Core Constraints] (Violations cause parsing failures — follow strictly)\n\n");
 
         sb.append("1. [Single Tool Call] Each response may contain ONLY ONE tool call.\n");
