@@ -350,7 +350,7 @@ public class APIRouter {
     }
 
     private String generateTitleViaFancyConsole(String firstMessage) throws IOException {
-        return chatViaFancyConsoleCompress("Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", firstMessage);
+        return chatViaFancyConsoleCompress("Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", firstMessage);
     }
 
     /**
