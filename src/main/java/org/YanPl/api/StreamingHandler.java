@@ -197,6 +197,7 @@ public class StreamingHandler {
                         }
 
                         try {
+                            logger.info("[SSE] data: " + data);
                             String textChunk = extractTextFromSSE(data);
 
                             // 检测 reasoning 刚结束 → 触发思考结束回调
@@ -383,11 +384,14 @@ public class StreamingHandler {
                             if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
                                 reasoningJustCompleted = true;
                             }
-                            return delta.get("content").getAsString();
+                            String content = delta.get("content").getAsString();
+                            logger.info("[Stream] → content 字段: '" + content + "'");
+                            return content;
                         }
                         // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
                             String rc = delta.get("reasoning_content").getAsString();
+                            logger.info("[Stream] → reasoning_content 字段: '" + (rc.length() > 50 ? rc.substring(0, 50) + "..." : rc) + "'");
                             if (!rc.isEmpty()) {
                                 hasReasoningInChunk = true;
                                 // 第一个非空 reasoning token → 开始计时
@@ -403,6 +407,7 @@ public class StreamingHandler {
                         // 捕获 Gemma 等模型的 reasoning 字段（CloudFlare Workers AI 兼容格式）
                         if (delta.has("reasoning") && !delta.get("reasoning").isJsonNull()) {
                             String rc = delta.get("reasoning").getAsString();
+                            logger.info("[Stream] → reasoning 字段: '" + (rc.length() > 50 ? rc.substring(0, 50) + "..." : rc) + "' | 完整 delta: " + delta.toString());
                             if (!rc.isEmpty()) {
                                 hasReasoningInChunk = true;
                                 if (reasoningStartTime == -1) {
