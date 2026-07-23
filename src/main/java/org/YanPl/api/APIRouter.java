@@ -365,7 +365,7 @@ public class APIRouter {
     }
 
     private String generateTitleViaFancyConsole(String firstMessage) throws IOException {
-        String content = chatViaFancyConsoleCompress("Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", firstMessage);
+        String content = chatViaFancyConsoleCompress("[Core Constraints] (Violations cause parsing failures — follow strictly).Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.", "Label this: " + firstMessage);
         if (content == null || content.isEmpty()) return null;
 
         if (plugin.getConfigManager().isDebug()) {
