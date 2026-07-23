@@ -446,7 +446,7 @@ public class LLMClient {
             }
 
             // 处理临时性错误（可重试），包括：429、500、502、503、504
-            int maxRetries = 3;
+            int maxRetries = 5;
             int retryCount = 0;
             while (isRetryableError(statusCode) && retryCount < maxRetries) {
                 retryCount++;
