@@ -1026,17 +1026,11 @@ public class CLIManager {
         // 异步调用小模型生成标题
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[CLI] 开始调用 AI 生成标题...");
-                }
+                plugin.getLogger().info("[CLI] 开始调用 AI 生成标题...");
                 String title = ai.generateTitle(messageToSummarize);
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[CLI] 标题生成返回: '" + title + "'");
-                }
+                plugin.getLogger().info("[CLI] 标题生成返回: '" + title + "'");
                 if (title != null && !title.isEmpty()) {
-                    if (plugin.getConfigManager().isDebug()) {
-                        plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
-                    }
+                    plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
                     // 存储标题
                     generatedTitles.put(sessionUUID, title);
                     // 直接更新文件中的标题（不检查session是否还在map中）

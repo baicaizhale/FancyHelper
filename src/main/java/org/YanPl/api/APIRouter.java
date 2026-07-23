@@ -306,7 +306,10 @@ public class APIRouter {
     private String chatViaFancyConsoleCompress(String systemPrompt, String userPrompt) throws IOException {
         String apiUrl = getApiUrl() + "/v1/chat/completions";
         String apiKey = getApiKey();
-        if (apiKey == null || apiKey.isEmpty()) return "";
+        if (apiKey == null || apiKey.isEmpty()) {
+            plugin.getLogger().warning("[压缩请求] API Key 为空");
+            return "";
+        }
 
         try {
             JsonObject body = new JsonObject();
@@ -335,20 +338,24 @@ public class APIRouter {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            plugin.getLogger().info("[压缩请求] 响应状态码: " + response.statusCode());
             if (response.statusCode() == 200) {
                 String raw = response.body();
-                if (plugin.getConfigManager().isDebug()) {
-                    plugin.getLogger().info("[压缩请求] 原始响应: " + raw);
+                plugin.getLogger().info("[压缩请求] 原始响应: " + raw);
+                try {
+                    AIResponse aiResp = plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(raw, JsonObject.class));
+                    String content = aiResp != null ? aiResp.getContent() : null;
+                    plugin.getLogger().info("[压缩请求] 提取内容: " + (content != null ? "'" + content + "'" : "null"));
+                    return content != null ? content : "";
+                } catch (Exception e) {
+                    plugin.getLogger().warning("[压缩请求] 解析响应失败: " + e.getMessage() + " | 原始响应: " + raw);
+                    return "";
                 }
-                AIResponse aiResp = plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(raw, JsonObject.class));
-                String content = aiResp != null ? aiResp.getContent() : null;
-                if (plugin.getConfigManager().isDebug() && content != null) {
-                    plugin.getLogger().info("[压缩请求] 提取内容: " + content);
-                }
-                return content != null ? content : "";
             }
+            plugin.getLogger().warning("[压缩请求] 非200响应: " + response.statusCode() + " - " + response.body());
             return "";
         } catch (Exception e) {
+            plugin.getLogger().warning("[压缩请求] 请求异常: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             throw new IOException("FancyConsole 压缩请求失败: " + e.getMessage());
         }
     }
