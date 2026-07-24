@@ -2555,8 +2555,25 @@ public class CLIManager {
         
         streamingHandler.setOnCompleteCallback((completeText) -> {
             if (responseHandled[0]) return;
+
+            // 检测异常流终止：有 reasoning 但无 content，说明上游中断
+            if (completeText.isEmpty() && streamingHandler.getThoughtContent() != null
+                    && !streamingHandler.getThoughtContent().isEmpty()
+                    && streamingHandler.getFinishReason() == null) {
+                responseHandled[0] = true;
+                activeStreamingHandlers.remove(uuid);
+                plugin.getLogger().warning("[CLI] 流异常终止（reasoning 有内容但 content 为空），自动重试");
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    isGenerating.put(uuid, false);
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §eAI 推理被上游中断，正在自动重试..."));
+                    handleChat(player, session.getLastUserMessage());
+                });
+                return;
+            }
+
             responseHandled[0] = true;
-            
+
             fullResponseText.append(completeText);
             activeStreamingHandlers.remove(uuid);
 
@@ -3890,6 +3907,23 @@ public class CLIManager {
 
                     streamingHandler.setOnCompleteCallback((completeText) -> {
                         if (responseHandled[0]) return;
+
+                        // 检测异常流终止：有 reasoning 但无 content，说明上游中断
+                        if (completeText.isEmpty() && streamingHandler.getThoughtContent() != null
+                                && !streamingHandler.getThoughtContent().isEmpty()
+                                && streamingHandler.getFinishReason() == null) {
+                            responseHandled[0] = true;
+                            activeStreamingHandlers.remove(uuid);
+                            plugin.getLogger().warning("[CLI] 流异常终止（reasoning 有内容但 content 为空），自动重试");
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                if (!player.isOnline()) return;
+                                isGenerating.put(uuid, false);
+                                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §eAI 推理被上游中断，正在自动重试..."));
+                                feedbackToAI(player, feedback);
+                            });
+                            return;
+                        }
+
                         responseHandled[0] = true;
                         fullResponseText.append(completeText);
                         activeStreamingHandlers.remove(uuid);

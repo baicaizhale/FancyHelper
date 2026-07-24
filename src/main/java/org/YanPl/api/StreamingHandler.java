@@ -322,18 +322,6 @@ public class StreamingHandler {
             
             flushRemainingBuffer();
 
-            // 检测异常流终止：有 reasoning 但没有 content，且没有正常结束标记
-            if (fullText.length() == 0 && thoughtContent.length() > 0 && finishReason == null) {
-                logger.warning("[Stream] 异常终止: 有 reasoning (" + thoughtContent.length() + " chars) 但无 content，流被上游中断");
-                errorOccurred = true;
-                if (onErrorCallback != null) {
-                    try {
-                        onErrorCallback.accept(new IOException("AI 推理过程被中断，未产生有效回复。请稍后重试或换一个更简单的问题。"));
-                    } catch (Exception ignored) {}
-                }
-                return fullText.toString();
-            }
-
             // 完成回调：只在未被取消且未出错时触发
             if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
                 try {
