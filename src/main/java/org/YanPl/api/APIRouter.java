@@ -193,6 +193,7 @@ public class APIRouter {
 
     // ============ FancyConsole 代理实现 ============
 
+    // TODO: 此地址与 RegistrationManager.getApiUrl() 重复，修改时需同步更新两处
     private final String API_BASE = "https://api.fancy.baicaizhale.top";
 
     private String getApiUrl() {

@@ -112,6 +112,7 @@ public class RegistrationManager {
 
     /**
      * 获取 FancyConsole API 基础地址
+     * TODO: 此地址与 APIRouter.API_BASE 重复，修改时需同步更新两处
      */
     public String getApiUrl() {
         return "https://api.fancy.baicaizhale.top";
