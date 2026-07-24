@@ -43,6 +43,7 @@ public class StreamingHandler {
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
     private volatile JsonObject streamUsage;  // 流式输出的 token 用量统计（由 FancyConsole 注入）
+    private volatile String finishReason;  // 流式输出的结束原因（length=截断, stop=正常）
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     
@@ -123,6 +124,20 @@ public class StreamingHandler {
      */
     public JsonObject getStreamUsage() {
         return streamUsage;
+    }
+
+    /**
+     * 流式输出是否被截断（finish_reason 为 "length"）
+     */
+    public boolean isTruncated() {
+        return "length".equals(finishReason);
+    }
+
+    /**
+     * 获取流式输出的结束原因
+     */
+    public String getFinishReason() {
+        return finishReason;
     }
     
     /**
@@ -211,6 +226,20 @@ public class StreamingHandler {
                                 JsonObject dataJson = gson.fromJson(data, JsonObject.class);
                                 if (dataJson != null && dataJson.has("usage")) {
                                     streamUsage = dataJson.getAsJsonObject("usage");
+                                }
+                            } catch (Exception ignored) {}
+
+                            // 提取 finish_reason（检测截断）
+                            try {
+                                JsonObject frJson = gson.fromJson(data, JsonObject.class);
+                                if (frJson != null && frJson.has("choices") && frJson.get("choices").isJsonArray()) {
+                                    var choices = frJson.getAsJsonArray("choices");
+                                    if (choices.size() > 0) {
+                                        var choice = choices.get(0).getAsJsonObject();
+                                        if (choice.has("finish_reason") && !choice.get("finish_reason").isJsonNull()) {
+                                            finishReason = choice.get("finish_reason").getAsString();
+                                        }
+                                    }
                                 }
                             } catch (Exception ignored) {}
 

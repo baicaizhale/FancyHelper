@@ -3945,7 +3945,12 @@ public class CLIManager {
                                 player.spigot().sendMessage(thoughtBtn);
                             }
 
-                            session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
+                            // 检测输出截断
+                            if (streamingHandler.isTruncated()) {
+                                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §e⚠ 输出被截断（已达最大 token 限制），可能不完整。"));
+                            }
+
+                            session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: " + streamingHandler.getFinishReason() + "\n");
                             AIResponse response = new AIResponse(completeText,
                                 (thought != null && !thought.isEmpty()) ? thought : null);
                             handleAIResponse(player, response, true);
