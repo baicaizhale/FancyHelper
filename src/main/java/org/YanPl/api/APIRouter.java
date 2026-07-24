@@ -198,7 +198,21 @@ public class APIRouter {
             String responseBody = response.body();
 
             if (statusCode == 429) {
-                return new AIResponse("FancyConsole API 调用次数已超今日限额，请明天再试或升级。", null, 0, 0, false);
+                String msg = "FancyConsole API 调用次数已超今日限额，请明天再试或升级。";
+                try {
+                    JsonObject err = gson.fromJson(responseBody, JsonObject.class);
+                    String code = err.has("code") ? err.get("code").getAsString() : "";
+                    if ("cost_limit_exceeded".equals(code)) {
+                        // 区分 5 小时成本和每日成本
+                        String detail = err.has("error") ? err.get("error").getAsString() : "";
+                        if (detail.contains("5-hour")) {
+                            msg = "FancyConsole 5 小时内 AI 成本已达上限，请稍后再试或升级。";
+                        } else {
+                            msg = "FancyConsole 今日 AI 成本已达上限，请明天再试或升级。";
+                        }
+                    }
+                } catch (Exception ignored) {}
+                return new AIResponse(msg, null, 0, 0, false);
             }
             if (statusCode != 200) {
                 String errorMsg = "FancyConsole API 请求失败 (HTTP " + statusCode + ")";
@@ -247,7 +261,21 @@ public class APIRouter {
 
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() == 429) {
-                throw new IOException("今日 API 调用限额已用尽。");
+                String errorMsg = "FancyConsole API 调用次数已超今日限额，请明天再试或升级。";
+                try (java.io.InputStream is = response.body()) {
+                    String errBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                    JsonObject err = gson.fromJson(errBody, JsonObject.class);
+                    String code = err.has("code") ? err.get("code").getAsString() : "";
+                    if ("cost_limit_exceeded".equals(code)) {
+                        String detail = err.has("error") ? err.get("error").getAsString() : "";
+                        if (detail.contains("5-hour")) {
+                            errorMsg = "FancyConsole 5 小时内 AI 成本已达上限，请稍后再试或升级。";
+                        } else {
+                            errorMsg = "FancyConsole 今日 AI 成本已达上限，请明天再试或升级。";
+                        }
+                    }
+                } catch (Exception ignored) {}
+                throw new IOException(errorMsg);
             }
             if (response.statusCode() != 200) {
                 // 读取错误响应体
