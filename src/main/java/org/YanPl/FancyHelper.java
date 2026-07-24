@@ -94,6 +94,9 @@ public final class FancyHelper extends JavaPlugin {
             // 初始化 API 路由层
             apiRouter = new APIRouter(this);
 
+            // 异步检测 FancyConsole 连通性
+            apiRouter.checkHealthAsync();
+
             // 初始化验证管理器
             verificationManager = new VerificationManager(this);
 

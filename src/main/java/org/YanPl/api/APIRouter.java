@@ -9,6 +9,8 @@ import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
 import org.YanPl.model.ProviderConfig;
 
+import org.bukkit.Bukkit;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -29,6 +31,7 @@ public class APIRouter {
     private final ConfigManager configManager;
     private final HttpClient httpClient;
     private final Gson gson = new Gson();
+    private volatile boolean fancyConsoleReachable = true;  // FancyConsole 连通状态
 
     public APIRouter(FancyHelper plugin) {
         this.plugin = plugin;
@@ -37,6 +40,43 @@ public class APIRouter {
                 .connectTimeout(Duration.ofSeconds(15))
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
+    }
+
+    /**
+     * 检测 FancyConsole 是否可达（异步调用，不阻塞启动）
+     * 连通状态会更新到 fancyConsoleReachable 字段，供后续请求判断
+     */
+    public void checkHealthAsync() {
+        if (!configManager.getProviderConfig().isAiFancy()) return;
+        String apiKey = getApiKey();
+        if (apiKey == null || apiKey.isEmpty()) return;
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(getApiUrl() + "/v1/health"))
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    fancyConsoleReachable = true;
+                } else {
+                    fancyConsoleReachable = false;
+                    plugin.getLogger().warning("[APIRouter] FancyConsole 健康检查返回 " + response.statusCode());
+                }
+            } catch (Exception e) {
+                fancyConsoleReachable = false;
+                plugin.getLogger().warning("[APIRouter] FancyConsole 不可达: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * FancyConsole 是否可达
+     */
+    public boolean isFancyConsoleReachable() {
+        return fancyConsoleReachable;
     }
 
     // ============ 对话 ============
@@ -227,7 +267,12 @@ public class APIRouter {
 
         } catch (Exception e) {
             plugin.getLogger().warning("[APIRouter] FancyConsole 对话请求失败: " + e.getMessage());
-            return new AIResponse("FancyConsole 请求失败: " + e.getMessage(), null, 0, 0, false);
+            fancyConsoleReachable = false;
+            String msg = "FancyConsole 服务不可用: " + e.getMessage();
+            if (e instanceof java.net.ConnectException || e instanceof java.net.http.HttpConnectTimeoutException) {
+                msg = "！！！FancyConsole 服务无法连接，请检查网络或联系管理员！！！";
+            }
+            return new AIResponse(msg, null, 0, 0, false);
         }
     }
 
@@ -289,12 +334,18 @@ public class APIRouter {
             return handler.processStream(response);
 
         } catch (IOException e) {
-            throw e;
+            fancyConsoleReachable = false;
+            String msg = e.getMessage();
+            if (msg != null && (msg.contains("Connection refused") || msg.contains("connect timed out") || msg.contains("HTTP 502"))) {
+                msg = "！！！FancyConsole 服务不可用，请检查网络或联系管理员！！！";
+            }
+            throw new IOException(msg, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("流式请求被中断", e);
         } catch (Exception e) {
-            throw new IOException("FancyConsole 流式请求失败: " + e.getMessage());
+            fancyConsoleReachable = false;
+            throw new IOException("FancyConsole 服务不可用: " + e.getMessage());
         }
     }
 
