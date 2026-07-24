@@ -208,6 +208,13 @@ public class APIRouter {
     }
 
     /**
+     * 判断是否为可重试的临时性错误
+     */
+    private boolean isRetryableError(int statusCode) {
+        return statusCode == 429 || statusCode == 500 || statusCode == 502 || statusCode == 503 || statusCode == 504;
+    }
+
+    /**
      * 通过 FancyConsole 代理对话（非流式）
      */
     private AIResponse chatViaFancyConsole(DialogueSession session, String systemPrompt, boolean isCompression) {
@@ -224,37 +231,57 @@ public class APIRouter {
             requestBody.addProperty("model", configManager.getFancyModel());
             requestBody.addProperty("max_tokens", 10000);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .header("X-Server-Id", getServerId())
-                    .timeout(Duration.ofSeconds(configManager.getApiTimeoutSeconds()))
-                    .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody), StandardCharsets.UTF_8))
-                    .build();
+            int maxRetries = 3;
+            for (int attempt = 0; attempt <= maxRetries; attempt++) {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(apiUrl))
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json; charset=utf-8")
+                        .header("X-Server-Id", getServerId())
+                        .timeout(Duration.ofSeconds(configManager.getApiTimeoutSeconds()))
+                        .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody), StandardCharsets.UTF_8))
+                        .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            int statusCode = response.statusCode();
-            String responseBody = response.body();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                int statusCode = response.statusCode();
+                String responseBody = response.body();
 
-            if (statusCode == 429) {
-                String msg = "FancyConsole API 调用次数已超今日限额，请明天再试或升级。";
-                try {
-                    JsonObject err = gson.fromJson(responseBody, JsonObject.class);
-                    String code = err.has("code") ? err.get("code").getAsString() : "";
-                    if ("cost_limit_exceeded".equals(code)) {
-                        // 区分 5 小时成本和每日成本
-                        String detail = err.has("error") ? err.get("error").getAsString() : "";
-                        if (detail.contains("5-hour")) {
-                            msg = "FancyConsole 5 小时内 AI 成本已达上限，请稍后再试或升级。";
-                        } else {
-                            msg = "FancyConsole 今日 AI 成本已达上限，请明天再试或升级。";
+                // 成功
+                if (statusCode == 200) {
+                    fancyConsoleReachable = true;
+                    return plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(responseBody, JsonObject.class));
+                }
+
+                // 429 成本超限不重试
+                if (statusCode == 429) {
+                    String msg = "FancyConsole API 调用次数已超今日限额，请明天再试或升级。";
+                    try {
+                        JsonObject err = gson.fromJson(responseBody, JsonObject.class);
+                        String code = err.has("code") ? err.get("code").getAsString() : "";
+                        if ("cost_limit_exceeded".equals(code)) {
+                            String detail = err.has("error") ? err.get("error").getAsString() : "";
+                            if (detail.contains("5-hour")) {
+                                msg = "FancyConsole 5 小时内 AI 成本已达上限，请稍后再试或升级。";
+                            } else {
+                                msg = "FancyConsole 今日 AI 成本已达上限，请明天再试或升级。";
+                            }
                         }
+                    } catch (Exception ignored) {}
+                    return new AIResponse(msg, null, 0, 0, false);
+                }
+
+                // 可重试的临时性错误
+                if (isRetryableError(statusCode) && attempt < maxRetries) {
+                    long waitMs = (long) Math.pow(2, attempt + 1) * 1000;
+                    plugin.getLogger().warning("[APIRouter] FancyConsole 返回 " + statusCode + "，" + waitMs / 1000 + "s 后重试 (" + (attempt + 1) + "/" + maxRetries + ")");
+                    try { Thread.sleep(waitMs); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
-                } catch (Exception ignored) {}
-                return new AIResponse(msg, null, 0, 0, false);
-            }
-            if (statusCode != 200) {
+                    continue;
+                }
+
+                // 不可重试的错误
                 String errorMsg = "FancyConsole API 请求失败 (HTTP " + statusCode + ")";
                 try {
                     JsonObject err = gson.fromJson(responseBody, JsonObject.class);
@@ -263,7 +290,7 @@ public class APIRouter {
                 return new AIResponse(errorMsg, null, 0, 0, false);
             }
 
-            return plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(responseBody, JsonObject.class));
+            return new AIResponse("FancyConsole 请求失败: 重试已用尽", null, 0, 0, false);
 
         } catch (Exception e) {
             plugin.getLogger().warning("[APIRouter] FancyConsole 对话请求失败: " + e.getMessage());
@@ -294,36 +321,58 @@ public class APIRouter {
             requestBody.addProperty("stream", true);
             requestBody.addProperty("max_tokens", 10000);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .header("X-Server-Id", getServerId())
-                    .header("Accept", "text/event-stream")
-                    .timeout(Duration.ofSeconds(configManager.getApiTimeoutSeconds()))
-                    .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody), StandardCharsets.UTF_8))
-                    .build();
+            int maxRetries = 3;
+            for (int attempt = 0; attempt <= maxRetries; attempt++) {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(apiUrl))
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json; charset=utf-8")
+                        .header("X-Server-Id", getServerId())
+                        .header("Accept", "text/event-stream")
+                        .timeout(Duration.ofSeconds(configManager.getApiTimeoutSeconds()))
+                        .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody), StandardCharsets.UTF_8))
+                        .build();
 
-            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            if (response.statusCode() == 429) {
-                String errorMsg = "FancyConsole API 调用次数已超今日限额，请明天再试或升级。";
-                try (java.io.InputStream is = response.body()) {
-                    String errBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                    JsonObject err = gson.fromJson(errBody, JsonObject.class);
-                    String code = err.has("code") ? err.get("code").getAsString() : "";
-                    if ("cost_limit_exceeded".equals(code)) {
-                        String detail = err.has("error") ? err.get("error").getAsString() : "";
-                        if (detail.contains("5-hour")) {
-                            errorMsg = "FancyConsole 5 小时内 AI 成本已达上限，请稍后再试或升级。";
-                        } else {
-                            errorMsg = "FancyConsole 今日 AI 成本已达上限，请明天再试或升级。";
+                HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+                // 成功
+                if (response.statusCode() == 200) {
+                    fancyConsoleReachable = true;
+                    return handler.processStream(response);
+                }
+
+                // 429 成本超限不重试
+                if (response.statusCode() == 429) {
+                    String errorMsg = "FancyConsole API 调用次数已超今日限额，请明天再试或升级。";
+                    try (java.io.InputStream is = response.body()) {
+                        String errBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                        JsonObject err = gson.fromJson(errBody, JsonObject.class);
+                        String code = err.has("code") ? err.get("code").getAsString() : "";
+                        if ("cost_limit_exceeded".equals(code)) {
+                            String detail = err.has("error") ? err.get("error").getAsString() : "";
+                            if (detail.contains("5-hour")) {
+                                errorMsg = "FancyConsole 5 小时内 AI 成本已达上限，请稍后再试或升级。";
+                            } else {
+                                errorMsg = "FancyConsole 今日 AI 成本已达上限，请明天再试或升级。";
+                            }
                         }
+                    } catch (Exception ignored) {}
+                    throw new IOException(errorMsg);
+                }
+
+                // 可重试的临时性错误
+                if (isRetryableError(response.statusCode()) && attempt < maxRetries) {
+                    try (java.io.InputStream is = response.body()) { is.readAllBytes(); } catch (Exception ignored) {}
+                    long waitMs = (long) Math.pow(2, attempt + 1) * 1000;
+                    plugin.getLogger().warning("[APIRouter] FancyConsole 流式返回 " + response.statusCode() + "，" + waitMs / 1000 + "s 后重试 (" + (attempt + 1) + "/" + maxRetries + ")");
+                    try { Thread.sleep(waitMs); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
-                } catch (Exception ignored) {}
-                throw new IOException(errorMsg);
-            }
-            if (response.statusCode() != 200) {
-                // 读取错误响应体
+                    continue;
+                }
+
+                // 不可重试的错误
                 String errorBody;
                 try (java.io.InputStream is = response.body()) {
                     errorBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
@@ -331,7 +380,7 @@ public class APIRouter {
                 throw new IOException("FancyConsole 请求失败 (HTTP " + response.statusCode() + "): " + errorBody);
             }
 
-            return handler.processStream(response);
+            throw new IOException("FancyConsole 请求失败: 重试已用尽");
 
         } catch (IOException e) {
             fancyConsoleReachable = false;
