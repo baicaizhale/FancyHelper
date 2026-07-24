@@ -42,6 +42,7 @@ public class StreamingHandler {
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
+    private volatile JsonObject streamUsage;  // 流式输出的 token 用量统计（由 FancyConsole 注入）
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     
@@ -114,6 +115,14 @@ public class StreamingHandler {
      */
     public boolean hasReasoningCompleteFired() {
         return reasoningCompleteFired;
+    }
+
+    /**
+     * 获取流式输出的 token 用量统计（由 FancyConsole 注入的 usage 事件）
+     * @return usage JSON 对象，可能为 null
+     */
+    public JsonObject getStreamUsage() {
+        return streamUsage;
     }
     
     /**
@@ -197,6 +206,14 @@ public class StreamingHandler {
                         }
 
                         try {
+                            // 提取 FancyConsole 注入的 usage 事件
+                            try {
+                                JsonObject dataJson = gson.fromJson(data, JsonObject.class);
+                                if (dataJson != null && dataJson.has("usage")) {
+                                    streamUsage = dataJson.getAsJsonObject("usage");
+                                }
+                            } catch (Exception ignored) {}
+
                             String textChunk = extractTextFromSSE(data);
 
                             // 检测 reasoning 刚结束 → 触发思考结束回调
