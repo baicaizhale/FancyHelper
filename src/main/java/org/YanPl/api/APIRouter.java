@@ -338,14 +338,14 @@ public class APIRouter {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            plugin.getLogger().info("[压缩请求] 响应状态码: " + response.statusCode());
+            if (plugin.getConfigManager().isDebug()) plugin.getLogger().info("[压缩请求] 响应状态码: " + response.statusCode());
             if (response.statusCode() == 200) {
                 String raw = response.body();
-                plugin.getLogger().info("[压缩请求] 原始响应: " + raw);
+                if (plugin.getConfigManager().isDebug()) plugin.getLogger().info("[压缩请求] 原始响应: " + raw);
                 try {
                     AIResponse aiResp = plugin.getLlmClient().getResponseParser().parseResponse(gson.fromJson(raw, JsonObject.class));
                     String content = aiResp != null ? aiResp.getContent() : null;
-                    plugin.getLogger().info("[压缩请求] 提取内容: " + (content != null ? "'" + content + "'" : "null"));
+                    if (plugin.getConfigManager().isDebug()) plugin.getLogger().info("[压缩请求] 提取内容: " + (content != null ? "'" + content + "'" : "null"));
                     return content != null ? content : "";
                 } catch (Exception e) {
                     plugin.getLogger().warning("[压缩请求] 解析响应失败: " + e.getMessage() + " | 原始响应: " + raw);
