@@ -230,7 +230,6 @@ public class APIRouter {
             JsonObject requestBody = new JsonObject();
             requestBody.add("messages", plugin.getLlmClient().buildMessagesArray(session, systemPrompt));
             requestBody.addProperty("model", configManager.getFancyModel());
-            requestBody.addProperty("max_tokens", 10000);
 
             int maxRetries = 3;
             for (int attempt = 0; attempt <= maxRetries; attempt++) {
@@ -320,7 +319,6 @@ public class APIRouter {
             requestBody.add("messages", plugin.getLlmClient().buildMessagesArray(session, systemPrompt));
             requestBody.addProperty("model", configManager.getFancyModel());
             requestBody.addProperty("stream", true);
-            requestBody.addProperty("max_tokens", 10000);
 
             int maxRetries = 3;
             for (int attempt = 0; attempt <= maxRetries; attempt++) {
