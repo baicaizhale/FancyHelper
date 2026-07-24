@@ -160,17 +160,17 @@ public class ConfigManager {
             // 新版: provider.ai: "fancy"（段落，选项: fancy/openai/cloudflare）
             String oldProvider = oldValues.get("provider") instanceof String ? (String) oldValues.get("provider") : null;
             if (oldProvider != null) {
-                // 判断 API Key 是否被自定义
                 String oldKey = oldValues.get("openai.api_key") instanceof String ? (String) oldValues.get("openai.api_key") : "";
                 String oldCfKey = oldValues.get("cloudflare.cf_key") instanceof String ? (String) oldValues.get("cloudflare.cf_key") : "";
 
                 boolean isOpenAiCustom = !oldKey.isEmpty() && !oldKey.equals("your-openai-api-key") && !oldKey.startsWith("sk-xxxx");
                 boolean isCfCustom = !oldCfKey.isEmpty() && !oldCfKey.equals("maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0") && !oldCfKey.startsWith("cfat_xxxx");
 
+                // 尊重旧版 provider 选择：只在旧 provider 对应的 Key 被自定义时才保留
                 String aiProvider;
-                if (isOpenAiCustom) {
+                if ("openai".equalsIgnoreCase(oldProvider) && isOpenAiCustom) {
                     aiProvider = "openai";
-                } else if (isCfCustom) {
+                } else if ("cloudflare".equalsIgnoreCase(oldProvider) && isCfCustom) {
                     aiProvider = "cloudflare";
                 } else {
                     aiProvider = "fancy";
