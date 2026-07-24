@@ -58,7 +58,7 @@ public class StreamingHandler {
         this.errorOccurred = false;
         this.gson = new Gson();
         this.logger = plugin.getLogger();
-        this.readTimeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
+        this.readTimeoutSeconds = plugin.getConfigManager().getStreamingReadTimeoutSeconds();
     }
     
     /**

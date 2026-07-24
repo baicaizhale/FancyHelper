@@ -423,6 +423,15 @@ public class ConfigManager {
         return config.getInt("settings.api_timeout_seconds", 120);
     }
 
+    /**
+     * 获取流式输出读取超时时间（秒）
+     * 控制两次 SSE chunk 之间的最大等待时间，推理模型首次 token 延迟可能很长
+     * @return 超时时间（秒），默认 300
+     */
+    public int getStreamingReadTimeoutSeconds() {
+        return config.getInt("settings.streaming_read_timeout_seconds", 300);
+    }
+
     public int getContextWindowWarningThreshold() {
         return config.getInt("settings.context_window_warning_threshold", 500);
     }
