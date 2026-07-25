@@ -3,8 +3,6 @@ package org.YanPl.manager;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.Skill;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -273,6 +271,9 @@ public class PromptManager {
 
         // 玩家名放在最后 —— 区分不同玩家但不影响缓存前缀
         sb.append("Player: ").append(player.getName()).append("\n");
+
+        // 当前时间（精确到分钟）
+        sb.append("Current Time: ").append(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))).append("\n");
 
         return sb.toString();
     }
