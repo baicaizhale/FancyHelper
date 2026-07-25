@@ -2563,10 +2563,19 @@ public class CLIManager {
                 responseHandled[0] = true;
                 activeStreamingHandlers.remove(uuid);
                 plugin.getLogger().warning("[CLI] 流异常终止（reasoning 有内容但 content 为空），自动重试");
+                // 获取最后一条用户消息用于重试
+                String lastUserMsg = "";
+                for (int i = session.getHistory().size() - 1; i >= 0; i--) {
+                    if ("user".equals(session.getHistory().get(i).getRole())) {
+                        lastUserMsg = session.getHistory().get(i).getContent();
+                        break;
+                    }
+                }
+                final String retryMsg = lastUserMsg;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (!player.isOnline()) return;
                     isGenerating.put(uuid, false);
-                    handleChat(player, session.getLastUserMessage());
+                    handleChat(player, retryMsg);
                 });
                 return;
             }
