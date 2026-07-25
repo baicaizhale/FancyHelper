@@ -455,7 +455,6 @@ public class CLIManager {
      */
     private void startThinkingTask() {
         new BukkitRunnable() {
-            @SuppressWarnings("null")
             @Override
             public void run() {
                 if (!plugin.isEnabled()) {
