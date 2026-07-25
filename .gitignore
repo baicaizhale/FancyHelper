@@ -13,6 +13,7 @@ AGENTS.md
 EULA.md
 .classpath
 worker/
+.reasonix/
 frontend/
 node_modules/
 .claude/

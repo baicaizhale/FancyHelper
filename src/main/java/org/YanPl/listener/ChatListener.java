@@ -5,6 +5,7 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
+import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -68,6 +69,14 @@ public class ChatListener implements Listener {
 
         String message = event.getMessage();
         Player player = event.getPlayer();
+
+        // FancyConsole API Key 输入检测
+        if (message.startsWith("fc_") && !plugin.getRegistrationManager().isRegistered()) {
+            event.setCancelled(true);
+            handleApiKeyInput(player, message);
+            return;
+        }
+
         if (!plugin.getCliManager().handleChat(player, message)) {
             if (plugin.getCliManager().isInCLI(player)) {
                 if (message.startsWith("！")) {
@@ -80,6 +89,30 @@ public class ChatListener implements Listener {
         }
         event.getRecipients().clear();
         event.setCancelled(true);
+    }
+
+    /**
+     * 处理 FancyConsole API Key 输入（聊天框粘贴 fc_...）
+     */
+    private void handleApiKeyInput(Player player, String apiKey) {
+        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在验证 FancyConsole API Key..."));
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                boolean valid = plugin.getRegistrationManager().validateKey(apiKey);
+                if (valid) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §a✓ API Key 验证成功！正在进入 CLI 模式..."));
+                        plugin.getCliManager().enterCLI(player, false);
+                    });
+                }
+            } catch (Exception e) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §c✗ §fAPI Key 验证失败: " + e.getMessage()));
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §f请确认你已在浏览器完成注册，并复制了正确的 API Key。"));
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §b点击注册: " + plugin.getRegistrationManager().getRegistrationUrl()));
+                });
+            }
+        });
     }
 
     /**
