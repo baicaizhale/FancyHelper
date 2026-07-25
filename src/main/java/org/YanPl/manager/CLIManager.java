@@ -2566,7 +2566,6 @@ public class CLIManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (!player.isOnline()) return;
                     isGenerating.put(uuid, false);
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §eAI 推理被上游中断，正在自动重试..."));
                     handleChat(player, session.getLastUserMessage());
                 });
                 return;
@@ -3918,7 +3917,6 @@ public class CLIManager {
                             Bukkit.getScheduler().runTask(plugin, () -> {
                                 if (!player.isOnline()) return;
                                 isGenerating.put(uuid, false);
-                                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §eAI 推理被上游中断，正在自动重试..."));
                                 feedbackToAI(player, feedback);
                             });
                             return;
