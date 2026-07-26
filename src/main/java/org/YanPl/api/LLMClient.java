@@ -1671,6 +1671,9 @@ public class LLMClient {
 
         String endpoint = model.contains("gpt-oss") ? "responses" : "chat/completions";
         String url;
+        // proxy_url 需要拼接 model 参数，避免被 VPS Node 误拒绝
+        String proxyUrl = plugin.getConfigManager().getCloudflareProxyUrl();
+        boolean hasProxy = proxyUrl != null && !proxyUrl.isEmpty();
         try {
             url = buildCloudflareApiUrl(endpoint);
         } catch (IOException e) {
@@ -1708,11 +1711,13 @@ public class LLMClient {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Authorization", "Bearer " + cfKey)
+                    .header("X-Server-Id", plugin.getRegistrationManager().getServerId())
                     .header("Content-Type", "application/json; charset=utf-8")
                     .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
+            // 使用 proxy_url 时，non-streaming 先走标准处理
             if (useResponsesApi) {
                 // gpt-oss 模型使用非流式请求，通过 responseParser 解析
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
