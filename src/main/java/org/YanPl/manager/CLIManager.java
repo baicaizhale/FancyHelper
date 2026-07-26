@@ -660,7 +660,7 @@ public class CLIManager {
      * 构建错误消息组件 §zFancyHelper§b§r §7> §f{context}（状态码 xxx）
      */
     private TextComponent buildErrorText(String errorMessage, String defaultContext) {
-        TextComponent msg = new TextComponent(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f"));
+        TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f")));
 
         if (errorMessage != null && !errorMessage.isEmpty()) {
             // 直接显示错误信息（已去掉前缀），不再做前缀检测
@@ -2335,7 +2335,7 @@ public class CLIManager {
             }
             
             if (isGenerating.getOrDefault(uuid, false)) {
-                TextComponent warnMsg = new TextComponent(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请不要在 Fancy 生成内容时发送消息"));
+                TextComponent warnMsg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请不要在 Fancy 生成内容时发送消息")));
                 TextComponent interruptBtn = new TextComponent(ChatColor.YELLOW + "[点击打断]");
                 interruptBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
                 interruptBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断生成")));

@@ -612,9 +612,9 @@ public class StreamingHandler {
             }
 
             // 如果到这里，可能是其他格式的 SSE 数据（如 [DONE] 标记或控制信息）
-            // reasoning 内容已在前面捕获，跳过日志避免噪音
+            // 不打印 info 级别日志避免日志刷屏，仅在 debug 模式输出
             if (plugin.getConfigManager().isDebug() && !hasReasoningInChunk) {
-                logger.info("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
+                logger.fine("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
             }
 
         } catch (com.google.gson.JsonSyntaxException jsonSyntaxError) {
