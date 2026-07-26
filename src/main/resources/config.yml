@@ -68,7 +68,7 @@ settings:
   
 provider:
   # AI提供商  fancy  | openai | cloudflare
-  ai: openai
+  ai: cloudflare
   # 搜索API提供商  fancy-metaso | fancy-tavily | metaso | tavily
   search: fancy-tavily
   # Jina Api    fancy  | none
@@ -88,7 +88,7 @@ cloudflare:
   # 创建密钥：https://blog.baicaizhale.top/post/create-cf-key-for-fhai
   cf_key: "cfat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   # 代理地址（可选），所有请求会经过此代理转发，需兼容 /v1/chat/completions 和 /v1/responses 端点
-  proxy_url: "https://ptc.fancy.baicaizhale.top"
+  proxy_url: "http://103.236.70.111:10100"
   # 主模型名称
   model: "@cf/google/gemma-4-26b-a4b-it"
   # 副模型（用于压缩等轻量级任务，使用主模型的 cf_key）
