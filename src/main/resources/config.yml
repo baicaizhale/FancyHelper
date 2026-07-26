@@ -68,7 +68,7 @@ settings:
   
 provider:
   # AI提供商  fancy  | openai | cloudflare
-  ai: fancy
+  ai: openai
   # 搜索API提供商  fancy-metaso | fancy-tavily | metaso | tavily
   search: fancy-tavily
   # Jina Api    fancy  | none
