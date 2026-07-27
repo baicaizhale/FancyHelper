@@ -1,7 +1,6 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
-import org.YanPl.model.ProviderConfig;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -155,68 +154,6 @@ public class ConfigManager {
                 plugin.getLogger().info("已清除旧版 co-model 配置段落");
             }
 
-            // ====== v3.x → v4.0 迁移：provider 字段升级 ======
-            // 旧版: provider: "cloudflare"（字符串，选项: cloudflare/openai）
-            // 新版: provider.ai: "fancy"（段落，选项: fancy/openai/cloudflare）
-            String oldProvider = oldValues.get("provider") instanceof String ? (String) oldValues.get("provider") : null;
-            if (oldProvider != null) {
-                String oldKey = oldValues.get("openai.api_key") instanceof String ? (String) oldValues.get("openai.api_key") : "";
-                String oldCfKey = oldValues.get("cloudflare.cf_key") instanceof String ? (String) oldValues.get("cloudflare.cf_key") : "";
-
-                boolean isOpenAiCustom = !oldKey.isEmpty() && !oldKey.equals("your-openai-api-key") && !oldKey.startsWith("sk-xxxx");
-                boolean isCfCustom = !oldCfKey.isEmpty() && !oldCfKey.equals("maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0") && !oldCfKey.startsWith("cfat_xxxx");
-
-                // 尊重旧版 provider 选择：只在旧 provider 对应的 Key 被自定义时才保留
-                String aiProvider;
-                if ("openai".equalsIgnoreCase(oldProvider) && isOpenAiCustom) {
-                    aiProvider = "openai";
-                } else if ("cloudflare".equalsIgnoreCase(oldProvider) && isCfCustom) {
-                    aiProvider = "cloudflare";
-                } else {
-                    aiProvider = "fancy";
-                }
-
-                newConfig.set("provider", null); // 清除旧 format（无论是字符串还是段落）
-                newConfig.set("provider.ai", aiProvider);
-                newConfig.set("provider.search", oldValues.getOrDefault("tavily.enabled", "true").toString().equals("true")
-                        ? "fancy-tavily" : "fancy-metaso");
-                newConfig.set("provider.jina", "fancy");
-
-                plugin.getLogger().info("已迁移 provider 配置: ai=" + aiProvider);
-
-                // v3→v4 迁移完成后，重新释放默认配置以确保格式和注释正确
-                Map<String, Object> v4Values = new HashMap<>();
-                for (String key : newConfig.getKeys(true)) {
-                    if (!key.equals("version") && !newConfig.isConfigurationSection(key)) {
-                        v4Values.put(key, newConfig.get(key));
-                    }
-                }
-                configFile.delete();
-                plugin.saveDefaultConfig();
-                newConfig = YamlConfiguration.loadConfiguration(configFile);
-                for (Map.Entry<String, Object> entry : v4Values.entrySet()) {
-                    if (newConfig.contains(entry.getKey())) {
-                        newConfig.set(entry.getKey(), entry.getValue());
-                    }
-                }
-            }
-
-            // v4.0 内升级：如果 provider 段落缺失（因早期迁移 bug），重建
-            if (!newConfig.contains("provider") || !newConfig.isConfigurationSection("provider")) {
-                newConfig.set("provider", null);
-                newConfig.set("provider.ai", "fancy");
-                newConfig.set("provider.search", "fancy-tavily");
-                newConfig.set("provider.jina", "fancy");
-                plugin.getLogger().info("已修复：重建缺失的 provider 配置段落");
-            }
-
-            // 如果 fancy 段落缺失（从旧版升级过来），补充默认值
-            if (!newConfig.contains("fancy") || !newConfig.isConfigurationSection("fancy")) {
-                newConfig.set("fancy.model", "default");
-                newConfig.set("fancy.co-model", "default-co");
-                plugin.getLogger().info("已补充默认 fancy 模型配置");
-            }
-
             try {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
@@ -348,50 +285,11 @@ public class ConfigManager {
     }
 
     /**
-     * 获取提供商
-     * @return AI 提供商名称 (fancy/openai/cloudflare)
+     * 获取 AI 提供商
+     * @return AI 提供商名称 (cloudflare 或 openai)
      */
     public String getProvider() {
-        String ai = config.getString("provider.ai");
-        if (ai != null && !ai.isEmpty()) return ai;
         return config.getString("provider", "cloudflare");
-    }
-
-    // ========== v4.0+ 提供商配置 ==========
-
-    /**
-     * 获取 FancyConsole 相关配置的 ProviderConfig 对象
-     */
-    public ProviderConfig getProviderConfig() {
-        String ai = config.getString("provider.ai", "fancy");
-        String search = config.getString("provider.search", "fancy-tavily");
-        String jina = config.getString("provider.jina", "fancy");
-        return new ProviderConfig(
-            ProviderConfig.AIProvider.fromString(ai),
-            ProviderConfig.SearchProvider.fromString(search),
-            ProviderConfig.JinaProvider.fromString(jina)
-        );
-    }
-
-    /**
-     * 获取 FancyConsole API 基础地址（可配置，默认指向 VPS 节点）
-     */
-    public String getFancyApiUrl() {
-        return config.getString("fancy.api_url", "https://api.fancy.baicaizhale.top");
-    }
-
-    /**
-     * 获取 FancyConsole 主模型名称
-     */
-    public String getFancyModel() {
-        return config.getString("fancy.model", "default");
-    }
-
-    /**
-     * 获取 FancyConsole 副模型名称（压缩、标题生成）
-     */
-    public String getFancyCoModel() {
-        return config.getString("fancy.co-model", "default");
     }
 
     /**
@@ -428,15 +326,6 @@ public class ConfigManager {
      */
     public int getApiTimeoutSeconds() {
         return config.getInt("settings.api_timeout_seconds", 120);
-    }
-
-    /**
-     * 获取流式输出读取超时时间（秒）
-     * 控制两次 SSE chunk 之间的最大等待时间，推理模型首次 token 延迟可能很长
-     * @return 超时时间（秒），默认 300
-     */
-    public int getStreamingReadTimeoutSeconds() {
-        return config.getInt("settings.streaming_read_timeout_seconds", 300);
     }
 
     public int getContextWindowWarningThreshold() {

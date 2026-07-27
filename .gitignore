@@ -8,9 +8,11 @@
 *.ipr
 *.iws
 AGENT.md
+CLAUDE.md
+AGENTS.md
+EULA.md
 .classpath
 worker/
-.reasonix/
 frontend/
 node_modules/
 .claude/

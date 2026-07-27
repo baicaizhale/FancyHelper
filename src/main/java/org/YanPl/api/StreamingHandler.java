@@ -42,8 +42,6 @@ public class StreamingHandler {
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
-    private volatile JsonObject streamUsage;  // 流式输出的 token 用量统计（由 FancyConsole 注入）
-    private volatile String finishReason;  // 流式输出的结束原因（length=截断, stop=正常）
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     
@@ -60,7 +58,7 @@ public class StreamingHandler {
         this.errorOccurred = false;
         this.gson = new Gson();
         this.logger = plugin.getLogger();
-        this.readTimeoutSeconds = plugin.getConfigManager().getStreamingReadTimeoutSeconds();
+        this.readTimeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
     }
     
     /**
@@ -116,28 +114,6 @@ public class StreamingHandler {
      */
     public boolean hasReasoningCompleteFired() {
         return reasoningCompleteFired;
-    }
-
-    /**
-     * 获取流式输出的 token 用量统计（由 FancyConsole 注入的 usage 事件）
-     * @return usage JSON 对象，可能为 null
-     */
-    public JsonObject getStreamUsage() {
-        return streamUsage;
-    }
-
-    /**
-     * 流式输出是否被截断（finish_reason 为 "length"）
-     */
-    public boolean isTruncated() {
-        return "length".equals(finishReason);
-    }
-
-    /**
-     * 获取流式输出的结束原因
-     */
-    public String getFinishReason() {
-        return finishReason;
     }
     
     /**
@@ -221,28 +197,6 @@ public class StreamingHandler {
                         }
 
                         try {
-                            // 提取 FancyConsole 注入的 usage 事件
-                            try {
-                                JsonObject dataJson = gson.fromJson(data, JsonObject.class);
-                                if (dataJson != null && dataJson.has("usage")) {
-                                    streamUsage = dataJson.getAsJsonObject("usage");
-                                }
-                            } catch (Exception ignored) {}
-
-                            // 提取 finish_reason（检测截断）
-                            try {
-                                JsonObject frJson = gson.fromJson(data, JsonObject.class);
-                                if (frJson != null && frJson.has("choices") && frJson.get("choices").isJsonArray()) {
-                                    var choices = frJson.getAsJsonArray("choices");
-                                    if (choices.size() > 0) {
-                                        var choice = choices.get(0).getAsJsonObject();
-                                        if (choice.has("finish_reason") && !choice.get("finish_reason").isJsonNull()) {
-                                            finishReason = choice.get("finish_reason").getAsString();
-                                        }
-                                    }
-                                }
-                            } catch (Exception ignored) {}
-
                             String textChunk = extractTextFromSSE(data);
 
                             // 检测 reasoning 刚结束 → 触发思考结束回调
@@ -321,7 +275,7 @@ public class StreamingHandler {
             }
             
             flushRemainingBuffer();
-
+            
             // 完成回调：只在未被取消且未出错时触发
             if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
                 try {
@@ -429,8 +383,7 @@ public class StreamingHandler {
                             if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
                                 reasoningJustCompleted = true;
                             }
-                            String contentText = delta.get("content").getAsString();
-                            return contentText;
+                            return delta.get("content").getAsString();
                         }
                         // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
@@ -612,9 +565,9 @@ public class StreamingHandler {
             }
 
             // 如果到这里，可能是其他格式的 SSE 数据（如 [DONE] 标记或控制信息）
-            // 不打印 info 级别日志避免日志刷屏，仅在 debug 模式输出
+            // reasoning 内容已在前面捕获，跳过日志避免噪音
             if (plugin.getConfigManager().isDebug() && !hasReasoningInChunk) {
-                logger.fine("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
+                logger.info("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
             }
 
         } catch (com.google.gson.JsonSyntaxException jsonSyntaxError) {

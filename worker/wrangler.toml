@@ -1,0 +1,13 @@
+name = "fancy-version-worker"
+main = "src/index.js"
+compatibility_date = "2026-05-30"
+account_id = "867520dfa43947e67f0416d72989a2af"
+
+# KV namespace for storing plugin version metadata
+kv_namespaces = [
+  { binding = "PLUGIN_METADATA", id = "b61c4877e5eb4f4abef9f6308a8e288a" }
+]
+
+routes = [
+  { pattern = "fancy-version.baicaizhale.top", custom_domain = true }
+]

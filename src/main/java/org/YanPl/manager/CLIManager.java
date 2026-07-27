@@ -150,7 +150,7 @@ public class CLIManager {
 
     public CLIManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.ai = plugin.getLlmClient();
+        this.ai = new LLMClient(plugin);
         this.promptManager = new PromptManager(plugin);
         this.toolExecutor = new ToolExecutor(plugin, this);
         this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
@@ -455,6 +455,7 @@ public class CLIManager {
      */
     private void startThinkingTask() {
         new BukkitRunnable() {
+            @SuppressWarnings("null")
             @Override
             public void run() {
                 if (!plugin.isEnabled()) {
@@ -517,17 +518,10 @@ public class CLIManager {
                             if (session != null) {
                                 long streamingTokens = streamedOutputTokens.getOrDefault(uuid, 0L);
                                 long roundTokens = roundOutputTokens.getOrDefault(uuid, 0L);
-                                long total = roundTokens + streamingTokens;
-                                if (total > 0) {
-                                    tokensInfo = " · " + total;
-                                }
+                                tokensInfo = " · " + (roundTokens + streamingTokens);
                             }
 
                             String statsSuffix = " (" + elapsedFromMsg + "s" + tokensInfo + " tokens)";
-                            // 如果 tokensInfo 是空，去掉末尾的 " tokens)"
-                            if (tokensInfo.isEmpty()) {
-                                statsSuffix = " (" + elapsedFromMsg + "s)";
-                            }
 
                             // ActionBar: TextComponent.setColor() 直接用 hex
                             TextComponent comp = new TextComponent(BREATHING_SYMBOLS[phaseIdx] + " ");
@@ -667,11 +661,11 @@ public class CLIManager {
      * 构建错误消息组件 §zFancyHelper§b§r §7> §f{context}（状态码 xxx）
      */
     private TextComponent buildErrorText(String errorMessage, String defaultContext) {
-        TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f")));
+        TextComponent msg = new TextComponent(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f"));
 
-        if (errorMessage != null && !errorMessage.isEmpty()) {
-            // 直接显示错误信息（已去掉前缀），不再做前缀检测
-            msg.addExtra(new TextComponent(errorMessage));
+        if (errorMessage != null && errorMessage.startsWith("§zFancyHelper§b§r §7> §f")) {
+            // 已经是友好消息，直接去掉前缀显示
+            msg.addExtra(new TextComponent(errorMessage.substring("§zFancyHelper§b§r §7> §f".length())));
             return msg;
         }
 
@@ -1032,11 +1026,14 @@ public class CLIManager {
         // 异步调用小模型生成标题
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                plugin.getLogger().info("[CLI] 开始调用 AI 生成标题...");
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] 开始调用 AI 生成标题...");
+                }
                 String title = ai.generateTitle(messageToSummarize);
-                plugin.getLogger().info("[CLI] 标题生成返回: '" + title + "'");
                 if (title != null && !title.isEmpty()) {
-                    plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
+                    if (plugin.getConfigManager().isDebug()) {
+                        plugin.getLogger().info("[CLI] AI 生成标题成功: " + title);
+                    }
                     // 存储标题
                     generatedTitles.put(sessionUUID, title);
                     // 直接更新文件中的标题（不检查session是否还在map中）
@@ -1343,24 +1340,6 @@ public class CLIManager {
         if (!plugin.getEulaManager().isEulaValid()) {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"));
             plugin.getLogger().warning("[CLI] 由于 EULA 文件无效，拒绝了 " + player.getName() + " 的访问。");
-            return;
-        }
-
-        // 检查 FancyConsole 注册状态（仅在未注册且 provider.ai=fancy 时提示）
-        boolean needsRegistration = !plugin.getRegistrationManager().isRegistered()
-            && plugin.getConfigManager().getProviderConfig().isAiFancy();
-        if (needsRegistration) {
-            String regUrl = plugin.getRegistrationManager().getRegistrationUrl();
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f首次使用 FancyConsole？"));
-            player.sendMessage(ColorUtil.translateCustomColors("§e点击下面链接注册（免费），然后在聊天框粘贴 API Key："));
-
-            TextComponent link = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + regUrl);
-            link.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, regUrl));
-            link.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                new Text("点击在浏览器中打开注册页面")));
-            player.spigot().sendMessage(link);
-
-            player.sendMessage(ColorUtil.translateCustomColors("§7已有注册的 API Key？直接粘贴到聊天框即可（以 fc_ 开头）"));
             return;
         }
 
@@ -2342,7 +2321,7 @@ public class CLIManager {
             }
             
             if (isGenerating.getOrDefault(uuid, false)) {
-                TextComponent warnMsg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请不要在 Fancy 生成内容时发送消息")));
+                TextComponent warnMsg = new TextComponent(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请不要在 Fancy 生成内容时发送消息"));
                 TextComponent interruptBtn = new TextComponent(ChatColor.YELLOW + "[点击打断]");
                 interruptBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
                 interruptBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断生成")));
@@ -2561,33 +2540,8 @@ public class CLIManager {
         
         streamingHandler.setOnCompleteCallback((completeText) -> {
             if (responseHandled[0]) return;
-
-            // 检测异常流终止：有 reasoning 但无 content，说明上游中断
-            if (completeText.isEmpty() && streamingHandler.getThoughtContent() != null
-                    && !streamingHandler.getThoughtContent().isEmpty()
-                    && streamingHandler.getFinishReason() == null) {
-                responseHandled[0] = true;
-                activeStreamingHandlers.remove(uuid);
-                plugin.getLogger().warning("[CLI] 流异常终止（reasoning 有内容但 content 为空），自动重试");
-                // 获取最后一条用户消息用于重试
-                String lastUserMsg = "";
-                for (int i = session.getHistory().size() - 1; i >= 0; i--) {
-                    if ("user".equals(session.getHistory().get(i).getRole())) {
-                        lastUserMsg = session.getHistory().get(i).getContent();
-                        break;
-                    }
-                }
-                final String retryMsg = lastUserMsg;
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) return;
-                    isGenerating.put(uuid, false);
-                    handleChat(player, retryMsg);
-                });
-                return;
-            }
-
             responseHandled[0] = true;
-
+            
             fullResponseText.append(completeText);
             activeStreamingHandlers.remove(uuid);
 
@@ -3921,22 +3875,6 @@ public class CLIManager {
 
                     streamingHandler.setOnCompleteCallback((completeText) -> {
                         if (responseHandled[0]) return;
-
-                        // 检测异常流终止：有 reasoning 但无 content，说明上游中断
-                        if (completeText.isEmpty() && streamingHandler.getThoughtContent() != null
-                                && !streamingHandler.getThoughtContent().isEmpty()
-                                && streamingHandler.getFinishReason() == null) {
-                            responseHandled[0] = true;
-                            activeStreamingHandlers.remove(uuid);
-                            plugin.getLogger().warning("[CLI] 流异常终止（reasoning 有内容但 content 为空），自动重试");
-                            Bukkit.getScheduler().runTask(plugin, () -> {
-                                if (!player.isOnline()) return;
-                                isGenerating.put(uuid, false);
-                                feedbackToAI(player, feedback);
-                            });
-                            return;
-                        }
-
                         responseHandled[0] = true;
                         fullResponseText.append(completeText);
                         activeStreamingHandlers.remove(uuid);
@@ -3992,12 +3930,7 @@ public class CLIManager {
                                 player.spigot().sendMessage(thoughtBtn);
                             }
 
-                            // 检测输出截断
-                            if (streamingHandler.isTruncated()) {
-                                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §e⚠ 输出被截断（已达最大 token 限制），可能不完整。"));
-                            }
-
-                            session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: " + streamingHandler.getFinishReason() + "\n");
+                            session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                             AIResponse response = new AIResponse(completeText,
                                 (thought != null && !thought.isEmpty()) ? thought : null);
                             handleAIResponse(player, response, true);
@@ -4559,12 +4492,8 @@ public class CLIManager {
 
         player.spigot().sendMessage(line1);
 
-        String stats;
-        if (totalTokens > 0) {
-            stats = "⟐ " + totalTokens + " tokens · " + String.format("%.1f", durationSec) + "s";
-        } else {
-            stats = "⟐ " + String.format("%.1f", durationSec) + "s";
-        }
+        // ▌⟐ tokens · time (思考 thinkTime)
+        String stats = "⟐ " + totalTokens + " tokens · " + String.format("%.1f", durationSec) + "s";
         if (thinkingSec > 0) {
             stats += " (思考 " + String.format("%.1f", thinkingSec) + "s)";
         }
