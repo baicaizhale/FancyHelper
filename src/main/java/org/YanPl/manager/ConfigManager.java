@@ -374,6 +374,13 @@ public class ConfigManager {
     }
 
     /**
+     * 获取 FancyConsole API 基础地址（可配置，默认指向 VPS 节点）
+     */
+    public String getFancyApiUrl() {
+        return config.getString("fancy.api_url", "https://api.fancy.baicaizhale.top");
+    }
+
+    /**
      * 获取 FancyConsole 主模型名称
      */
     public String getFancyModel() {

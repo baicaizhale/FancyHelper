@@ -23,7 +23,7 @@ import java.util.Map;
 /**
  * API 路由层
  * 根据 ProviderConfig 决定走 FancyConsole 代理还是 BYOK 直连
- * BYOK 路径委托给原有的 LLMClient/TavilyAPI/MetasoAPI，fancy 路径直接发往 api.fancy.baicaizhale.top
+ * BYOK 路径委托给原有的 LLMClient/TavilyAPI/MetasoAPI，fancy 路径直接发往 VPS 节点（api2.fancy.baicaizhale.top）
  */
 public class APIRouter {
 
@@ -193,11 +193,12 @@ public class APIRouter {
 
     // ============ FancyConsole 代理实现 ============
 
-    // 此地址与 RegistrationManager.getApiUrl() 重复，修改时需同步更新两处
-    private final String API_BASE = "https://api.fancy.baicaizhale.top";
-
     private String getApiUrl() {
-        return API_BASE;
+        String configured = configManager.getFancyApiUrl();
+        if (configured != null && !configured.isEmpty()) {
+            return configured;
+        }
+        return "https://api.fancy.baicaizhale.top"; // fallback
     }
 
     private String getApiKey() {

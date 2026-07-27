@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 4.0.1
+version: 4.0.2
 
 # 插件设置
 settings:
@@ -68,7 +68,7 @@ settings:
   
 provider:
   # AI提供商  fancy  | openai | cloudflare
-  ai: cloudflare
+  ai: fancy
   # 搜索API提供商  fancy-metaso | fancy-tavily | metaso | tavily
   search: fancy-tavily
   # Jina Api    fancy  | none
@@ -76,7 +76,9 @@ provider:
 
 # FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
 fancy:
-  # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表】
+  # API 地址（可选，默认指向 Worker 中转）
+  api_url: "https://api.fancy.baicaizhale.top"
+  # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表
   # 主模型名称
   model: "default"
   # 副模型（用于压缩、标题生成等轻量级任务）
@@ -88,7 +90,7 @@ cloudflare:
   # 创建密钥：https://blog.baicaizhale.top/post/create-cf-key-for-fhai
   cf_key: "cfat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   # 代理地址（可选），所有请求会经过此代理转发，需兼容 /v1/chat/completions 和 /v1/responses 端点
-  proxy_url: "http://103.236.70.111:10100"
+  proxy_url: "http://103.236.70.111:10114"
   # 主模型名称
   model: "@cf/google/gemma-4-26b-a4b-it"
   # 副模型（用于压缩等轻量级任务，使用主模型的 cf_key）

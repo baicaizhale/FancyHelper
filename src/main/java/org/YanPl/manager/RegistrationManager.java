@@ -112,9 +112,13 @@ public class RegistrationManager {
 
     /**
      * 获取 FancyConsole API 基础地址
-     * 此地址与 APIRouter.API_BASE 重复，修改时需同步更新两处
+     * 通过 ConfigManager 读取配置，支持自定义 VPS 地址
      */
     public String getApiUrl() {
+        String configured = plugin.getConfigManager().getFancyApiUrl();
+        if (configured != null && !configured.isEmpty()) {
+            return configured;
+        }
         return "https://api.fancy.baicaizhale.top";
     }
 

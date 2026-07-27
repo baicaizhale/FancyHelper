@@ -517,10 +517,17 @@ public class CLIManager {
                             if (session != null) {
                                 long streamingTokens = streamedOutputTokens.getOrDefault(uuid, 0L);
                                 long roundTokens = roundOutputTokens.getOrDefault(uuid, 0L);
-                                tokensInfo = " · " + (roundTokens + streamingTokens);
+                                long total = roundTokens + streamingTokens;
+                                if (total > 0) {
+                                    tokensInfo = " · " + total;
+                                }
                             }
 
                             String statsSuffix = " (" + elapsedFromMsg + "s" + tokensInfo + " tokens)";
+                            // 如果 tokensInfo 是空，去掉末尾的 " tokens)"
+                            if (tokensInfo.isEmpty()) {
+                                statsSuffix = " (" + elapsedFromMsg + "s)";
+                            }
 
                             // ActionBar: TextComponent.setColor() 直接用 hex
                             TextComponent comp = new TextComponent(BREATHING_SYMBOLS[phaseIdx] + " ");
@@ -4552,8 +4559,12 @@ public class CLIManager {
 
         player.spigot().sendMessage(line1);
 
-        // ▌⟐ tokens · time (思考 thinkTime)
-        String stats = "⟐ " + totalTokens + " tokens · " + String.format("%.1f", durationSec) + "s";
+        String stats;
+        if (totalTokens > 0) {
+            stats = "⟐ " + totalTokens + " tokens · " + String.format("%.1f", durationSec) + "s";
+        } else {
+            stats = "⟐ " + String.format("%.1f", durationSec) + "s";
+        }
         if (thinkingSec > 0) {
             stats += " (思考 " + String.format("%.1f", thinkingSec) + "s)";
         }
