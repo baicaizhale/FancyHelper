@@ -20,6 +20,7 @@ import org.YanPl.manager.GuiManager;
 import org.YanPl.manager.SkillManager;
 import org.YanPl.manager.SkillUpdateManager;
 import org.YanPl.manager.StatsManager;
+import org.YanPl.manager.FancyConsoleManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -60,6 +61,7 @@ public final class FancyHelper extends JavaPlugin {
     private SkillUpdateManager skillUpdateManager;
     private StatsManager statsManager;
     private McpManager mcpManager;
+    private FancyConsoleManager fancyConsoleManager;
 
     @Override
     public void onEnable() {
@@ -78,6 +80,9 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化配置管理器
             configManager = new ConfigManager(this);
+
+            // 初始化 FancyConsole 集成
+            fancyConsoleManager = new FancyConsoleManager(this);
 
             // 初始化验证管理器
             verificationManager = new VerificationManager(this);
@@ -433,6 +438,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public FancyConsoleManager getFancyConsoleManager() {
+        return fancyConsoleManager;
     }
 
     public WorkspaceIndexer getWorkspaceIndexer() {

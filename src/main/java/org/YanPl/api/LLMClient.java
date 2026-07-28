@@ -365,12 +365,82 @@ public class LLMClient {
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
         checkConfigLoaded();
 
+        // 检测是否启用 FancyConsole 模式
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return chatWithFancyConsole(session, systemPrompt);
+        }
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(session, systemPrompt);
         }
         // 否则使用 CloudFlare Workers AI
         return chatWithCloudFlare(session, systemPrompt);
+    }
+
+    /**
+     * 使用 FancyConsole 进行对话（OpenAI 兼容格式）
+     */
+    private AIResponse chatWithFancyConsole(DialogueSession session, String systemPrompt) throws IOException {
+        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        String model = plugin.getConfigManager().getFancyModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            return new AIResponse("§zFancyConsole§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。", null, 0, 0, false);
+        }
+
+        if (!apiUrl.contains("/v1/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "v1/chat/completions";
+            } else {
+                apiUrl += "/v1/chat/completions";
+            }
+        }
+
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 10000);
+
+        String requestBody = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[FancyConsole] 请求: " + apiUrl + " 模型: " + model);
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+        try {
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
+                logInteraction(session, requestBody, responseBody);
+                return new AIResponse("§zFancyConsole§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")", null, 0, 0, false);
+            }
+
+            logInteraction(session, requestBody, responseBody);
+
+            JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
+            return responseParser.parseResponse(resultJson);
+
+        } catch (java.net.http.HttpTimeoutException e) {
+            return new AIResponse("§zFancyConsole§b§r §7> §c请求超时，请稍后重试。", null, 0, 0, false);
+        } catch (java.net.ConnectException e) {
+            return new AIResponse("§zFancyConsole§b§r §7> §c无法连接到 FancyConsole 服务器。", null, 0, 0, false);
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new AIResponse("§zFancyConsole§b§r §7> §c网络错误: " + e.getMessage(), null, 0, 0, false);
+        }
     }
 
     /**
@@ -1542,10 +1612,75 @@ public class LLMClient {
     public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         checkConfigLoaded();
 
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return chatStreamingWithFancyConsole(session, systemPrompt, streamingHandler);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
         }
         return chatStreamingWithCloudFlare(session, systemPrompt, streamingHandler);
+    }
+
+    /**
+     * 使用 FancyConsole 进行流式对话（OpenAI 兼容格式）
+     */
+    private String chatStreamingWithFancyConsole(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        String model = plugin.getConfigManager().getFancyModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyConsole§b§r §7> §c未绑定 API Key。请先使用 /fancyhelper bind <API Key> 绑定。");
+        }
+
+        if (!apiUrl.contains("/v1/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "v1/chat/completions";
+            } else {
+                apiUrl += "/v1/chat/completions";
+            }
+        }
+
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", plugin.getConfigManager().getContextWindowLimit());
+        bodyJson.addProperty("stream", true);
+
+        String requestBody = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[FancyConsole Streaming] 请求: " + apiUrl + " 模型: " + model);
+        }
+
+        // FancyConsole 是 OpenAI 兼容格式，复用相同的流式处理逻辑
+        String bodyString = gson.toJson(bodyJson);
+        logRequestFormatted(session, bodyString);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() != 200) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                throw new IOException("FancyConsole 流式请求失败: " + response.statusCode() + " - " + errorBody);
+            }
+
+            String fullText = streamingHandler.processStream(response);
+            return fullText;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("流式调用被中断: " + e.getMessage(), e);
+        }
     }
 
     /**

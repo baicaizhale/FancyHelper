@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 3.8.7
+version: 4.0.0
 
 # 插件设置
 settings:
@@ -61,8 +61,24 @@ settings:
     - scoreboard
     - tag
 
-# 提供商选择（接受参数：cloudflare/openai）
-provider: cloudflare
+# 提供商选择 — fancy 走 FancyConsole（配额管理），其余为 BYOK（直连）
+provider:
+  # AI: fancy | openai | cloudflare
+  ai: fancy
+  # 搜索: fancy-tavily | fancy-metaso | tavily | metaso
+  search: fancy-tavily
+  # Jina: fancy | none（关闭网页抓取）
+  jina: fancy
+
+# FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
+fancy:
+  # API 地址（可选，默认指向 http://api.fancy.baicaizhale.top）
+  api_url: http://api.fancy.baicaizhale.top
+  # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表
+  # 主模型名称
+  model: toter-claude-opus-4-5
+  # 副模型（用于压缩、标题生成等轻量级任务）
+  co-model: default_co
 
 # CloudFlare Workers AI 配置
 cloudflare:

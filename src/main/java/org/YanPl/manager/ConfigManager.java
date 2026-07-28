@@ -37,6 +37,84 @@ public class ConfigManager {
         loadPlayerData();
     }
 
+    // ============================================================
+    // FancyConsole 配置
+    // ============================================================
+
+    /**
+     * 获取 FancyConsole API 地址
+     */
+    public String getFancyApiUrl() {
+        return config.getString("fancy.api_url", "http://api.fancy.baicaizhale.top");
+    }
+
+    /**
+     * 获取 FancyConsole 主模型
+     */
+    public String getFancyModel() {
+        return config.getString("fancy.model", "toter-claude-opus-4-5");
+    }
+
+    /**
+     * 获取 FancyConsole 副模型
+     */
+    public String getFancyCoModel() {
+        return config.getString("fancy.co-model", "default_co");
+    }
+
+    // ============================================================
+    // 提供商配置
+    // ============================================================
+
+    /**
+     * 获取 AI 提供商
+     * @return fancy | openai | cloudflare
+     */
+    public String getProvider() {
+        // 新版结构: provider.ai
+        String aiProvider = config.getString("provider.ai", null);
+        if (aiProvider != null) return aiProvider;
+        // 旧版兼容: provider 直接是字符串
+        return config.getString("provider", "fancy");
+    }
+
+    /**
+     * 获取搜索 API 提供商
+     * @return fancy-tavily | fancy-metaso | tavily | metaso
+     */
+    public String getSearchProvider() {
+        return config.getString("provider.search", "fancy-tavily");
+    }
+
+    /**
+     * 获取 Jina 网页抓取提供商
+     * @return fancy | none
+     */
+    public String getJinaProvider() {
+        return config.getString("provider.jina", "fancy");
+    }
+
+    /**
+     * 是否使用 FancyConsole 作为 AI 提供商
+     */
+    public boolean isFancyConsoleAi() {
+        return "fancy".equals(getProvider());
+    }
+
+    /**
+     * 是否使用 FancyConsole 作为搜索代理
+     */
+    public boolean isFancyConsoleSearch() {
+        return "fancy-tavily".equals(getSearchProvider()) || "fancy-metaso".equals(getSearchProvider());
+    }
+
+    /**
+     * 是否使用 FancyConsole 作为网页抓取代理
+     */
+    public boolean isFancyConsoleJina() {
+        return "fancy".equals(getJinaProvider());
+    }
+
     /**
      * 加载玩家数据配置文件
      */
@@ -153,6 +231,17 @@ public class ConfigManager {
                 newConfig.set("co-model", null);
                 plugin.getLogger().info("已清除旧版 co-model 配置段落");
             }
+
+            // 迁移旧版 provider 字段（string → object）
+            // 旧格式: provider: cloudflare  →  新格式: provider: { ai: cloudflare, search: fancy-tavily, jina: fancy }
+            if (oldValues.containsKey("provider") && !(oldValues.get("provider") instanceof Map)) {
+                String oldProvider = String.valueOf(oldValues.get("provider"));
+                newConfig.set("provider.ai", oldProvider);
+                plugin.getLogger().info("已迁移旧配置 provider=" + oldProvider + " 到 provider.ai=" + oldProvider);
+            }
+            // 同时确保 provider.search / provider.jina 在新配置中有默认值
+            if (!newConfig.contains("provider.search")) newConfig.set("provider.search", "fancy-tavily");
+            if (!newConfig.contains("provider.jina")) newConfig.set("provider.jina", "fancy");
 
             try {
                 newConfig.save(configFile);
@@ -282,14 +371,6 @@ public class ConfigManager {
      */
     public String getCompressionOpenAiModel() {
         return config.getString("openai.co-model", "gpt-4o-mini");
-    }
-
-    /**
-     * 获取 AI 提供商
-     * @return AI 提供商名称 (cloudflare 或 openai)
-     */
-    public String getProvider() {
-        return config.getString("provider", "cloudflare");
     }
 
     /**

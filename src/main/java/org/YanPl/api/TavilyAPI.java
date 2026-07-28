@@ -76,6 +76,11 @@ public class TavilyAPI {
      * @return 格式化的搜索结果字符串
      */
     public String search(String query, int maxResults) {
+        // FancyConsole 搜索
+        if (configManager.isFancyConsoleSearch()) {
+            return searchWithFancyConsole(query, maxResults);
+        }
+
         if (!configManager.isTavilyEnabled()) {
             return "Tavily 搜索未启用。请在 config.yml 中配置 tavily.enabled = true";
         }
@@ -134,7 +139,47 @@ public class TavilyAPI {
             return "Tavily 搜索出错: " + e.getMessage();
         }
     }
-    
+
+    /**
+     * 使用 FancyConsole 进行搜索
+     */
+    private String searchWithFancyConsole(String query, int maxResults) {
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            return "§zFancyConsole§b§r §7> §c未绑定 API Key，无法使用该功能。";
+        }
+
+        String fancyUrl = configManager.getFancyApiUrl();
+        if (!fancyUrl.endsWith("/")) fancyUrl += "/";
+        String apiUrl = fancyUrl + "v1/search";
+
+        try {
+            JsonObject requestBody = new JsonObject();
+            requestBody.addProperty("query", query);
+            requestBody.addProperty("max_results", Math.min(maxResults, 10));
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody)))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                return parseSearchResponse(response.body(), query);
+            } else {
+                plugin.getLogger().warning("[FancyConsole] 搜索失败: " + response.statusCode());
+                return "FancyConsole 搜索失败 (HTTP " + response.statusCode() + ")";
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("[FancyConsole] 搜索异常: " + e.getMessage());
+            return "FancyConsole 搜索出错: " + e.getMessage();
+        }
+    }
+
     /**
      * 解析 Tavily 搜索响应
      * 
