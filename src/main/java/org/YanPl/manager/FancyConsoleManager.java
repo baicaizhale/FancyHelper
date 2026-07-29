@@ -21,7 +21,7 @@ import java.util.UUID;
  */
 public class FancyConsoleManager {
 
-    private static final String DEFAULT_CONSOLE_URL = "http://api.fancy.baicaizhale.top";
+    private static final String DEFAULT_CONSOLE_URL = "https://api.fancy.baicaizhale.top";
     private static final String CONFIG_FILE_NAME = "client-fancy.yml";
 
     private final FancyHelper plugin;
@@ -34,6 +34,7 @@ public class FancyConsoleManager {
         this.plugin = plugin;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
         initConfig();
     }
