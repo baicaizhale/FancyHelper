@@ -1344,13 +1344,112 @@ public class LLMClient {
     public String generateTitle(String firstMessage) throws IOException {
         checkConfigLoaded();
 
-        // 使用主模型的配置，而不是压缩模型
         String provider = plugin.getConfigManager().getProvider();
 
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return generateTitleWithFancyConsole(firstMessage);
+        }
         if ("openai".equalsIgnoreCase(provider)) {
             return generateTitleWithOpenAI(firstMessage);
         } else {
             return generateTitleWithCloudFlare(firstMessage);
+        }
+    }
+
+    /**
+     * 使用 FancyConsole 生成标题
+     */
+    private String generateTitleWithFancyConsole(String firstMessage) throws IOException {
+        return generateTitleWithRetryFancyConsole(firstMessage);
+    }
+
+    /**
+     * 使用 FancyConsole 生成标题（带重试）
+     */
+    private String generateTitleWithRetryFancyConsole(String firstMessage) throws IOException {
+        int maxRetries = 4;
+        boolean reachedApi = false;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String title = generateTitleFromFancyConsole(firstMessage);
+                if (title != null) return title;
+                reachedApi = true;
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试 JSON 解析失败");
+            } catch (Exception e) {
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试失败: " + e.getMessage());
+            }
+        }
+
+        if (reachedApi) return "";
+        return null;
+    }
+
+    /**
+     * 使用 FancyConsole 生成标题（单次尝试）
+     */
+    private String generateTitleFromFancyConsole(String firstMessage) throws IOException {
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未绑定 API Key");
+        }
+
+        String fancyUrl = plugin.getConfigManager().getFancyApiUrl();
+        String model = plugin.getConfigManager().getFancyModel();
+
+        // Auto-append path
+        String url = fancyUrl;
+        if (!url.contains("/chat/completions")) {
+            url = url.replaceAll("/+$", "") + "/v1/chat/completions";
+        }
+
+        JsonArray messagesArray = new JsonArray();
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        messagesArray.add(systemMsg);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Label this: " + firstMessage);
+        messagesArray.add(userMsg);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 请求体: " + bodyString);
+        }
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(60))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[标题生成] 响应 (" + response.statusCode() + "): " + responseBody);
+            }
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[标题生成] FancyConsole API 错误: " + response.statusCode());
+                throw new IOException("标题生成失败: " + response.statusCode());
+            }
+
+            return parseTitleFromResponse(responseBody);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("标题生成被中断: " + e.getMessage(), e);
         }
     }
 
