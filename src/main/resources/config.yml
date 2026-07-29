@@ -61,7 +61,7 @@ settings:
     - scoreboard
     - tag
 
-# 提供商选择 — fancy 走 FancyConsole（配额管理），其余为 BYOK（直连）
+# 提供商选择 — fancy 走 FancyConsole，其余为 BYOK
 provider:
   # AI: fancy | openai | cloudflare
   ai: fancy
@@ -76,7 +76,7 @@ fancy:
   api_url: http://api.fancy.baicaizhale.top
   # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表
   # 主模型名称
-  model: toter-claude-opus-4-5
+  model: default
   # 副模型（用于压缩、标题生成等轻量级任务）
   co-model: default_co
 
