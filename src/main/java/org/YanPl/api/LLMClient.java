@@ -1406,6 +1406,11 @@ public class LLMClient {
             url = url.replaceAll("/+$", "") + "/v1/chat/completions";
         }
 
+        // Log the real URL we're calling
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 请求 URL: " + url);
+        }
+
         JsonArray messagesArray = new JsonArray();
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
