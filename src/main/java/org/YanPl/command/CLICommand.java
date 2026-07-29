@@ -522,7 +522,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleDeepReload(CommandSender sender) {
         try {
             if (plugin.signalReloadService("RELOAD", null)) {
-                sender.sendMessage(ChatColor.GREEN + ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载, 可能需要20s左右的时间等待响应"));
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载, 可能需要20s左右的时间等待响应"));
 
                 // 信号已发送, 立即在主线程自卸载
                 Bukkit.getPluginManager().disablePlugin(plugin);
@@ -1448,11 +1448,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleNotice(CommandSender sender) {
-        sender.sendMessage("§zFancyHelper§b§r §7> §f正在获取公告...");
-        
+        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在获取公告..."));
+
         plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
             if (noticeData == null || !noticeData.enabled) {
-                sender.sendMessage(ChatColor.GRAY + "§zFancyHelper§b§r §7> §f当前没有可显示的公告。");
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可显示的公告。"));
                 return;
             }
             
