@@ -146,7 +146,7 @@ public class TavilyAPI {
     private String searchWithFancyConsole(String query, int maxResults) {
         String apiKey = plugin.getFancyConsoleManager().getApiKey();
         if (apiKey == null || apiKey.isEmpty()) {
-            return "§zFancyConsole§b§r §7> §c未绑定 API Key，无法使用该功能。";
+            return "§zFancyHelper§b§r §7> §c未绑定 API Key，无法使用该功能。";
         }
 
         String fancyUrl = configManager.getFancyApiUrl();

@@ -386,7 +386,7 @@ public class LLMClient {
         String model = plugin.getConfigManager().getFancyModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            return new AIResponse("§zFancyConsole§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。", null, 0, 0, false);
+            return new AIResponse("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。", null, 0, 0, false);
         }
 
         if (!apiUrl.contains("/v1/chat/completions")) {
@@ -425,7 +425,7 @@ public class LLMClient {
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
                 logInteraction(session, requestBody, responseBody);
-                return new AIResponse("§zFancyConsole§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")", null, 0, 0, false);
+                return new AIResponse("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")", null, 0, 0, false);
             }
 
             logInteraction(session, requestBody, responseBody);
@@ -434,12 +434,12 @@ public class LLMClient {
             return responseParser.parseResponse(resultJson);
 
         } catch (java.net.http.HttpTimeoutException e) {
-            return new AIResponse("§zFancyConsole§b§r §7> §c请求超时，请稍后重试。", null, 0, 0, false);
+            return new AIResponse("§zFancyHelper§b§r §7> §c请求超时，请稍后重试。", null, 0, 0, false);
         } catch (java.net.ConnectException e) {
-            return new AIResponse("§zFancyConsole§b§r §7> §c无法连接到 FancyConsole 服务器。", null, 0, 0, false);
+            return new AIResponse("§zFancyHelper§b§r §7> §c无法连接到 FancyConsole 服务器。", null, 0, 0, false);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return new AIResponse("§zFancyConsole§b§r §7> §c网络错误: " + e.getMessage(), null, 0, 0, false);
+            return new AIResponse("§zFancyHelper§b§r §7> §c网络错误: " + e.getMessage(), null, 0, 0, false);
         }
     }
 
@@ -1630,7 +1630,7 @@ public class LLMClient {
         String model = plugin.getConfigManager().getFancyModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            throw new IOException("§zFancyConsole§b§r §7> §c未绑定 API Key。请先使用 /fancyhelper bind <API Key> 绑定。");
+            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 /fancyhelper bind <API Key> 绑定。");
         }
 
         if (!apiUrl.contains("/v1/chat/completions")) {

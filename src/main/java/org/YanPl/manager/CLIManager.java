@@ -663,9 +663,13 @@ public class CLIManager {
     private TextComponent buildErrorText(String errorMessage, String defaultContext) {
         TextComponent msg = new TextComponent(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f"));
 
-        if (errorMessage != null && errorMessage.startsWith("§zFancyHelper§b§r §7> §f")) {
-            // 已经是友好消息，直接去掉前缀显示
-            msg.addExtra(new TextComponent(errorMessage.substring("§zFancyHelper§b§r §7> §f".length())));
+        // Match both "§zFancyHelper§b§r §7> §f" and "§zFancyConsole§b§r §7> §c" etc prefixes
+        if (errorMessage != null && errorMessage.startsWith("§zFancyHelper§b§r §7>")) {
+            msg.addExtra(new TextComponent(ColorUtil.translateCustomColors(errorMessage.substring("§zFancyHelper§b§r §7>".length()))));
+            return msg;
+        }
+        if (errorMessage != null && errorMessage.startsWith("§zFancyConsole§b§r §7>")) {
+            msg.addExtra(new TextComponent(ColorUtil.translateCustomColors(errorMessage.substring("§zFancyConsole§b§r §7>".length()))));
             return msg;
         }
 
