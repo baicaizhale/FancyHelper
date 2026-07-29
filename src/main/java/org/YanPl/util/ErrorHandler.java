@@ -97,8 +97,7 @@ public class ErrorHandler {
         return () -> {
             if (player == null || !player.isOnline()) return;
             
-            player.sendMessage(ChatColor.YELLOW + "操作失败，点击 " + 
-                ChatColor.GREEN + "[重试]" + ChatColor.YELLOW + " 重新尝试");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e操作失败，点击 §a[重试]§e 重新尝试"));
             // 注意：实际的点击按钮需要在调用处创建，因为需要 TextComponent
         };
     }

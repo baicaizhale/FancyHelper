@@ -162,7 +162,7 @@ public class ToolExecutor {
                 break;
 
             default:
-                player.sendMessage(ChatColor.RED + "未知工具: " + toolName);
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知工具: " + toolName));
                 String error = "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。";
                 cliManager.feedbackToAI(player, error);
                 if (session != null) {
@@ -224,20 +224,20 @@ public class ToolExecutor {
 
         if (lowerToolName.equals("#remember") || lowerToolName.equals("#forget") ||
             lowerToolName.equals("#edit_memory")) {
-            TextComponent message = new TextComponent(ChatColor.WHITE + "⁕ Fancy 正在记住你说的话.. ");
-            TextComponent manageBtn = new TextComponent("[管理记忆]");
+            TextComponent message = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§f⁕ Fancy 正在记住你说的话.. ")));
+            TextComponent manageBtn = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§f[管理记忆]")));
             manageBtn.setColor(net.md_5.bungee.api.ChatColor.of(ColorUtil.getColorZ()));
             manageBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
-            manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理偏好记忆")));
+            manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ColorUtil.translateCustomColors("§7点击管理偏好记忆"))));
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
         } else if (lowerToolName.equals("#exit")) {
-            player.sendMessage(ChatColor.GRAY + "〇 Exiting...");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7〇 Exiting..."));
         } else if (lowerToolName.equals("#skill")) {
             String skillId = args.trim().toLowerCase();
             org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
             String skillName = skill != null ? skill.getDisplayName() : args;
-            player.sendMessage(ChatColor.GRAY + "◌ Run Skill: " + skillName);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7◌ Run Skill: " + skillName));
         }
     }
 
@@ -260,7 +260,7 @@ public class ToolExecutor {
 
         // SMART 模式下评估风险
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
-            player.sendMessage(ChatColor.GRAY + "⁕ 正在评估操作风险...");
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7⁕ 正在评估操作风险..."));
             cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.THINKING);
             
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -272,7 +272,7 @@ public class ToolExecutor {
                     if (assessment.level >= threshold) {
                         cliManager.sendSmartRiskConfirm(player, "run", cleanCommand, assessment);
                     } else {
-                        player.sendMessage(ChatColor.GOLD + ">> SMART RUN " + ChatColor.WHITE + cleanCommand);
+                        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §6>> SMART RUN §f" + cleanCommand));
                         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                         executeCommand(player, cleanCommand);
                     }
@@ -284,13 +284,13 @@ public class ToolExecutor {
         // YOLO 模式下风险命令需要确认
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             if (isRiskyCommand(cleanCommand)) {
-                player.sendMessage(ChatColor.YELLOW + "⨀ 检测到风险命令，执行可能带来无法挽回的后果，请检查命令");
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e⨀ 检测到风险命令，执行可能带来无法挽回的后果，请检查命令"));
                 cliManager.setPendingCommand(uuid, cleanCommand);
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
                 sendConfirmButtons(player, cleanCommand);
                 return true;
             } else {
-                player.sendMessage(ChatColor.GOLD + ">> YOLO RUN " + ChatColor.WHITE + cleanCommand);
+                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §6>> YOLO RUN §f" + cleanCommand));
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                 executeCommand(player, cleanCommand);
                 return true;
