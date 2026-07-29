@@ -518,10 +518,13 @@ public class CLIManager {
                             if (session != null) {
                                 long streamingTokens = streamedOutputTokens.getOrDefault(uuid, 0L);
                                 long roundTokens = roundOutputTokens.getOrDefault(uuid, 0L);
-                                tokensInfo = " · " + (roundTokens + streamingTokens);
+                                long total = roundTokens + streamingTokens;
+                                if (total > 0) {
+                                    tokensInfo = " · " + total;
+                                }
                             }
 
-                            String statsSuffix = " (" + elapsedFromMsg + "s" + tokensInfo + " tokens)";
+                            String statsSuffix = " (" + elapsedFromMsg + "s" + tokensInfo + (tokensInfo.isEmpty() ? ")" : " tokens)");
 
                             // ActionBar: TextComponent.setColor() 直接用 hex
                             TextComponent comp = new TextComponent(BREATHING_SYMBOLS[phaseIdx] + " ");

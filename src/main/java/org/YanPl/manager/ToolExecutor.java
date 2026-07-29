@@ -232,12 +232,12 @@ public class ToolExecutor {
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
         } else if (lowerToolName.equals("#exit")) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7〇 Exiting..."));
+            player.sendMessage(ColorUtil.translateCustomColors("§7〇 Exiting..."));
         } else if (lowerToolName.equals("#skill")) {
             String skillId = args.trim().toLowerCase();
             org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
             String skillName = skill != null ? skill.getDisplayName() : args;
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7◌ Run Skill: " + skillName));
+            player.sendMessage(ColorUtil.translateCustomColors("§7◌ Run Skill: " + skillName));
         }
     }
 
@@ -260,7 +260,7 @@ public class ToolExecutor {
 
         // SMART 模式下评估风险
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §7⁕ 正在评估操作风险..."));
+            player.sendMessage(ColorUtil.translateCustomColors("§7⁕ 正在评估操作风险..."));
             cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.THINKING);
             
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -272,7 +272,7 @@ public class ToolExecutor {
                     if (assessment.level >= threshold) {
                         cliManager.sendSmartRiskConfirm(player, "run", cleanCommand, assessment);
                     } else {
-                        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §6>> SMART RUN §f" + cleanCommand));
+                        player.sendMessage(ColorUtil.translateCustomColors("§6>> SMART RUN §f" + cleanCommand));
                         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                         executeCommand(player, cleanCommand);
                     }
@@ -284,13 +284,13 @@ public class ToolExecutor {
         // YOLO 模式下风险命令需要确认
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             if (isRiskyCommand(cleanCommand)) {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e⨀ 检测到风险命令，执行可能带来无法挽回的后果，请检查命令"));
+                player.sendMessage(ColorUtil.translateCustomColors("§e⨀ 检测到风险命令，执行可能带来无法挽回的后果，请检查命令"));
                 cliManager.setPendingCommand(uuid, cleanCommand);
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
                 sendConfirmButtons(player, cleanCommand);
                 return true;
             } else {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §6>> YOLO RUN §f" + cleanCommand));
+                player.sendMessage(ColorUtil.translateCustomColors("§6>> YOLO RUN §f" + cleanCommand));
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                 executeCommand(player, cleanCommand);
                 return true;
