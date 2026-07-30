@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -37,6 +38,7 @@ public class StreamingHandler {
     private volatile Consumer<Throwable> onErrorCallback;
     private volatile Consumer<String> onReasoningCallback;      // 思考内容逐片回调
     private volatile Consumer<Long> onReasoningCompleteCallback;  // 思考结束回调，参数为思考耗时ms
+    private volatile BiConsumer<Long, Long> onUsageTokens;        // API 返回的 token 用量回调 (input, output)
     private volatile boolean errorOccurred = false;
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
@@ -99,6 +101,14 @@ public class StreamingHandler {
      */
     public void setOnReasoningCompleteCallback(Consumer<Long> callback) {
         this.onReasoningCompleteCallback = callback;
+    }
+
+    /**
+     * 设置 API token 用量回调（当 SSE 尾部出现 usage 字段时触发）
+     * @param callback 回调函数，参数为 (inputTokens, outputTokens)
+     */
+    public void setOnUsageTokens(BiConsumer<Long, Long> callback) {
+        this.onUsageTokens = callback;
     }
 
     /**
@@ -365,6 +375,16 @@ public class StreamingHandler {
             if (json == null) {
                 logger.warning("[Stream] JSON解析结果为null: " + jsonStr);
                 return null;
+            }
+
+            // 检测 SSE 尾部 usage 字段（API 返回的真实 token 消耗）
+            if (json.has("usage") && json.get("usage").isJsonObject() && onUsageTokens != null) {
+                JsonObject usage = json.getAsJsonObject("usage");
+                long pt = usage.has("prompt_tokens") ? usage.get("prompt_tokens").getAsLong() : 0;
+                long ct = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
+                if (pt > 0 || ct > 0) {
+                    onUsageTokens.accept(pt, ct);
+                }
             }
 
             // 标记本 chunk 是否包含 reasoning（思考）内容，

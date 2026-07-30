@@ -2499,6 +2499,18 @@ public class CLIManager {
                 + DialogueSession.calculateTokens(reasoningChunk));
         });
 
+        // 如果 API 返回了真实 token 用量，替换本地估算值
+        streamingHandler.setOnUsageTokens((inputTokens, outputTokens) -> {
+            streamedOutputTokens.put(uuid, outputTokens);
+            if (session != null) {
+                session.addInputTokens(inputTokens);
+                session.addOutputTokens(outputTokens);
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[CLI] API Token Usage - Input: " + inputTokens + ", Output: " + outputTokens);
+                }
+            }
+        });
+
         streamingHandler.setOnChunkCallback((chunk) -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
             
@@ -3818,6 +3830,15 @@ public class CLIManager {
                         if (reasoningChunk == null || reasoningChunk.isEmpty()) return;
                         streamedOutputTokens.put(uuid, streamedOutputTokens.getOrDefault(uuid, 0L)
                             + DialogueSession.calculateTokens(reasoningChunk));
+                    });
+
+                    // 如果 API 返回了真实 token 用量，替换本地估算值
+                    streamingHandler.setOnUsageTokens((inputTokens, outputTokens) -> {
+                        streamedOutputTokens.put(uuid, outputTokens);
+                        if (session != null) {
+                            session.addInputTokens(inputTokens);
+                            session.addOutputTokens(outputTokens);
+                        }
                     });
 
                     // 思考结束回调：在工具反馈流中也显示思考按钮
