@@ -12,10 +12,8 @@ settings:
   # 补充系统提示词（会自动追加到基础系统提示词后面，不加就留空；注意如果是角色扮演类提示词请关闭Meow模式）
   supplementary_prompt: ""
   # CLI 模式会话的自动过期时间 （以分钟为单位）
-  timeout_minutes: 10
+  timeout_minutes: 60
   # API 请求超时时间（以秒为单位）
-  # 对于推理模型（如 gpt-oss-120b、deepseek-reasoner、kimi-k2.5 等），建议设置为 120-300 秒
-  # 对于普通模型（如 gpt-4o、gpt-4o-mini），建议设置为 60-120 秒
   api_timeout_seconds: 120
   # 上下文窗口剩余警告阈值
   context_window_warning_threshold: 500
@@ -27,16 +25,16 @@ settings:
   check_update: true
   # 是否在管理员进入服务器时提示更新
   op_update_notify: true
-  # 是否在检测到新版本时自动下载并安装更新，Paper及下游服务端推荐开启（使用Spigot及上游服务端请关闭此选项，目前还是会出bug）
+  # 是否在检测到新版本时自动下载并安装更新
   auto_upgrade: true
-  # 防循环检测的连续相似调用阈值
+  # 防循环
   anti_loop:
     # 连续多少次相似调用触发中断
     threshold_count: 4
     # 相似度阈值 (0.0 - 1.0)，建议 0.95
     similarity_threshold: 0.95
-    # 单次对话中连续调用工具的最大次数 (防止 AI 陷入逻辑循环或过度消耗)
-    max_chain_count: 30
+    # 单次对话中连续调用工具的最大次数
+    max_chain_count: 100
   # SMART 模式风险阈值 (0-100)，当风险值高于此值时需要玩家确认
   smart_risk_threshold: 50
 # 日志保留天数，超过此天数的日志将被自动删除
@@ -84,7 +82,7 @@ fancy:
 cloudflare:
   # CloudFlare Workers AI API 密钥，FancyHelper会自动根据密钥来获取对应的account-id
   # 如果你有疑问，可以看看 https://blog.baicaizhale.top/post/create-cf-key-for-fhai
-  cf_key: "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0"
+  cf_key: cfat_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   # 代理地址（可选），如果设置则所有请求会经过此代理转发到 Cloudflare Workers AI
   # 代理必须兼容 /v1/chat/completions 和 /v1/responses 端点
   proxy_url: "https://ptc.fancy.baicaizhale.top"
@@ -100,7 +98,7 @@ openai:
   # API 地址，各服务商地址不同
   api_url: https://api.deepseek.com/chat/completions
   # API 密钥
-  api_key: your-openai-api-key
+  api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   # 模型名称
   model: deepseek-v4-pro
   # 副模型设置（用于压缩等轻量级任务，使用主模型的 api_url 和 api_key）
@@ -111,7 +109,7 @@ metaso:
   # 是否启用 Metaso AI 搜索（默认关闭，启用后将使用 Metaso API 进行 AI 搜索）
   enabled: false
   # Metaso API 令牌，从 https://metaso.cn/search-api/api-keys 获取
-  api_token: mk-A8D756FEDE5A65D47124446CDF97D728
+  api_token: mk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   # 使用的模型名称（fast: 快速模型，pro: 专业模型）
   model: pro
   # 是否启用简洁摘要模式
@@ -121,9 +119,9 @@ metaso:
 tavily:
   # 是否启用 Tavily 搜索（启用后将使用 Tavily API 进行全网搜索）
   enabled: true
-  # Tavily API 密钥，从 https://app.tavily.com/home 获取。如果你有霍格沃兹环境请使用自己的密钥
-  api_key: "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"
-  # Tavily API 代理地址，用于解决国内网络访问问题，留空则使用官方地址。我简直算是为了这个代理而买了一个域名QWQ(求赞助)
+  # Tavily API 密钥，从 https://app.tavily.com/home 获取
+  api_key: "tvly-dev-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # Tavily API 代理地址，用于解决国内网络访问问题，留空则使用官方地址
   proxy_url: "https://tavilyproxy.baicaizhale.top" 
   # 搜索结果数量限制（1-10）
   max_results: 7
