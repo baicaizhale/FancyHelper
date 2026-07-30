@@ -158,6 +158,67 @@ public class FancyConsoleManager {
         return hasApiKey();
     }
 
+    /**
+     * 向 FancyConsole 上报服务器统计数据
+     * @param snapshot 统计数据快照
+     * @return 是否上报成功
+     */
+    public boolean reportStats(StatsManager.StatsSnapshot snapshot) {
+        try {
+            JsonObject body = new JsonObject();
+            // Don't include api_key in body - use Authorization header
+            body.addProperty("server_id", getServerId());
+            body.addProperty("reported_at", java.time.Instant.now().toString());
+
+            // 环境信息
+            body.addProperty("plugin_version", snapshot.pluginVersion);
+            body.addProperty("server_software", snapshot.serverSoftware);
+            body.addProperty("minecraft_version", snapshot.minecraftVersion);
+            body.addProperty("java_version", snapshot.javaVersion);
+            body.addProperty("os_name", snapshot.osName);
+            body.addProperty("os_arch", snapshot.osArch);
+            body.addProperty("available_processors", snapshot.availableProcessors);
+            body.addProperty("max_memory_mb", snapshot.maxMemoryMb);
+            body.addProperty("online_mode", snapshot.onlineMode);
+            body.addProperty("ai_provider", snapshot.aiProvider);
+
+            // 累计计数
+            body.addProperty("total_input_tokens", snapshot.totalInputTokens);
+            body.addProperty("total_output_tokens", snapshot.totalOutputTokens);
+            body.addProperty("cli_entry_count", snapshot.cliEntryCount);
+            body.addProperty("conversation_count", snapshot.conversationCount);
+            body.addProperty("tool_success_count", snapshot.toolSuccessCount);
+            body.addProperty("tool_failure_count", snapshot.toolFailureCount);
+            body.addProperty("error_count", snapshot.errorCount);
+            body.addProperty("total_thinking_time_ms", snapshot.totalThinkingTimeMs);
+
+            // 快照
+            body.addProperty("online_players", snapshot.onlinePlayers);
+            body.addProperty("active_cli_sessions", snapshot.activeCliSessions);
+            body.addProperty("loaded_skills", snapshot.loadedSkills);
+            body.addProperty("indexed_commands", snapshot.indexedCommands);
+            body.addProperty("uptime_seconds", snapshot.uptimeSeconds);
+            body.addProperty("mode_yolo_count", snapshot.modeYoloCount);
+            body.addProperty("mode_smart_count", snapshot.modeSmartCount);
+            body.addProperty("mode_normal_count", snapshot.modeNormalCount);
+            body.addProperty("mode_plan_count", snapshot.modePlanCount);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(getConsoleUrl() + "/api/fancyhelper/report-stats"))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + getApiKey())
+                    .timeout(Duration.ofSeconds(15))
+                    .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200;
+        } catch (Exception e) {
+            plugin.getLogger().warning("[FancyConsole] 上报统计数据失败: " + e.getMessage());
+            return false;
+        }
+    }
+
     public static class ValidateKeyResult {
         public final boolean valid;
         public final String email;
