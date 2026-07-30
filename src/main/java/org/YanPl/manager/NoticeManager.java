@@ -218,14 +218,14 @@ public class NoticeManager {
                     break;
             }
 
-            Bukkit.getConsoleSender().sendMessage(ChatColor.GRAY + "========================================");
-            Bukkit.getConsoleSender().sendMessage(ChatColor.GOLD + "【FancyHelper】");
+            Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§8========================================"));
+            Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§6【FancyHelper】"));
             if (noticeData.text != null && !noticeData.text.isEmpty()) {
                 for (String line : noticeData.text.split("\\n")) {
-                    Bukkit.getConsoleSender().sendMessage(colorCode + line);
+                    Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors(colorCode + line));
                 }
             }
-            Bukkit.getConsoleSender().sendMessage(ChatColor.GRAY + "========================================");
+            Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§8========================================"));
         }
     }
 
@@ -251,27 +251,27 @@ public class NoticeManager {
                     break;
             }
 
-            player.sendMessage("§8§m------------------------------------");
+            player.sendMessage(ColorUtil.translateCustomColors("§8§m------------------------------------"));
             player.sendMessage("");
-            player.sendMessage("§8▌ §e✦ §fFancyHelper §8── §7公告");
+            player.sendMessage(ColorUtil.translateCustomColors("§8▌ §e✦ §zFancyHelper §8── §7公告"));
             player.sendMessage("");
             if (noticeData.text != null && !noticeData.text.isEmpty()) {
                 for (String line : noticeData.text.split("\\n")) {
-                    player.sendMessage(colorCode + "  " + line);
+                    player.sendMessage(ColorUtil.translateCustomColors(colorCode + "  " + line));
                 }
             }
             player.sendMessage("");
 
             if (!hasRead(player)) {
-                TextComponent readButton = new TextComponent("§8▌ §7[§a ✔ 标为已读§7 ]");
-                readButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("§7点击将此公告标记为已读")));
+                TextComponent readButton = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§8▌ §7[§a ✔ 标为已读§7 ]")));
+                readButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ColorUtil.translateCustomColors("§7点击将此公告标记为已读"))));
                 readButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/fancyhelper notice read"));
 
                 player.spigot().sendMessage(readButton);
                 player.sendMessage("");
             }
 
-            player.sendMessage("§8§m------------------------------------");
+            player.sendMessage(ColorUtil.translateCustomColors("§8§m------------------------------------"));
         }
     }
 

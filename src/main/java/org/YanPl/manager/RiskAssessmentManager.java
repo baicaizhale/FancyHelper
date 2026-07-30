@@ -12,7 +12,7 @@ public class RiskAssessmentManager {
 
     public RiskAssessmentManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.ai = plugin.getLlmClient();
+        this.ai = new LLMClient(plugin);
     }
 
     /**

@@ -5,9 +5,7 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
-import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -16,6 +14,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.YanPl.util.ColorUtil;
 
 import java.lang.reflect.Method;
 
@@ -69,14 +68,6 @@ public class ChatListener implements Listener {
 
         String message = event.getMessage();
         Player player = event.getPlayer();
-
-        // FancyConsole API Key 输入检测
-        if (message.startsWith("fc_") && !plugin.getRegistrationManager().isRegistered()) {
-            event.setCancelled(true);
-            handleApiKeyInput(player, message);
-            return;
-        }
-
         if (!plugin.getCliManager().handleChat(player, message)) {
             if (plugin.getCliManager().isInCLI(player)) {
                 if (message.startsWith("！")) {
@@ -92,30 +83,6 @@ public class ChatListener implements Listener {
     }
 
     /**
-     * 处理 FancyConsole API Key 输入（聊天框粘贴 fc_...）
-     */
-    private void handleApiKeyInput(Player player, String apiKey) {
-        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在验证 FancyConsole API Key..."));
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                boolean valid = plugin.getRegistrationManager().validateKey(apiKey);
-                if (valid) {
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §a✓ API Key 验证成功！正在进入 CLI 模式..."));
-                        plugin.getCliManager().enterCLI(player, false);
-                    });
-                }
-            } catch (Exception e) {
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §c✗ §fAPI Key 验证失败: " + e.getMessage()));
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §f请确认你已在浏览器完成注册，并复制了正确的 API Key。"));
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §b点击注册: " + plugin.getRegistrationManager().getRegistrationUrl()));
-                });
-            }
-        });
-    }
-
-    /**
      * 拦截 CLI 模式下玩家误输 /stop 和 /exit 等命令
      */
     @EventHandler(priority = EventPriority.LOWEST)
@@ -127,14 +94,14 @@ public class ChatListener implements Listener {
 
         if (cmd.equals("/stop")) {
             event.setCancelled(true);
-            player.sendMessage(ChatColor.YELLOW + "⚡ 检测到 /stop，是否想输入 stop 打断 AI？已为你执行打断。");
+            player.sendMessage(ColorUtil.translateCustomColors("§e⚡ 检测到 /stop，是否想输入 stop 打断 AI？已为你执行打断。"));
             plugin.getCliManager().handleChat(player, "stop");
         } else if (cmd.equals("/exit")) {
             event.setCancelled(true);
-            TextComponent msg = new TextComponent(ChatColor.GRAY + "你是否想退出 CLI 模式？ ");
-            TextComponent escapeBtn = new TextComponent(ChatColor.GOLD + "" + ChatColor.BOLD + "[ Escape ]");
+            TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§7你是否想退出 CLI 模式？ ")));
+            TextComponent escapeBtn = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§6§l[ Escape ]")));
             escapeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exit"));
-            escapeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击退出 CLI 模式")));
+            escapeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ColorUtil.translateCustomColors("§7点击退出 CLI 模式"))));
             msg.addExtra(escapeBtn);
             player.spigot().sendMessage(msg);
         }

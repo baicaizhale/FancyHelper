@@ -1,12 +1,9 @@
 package org.YanPl;
 
-import org.YanPl.api.LLMClient;
 import org.YanPl.api.MetasoAPI;
 import org.YanPl.api.TavilyAPI;
-import org.YanPl.api.APIRouter;
 import org.YanPl.command.CLICommand;
 import org.YanPl.listener.ChatListener;
-import org.YanPl.manager.RegistrationManager;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
 import org.YanPl.manager.PacketCaptureManager;
@@ -23,6 +20,7 @@ import org.YanPl.manager.GuiManager;
 import org.YanPl.manager.SkillManager;
 import org.YanPl.manager.SkillUpdateManager;
 import org.YanPl.manager.StatsManager;
+import org.YanPl.manager.FancyConsoleManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.bstats.bukkit.Metrics;
@@ -63,9 +61,7 @@ public final class FancyHelper extends JavaPlugin {
     private SkillUpdateManager skillUpdateManager;
     private StatsManager statsManager;
     private McpManager mcpManager;
-    private RegistrationManager registrationManager;
-    private LLMClient llmClient;
-    private APIRouter apiRouter;
+    private FancyConsoleManager fancyConsoleManager;
 
     @Override
     public void onEnable() {
@@ -85,17 +81,8 @@ public final class FancyHelper extends JavaPlugin {
             // 初始化配置管理器
             configManager = new ConfigManager(this);
 
-            // 初始化 FancyConsole 注册管理器（config 之后，因为需要 Console URL）
-            registrationManager = new RegistrationManager(this);
-
-            // 初始化 AI 客户端
-            llmClient = new LLMClient(this);
-
-            // 初始化 API 路由层
-            apiRouter = new APIRouter(this);
-
-            // 异步检测 FancyConsole 连通性
-            apiRouter.checkHealthAsync();
+            // 初始化 FancyConsole 集成
+            fancyConsoleManager = new FancyConsoleManager(this);
 
             // 初始化验证管理器
             verificationManager = new VerificationManager(this);
@@ -434,11 +421,6 @@ public final class FancyHelper extends JavaPlugin {
             mcpManager.shutdown();
         }
 
-        // 关闭注册管理器
-        if (registrationManager != null) {
-            registrationManager.shutdown();
-        }
-
         // 保存统计数据
         if (statsManager != null) {
             statsManager.save();
@@ -456,6 +438,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public FancyConsoleManager getFancyConsoleManager() {
+        return fancyConsoleManager;
     }
 
     public WorkspaceIndexer getWorkspaceIndexer() {
@@ -528,18 +514,6 @@ public final class FancyHelper extends JavaPlugin {
 
     public McpManager getMcpManager() {
         return mcpManager;
-    }
-
-    public RegistrationManager getRegistrationManager() {
-        return registrationManager;
-    }
-
-    public LLMClient getLlmClient() {
-        return llmClient;
-    }
-
-    public APIRouter getApiRouter() {
-        return apiRouter;
     }
 
     /**

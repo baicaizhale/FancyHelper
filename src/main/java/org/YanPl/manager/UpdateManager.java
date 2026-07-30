@@ -86,7 +86,7 @@ public class UpdateManager implements Listener {
                             String trimmedLine = line.trim();
                             if (!trimmedLine.isEmpty()) {
                                 trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
-                                Bukkit.getConsoleSender().sendMessage(" §b§l> §r" + trimmedLine);
+                                Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors(" §b§l> §r" + trimmedLine));
                             }
                         }
                     }
@@ -106,7 +106,7 @@ public class UpdateManager implements Listener {
                                 String trimmedLine = line.trim();
                                 if (!trimmedLine.isEmpty()) {
                                     trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
-                                    sender.sendMessage(" §b§l> §r" + trimmedLine);
+                                    sender.sendMessage(ColorUtil.translateCustomColors(" §b§l> §r" + trimmedLine));
                                 }
                             }
                         }
@@ -398,7 +398,7 @@ public class UpdateManager implements Listener {
                         String trimmedLine = line.trim();
                         if (!trimmedLine.isEmpty()) {
                             trimmedLine = trimmedLine.replaceFirst("^[*\\-\\d.]+\\s+", "");
-                            player.sendMessage(" §b§l- §r" + trimmedLine);
+                            player.sendMessage(ColorUtil.translateCustomColors(" §b§l- §r" + trimmedLine));
                         }
                     }
                 }

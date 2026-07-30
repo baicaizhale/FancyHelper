@@ -41,6 +41,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
                 return true;
             }
+
+            // Check registration status
+            if (!plugin.getFancyConsoleManager().isReady() && !isAnyByokConfigured()) {
+                showRegistrationPrompt((Player) sender);
+                return true;
+            }
+
             Player player = (Player) sender;
             if (!player.hasPermission("fancyhelper.cli")) {
                 player.sendMessage(ChatColor.RED + "你没有权限使用此命令。");
@@ -52,6 +59,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         String subCommand = args[0].toLowerCase();
         switch (subCommand) {
+            case "bind":
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+                    return true;
+                }
+                return handleBind((Player) sender, args);
             case "reload":
                 if (!sender.hasPermission("fancyhelper.reload")) {
                     sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限执行重载。"));
@@ -171,6 +184,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f可用子命令:"));
         sender.sendMessage(" §7- §b/cli §f: 切换进入/退出 CLI 模式");
+        sender.sendMessage(" §7- §b/cli bind <key> §f: 绑定 FancyConsole API Key");
         sender.sendMessage(" §7- §b/cli reload §f: 重新加载配置与工作区");
         sender.sendMessage(" §7- §b/cli reload deeply §f: 深度重载（完全重启插件）");
         sender.sendMessage(" §7- §b/cli status §f: 查看插件运行状态");
@@ -368,6 +382,91 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    // ============================================================
+    //  FancyConsole 绑定 / 注册流程
+    // ============================================================
+
+    /**
+     * 检查是否有可用的 BYOK 配置（OpenAI 等直连模式）
+     */
+    private boolean isAnyByokConfigured() {
+        String provider = plugin.getConfigManager().getProvider();
+        if ("openai".equals(provider)) {
+            String key = plugin.getConfigManager().getOpenAiApiKey();
+            if (key != null && !key.isEmpty() && !"your-openai-api-key".equals(key)) return true;
+        }
+        if ("cloudflare".equals(provider)) {
+            String key = plugin.getConfigManager().getCloudflareCfKey();
+            if (key != null && !key.isEmpty()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 显示注册引导提示
+     */
+    private void showRegistrationPrompt(Player player) {
+        String regUrl = plugin.getFancyConsoleManager().getRegistrationUrl();
+        String serverId = plugin.getFancyConsoleManager().getServerId();
+
+        player.sendMessage("");
+        player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f未检测到 API Key 或 BYOK 配置"));
+        player.sendMessage(ColorUtil.translateCustomColors("§7  请先在 FancyConsole 注册账号以获取 API Key"));
+        player.sendMessage("");
+
+        net.md_5.bungee.api.chat.TextComponent link = new net.md_5.bungee.api.chat.TextComponent(
+                ColorUtil.translateCustomColors("§8[ §b点击此处注册 §8]"));
+        link.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                net.md_5.bungee.api.chat.ClickEvent.Action.OPEN_URL, regUrl));
+        link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
+                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+                new net.md_5.bungee.api.chat.hover.content.Text("§7点击打开注册页面")));
+        player.spigot().sendMessage(link);
+
+        player.sendMessage(ColorUtil.translateCustomColors("§7  注册完成后，在游戏内输入:"));
+        player.sendMessage(ColorUtil.translateCustomColors("§b  /fancyhelper bind <你的API Key>"));
+        player.sendMessage(ColorUtil.translateCustomColors("§7  服务器 ID: §f" + serverId));
+        player.sendMessage("");
+    }
+
+    /**
+     * 处理 /cli bind <key> 绑定 API Key
+     */
+    private boolean handleBind(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §c用法: /fancyhelper bind <API Key>"));
+            return true;
+        }
+
+        String apiKey = args[1].trim();
+        if (apiKey.isEmpty()) {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §cAPI Key 不能为空"));
+            return true;
+        }
+
+        player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f正在验证 API Key..."));
+
+        org.YanPl.manager.FancyConsoleManager.ValidateKeyResult result =
+                plugin.getFancyConsoleManager().validateKey(apiKey);
+
+        if (result.valid) {
+            plugin.getFancyConsoleManager().setApiKey(apiKey);
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §aAPI Key 绑定成功!"));
+            if (result.email != null && !result.email.isEmpty()) {
+                player.sendMessage(ColorUtil.translateCustomColors("§7  账号: §f" + result.email));
+            }
+            if (result.tier != null && !result.tier.isEmpty()) {
+                player.sendMessage(ColorUtil.translateCustomColors("§7  层级: §f" + result.tier));
+            }
+            player.sendMessage(ColorUtil.translateCustomColors("§7  现在可以使用 §b/cli §7进入 AI 对话了"));
+        } else {
+            String errorMsg = result.error != null ? result.error : "验证失败";
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §c" + errorMsg));
+            player.sendMessage(ColorUtil.translateCustomColors("§7  请确认 API Key 正确，或重新在网页注册"));
+        }
+        return true;
+    }
+
     private void toggleCLIMode(Player player) {
         // 切换玩家的 CLI 模式
         plugin.getCliManager().toggleCLI(player);
@@ -423,7 +522,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleDeepReload(CommandSender sender) {
         try {
             if (plugin.signalReloadService("RELOAD", null)) {
-                sender.sendMessage(ChatColor.GREEN + ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载, 可能需要20s左右的时间等待响应"));
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载, 可能需要20s左右的时间等待响应"));
 
                 // 信号已发送, 立即在主线程自卸载
                 Bukkit.getPluginManager().disablePlugin(plugin);
@@ -1350,10 +1449,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     private void handleNotice(CommandSender sender) {
         sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在获取公告..."));
-        
+
         plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
             if (noticeData == null || !noticeData.enabled) {
-                sender.sendMessage(ColorUtil.translateCustomColors(ChatColor.GRAY + "§zFancyHelper§b§r §7> §f当前没有可显示的公告。"));
+                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可显示的公告。"));
                 return;
             }
             
@@ -1523,7 +1622,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "reload", "status", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
+                "bind", "reload", "status", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",

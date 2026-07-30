@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -37,13 +38,12 @@ public class StreamingHandler {
     private volatile Consumer<Throwable> onErrorCallback;
     private volatile Consumer<String> onReasoningCallback;      // 思考内容逐片回调
     private volatile Consumer<Long> onReasoningCompleteCallback;  // 思考结束回调，参数为思考耗时ms
+    private volatile BiConsumer<Long, Long> onUsageTokens;        // API 返回的 token 用量回调 (input, output)
     private volatile boolean errorOccurred = false;
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
-    private volatile JsonObject streamUsage;  // 流式输出的 token 用量统计（由 FancyConsole 注入）
-    private volatile String finishReason;  // 流式输出的结束原因（length=截断, stop=正常）
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     
@@ -60,7 +60,7 @@ public class StreamingHandler {
         this.errorOccurred = false;
         this.gson = new Gson();
         this.logger = plugin.getLogger();
-        this.readTimeoutSeconds = plugin.getConfigManager().getStreamingReadTimeoutSeconds();
+        this.readTimeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
     }
     
     /**
@@ -104,6 +104,14 @@ public class StreamingHandler {
     }
 
     /**
+     * 设置 API token 用量回调（当 SSE 尾部出现 usage 字段时触发）
+     * @param callback 回调函数，参数为 (inputTokens, outputTokens)
+     */
+    public void setOnUsageTokens(BiConsumer<Long, Long> callback) {
+        this.onUsageTokens = callback;
+    }
+
+    /**
      * 获取累积的思考内容（来自 reasoning_content 字段）
      * @return 思考内容字符串
      */
@@ -116,28 +124,6 @@ public class StreamingHandler {
      */
     public boolean hasReasoningCompleteFired() {
         return reasoningCompleteFired;
-    }
-
-    /**
-     * 获取流式输出的 token 用量统计（由 FancyConsole 注入的 usage 事件）
-     * @return usage JSON 对象，可能为 null
-     */
-    public JsonObject getStreamUsage() {
-        return streamUsage;
-    }
-
-    /**
-     * 流式输出是否被截断（finish_reason 为 "length"）
-     */
-    public boolean isTruncated() {
-        return "length".equals(finishReason);
-    }
-
-    /**
-     * 获取流式输出的结束原因
-     */
-    public String getFinishReason() {
-        return finishReason;
     }
     
     /**
@@ -221,28 +207,6 @@ public class StreamingHandler {
                         }
 
                         try {
-                            // 提取 FancyConsole 注入的 usage 事件
-                            try {
-                                JsonObject dataJson = gson.fromJson(data, JsonObject.class);
-                                if (dataJson != null && dataJson.has("usage")) {
-                                    streamUsage = dataJson.getAsJsonObject("usage");
-                                }
-                            } catch (Exception ignored) {}
-
-                            // 提取 finish_reason（检测截断）
-                            try {
-                                JsonObject frJson = gson.fromJson(data, JsonObject.class);
-                                if (frJson != null && frJson.has("choices") && frJson.get("choices").isJsonArray()) {
-                                    var choices = frJson.getAsJsonArray("choices");
-                                    if (choices.size() > 0) {
-                                        var choice = choices.get(0).getAsJsonObject();
-                                        if (choice.has("finish_reason") && !choice.get("finish_reason").isJsonNull()) {
-                                            finishReason = choice.get("finish_reason").getAsString();
-                                        }
-                                    }
-                                }
-                            } catch (Exception ignored) {}
-
                             String textChunk = extractTextFromSSE(data);
 
                             // 检测 reasoning 刚结束 → 触发思考结束回调
@@ -321,7 +285,7 @@ public class StreamingHandler {
             }
             
             flushRemainingBuffer();
-
+            
             // 完成回调：只在未被取消且未出错时触发
             if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
                 try {
@@ -413,6 +377,16 @@ public class StreamingHandler {
                 return null;
             }
 
+            // 检测 SSE 尾部 usage 字段（API 返回的真实 token 消耗）
+            if (json.has("usage") && json.get("usage").isJsonObject() && onUsageTokens != null) {
+                JsonObject usage = json.getAsJsonObject("usage");
+                long pt = usage.has("prompt_tokens") ? usage.get("prompt_tokens").getAsLong() : 0;
+                long ct = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
+                if (pt > 0 || ct > 0) {
+                    onUsageTokens.accept(pt, ct);
+                }
+            }
+
             // 标记本 chunk 是否包含 reasoning（思考）内容，
             // 若是则无需在末尾打印"无法提取文本"的调试日志
             boolean hasReasoningInChunk = false;
@@ -429,8 +403,7 @@ public class StreamingHandler {
                             if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
                                 reasoningJustCompleted = true;
                             }
-                            String contentText = delta.get("content").getAsString();
-                            return contentText;
+                            return delta.get("content").getAsString();
                         }
                         // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {

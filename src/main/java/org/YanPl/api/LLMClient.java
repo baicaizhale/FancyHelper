@@ -40,6 +40,7 @@ public class LLMClient {
         int timeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+                .followRedirects(HttpClient.Redirect.NORMAL)
                 .version(HttpClient.Version.HTTP_1_1) // 强制使用 HTTP/1.1 以避免某些 API (如阿里云) 的 HTTP/2 EOF 错误
                 .build();
     }
@@ -69,7 +70,7 @@ public class LLMClient {
      */
     private void checkConfigLoaded() throws IOException {
         if (plugin.getConfigManager().isConfigLoadFailed()) {
-            throw new IOException("config.yml 格式错误，无法加载配置文件，请检查控制台输出。");
+            throw new IOException("§zFancyHelper§b§r §7> §fconfig.yml 格式错误，无法加载配置文件，请检查控制台输出。");
         }
     }
 
@@ -224,7 +225,7 @@ public class LLMClient {
     /**
      * 构建消息数组（OpenAI 和 CloudFlare API 通用）
      */
-    public JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
+    private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
         JsonArray messagesArray = new JsonArray();
 
         String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
@@ -313,7 +314,7 @@ public class LLMClient {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         if (cfKey.isEmpty()) {
             plugin.getLogger().severe("[AI 错误] 未配置 Cloudflare API Key");
-            throw new IOException("API调用发生未知错误，请查看控制台");
+            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
         }
 
         try {
@@ -329,7 +330,7 @@ public class LLMClient {
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[AI 错误] 获取 Account ID 失败: " + response.statusCode());
                 plugin.getLogger().warning("[AI 错误] 响应体: " + response.body());
-                throw new IOException("API调用发生未知错误，请查看控制台");
+                throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
             }
 
             JsonObject resultJson = gson.fromJson(response.body(), JsonObject.class);
@@ -339,7 +340,7 @@ public class LLMClient {
                 return cachedAccountId;
             } else {
                 plugin.getLogger().warning("[AI 错误] 未找到关联的 CloudFlare 账户");
-                throw new IOException("API调用发生未知错误，请查看控制台");
+                throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -364,7 +365,83 @@ public class LLMClient {
 
     public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
         checkConfigLoaded();
-        return plugin.getApiRouter().chat(session, systemPrompt);
+
+        // 检测是否启用 FancyConsole 模式
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return chatWithFancyConsole(session, systemPrompt);
+        }
+        // 检测是否启用 OpenAI 模式
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatWithOpenAI(session, systemPrompt);
+        }
+        // 否则使用 CloudFlare Workers AI
+        return chatWithCloudFlare(session, systemPrompt);
+    }
+
+    /**
+     * 使用 FancyConsole 进行对话（OpenAI 兼容格式）
+     */
+    private AIResponse chatWithFancyConsole(DialogueSession session, String systemPrompt) throws IOException {
+        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        String model = plugin.getConfigManager().getFancyModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            return new AIResponse("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。", null, 0, 0, false);
+        }
+
+        if (!apiUrl.contains("/v1/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "v1/chat/completions";
+            } else {
+                apiUrl += "/v1/chat/completions";
+            }
+        }
+
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 10000);
+
+        String requestBody = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[FancyConsole] 请求: " + apiUrl + " 模型: " + model);
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+        try {
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
+                logInteraction(session, requestBody, responseBody);
+                return new AIResponse("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")", null, 0, 0, false);
+            }
+
+            logInteraction(session, requestBody, responseBody);
+
+            JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
+            return responseParser.parseResponse(resultJson);
+
+        } catch (java.net.http.HttpTimeoutException e) {
+            return new AIResponse("§zFancyHelper§b§r §7> §c请求超时，请稍后重试。", null, 0, 0, false);
+        } catch (java.net.ConnectException e) {
+            return new AIResponse("§zFancyHelper§b§r §7> §c无法连接到 FancyConsole 服务器。", null, 0, 0, false);
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new AIResponse("§zFancyHelper§b§r §7> §c网络错误: " + e.getMessage(), null, 0, 0, false);
+        }
     }
 
     /**
@@ -418,6 +495,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 10000);
 
         // 对于支持推理参数的模型（如 deepseek-reasoner、o1、qwen-max 等），添加推理参数
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
@@ -445,7 +523,7 @@ public class LLMClient {
             }
 
             // 处理临时性错误（可重试），包括：429、500、502、503、504
-            int maxRetries = 5;
+            int maxRetries = 3;
             int retryCount = 0;
             while (isRetryableError(statusCode) && retryCount < maxRetries) {
                 retryCount++;
@@ -502,7 +580,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控）
                 if (statusCode == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                 }
 
                 // Cloudflare 429 Neurons 耗尽
@@ -519,7 +597,7 @@ public class LLMClient {
                     errorMsg = errorPrompt;
                     plugin.getLogger().warning(errorLogMsg);
                 } else {
-                    errorMsg = "API调用发生未知错误，请查看控制台";
+                    errorMsg = "§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台";
                     plugin.getLogger().warning("状态码: " + statusCode);
                     plugin.getLogger().warning("响应体: " + responseBody);
                 }
@@ -540,7 +618,7 @@ public class LLMClient {
             }
 
             plugin.getLogger().warning("[AI 错误] 无法解析 OpenAI API 响应: " + responseBody);
-            throw new IOException("API调用发生未知错误，请查看控制台");
+            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             plugin.getLogger().warning("[AI 错误] OpenAI API 调用被中断: " + e.getMessage());
@@ -620,19 +698,19 @@ public class LLMClient {
     private String getErrorPrompt(int statusCode) {
         switch (statusCode) {
             case 400:
-                return "构造的请求体有问题，请向开发者报告此错误";
+                return "§zFancyHelper§b§r §7> §f构造的请求体有问题，请向开发者报告此错误";
             case 401:
-                return "API-key填写不正确，请检查config.yml [https://blog.baicaizhale.top/post/whyusee2]";
+                return "§zFancyHelper§b§r §7> §fAPI-key填写不正确，请检查config.yml [https://blog.baicaizhale.top/post/whyusee2]";
             case 402:
-                return "开放平台显示您的余额不足，请检查您的开放平台余额";
+                return "§zFancyHelper§b§r §7> §f开放平台显示您的余额不足，请检查您的开放平台余额";
             case 422:
-                return "构造的请求体有问题，请向开发者报告此错误";
+                return "§zFancyHelper§b§r §7> §f构造的请求体有问题，请向开发者报告此错误";
             case 429:
                 return null; // 429 错误会自动重试，不需要提示
             case 500:
-                return "开放平台出现问题，请等待恢复";
+                return "§zFancyHelper§b§r §7> §f开放平台出现问题，请等待恢复";
             case 503:
-                return "开放平台出现问题，请等待恢复";
+                return "§zFancyHelper§b§r §7> §f开放平台出现问题，请等待恢复";
             default:
                 return null;
         }
@@ -646,9 +724,9 @@ public class LLMClient {
         String defaultKey = "maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0";
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         if (defaultKey.equals(cfKey)) {
-            return "默认配置的Neurons分配已耗尽，请换用您自己的key继续使用。参见https://blog.baicaizhale.top/post/create-cf-key-for-fhai";
+            return "§zFancyHelper§b§r §7> §f默认配置的Neurons分配已耗尽，请换用您自己的key继续使用。参见https://blog.baicaizhale.top/post/create-cf-key-for-fhai";
         }
-        return "今天的Neurons配额已耗尽，明天再来？";
+        return "§zFancyHelper§b§r §7> §f今天的Neurons配额已耗尽，明天再来？";
     }
 
     /**
@@ -713,6 +791,7 @@ public class LLMClient {
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
+        bodyJson.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
             bodyJson.add("input", messagesArray);
@@ -736,7 +815,7 @@ public class LLMClient {
         if (bodyString.contains("\"content\":null") || bodyString.contains("\"role\":null")) {
             plugin.getLogger().severe("[AI 错误] 严重：载荷中包含空的 content 或 role！");
             plugin.getLogger().severe("[AI 错误] 完整载荷: " + bodyString);
-            throw new IOException("API调用发生未知错误，请查看控制台");
+            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
         }
 
         if (bodyString.matches(".*\"content\":\\s*\"\"\\s*[,}].*")) {
@@ -769,7 +848,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控），不进行重试
                 if (response.statusCode() == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                 }
 
                 // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
@@ -799,7 +878,7 @@ public class LLMClient {
             }
 
             plugin.getLogger().warning("[AI 错误] 无法解析响应: " + responseBody);
-            throw new IOException("API调用发生未知错误，请查看控制台");
+            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             plugin.getLogger().warning("[AI 错误] 调用被中断: " + e.getMessage());
@@ -830,6 +909,7 @@ public class LLMClient {
         // 构建简化的请求体
         JsonObject simpleBody = new JsonObject();
         simpleBody.addProperty("model", model);
+        simpleBody.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
             simpleBody.add("input", simpleInput);
@@ -870,7 +950,7 @@ public class LLMClient {
         if (simpleResp.statusCode() != 200) {
             plugin.getLogger().warning("[AI Error - Retry] 状态码: " + simpleResp.statusCode());
             plugin.getLogger().warning("[AI Error - Retry] 响应体: " + simpleRespBody);
-            throw new IOException("API调用发生未知错误，请查看控制台");
+            throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
         }
 
         JsonObject responseJson = gson.fromJson(simpleRespBody, JsonObject.class);
@@ -879,7 +959,7 @@ public class LLMClient {
             return retryResponse;
         }
         plugin.getLogger().warning("[AI 错误] 无法解析重试响应: " + simpleRespBody);
-        throw new IOException("API调用发生未知错误，请查看控制台");
+        throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
     }
 
     /**
@@ -903,84 +983,11 @@ public class LLMClient {
      * @return AI响应
      */
     public AIResponse chatSimple(String prompt) throws IOException {
-        return plugin.getApiRouter().chatSimple(prompt);
-    }
-
-    // ========== APIRouter 公开接口（BYOK 直连路径） ==========
-
-    /**
-     * APIRouter 调用的直连入口（BYOK），不走路由层
-     */
-    public AIResponse chatDirect(DialogueSession session, String systemPrompt) throws IOException {
         checkConfigLoaded();
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAI(session, systemPrompt);
-        }
-        return chatWithCloudFlare(session, systemPrompt);
-    }
 
-    /**
-     * APIRouter 调用的流式直连入口（BYOK）
-     */
-    public String chatStreamingDirect(DialogueSession session, String systemPrompt, StreamingHandler handler) throws IOException {
-        checkConfigLoaded();
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatStreamingWithOpenAI(session, systemPrompt, handler);
-        }
-        return chatStreamingWithCloudFlare(session, systemPrompt, handler);
-    }
-
-    /**
-     * APIRouter 调用的简单直连入口（BYOK）
-     */
-    public AIResponse chatSimpleDirect(String prompt) throws IOException {
-        checkConfigLoaded();
         DialogueSession tempSession = new DialogueSession();
         tempSession.addMessage("user", prompt);
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAI(tempSession, "");
-        }
-        return chatWithCloudFlare(tempSession, "");
-    }
-
-    /**
-     * APIRouter 调用的压缩模型直连入口（BYOK）
-     */
-    public String chatWithCompressionModelDirect(String systemPrompt, String userPrompt) throws IOException {
-        checkConfigLoaded();
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
-        }
-        return chatWithCloudFlareCompressionModel(systemPrompt, userPrompt);
-    }
-
-    /**
-     * APIRouter 调用的上下文压缩直连入口（BYOK）
-     */
-    public String compressContextDirect(String context) throws IOException {
-        checkConfigLoaded();
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return compressWithOpenAI(context);
-        }
-        return compressWithCloudFlare(context);
-    }
-
-    /**
-     * APIRouter 调用的标题生成直连入口（BYOK）
-     */
-    public String generateTitleDirect(String firstMessage) throws IOException {
-        checkConfigLoaded();
-        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return generateTitleWithOpenAI(firstMessage);
-        }
-        return generateTitleWithCloudFlare(firstMessage);
-    }
-
-    /**
-     * 公开 ResponseParser 供 APIRouter 使用
-     */
-    public ResponseParser getResponseParser() {
-        return responseParser;
+        return chat(tempSession, "你是一个得力的助手。");
     }
 
     /**
@@ -991,7 +998,13 @@ public class LLMClient {
      * @throws IOException 当 API 调用失败时
      */
     public String chatWithCompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        return plugin.getApiRouter().chatWithCompressionModel(systemPrompt, userPrompt);
+        String provider = plugin.getConfigManager().getProvider();
+
+        if ("openai".equalsIgnoreCase(provider)) {
+            return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
+        } else {
+            return chatWithCloudFlareCompressionModel(systemPrompt, userPrompt);
+        }
     }
 
     /**
@@ -1174,21 +1187,17 @@ public class LLMClient {
      * @return 压缩后的摘要
      * @throws IOException 当 API 调用失败时
      */
-    /**
-     * 压缩对话上下文（路由到 APIRouter）
-     */
     public String compressContext(String context) throws IOException {
-        return plugin.getApiRouter().compressContext(context);
-    }
+        checkConfigLoaded();
 
-    /**
-     * 生成对话标题（路由到 APIRouter）
-     */
-    public String generateTitle(String firstMessage) throws IOException {
-        return plugin.getApiRouter().generateTitle(firstMessage);
+        String provider = plugin.getConfigManager().getCompressionModelProvider();
+        
+        if ("openai".equalsIgnoreCase(provider)) {
+            return compressWithOpenAI(context);
+        } else {
+            return compressWithCloudFlare(context);
+        }
     }
-
-    // ========== 以下是私有实现方法（不经过路由层，BYOK 直连入口直接调用）==========
 
     /**
      * 使用 CloudFlare 压缩模型进行上下文压缩
@@ -1217,6 +1226,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 300);
         bodyJson.addProperty("temperature", 0.3);
 
         String bodyString = gson.toJson(bodyJson);
@@ -1289,6 +1299,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 300);
         bodyJson.addProperty("temperature", 0.3);
         bodyJson.addProperty("reasoning_effort", "low");
 
@@ -1323,6 +1334,128 @@ public class LLMClient {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("压缩被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用主模型生成对话标题（不用压缩模型）
+     * @param firstMessage 第一条用户消息
+     * @return 生成的标题（不超过15字）
+     */
+    public String generateTitle(String firstMessage) throws IOException {
+        checkConfigLoaded();
+
+        String provider = plugin.getConfigManager().getProvider();
+
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return generateTitleWithFancyConsole(firstMessage);
+        }
+        if ("openai".equalsIgnoreCase(provider)) {
+            return generateTitleWithOpenAI(firstMessage);
+        } else {
+            return generateTitleWithCloudFlare(firstMessage);
+        }
+    }
+
+    /**
+     * 使用 FancyConsole 生成标题
+     */
+    private String generateTitleWithFancyConsole(String firstMessage) throws IOException {
+        return generateTitleWithRetryFancyConsole(firstMessage);
+    }
+
+    /**
+     * 使用 FancyConsole 生成标题（带重试）
+     */
+    private String generateTitleWithRetryFancyConsole(String firstMessage) throws IOException {
+        int maxRetries = 4;
+        boolean reachedApi = false;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String title = generateTitleFromFancyConsole(firstMessage);
+                if (title != null) return title;
+                reachedApi = true;
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试 JSON 解析失败");
+            } catch (Exception e) {
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试失败: " + e.getMessage());
+            }
+        }
+
+        if (reachedApi) return "";
+        return null;
+    }
+
+    /**
+     * 使用 FancyConsole 生成标题（单次尝试）
+     */
+    private String generateTitleFromFancyConsole(String firstMessage) throws IOException {
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未绑定 API Key");
+        }
+
+        String fancyUrl = plugin.getConfigManager().getFancyApiUrl();
+        String model = plugin.getConfigManager().getFancyModel();
+
+        // Auto-append path
+        String url = fancyUrl;
+        if (!url.contains("/chat/completions")) {
+            url = url.replaceAll("/+$", "") + "/v1/chat/completions";
+        }
+
+        // Log the real URL we're calling
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 请求 URL: " + url);
+        }
+
+        JsonArray messagesArray = new JsonArray();
+        JsonObject systemMsg = new JsonObject();
+        systemMsg.addProperty("role", "system");
+        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        messagesArray.add(systemMsg);
+
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", "Label this: " + firstMessage);
+        messagesArray.add(userMsg);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[标题生成] 请求体: " + bodyString);
+        }
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(60))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[标题生成] 响应 (" + response.statusCode() + "): " + responseBody);
+            }
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[标题生成] FancyConsole API 错误: " + response.statusCode());
+                throw new IOException("标题生成失败: " + response.statusCode());
+            }
+
+            return parseTitleFromResponse(responseBody);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("标题生成被中断: " + e.getMessage(), e);
         }
     }
 
@@ -1395,7 +1528,7 @@ public class LLMClient {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "[Core Constraints] (Violations cause parsing failures — follow strictly).Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1471,7 +1604,7 @@ public class LLMClient {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "[Core Constraints] (Violations cause parsing failures — follow strictly).Title labeling task. Do NOT think, reason, or echo. Do NOT use Markdown. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1583,7 +1716,74 @@ public class LLMClient {
      */
     public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         checkConfigLoaded();
-        return plugin.getApiRouter().chatStreaming(session, systemPrompt, streamingHandler);
+
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return chatStreamingWithFancyConsole(session, systemPrompt, streamingHandler);
+        }
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
+        }
+        return chatStreamingWithCloudFlare(session, systemPrompt, streamingHandler);
+    }
+
+    /**
+     * 使用 FancyConsole 进行流式对话（OpenAI 兼容格式）
+     */
+    private String chatStreamingWithFancyConsole(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        String model = plugin.getConfigManager().getFancyModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 /fancyhelper bind <API Key> 绑定。");
+        }
+
+        if (!apiUrl.contains("/v1/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "v1/chat/completions";
+            } else {
+                apiUrl += "/v1/chat/completions";
+            }
+        }
+
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", plugin.getConfigManager().getContextWindowLimit());
+        bodyJson.addProperty("stream", true);
+
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[FancyConsole Streaming] 请求: " + apiUrl + " 模型: " + model);
+        }
+
+        // FancyConsole 是 OpenAI 兼容格式，复用相同的流式处理逻辑
+        String bodyString = gson.toJson(bodyJson);
+        logRequestFormatted(session, bodyString);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() != 200) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                throw new IOException("FancyConsole 流式请求失败: " + response.statusCode() + " - " + errorBody);
+            }
+
+            String fullText = streamingHandler.processStream(response);
+            return fullText;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("流式调用被中断: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -1615,6 +1815,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 10000);
         bodyJson.addProperty("stream", true);
 
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
@@ -1641,7 +1842,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控）
                 if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                 }
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
@@ -1684,6 +1885,7 @@ public class LLMClient {
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
+        bodyJson.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
             // gpt-oss 模型通过 Responses API 不支持流式，走非流式请求
@@ -1720,7 +1922,7 @@ public class LLMClient {
                     // 特殊处理 Content Exists Risk（内容风控）
                     if (response.statusCode() == 400 && response.body() != null && response.body().contains("Content Exists Risk")) {
                         plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                        throw new IOException("对话内容触发了风控，请新建对话后重试");
+                        throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                     }
                     if (response.statusCode() == 429) {
                         throw new IOException(getCloudflare429Message());
@@ -1741,7 +1943,7 @@ public class LLMClient {
                 // 特殊处理 Content Exists Risk（内容风控）
                 if (response.statusCode() == 400 && errorBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
-                    throw new IOException("对话内容触发了风控，请新建对话后重试");
+                    throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                 }
                 if (response.statusCode() == 429) {
                     throw new IOException(getCloudflare429Message());
