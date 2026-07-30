@@ -12,7 +12,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -32,16 +31,6 @@ public class StatsManager {
     private final File dataFile;
     private final Object saveLock = new Object();
     private final long pluginStartTime;
-
-    // 已上报的累计值快照（用于构建增量）
-    private long lastReportedInputTokens;
-    private long lastReportedOutputTokens;
-    private long lastReportedCliEntries;
-    private long lastReportedConversations;
-    private long lastReportedToolSuccess;
-    private long lastReportedToolFailure;
-    private long lastReportedErrors;
-    private long lastReportedThinkingTimeMs;
 
     public StatsManager(FancyHelper plugin, Metrics metrics) {
         this.plugin = plugin;
