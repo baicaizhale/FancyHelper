@@ -24,6 +24,9 @@ public class ErrorHandler {
      * @param callback 错误处理后的回调（在主线程执行）
      */
     public void handleAsyncError(Player player, String operation, Throwable error, Runnable callback) {
+        // 统计错误次数
+        plugin.getStatsManager().incrementErrorCount();
+
         // 上报错误
         plugin.getCloudErrorReport().report(error);
         

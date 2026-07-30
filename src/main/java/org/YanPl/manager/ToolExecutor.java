@@ -172,6 +172,13 @@ public class ToolExecutor {
                 break;
         }
 
+        // 记录工具调用统计
+        if (success) {
+            plugin.getStatsManager().incrementToolSuccess();
+        } else {
+            plugin.getStatsManager().incrementToolFailure();
+        }
+
         return success;
     }
 

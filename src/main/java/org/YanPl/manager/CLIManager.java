@@ -608,7 +608,9 @@ public class CLIManager {
         GenerationStatus status = generationStates.get(uuid);
 
         if (startTime != null && status == GenerationStatus.THINKING) {
-            session.addThinkingTime(System.currentTimeMillis() - startTime);
+            long elapsed = System.currentTimeMillis() - startTime;
+            session.addThinkingTime(elapsed);
+            plugin.getStatsManager().addThinkingTime(elapsed);
         }
     }
 
@@ -1571,9 +1573,10 @@ public class CLIManager {
                 roundOutputTokens.merge(uuid, pendingStreamed, (a, b) -> a + b);
             }
             // 将本次会话的总 token 汇入全局统计
-            long sessionTotal = exitSession.getTotalInputTokens() + exitSession.getTotalOutputTokens();
-            if (sessionTotal > 0) {
-                plugin.getStatsManager().addTokens(sessionTotal);
+            long exitInput = exitSession.getTotalInputTokens();
+            long exitOutput = exitSession.getTotalOutputTokens();
+            if (exitInput > 0 || exitOutput > 0) {
+                plugin.getStatsManager().addTokens(exitInput, exitOutput);
             }
         }
 
