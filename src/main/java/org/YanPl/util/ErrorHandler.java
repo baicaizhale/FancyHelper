@@ -2,7 +2,6 @@ package org.YanPl.util;
 
 import org.YanPl.FancyHelper;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 

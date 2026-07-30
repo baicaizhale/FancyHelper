@@ -15,8 +15,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.net.http.HttpClient.Redirect;
-import java.time.Duration;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -1755,8 +1753,6 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", plugin.getConfigManager().getContextWindowLimit());
         bodyJson.addProperty("stream", true);
-
-        String requestBody = gson.toJson(bodyJson);
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[FancyConsole Streaming] 请求: " + apiUrl + " 模型: " + model);

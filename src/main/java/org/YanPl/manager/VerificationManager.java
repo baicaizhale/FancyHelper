@@ -3,7 +3,6 @@ package org.YanPl.manager;
 import org.YanPl.FancyHelper;
 import org.YanPl.util.ColorUtil;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 import java.io.File;
