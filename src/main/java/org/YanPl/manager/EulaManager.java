@@ -13,7 +13,6 @@ import java.util.List;
  * EULA 文件检查直接通过（isEulaValid 恒为 true）。
  */
 public class EulaManager {
-    private final FancyHelper plugin;
     private final List<String> eulaContent;
 
     /**
@@ -22,8 +21,6 @@ public class EulaManager {
      * @param plugin 插件实例
      */
     public EulaManager(FancyHelper plugin) {
-        this.plugin = plugin;
-
         this.eulaContent = Arrays.asList(
             "==============================================",
             "  FancyHelper 最终用户许可协议 (EULA)",
