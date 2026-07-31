@@ -5,6 +5,7 @@ import net.md_5.bungee.api.chat.BaseComponent;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
 
 /**
  * 颜色工具类：处理自定义颜色代码转换
@@ -63,7 +64,10 @@ public class ColorUtil {
         String colorX = COLOR_X.toString();
         String colorZ = COLOR_Z.toString();
 
-        message = message.replace("§x", colorX);
+        // §x 同时是 legacy hex（§x§RR§GG§BB）的前缀。若文本已含转换出的 hex 序列，
+        // 直接 replace 会把其前缀也替换掉导致颜色损坏，因此只替换"非完整 hex 序列开头"的 §x。
+        String hexSeq = "[§][0-9a-fA-F][§][0-9a-fA-F][§][0-9a-fA-F][§][0-9a-fA-F][§][0-9a-fA-F][§][0-9a-fA-F]";
+        message = message.replaceAll("§x(?!" + hexSeq + ")", Matcher.quoteReplacement(colorX));
         message = message.replace("§z", colorZ);
         message = message.replace("&x", colorX);
         message = message.replace("&z", colorZ);
