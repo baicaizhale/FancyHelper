@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.util.ColorUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -387,7 +388,7 @@ public class LLMClient {
         String model = plugin.getConfigManager().getFancyModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            return new AIResponse("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。", null, 0, 0, false);
+            return new AIResponse(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。"), null, 0, 0, false);
         }
 
         if (!apiUrl.contains("/v1/chat/completions")) {
@@ -426,7 +427,7 @@ public class LLMClient {
             if (response.statusCode() != 200) {
                 plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
                 logInteraction(session, requestBody, responseBody);
-                return new AIResponse("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")", null, 0, 0, false);
+                throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")"));
             }
 
             logInteraction(session, requestBody, responseBody);
@@ -435,12 +436,12 @@ public class LLMClient {
             return responseParser.parseResponse(resultJson);
 
         } catch (java.net.http.HttpTimeoutException e) {
-            return new AIResponse("§zFancyHelper§b§r §7> §c请求超时，请稍后重试。", null, 0, 0, false);
+            throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请求超时，请稍后重试。"), e);
         } catch (java.net.ConnectException e) {
-            return new AIResponse("§zFancyHelper§b§r §7> §c无法连接到 FancyConsole 服务器。", null, 0, 0, false);
+            throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c无法连接到 FancyConsole 服务器。"), e);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return new AIResponse("§zFancyHelper§b§r §7> §c网络错误: " + e.getMessage(), null, 0, 0, false);
+            throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c网络错误: " + e.getMessage()), e);
         }
     }
 
@@ -1751,7 +1752,13 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", plugin.getConfigManager().getContextWindowLimit());
+        // max_tokens 不能超过模型上下文窗口 - 输入token，否则模型会拒绝请求。
+        // 各模型对 max_tokens 还有独立上限（常见 65536），统一钳制避免超限。
+        int contextLimit = plugin.getConfigManager().getContextWindowLimit();
+        int estimatedInput = DialogueSession.calculateTokens(gson.toJson(messagesArray));
+        int maxTokens = Math.max(contextLimit - estimatedInput, 1024);
+        maxTokens = Math.min(maxTokens, 65536);
+        bodyJson.addProperty("max_tokens", maxTokens);
         bodyJson.addProperty("stream", true);
 
         if (plugin.getConfigManager().isDebug()) {

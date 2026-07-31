@@ -151,6 +151,30 @@ class ColorUtilParameterizedTest {
             assertNotNull(result);
             assertTrue(result.contains("你好世界"));
         }
+
+        @Test
+        @DisplayName("幂等性：重复调用不破坏已转换结果")
+        void testIdempotent() {
+            String input = "§zFancyHelper§b§r §7> §cAPI 请求失败 (500)";
+            String once = ColorUtil.translateCustomColors(input);
+            String twice = ColorUtil.translateCustomColors(once);
+            assertEquals(once, twice);
+        }
+
+        @Test
+        @DisplayName("已有的 legacy hex 序列保持原样（不被二次替换）")
+        void testExistingHexPreserved() {
+            String hex = "§x§3§0§a§e§e§5FancyHelper";
+            assertEquals(hex, ColorUtil.translateCustomColors(hex));
+        }
+
+        @Test
+        @DisplayName("自定义 §x 码（非 hex 序列开头）仍正常转换")
+        void testCustomXNotHex() {
+            String result = ColorUtil.translateCustomColors("§xHello");
+            String expected = net.md_5.bungee.api.ChatColor.of("#11A8CD").toString() + "Hello";
+            assertEquals(expected, result);
+        }
     }
 
     @Nested

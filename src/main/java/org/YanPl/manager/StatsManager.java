@@ -248,10 +248,9 @@ public class StatsManager {
 
         StatsSnapshot snapshot = buildSnapshot();
         boolean success = plugin.getFancyConsoleManager().reportStats(snapshot);
+        // 上报失败不报错（静默后台任务），仅调试模式记录成功
         if (success && plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[StatsManager] 上报成功");
-        } else if (!success) {
-            plugin.getLogger().warning("[StatsManager] 上报失败");
         }
     }
 

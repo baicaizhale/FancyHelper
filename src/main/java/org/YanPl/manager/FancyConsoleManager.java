@@ -214,7 +214,7 @@ public class FancyConsoleManager {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return response.statusCode() == 200;
         } catch (Exception e) {
-            plugin.getLogger().warning("[FancyConsole] 上报统计数据失败: " + e.getMessage());
+            // 上报失败静默处理（后台任务，不打扰控制台）
             return false;
         }
     }
