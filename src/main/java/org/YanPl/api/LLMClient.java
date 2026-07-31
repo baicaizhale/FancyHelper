@@ -1751,7 +1751,10 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", plugin.getConfigManager().getContextWindowLimit());
+        // max_tokens 不能超过模型上下文窗口 - 输入token，否则模型会拒绝请求
+        int contextLimit = plugin.getConfigManager().getContextWindowLimit();
+        int estimatedInput = DialogueSession.calculateTokens(gson.toJson(messagesArray));
+        bodyJson.addProperty("max_tokens", Math.max(contextLimit - estimatedInput, 1024));
         bodyJson.addProperty("stream", true);
 
         if (plugin.getConfigManager().isDebug()) {
