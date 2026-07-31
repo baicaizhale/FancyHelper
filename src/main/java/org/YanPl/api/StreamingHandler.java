@@ -46,6 +46,9 @@ public class StreamingHandler {
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
+    private long pendingUsageInput = 0;    // 流中最后一次出现的 usage 输入 token（累计值）
+    private long pendingUsageOutput = 0;   // 流中最后一次出现的 usage 输出 token（累计值）
+    private boolean usageSeen = false;     // 本次流是否出现过非零 usage
     
     /**
      * 创建流式输出处理器
@@ -285,7 +288,16 @@ public class StreamingHandler {
             }
             
             flushRemainingBuffer();
-            
+
+            // 流结束时统一触发一次 token 用量回调（最后一次 usage 的累计值）
+            if (usageSeen && onUsageTokens != null && !isCancelled.get()) {
+                try {
+                    onUsageTokens.accept(pendingUsageInput, pendingUsageOutput);
+                } catch (Exception usageCallbackError) {
+                    logger.warning("[Stream] token 用量回调异常: " + usageCallbackError.getMessage());
+                }
+            }
+
             // 完成回调：只在未被取消且未出错时触发
             if (!isCancelled.get() && !errorOccurred && onCompleteCallback != null) {
                 try {
@@ -377,13 +389,16 @@ public class StreamingHandler {
                 return null;
             }
 
-            // 检测 SSE 尾部 usage 字段（API 返回的真实 token 消耗）
-            if (json.has("usage") && json.get("usage").isJsonObject() && onUsageTokens != null) {
+            // 检测 SSE usage 字段（API 返回的真实 token 消耗）。
+            // 某些模型会在每个 chunk 都附带 usage（累计值），只暂存最后一次，流结束时统一触发一次
+            if (json.has("usage") && json.get("usage").isJsonObject()) {
                 JsonObject usage = json.getAsJsonObject("usage");
                 long pt = usage.has("prompt_tokens") ? usage.get("prompt_tokens").getAsLong() : 0;
                 long ct = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
                 if (pt > 0 || ct > 0) {
-                    onUsageTokens.accept(pt, ct);
+                    pendingUsageInput = pt;
+                    pendingUsageOutput = ct;
+                    usageSeen = true;
                 }
             }
 
