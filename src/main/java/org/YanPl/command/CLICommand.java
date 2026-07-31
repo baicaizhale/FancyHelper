@@ -6,6 +6,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.manager.InstructionManager;
+import org.YanPl.manager.StatsManager;
 import org.YanPl.model.DialogueSession;
 import org.YanPl.model.SessionRecord;
 import org.YanPl.util.ColorUtil;
@@ -74,6 +75,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "status":
                 handleStatus(sender);
+                break;
+            case "stats":
+                handleStatsCommand(sender);
                 break;
             case "update":
             case "checkupdate":
@@ -188,6 +192,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(" §7- §b/cli reload §f: 重新加载配置与工作区");
         sender.sendMessage(" §7- §b/cli reload deeply §f: 深度重载（完全重启插件）");
         sender.sendMessage(" §7- §b/cli status §f: 查看插件运行状态");
+        sender.sendMessage(" §7- §b/cli stats §f: 手动上报统计数据（测试用）");
         sender.sendMessage(" §7- §b/cli checkupdate §f: 检查更新");
         sender.sendMessage(" §7- §b/cli upgrade §f: 下载并安装更新");
         sender.sendMessage(" §7- §b/cli notice §f: 查看系统公告");
@@ -605,6 +610,31 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.spigot().sendMessage(actionLine);
 
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+    }
+
+    /**
+     * 手动触发一次统计数据上报（用于测试）
+     */
+    private void handleStatsCommand(CommandSender sender) {
+        if (!plugin.getFancyConsoleManager().isReady()) {
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未配置 API Key，无法上报统计。"));
+            return;
+        }
+
+        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在上报统计数据..."));
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            StatsManager.StatsSnapshot snapshot = plugin.getStatsManager().buildSnapshot();
+            boolean success = plugin.getFancyConsoleManager().reportStats(snapshot);
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (success) {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a统计数据上报成功。"));
+                } else {
+                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c统计数据上报失败，请检查网络或 API Key。"));
+                }
+            });
+        });
     }
 
     private void handleSettings(Player player) {
@@ -1622,7 +1652,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "bind", "reload", "status", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
+                "bind", "reload", "status", "stats", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
