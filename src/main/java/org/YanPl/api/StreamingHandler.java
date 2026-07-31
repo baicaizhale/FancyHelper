@@ -421,10 +421,12 @@ public class StreamingHandler {
                             return delta.get("content").getAsString();
                         }
                         // 捕获思考模型的 reasoning_content（DeepSeek R1, OpenAI o1/o3 等）
+                        boolean capturedReasoning = false;
                         if (delta.has("reasoning_content") && !delta.get("reasoning_content").isJsonNull()) {
                             String rc = delta.get("reasoning_content").getAsString();
                             if (!rc.isEmpty()) {
                                 hasReasoningInChunk = true;
+                                capturedReasoning = true;
                                 // 第一个非空 reasoning token → 开始计时
                                 if (reasoningStartTime == -1) {
                                     reasoningStartTime = System.currentTimeMillis();
@@ -436,7 +438,8 @@ public class StreamingHandler {
                             }
                         }
                         // 捕获 Gemma 等模型的 reasoning 字段（CloudFlare Workers AI 兼容格式）
-                        if (delta.has("reasoning") && !delta.get("reasoning").isJsonNull()) {
+                        // 仅当 reasoning_content 未命中时使用，避免同一 chunk 双字段重复累积
+                        if (!capturedReasoning && delta.has("reasoning") && !delta.get("reasoning").isJsonNull()) {
                             String rc = delta.get("reasoning").getAsString();
                             if (!rc.isEmpty()) {
                                 hasReasoningInChunk = true;
