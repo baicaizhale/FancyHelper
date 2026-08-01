@@ -7,7 +7,6 @@ import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
-import org.YanPl.util.ColorUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -388,7 +387,7 @@ public class LLMClient {
         String model = plugin.getConfigManager().getFancyModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            return new AIResponse(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。"), null, 0, 0, false);
+            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。");
         }
 
         if (!apiUrl.contains("/v1/chat/completions")) {
@@ -420,29 +419,29 @@ public class LLMClient {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
+        HttpResponse<String> response;
         try {
-            HttpResponse<String> response = sendWithRetry(request);
-            String responseBody = response.body();
-
-            if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
-                logInteraction(session, requestBody, responseBody);
-                throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")"));
-            }
-
-            logInteraction(session, requestBody, responseBody);
-
-            JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
-            return responseParser.parseResponse(resultJson);
-
+            response = sendWithRetry(request);
         } catch (java.net.http.HttpTimeoutException e) {
-            throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请求超时，请稍后重试。"), e);
+            throw new IOException("§zFancyHelper§b§r §7> §c请求超时，请稍后重试。", e);
         } catch (java.net.ConnectException e) {
-            throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c无法连接到 FancyConsole 服务器。"), e);
+            throw new IOException("§zFancyHelper§b§r §7> §c无法连接到 FancyConsole 服务器。", e);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            throw new IOException(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c网络错误: " + e.getMessage()), e);
+            throw new IOException("§zFancyHelper§b§r §7> §c网络错误: " + e.getMessage(), e);
         }
+
+        String responseBody = response.body();
+        if (response.statusCode() != 200) {
+            plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
+            logInteraction(session, requestBody, responseBody);
+            throw new IOException("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")");
+        }
+
+        logInteraction(session, requestBody, responseBody);
+
+        JsonObject resultJson = gson.fromJson(responseBody, JsonObject.class);
+        return responseParser.parseResponse(resultJson);
     }
 
     /**
@@ -454,7 +453,7 @@ public class LLMClient {
         String model = plugin.getConfigManager().getOpenAiModel();
 
         if (apiKey == null || apiKey.isEmpty()) {
-            return new AIResponse("错误: 请先在配置文件中设置 openai.api_key。", null, 0, 0, false);
+            throw new IOException("§zFancyHelper§b§r §7> §f请先在配置文件中设置 openai.api_key。");
         }
 
         if (model == null || model.isEmpty()) {
@@ -765,7 +764,7 @@ public class LLMClient {
         String model = plugin.getConfigManager().getCloudflareModel();
 
         if (cfKey == null || cfKey.isEmpty()) {
-            return new AIResponse("错误: 配置文件存在问题。", null, 0, 0, false);
+            throw new IOException("§zFancyHelper§b§r §7> §f配置文件存在问题（未配置 Cloudflare cf_key）。");
         }
 
         if (model == null || model.isEmpty()) {
@@ -1001,6 +1000,9 @@ public class LLMClient {
     public String chatWithCompressionModel(String systemPrompt, String userPrompt) throws IOException {
         String provider = plugin.getConfigManager().getProvider();
 
+        if ("fancy".equalsIgnoreCase(provider)) {
+            return chatWithFancyConsoleCompressionModel(systemPrompt, userPrompt);
+        }
         if ("openai".equalsIgnoreCase(provider)) {
             return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
         } else {
@@ -1058,6 +1060,94 @@ public class LLMClient {
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
                 plugin.getLogger().warning("[co-model] CloudFlare API 错误: " + response.statusCode() + " - " + errorBody);
+                throw new IOException("API调用失败: " + response.statusCode());
+            }
+
+            // 读取 SSE 流，累积 content
+            StringBuilder content = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data: ")) continue;
+                    String data = line.substring(6).trim();
+                    if ("[DONE]".equals(data)) break;
+                    try {
+                        JsonObject chunk = gson.fromJson(data, JsonObject.class);
+                        JsonArray choices = chunk.getAsJsonArray("choices");
+                        if (choices == null || choices.size() == 0) continue;
+                        JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
+                        if (delta != null && delta.has("content") && !delta.get("content").isJsonNull()) {
+                            content.append(delta.get("content").getAsString());
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            String result = content.toString().trim();
+            if (result.isEmpty()) {
+                throw new IOException("co-model 返回空内容");
+            }
+            return result;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("API调用被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 FancyConsole co-model 进行对话
+     */
+    private String chatWithFancyConsoleCompressionModel(String systemPrompt, String userPrompt) throws IOException {
+        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        String model = plugin.getConfigManager().getFancyCoModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。");
+        }
+
+        if (!apiUrl.contains("/v1/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "v1/chat/completions";
+            } else {
+                apiUrl += "/v1/chat/completions";
+            }
+        }
+
+        JsonArray messagesArray = new JsonArray();
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            JsonObject sysMsg = new JsonObject();
+            sysMsg.addProperty("role", "system");
+            sysMsg.addProperty("content", systemPrompt);
+            messagesArray.add(sysMsg);
+        }
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("temperature", 0.3);
+        bodyJson.addProperty("stream", true);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(60))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() != 200) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                plugin.getLogger().warning("[co-model] FancyConsole API 错误: " + response.statusCode() + " - " + errorBody);
                 throw new IOException("API调用失败: " + response.statusCode());
             }
 
@@ -1192,7 +1282,10 @@ public class LLMClient {
         checkConfigLoaded();
 
         String provider = plugin.getConfigManager().getCompressionModelProvider();
-        
+
+        if ("fancy".equalsIgnoreCase(provider)) {
+            return compressWithFancyConsole(context);
+        }
         if ("openai".equalsIgnoreCase(provider)) {
             return compressWithOpenAI(context);
         } else {
@@ -1253,6 +1346,76 @@ public class LLMClient {
             JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
             AIResponse aiResponse = responseParser.parseResponse(responseJson);
             
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                return aiResponse.getContent().trim();
+            }
+
+            throw new IOException("无法解析压缩响应");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("压缩被中断: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 使用 FancyConsole 压缩模型进行上下文压缩
+     */
+    private String compressWithFancyConsole(String context) throws IOException {
+        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
+        String apiKey = plugin.getFancyConsoleManager().getApiKey();
+        String model = plugin.getConfigManager().getFancyCoModel();
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 /fancyhelper bind <API Key> 绑定。");
+        }
+
+        if (!apiUrl.contains("/v1/chat/completions")) {
+            if (apiUrl.endsWith("/")) {
+                apiUrl += "v1/chat/completions";
+            } else {
+                apiUrl += "/v1/chat/completions";
+            }
+        }
+
+        // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
+        String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
+
+        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
+        JsonArray messagesArray = new JsonArray();
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        userMsg.addProperty("content", userPrompt);
+        messagesArray.add(userMsg);
+
+        // 构建请求体
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("model", model);
+        bodyJson.add("messages", messagesArray);
+        bodyJson.addProperty("max_tokens", 300);
+        bodyJson.addProperty("temperature", 0.3);
+
+        String bodyString = gson.toJson(bodyJson);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request);
+            String responseBody = response.body();
+
+            if (response.statusCode() != 200) {
+                plugin.getLogger().warning("[压缩] FancyConsole API 错误: " + response.statusCode() + " - " + responseBody);
+                throw new IOException("压缩失败: " + response.statusCode());
+            }
+
+            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
+            AIResponse aiResponse = responseParser.parseResponse(responseJson);
+
             if (aiResponse != null && aiResponse.getContent() != null) {
                 return aiResponse.getContent().trim();
             }
