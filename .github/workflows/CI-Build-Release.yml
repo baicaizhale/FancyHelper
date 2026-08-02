@@ -4,11 +4,21 @@ name: CI-Build & Release
 
 
 on:
+  # 推送 master 时仅当实际动到代码/构建相关文件才触发，避免 README 等无关改动空跑
+  # 官方文档：paths 过滤对 tag 推送不生效，故 v* tag 推送始终触发（用于发版）
   push:
-    tags: [ 'v*' ]
     branches: [ master ]
+    tags: [ 'v*' ]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/**'
   pull_request:
     branches: [ master ]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/**'
   workflow_dispatch:
     inputs:
       build_type:
