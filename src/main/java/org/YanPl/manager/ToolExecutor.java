@@ -263,7 +263,9 @@ public class ToolExecutor {
         }
 
         UUID uuid = player.getUniqueId();
-        String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
+        // 注释化：不再删除前导 /，命令保留原样执行（服务器端 dispatchCommand 会自行处理 /）
+        String cleanCommand = command;
+        // String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
 
         // SMART 模式下评估风险
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
@@ -315,6 +317,10 @@ public class ToolExecutor {
      */
     private boolean isRiskyCommand(String cmd) {
         String cleanCmd = cmd.trim();
+        // 注释化后命令可能带前导 /，此处单独去掉，保证风险检测仍然生效
+        if (cleanCmd.startsWith("/")) {
+            cleanCmd = cleanCmd.substring(1).trim();
+        }
         if (cleanCmd.toLowerCase().startsWith("minecraft:")) {
             cleanCmd = cleanCmd.substring(10).trim();
         }
@@ -1185,75 +1191,72 @@ public class ToolExecutor {
 
     /**
      * 执行服务器命令
+     * <p>
+     * 以真实玩家身份执行（player.performCommand），保证 instanceof CraftPlayer、
+     * 原版命令、身份比对、权限校验均按真实玩家处理。
+     * 命令输出通过 PacketCaptureManager（ProtocolLib 数据包层）捕获。
      */
     public void executeCommand(Player player, String command) {
+        if (!plugin.isEnabled()) return;
+
+        // 注释化：不再删除前导 /，命令保留原样执行（服务器端 dispatchCommand 会自行处理 /）
+        // String trimmed = command.trim();
+        // final String cleanCommand = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
+        final String cleanCommand = command.trim();
+        if (cleanCommand.isEmpty()) return;
+
         if (plugin.getPacketCaptureManager() != null) {
             plugin.getPacketCaptureManager().startCapture(player);
         }
 
-        if (!plugin.isEnabled()) return;
-        
         Bukkit.getScheduler().runTask(plugin, () -> {
-            StringBuilder output = new StringBuilder();
-            String cmdName = command.split(" ")[0].toLowerCase();
-            if (cmdName.startsWith("/")) cmdName = cmdName.substring(1);
-
             player.sendMessage(ChatColor.GRAY + "⇒ 命令已下发，等待反馈中...");
 
             boolean success;
             try {
-                org.bukkit.command.CommandSender interceptor = createInterceptor(player, output);
-                success = Bukkit.dispatchCommand(interceptor, command);
+                // 以真实玩家身份执行命令
+                success = player.performCommand(cleanCommand);
             } catch (Throwable t) {
-                success = player.performCommand(command);
+                plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] 执行命令时出错: " + t.getMessage());
+                success = false;
             }
 
             boolean finalSuccess = success;
 
             if (!plugin.isEnabled()) return;
-            
-            // 延迟 1 秒 (20 ticks) 检查反馈
+
+            // 延迟 1 秒 (20 ticks) 检查反馈（通过 PacketCapture 捕获玩家实际看到的输出）
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 String currentPacketOutput = "";
-                String currentProxyOutput = output.toString();
                 boolean hasOutput = false;
 
-                // 检查 PacketCapture 是否有内容
                 if (plugin.getPacketCaptureManager() != null) {
                     currentPacketOutput = plugin.getPacketCaptureManager().peekCapture(player);
                     if (!currentPacketOutput.isEmpty()) hasOutput = true;
                 }
-                // 检查拦截器是否有内容
-                if (!currentProxyOutput.isEmpty()) hasOutput = true;
 
                 // 如果有输出，或者命令执行失败，则立即结束
                 if (hasOutput || !finalSuccess) {
                     String finalPacketOutput = "";
                     if (plugin.getPacketCaptureManager() != null) {
-                        // 如果拦截器已有输出，则忽略数据包捕获的输出，避免广播消息污染
-                        if (!currentProxyOutput.isEmpty()) {
-                            // 停止捕获但丢弃输出
-                            plugin.getPacketCaptureManager().stopCapture(player);
-                            finalPacketOutput = "";
-                        } else {
-                            finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
-                        }
+                        finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
                     }
-                    String finalResult = buildCommandResult(command, finalPacketOutput, currentProxyOutput, finalSuccess);
+                    String finalResult = buildCommandResult(cleanCommand, finalPacketOutput, finalSuccess);
                     cliManager.feedbackToAI(player, "#run_result: " + finalResult);
                     return;
                 }
 
                 // 如果没有输出，延长等待 5 秒 (100 ticks)
                 player.sendMessage(ChatColor.GRAY + "⇒ 暂无反馈，延长等待 5秒...");
-                
+
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     String delayedPacketOutput = "";
                     if (plugin.getPacketCaptureManager() != null) {
                         delayedPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
                     }
-                    
-                    String finalResult = buildCommandResult(command, delayedPacketOutput, output.toString(), finalSuccess);
+
+                    String finalResult = buildCommandResult(cleanCommand, delayedPacketOutput, finalSuccess);
                     cliManager.feedbackToAI(player, "#run_result: " + finalResult);
                 }, 100L);
 
@@ -1264,10 +1267,7 @@ public class ToolExecutor {
     /**
      * 构建命令执行结果
      */
-    private String buildCommandResult(String command, String packetOutput, String proxyOutput, boolean success) {
-        if (!proxyOutput.isEmpty()) {
-            return ColorUtil.legacyToReadable(proxyOutput);
-        }
+    private String buildCommandResult(String command, String packetOutput, boolean success) {
         if (!packetOutput.isEmpty()) {
             return packetOutput;
         }
@@ -1279,189 +1279,7 @@ public class ToolExecutor {
             }
             return "命令执行结果未知 (你可以用choose工具问一下用户)";
         }
-        return "命令执行失败。可能原因：\n1. 命令语法错误\n2. 权限不足\n3. 该指令不支持拦截输出\n请检查语法或换一种实现方式。";
-    }
-
-    /**
-     * 创建命令输出拦截器
-     */
-    private org.bukkit.command.CommandSender createInterceptor(Player player, StringBuilder output) {
-        return (org.bukkit.command.CommandSender) java.lang.reflect.Proxy.newProxyInstance(
-            plugin.getClass().getClassLoader(),
-            new Class<?>[]{org.bukkit.entity.Player.class},
-            (proxy, method, args) -> {
-                String methodName = method.getName();
-
-                if (methodName.equals("sendMessage") || methodName.equals("sendRawMessage") || methodName.equals("sendActionBar")) {
-                    return handleSendMessage(player, output, args, methodName);
-                }
-
-                if (methodName.equals("sendTitle") && args.length >= 2) {
-                    return handleSendTitle(player, output, args);
-                }
-
-                if (methodName.equals("spigot")) {
-                    return createSpigotInterceptor(player, output);
-                }
-
-                // 其他方法委托给原玩家
-                try {
-                    Object result = method.invoke(player, args);
-                    if (result == null && method.getReturnType().isPrimitive()) {
-                        return getDefaultValue(method.getReturnType());
-                    }
-                    return result;
-                } catch (java.lang.reflect.InvocationTargetException e) {
-                    plugin.getLogger().warning("[CLI] Method " + methodName + " threw exception: " + e.getCause().getMessage());
-                    plugin.getCloudErrorReport().report(e.getCause());
-                    throw e.getCause();
-                }
-            }
-        );
-    }
-
-    /**
-     * 处理 sendMessage 方法调用
-     */
-    private Object handleSendMessage(Player player, StringBuilder output, Object[] args, String methodName) {
-        if (args.length == 0 || args[0] == null) return null;
-
-        if (args[0] instanceof String) {
-            String msg = (String) args[0];
-            if (output.length() > 0) output.append("\n");
-            output.append(msg);
-            if (methodName.equals("sendActionBar")) {
-                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
-                    new net.md_5.bungee.api.chat.TextComponent(msg));
-            } else {
-                player.sendMessage(msg);
-            }
-        } else if (args[0] instanceof String[]) {
-            for (String msg : (String[]) args[0]) {
-                if (output.length() > 0) output.append("\n");
-                output.append(msg);
-                player.sendMessage(msg);
-            }
-        } else if (args.length > 1 && args[0] instanceof java.util.UUID && args[1] instanceof String) {
-            String msg = (String) args[1];
-            if (output.length() > 0) output.append("\n");
-            output.append(msg);
-            player.sendMessage(msg);
-        } else {
-            handleComponentMessage(player, output, args[0], methodName);
-        }
-
-        return null;
-    }
-
-    /**
-     * 处理组件消息
-     */
-    private void handleComponentMessage(Player player, StringBuilder output, Object componentObj, String methodName) {
-        try {
-            Class<?> componentClass = Class.forName("net.kyori.adventure.text.Component");
-            Object component = componentClass.isInstance(componentObj) ? componentObj : null;
-
-            if (component == null) {
-                try {
-                    java.lang.reflect.Method asComponent = componentObj.getClass().getMethod("asComponent");
-                    Object maybeComponent = asComponent.invoke(componentObj);
-                    if (componentClass.isInstance(maybeComponent)) {
-                        component = maybeComponent;
-                    }
-                } catch (Exception ignored) {}
-            }
-
-            if (component != null) {
-                // 使用 LegacyComponentSerializer 保留颜色信息（输出 § 码）
-                Class<?> legacySerializerClass = Class.forName("net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer");
-                java.lang.reflect.Method legacySection = legacySerializerClass.getMethod("legacySection");
-                Object legacySerializer = legacySection.invoke(null);
-                java.lang.reflect.Method serializeMethod = legacySerializer.getClass().getMethod("serialize", componentClass);
-                String extracted = (String) serializeMethod.invoke(legacySerializer, component);
-
-                if (extracted != null && !extracted.isEmpty()) {
-                    if (output.length() > 0) output.append("\n");
-                    output.append(extracted);
-
-                    if (methodName.equals("sendActionBar")) {
-                        try {
-                            java.lang.reflect.Method sendActionBar = player.getClass().getMethod("sendActionBar", componentClass);
-                            sendActionBar.invoke(player, component);
-                        } catch (Exception ignored) {
-                            player.sendMessage(extracted);
-                        }
-                    } else {
-                        try {
-                            java.lang.reflect.Method sendMessage = player.getClass().getMethod("sendMessage", componentClass);
-                            sendMessage.invoke(player, component);
-                        } catch (Exception ignored) {
-                            player.sendMessage(extracted);
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-    }
-
-    /**
-     * 处理 sendTitle 方法调用
-     */
-    private Object handleSendTitle(Player player, StringBuilder output, Object[] args) {
-        String title = args[0] != null ? args[0].toString() : "";
-        String subtitle = args[1] != null ? args[1].toString() : "";
-
-        if (!title.isEmpty() || !subtitle.isEmpty()) {
-            try {
-                player.sendTitle(title, subtitle,
-                    args.length > 2 ? (int) args[2] : 10,
-                    args.length > 3 ? (int) args[3] : 70,
-                    args.length > 4 ? (int) args[4] : 20);
-            } catch (NoSuchMethodError e) {
-                player.sendMessage(title + " " + subtitle);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * 创建 Spigot 拦截器
-     */
-    private org.bukkit.command.CommandSender.Spigot createSpigotInterceptor(Player player, StringBuilder output) {
-        return new org.bukkit.command.CommandSender.Spigot() {
-            @Override
-            public void sendMessage(net.md_5.bungee.api.chat.BaseComponent component) {
-                if (component == null) return;
-                String legacyText = net.md_5.bungee.api.chat.TextComponent.toLegacyText(component);
-                if (output.length() > 0) output.append("\n");
-                output.append(legacyText);
-                player.spigot().sendMessage(component);
-            }
-
-            @Override
-            public void sendMessage(net.md_5.bungee.api.chat.BaseComponent... components) {
-                if (components == null) return;
-                for (net.md_5.bungee.api.chat.BaseComponent component : components) {
-                    sendMessage(component);
-                }
-            }
-        };
-    }
-
-    /**
-     * 获取基本类型的默认值
-     */
-    private Object getDefaultValue(Class<?> type) {
-        if (type == boolean.class) return false;
-        if (type == int.class) return 0;
-        if (type == double.class) return 0.0;
-        if (type == float.class) return 0.0f;
-        if (type == long.class) return 0L;
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == char.class) return '\0';
-        return null;
+        return "命令执行失败。可能原因：\n1. 命令语法错误\n2. 权限不足\n3. 命令内部要求特定执行者\n请检查语法或换一种实现方式。";
     }
 
     /**

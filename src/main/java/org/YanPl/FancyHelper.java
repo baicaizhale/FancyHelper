@@ -91,12 +91,23 @@ public final class FancyHelper extends JavaPlugin {
             if (getServer().getPluginManager().isPluginEnabled("ProtocolLib")) {
                 initPacketCapture();
             } else {
-                getLogger().warning("==================");
-                getLogger().warning("未检测到 ProtocolLib！");
-                getLogger().warning("FancyHelper 的部分高级功能（如命令输出捕获）将无法使用。");
-                getLogger().warning("建议前往 https://www.spigotmc.org/resources/protocollib.1997/ 下载并安装以获得最佳体验。");
-                getLogger().warning("==================");
+                getLogger().severe("==================================================");
+                getLogger().severe("未检测到 ProtocolLib！");
+                getLogger().severe("FancyHelper 依赖 ProtocolLib 提供命令输出捕获等核心功能，缺少它将无法正常工作。");
+                getLogger().severe("请前往以下地址下载并安装 ProtocolLib，然后重启服务器：");
+                getLogger().severe("https://www.spigotmc.org/resources/protocollib.1997/");
+                getLogger().severe("==================================================");
+
+                // 如果 ReloadService 正在运行，也一并停掉，避免它残留等待一个已禁用的主插件
+                Plugin reloadService = getServer().getPluginManager().getPlugin("FancyHelperReloadService");
+                if (reloadService != null && reloadService.isEnabled()) {
+                    getLogger().severe("检测到 FancyHelperReloadService 正在运行，已一并停止。");
+                    getServer().getPluginManager().disablePlugin(reloadService);
+                }
+
                 packetCaptureManager = null;
+                setEnabled(false);
+                return;
             }
 
             // 异步索引服务器命令与预设文件

@@ -1,6 +1,5 @@
 package org.YanPl.mcp.core;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.DisplayName;
@@ -10,8 +9,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("JsonRpcHandler 测试")
 class JsonRpcHandlerTest {
-
-    private static final Gson gson = new Gson();
 
     @Test
     @DisplayName("buildRequestJson 应包含 jsonrpc/id/method/params")
