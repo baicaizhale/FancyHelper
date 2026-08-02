@@ -58,6 +58,8 @@ settings:
     - data
     - scoreboard
     - tag
+    - say
+    - title
 
 # 提供商选择 — fancy 走 FancyConsole，其余为 BYOK
 provider:
