@@ -1,6 +1,6 @@
 # FancyHelper
 
-<img src="pic/image.webp" alt="FancyHelper Logo" width="50%">
+<img src="pic/image.webp" alt="FancyHelper Logo" width="20%">
 
 > 用说人话的方式管理你的 Minecraft 服务器。
 
