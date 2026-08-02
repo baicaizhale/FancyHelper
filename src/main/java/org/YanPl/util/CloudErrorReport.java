@@ -2,6 +2,7 @@ package org.YanPl.util;
 
 import org.YanPl.FancyHelper;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
@@ -61,7 +62,7 @@ public class CloudErrorReport {
                 List<File> logFiles = collectLogFiles(tempDir, throwable);
 
                 // 上传文件
-                uploadFiles(logFiles);
+                uploadFiles(logFiles, throwable);
 
                 // 清理临时文件
                 for (File file : logFiles) {
@@ -69,7 +70,7 @@ public class CloudErrorReport {
                 }
 
             } catch (Exception e) {
-                plugin.getLogger().warning("错误上报失败: " + e.getMessage());
+                plugin.getLogger().warning("错误上报失败: " + e.getMessage() + buildErrorSummary(throwable));
             }
         });
     }
@@ -261,7 +262,7 @@ public class CloudErrorReport {
      * @param files 文件列表
      * @throws IOException IO异常
      */
-    private void uploadFiles(List<File> files) throws IOException {
+    private void uploadFiles(List<File> files, Throwable throwable) throws IOException {
         String boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString();
         HttpURLConnection conn = (HttpURLConnection) new URL(workerUrl).openConnection();
         conn.setRequestMethod("POST");
@@ -303,7 +304,7 @@ public class CloudErrorReport {
         if (responseCode == 200) {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
                 String response = reader.lines().collect(Collectors.joining("\n"));
-                plugin.getLogger().info("已自动向开发者提交崩溃报告，感谢支持。报告编号: " + response);
+                plugin.getLogger().info("已自动向开发者提交崩溃报告，感谢支持。报告编号: " + response + buildErrorSummary(throwable));
             }
         } else {
             plugin.getLogger().warning("错误上报失败，响应码: " + responseCode);
@@ -325,6 +326,50 @@ public class CloudErrorReport {
             sb.append("Caused by: " ).append(getStackTraceString(t.getCause()));
         }
         return sb.toString();
+    }
+
+    /**
+     * 构建错误摘要（错误类型 + HTTP 状态码 + 具体内容），用于控制台日志展示
+     *
+     * @param throwable 异常
+     * @return 错误摘要（不含颜色码，过长时截断）
+     */
+    private String buildErrorSummary(Throwable throwable) {
+        if (throwable == null) return "";
+
+        String message = throwable.getMessage();
+        StringBuilder sb = new StringBuilder(" | 错误: ");
+
+        // 优先提取 HTTP 状态码（如 400），与具体错误一起展示
+        String statusCode = extractStatusCode(message);
+        if (statusCode != null) {
+            sb.append("HTTP ").append(statusCode).append(" ");
+        }
+        sb.append(throwable.getClass().getSimpleName());
+        if (message != null && !message.isEmpty()) {
+            sb.append(": ").append(message);
+        }
+
+        // 去除 § 颜色码便于控制台阅读，折叠多行内容避免破坏日志行格式，过长时截断
+        String summary = ChatColor.stripColor(sb.toString()).replaceAll("[\\r\\n]+", " ").trim();
+        if (summary.length() > 600) {
+            summary = summary.substring(0, 600) + "...(已截断)";
+        }
+        return summary;
+    }
+
+    /**
+     * 从错误消息中提取 HTTP 状态码（如 400）
+     *
+     * @param message 错误消息
+     * @return HTTP 状态码，未找到返回 null
+     */
+    private String extractStatusCode(String message) {
+        if (message == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "(?:HTTP|状态码|status|statusCode)\\s*[:：]?\\s*(\\d{3})",
+                java.util.regex.Pattern.CASE_INSENSITIVE).matcher(message);
+        return m.find() ? m.group(1) : null;
     }
 
     /**
