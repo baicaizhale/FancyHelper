@@ -1205,6 +1205,9 @@ public class ToolExecutor {
         final String cleanCommand = command.trim();
         if (cleanCommand.isEmpty()) return;
 
+        // Paper 1.21.11+ 将游戏规则名从 camelCase 改为 snake_case：版本较高时自动转换格式
+        final String executedCommand = convertGameruleForServer(cleanCommand);
+
         if (plugin.getPacketCaptureManager() != null) {
             plugin.getPacketCaptureManager().startCapture(player);
         }
@@ -1213,16 +1216,21 @@ public class ToolExecutor {
             player.sendMessage(ChatColor.GRAY + "⇒ 命令已下发，等待反馈中...");
 
             boolean success;
+            String commandError = null;
             try {
                 // 以真实玩家身份执行命令
-                success = player.performCommand(cleanCommand);
+                success = player.performCommand(executedCommand);
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
-                plugin.getLogger().warning("[CLI] 执行命令时出错: " + t.getMessage());
+                // 提取被 VanillaCommandWrapper 包装的底层真实报错（如 Incorrect argument ...）
+                commandError = extractRootCauseMessage(t);
+                plugin.getLogger().warning("[CLI] 执行命令时出错: " + commandError);
+                plugin.getLogger().log(java.util.logging.Level.WARNING, "[CLI] 命令执行异常完整堆栈: " + executedCommand, t);
                 success = false;
             }
 
             boolean finalSuccess = success;
+            final String finalCommandError = commandError;
 
             if (!plugin.isEnabled()) return;
 
@@ -1242,7 +1250,7 @@ public class ToolExecutor {
                     if (plugin.getPacketCaptureManager() != null) {
                         finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
                     }
-                    String finalResult = buildCommandResult(cleanCommand, finalPacketOutput, finalSuccess);
+                    String finalResult = buildCommandResult(executedCommand, finalPacketOutput, finalSuccess, finalCommandError, "");
                     cliManager.feedbackToAI(player, "#run_result: " + finalResult);
                     return;
                 }
@@ -1256,7 +1264,10 @@ public class ToolExecutor {
                         delayedPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
                     }
 
-                    String finalResult = buildCommandResult(cleanCommand, delayedPacketOutput, finalSuccess);
+                    // 兜底：数据包仍无输出时，尝试从控制台日志抓取命令反馈
+                    String consoleFeedback = (finalSuccess && delayedPacketOutput.isEmpty())
+                            ? getConsoleFeedback(player, executedCommand) : "";
+                    String finalResult = buildCommandResult(executedCommand, delayedPacketOutput, finalSuccess, finalCommandError, consoleFeedback);
                     cliManager.feedbackToAI(player, "#run_result: " + finalResult);
                 }, 100L);
 
@@ -1266,12 +1277,25 @@ public class ToolExecutor {
 
     /**
      * 构建命令执行结果
+     * <p>
+     * 反馈优先级（从高到低）：
+     * 1. 数据包捕获的玩家消息（最真实）
+     * 2. 命令成功时控制台日志兜底反馈（issued server command 的下一句）
+     * 3. 命令失败时服务器抛出的真实报错（已提取根因）
+     * 4. 通用失败文案
+     *
+     * @param serverError    服务器抛出的真实报错（已提取根因），无异常时为 null
+     * @param consoleFeedback 控制台日志兜底反馈，仅在成功且无数据包输出时传入，无内容为空串
      */
-    private String buildCommandResult(String command, String packetOutput, boolean success) {
+    private String buildCommandResult(String command, String packetOutput, boolean success, String serverError, String consoleFeedback) {
         if (!packetOutput.isEmpty()) {
             return packetOutput;
         }
         if (success) {
+            // 兜底：数据包没抓到输出时，控制台反馈比"结果未知"更有价值
+            if (consoleFeedback != null && !consoleFeedback.isEmpty()) {
+                return "控制台反馈: " + consoleFeedback;
+            }
             if (command.toLowerCase().startsWith("tp")) {
                 return "命令执行结果未知 (你可以用choose工具问一下用户)";
             } else if (command.toLowerCase().startsWith("op") || command.toLowerCase().startsWith("deop")) {
@@ -1279,7 +1303,230 @@ public class ToolExecutor {
             }
             return "命令执行结果未知 (你可以用choose工具问一下用户)";
         }
+        // 失败时优先反馈服务器真实报错，让 AI 能根据错误修正命令后重试
+        if (serverError != null && !serverError.isEmpty()) {
+            String hint = "";
+            if (command.toLowerCase().startsWith("gamerule") && isGameruleSnakeCaseServer()) {
+                hint = " 提示：该服务器游戏规则名使用 snake_case（如 keepInventory → keep_inventory），且部分规则已合并或改名，请检查规则名后重试。";
+            }
+            return "命令执行失败。服务器返回错误: " + serverError + "。" + hint + " 请根据错误信息修正命令后重试。";
+        }
         return "命令执行失败。可能原因：\n1. 命令语法错误\n2. 权限不足\n3. 命令内部要求特定执行者\n请检查语法或换一种实现方式。";
+    }
+
+    /**
+     * 控制台日志兜底：找到玩家执行该命令时服务器记录的 "xxx issued server command" 行，
+     * 抓取其后的下一句（或多句）作为命令反馈。
+     * 仅在数据包捕获无输出时调用，作为最后的信息来源。
+     */
+    private String getConsoleFeedback(Player player, String command) {
+        try {
+            File logFile = new File("logs", "latest.log");
+            if (!logFile.isFile()) return "";
+
+            List<String> tail = readLogTail(logFile, 64 * 1024);
+            return extractConsoleFeedback(tail, player.getName(), command);
+        } catch (Exception e) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().warning("[CLI] 控制台日志兜底读取失败: " + e.getMessage());
+            }
+            return "";
+        }
+    }
+
+    /**
+     * 读取日志文件末尾的内容（最多 maxBytes 字节，限制在最后 200 行）
+     */
+    private static List<String> readLogTail(File file, int maxBytes) throws IOException {
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+            long length = raf.length();
+            long start = Math.max(0, length - maxBytes);
+            raf.seek(start);
+            byte[] buf = new byte[(int) (length - start)];
+            raf.readFully(buf);
+            String text = new String(buf, StandardCharsets.UTF_8);
+            String[] allLines = text.split("\r?\n");
+            // 从文件中间开始读时第一行是截断残片，跳过；再限制最多 200 行
+            int skipFirst = (start > 0) ? 1 : 0;
+            int from = Math.max(skipFirst, allLines.length - 200);
+            List<String> tail = new java.util.ArrayList<>();
+            for (int i = from; i < allLines.length; i++) {
+                tail.add(allLines[i]);
+            }
+            return tail;
+        }
+    }
+
+    /**
+     * 从日志行中提取指定玩家执行指定命令后的控制台反馈（纯逻辑，便于单测）。
+     * 匹配 "&lt;玩家&gt; issued server command: /&lt;命令&gt;" 行，取其后最多 5 行非空内容，
+     * 遇到下一条 "issued server command" 即停止。找不到匹配返回空串。
+     */
+    static String extractConsoleFeedback(List<String> logLines, String playerName, String command) {
+        if (logLines == null || playerName == null || command == null) return "";
+
+        // 日志中的命令带一个前导 /
+        String normalized = command.startsWith("/") ? command.substring(1) : command;
+        String marker = playerName + " issued server command: /" + normalized;
+
+        for (int i = logLines.size() - 1; i >= 0; i--) {
+            String line = logLines.get(i);
+            if (line == null) continue;
+            // issued server command 行中命令一定在行尾，用 endsWith 精确匹配，
+            // 避免命令 A 被更长的命令 B（如 say hello vs say hello world）误匹配
+            if (!line.trim().endsWith(marker)) continue;
+
+            StringBuilder sb = new StringBuilder();
+            int grabbed = 0;
+            for (int j = i + 1; j < logLines.size() && grabbed < 5; j++) {
+                String next = stripLogPrefix(logLines.get(j));
+                if (next.isEmpty()) continue;
+                if (next.contains(" issued server command:")) break;
+                if (grabbed > 0) sb.append("\n");
+                sb.append(next);
+                grabbed++;
+            }
+            return sb.toString();
+        }
+        return "";
+    }
+
+    /**
+     * 去掉控制台日志行的前缀（形如 "[HH:MM:SS LEVEL]: "），保留正文
+     */
+    static String stripLogPrefix(String raw) {
+        if (raw == null) return "";
+        String s = raw.trim();
+        int idx = s.indexOf("]:");
+        if (idx != -1) {
+            s = s.substring(idx + 2).trim();
+        }
+        return s;
+    }
+
+    /**
+     * 提取异常链中最深层（根因）的真实错误信息。
+     * CraftBukkit 的 VanillaCommandWrapper 会把底层 Brigadier 异常包装成
+     * "Unhandled exception executing ..." 的 CommandException，真正的错误
+     * （如 CommandSyntaxException: Incorrect argument ...）藏在 cause 链深处，
+     * 只有取出根因，AI 才能根据真实报错自我修正。
+     */
+    static String extractRootCauseMessage(Throwable t) {
+        // 先沿 cause 链找到最深层（根因）异常
+        Throwable current = t;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        // 根因没有可读消息时，向上回溯到最近一个有消息的异常，避免返回 null
+        String msg = current.getMessage();
+        if (msg == null || msg.trim().isEmpty()) {
+            Throwable walker = t;
+            while (walker != null) {
+                String m = walker.getMessage();
+                if (m != null && !m.trim().isEmpty()) {
+                    return m;
+                }
+                walker = walker.getCause();
+            }
+            return current.getClass().getSimpleName();
+        }
+        return msg;
+    }
+
+    /**
+     * gamerule 格式自适应：当服务器版本 &gt;= 1.21.11（游戏规则名改为 snake_case）时，
+     * 自动把命令里的 camelCase 规则名转为 snake_case（如 keepInventory → keep_inventory）。
+     * 旧版本服务器不做转换（camelCase 仍是正确格式）。
+     */
+    static String convertGameruleForServer(String command) {
+        if (command == null || command.isEmpty()) return command;
+        if (!isGameruleSnakeCaseServer()) return command;
+        return convertGameruleCommand(command);
+    }
+
+    /**
+     * 检测服务器是否已切换为 snake_case 游戏规则名（Paper 1.21.11+）。
+     * Bukkit.getBukkitVersion() 形如 "1.21.11-R0.1-SNAPSHOT"，先截掉 -R 后缀再比较。
+     */
+    static boolean isGameruleSnakeCaseServer() {
+        try {
+            String version = Bukkit.getBukkitVersion();
+            if (version == null) return false;
+            int dash = version.indexOf('-');
+            if (dash != -1) version = version.substring(0, dash);
+            return compareVersions(version, "1.21.11") >= 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 将 gamerule 命令中的 camelCase 规则名转换为 snake_case，只改规则名、不动其他部分。
+     * 例: "gamerule keepInventory true" → "gamerule keep_inventory true"
+     */
+    static String convertGameruleCommand(String command) {
+        if (command == null || command.isEmpty()) return command;
+        String prefix = command.startsWith("/") ? "/" : "";
+        String body = command.startsWith("/") ? command.substring(1) : command;
+        String[] parts = body.split("\\s+", 3);
+        if (parts.length < 2) return command;
+        String cmdName = parts[0].toLowerCase();
+        if (cmdName.startsWith("minecraft:")) {
+            cmdName = cmdName.substring("minecraft:".length());
+        }
+        if (!cmdName.equals("gamerule")) return command;
+        String newName = camelToSnake(parts[1]);
+        if (newName.equals(parts[1])) return command;
+        if (parts.length == 2) {
+            return prefix + parts[0] + " " + newName;
+        }
+        return prefix + parts[0] + " " + newName + " " + parts[2];
+    }
+
+    /**
+     * camelCase → snake_case：在大写字母前插入下划线并转小写。
+     * 例: keepInventory → keep_inventory, randomTickSpeed → random_tick_speed
+     */
+    static String camelToSnake(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0) {
+                    sb.append('_');
+                }
+                sb.append(Character.toLowerCase(c));
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 数值化版本比较：逐段按数字比较（"1.21.10" &lt; "1.21.11" &lt; "26.1"）
+     */
+    static int compareVersions(String a, String b) {
+        if (a == null || a.isEmpty()) a = "0";
+        if (b == null || b.isEmpty()) b = "0";
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        int n = Math.max(pa.length, pb.length);
+        for (int i = 0; i < n; i++) {
+            int x = i < pa.length ? parseVersionPart(pa[i]) : 0;
+            int y = i < pb.length ? parseVersionPart(pb[i]) : 0;
+            if (x != y) return Integer.compare(x, y);
+        }
+        return 0;
+    }
+
+    private static int parseVersionPart(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /**
