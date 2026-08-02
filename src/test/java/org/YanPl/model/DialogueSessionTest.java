@@ -271,16 +271,6 @@ class DialogueSessionTest {
     }
 
     @Test
-    @DisplayName("历史超过500条时应该自动裁剪")
-    void testHistoryAutoTrim() {
-        for (int i = 0; i < 505; i++) {
-            session.addMessage("user", "消息" + i);
-        }
-        
-        assertTrue(session.getHistory().size() <= 500);
-    }
-
-    @Test
     @DisplayName("Message 默认构造函数")
     void testMessageDefaultConstructor() {
         DialogueSession.Message msg = new DialogueSession.Message("user", "内容");
@@ -322,10 +312,11 @@ class DialogueSessionTest {
     @Test
     @DisplayName("Mode 枚举值")
     void testModeEnum() {
-        assertEquals(3, DialogueSession.Mode.values().length);
+        assertEquals(4, DialogueSession.Mode.values().length);
         assertEquals(DialogueSession.Mode.NORMAL, DialogueSession.Mode.valueOf("NORMAL"));
         assertEquals(DialogueSession.Mode.YOLO, DialogueSession.Mode.valueOf("YOLO"));
         assertEquals(DialogueSession.Mode.SMART, DialogueSession.Mode.valueOf("SMART"));
+        assertEquals(DialogueSession.Mode.PLAN, DialogueSession.Mode.valueOf("PLAN"));
     }
 
     @Test

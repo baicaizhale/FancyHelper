@@ -3,6 +3,7 @@ package org.YanPl.manager;
 import org.YanPl.FancyHelper;
 import org.YanPl.util.CloudErrorReport;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,10 +40,10 @@ class ConfigManagerTest {
     @Mock
     private FileConfiguration config;
 
-    @Mock
-    private FileConfiguration playerData;
-
     private ConfigManager configManager;
+
+    private Player player;
+    private String uuid;
 
     @TempDir
     Path tempDir;
@@ -52,13 +54,18 @@ class ConfigManagerTest {
         when(plugin.getCloudErrorReport()).thenReturn(cloudErrorReport);
         when(plugin.getConfig()).thenReturn(config);
         when(plugin.isEnabled()).thenReturn(true);
-        
+
         File dataFolder = tempDir.toFile();
         when(plugin.getDataFolder()).thenReturn(dataFolder);
-        
+
         Files.createDirectories(dataFolder.toPath());
 
         configManager = new ConfigManager(plugin);
+
+        // isPlayerToolEnabled 走 playerData（真实 YamlConfiguration，临时目录加载）
+        uuid = UUID.randomUUID().toString();
+        player = mock(Player.class);
+        when(player.getUniqueId()).thenReturn(UUID.fromString(uuid));
     }
 
     @Test
@@ -94,7 +101,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getCompressionModelProvider 应返回主 provider")
     void testGetCompressionModelProvider_FollowsMainProvider() {
-        when(config.getString("provider", "cloudflare")).thenReturn("openai");
+        when(config.getString("provider.ai", null)).thenReturn("openai");
 
         String result = configManager.getCompressionModelProvider();
 
@@ -124,7 +131,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getProvider 应返回 cloudflare 当配置为 cloudflare")
     void testGetProvider_ReturnsCloudflare() {
-        when(config.getString("provider", "cloudflare")).thenReturn("cloudflare");
+        when(config.getString("provider.ai", null)).thenReturn("cloudflare");
 
         String result = configManager.getProvider();
 
@@ -134,7 +141,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getProvider 应返回 openai 当配置为 openai")
     void testGetProvider_ReturnsOpenAI() {
-        when(config.getString("provider", "cloudflare")).thenReturn("openai");
+        when(config.getString("provider.ai", null)).thenReturn("openai");
 
         String result = configManager.getProvider();
 
@@ -505,5 +512,105 @@ class ConfigManagerTest {
         configManager.save();
 
         verify(config).save(any(File.class));
+    }
+
+    // ==================== isPlayerToolEnabled 权限分组 ====================
+
+    @Test
+    @DisplayName("未设置任何权限时 read/write/ls/edit 均默认禁用")
+    void testPlayerToolDefaultDisabled() {
+        assertFalse(configManager.isPlayerToolEnabled(player, "read"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "write"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "ls"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "edit"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "diff"));
+    }
+
+    @Test
+    @DisplayName("setPlayerToolEnabled(read) 后 read 启用、write 仍禁用")
+    void testSetReadOnlyGrantsReadOnly() {
+        configManager.setPlayerToolEnabled(player, "read", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "read"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "write"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "ls"));
+    }
+
+    @Test
+    @DisplayName("write 权限隐含 read：ls/read 也返回 true")
+    void testWriteImpliesRead() {
+        configManager.setPlayerToolEnabled(player, "write", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "write"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "read"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "ls"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "edit"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "diff"));
+    }
+
+    @Test
+    @DisplayName("ls/read 映射到 read 组")
+    void testLsMapsToReadGroup() {
+        configManager.setPlayerToolEnabled(player, "ls", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "read"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "write"));
+    }
+
+    @Test
+    @DisplayName("edit/diff 映射到 write 组（隐含 read）")
+    void testEditDiffMapToWriteGroup() {
+        configManager.setPlayerToolEnabled(player, "edit", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "edit"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "read"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "write"));
+        // diff 与 edit 同属 write 组
+        assertTrue(configManager.isPlayerToolEnabled(player, "diff"));
+
+        configManager.setPlayerToolEnabled(player, "diff", true);
+        assertTrue(configManager.isPlayerToolEnabled(player, "diff"));
+    }
+
+    @Test
+    @DisplayName("write 关闭后 read 保留（独立于 write 状态）")
+    void testDisableWriteKeepsRead() {
+        configManager.setPlayerToolEnabled(player, "write", true);
+        configManager.setPlayerToolEnabled(player, "write", false);
+
+        assertFalse(configManager.isPlayerToolEnabled(player, "write"));
+        // setPlayerToolEnabled(write=true) 时已写入 uuid.read=true，关闭 write 不会清除 read
+        assertTrue(configManager.isPlayerToolEnabled(player, "read"));
+    }
+
+    @Test
+    @DisplayName("工具名大小写不敏感")
+    void testToolNameCaseInsensitive() {
+        configManager.setPlayerToolEnabled(player, "Write", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "write"));
+        assertTrue(configManager.isPlayerToolEnabled(player, "READ"));
+    }
+
+    @Test
+    @DisplayName("非分组工具走独立条目且互不影响")
+    void testCustomToolUsesOwnEntry() {
+        configManager.setPlayerToolEnabled(player, "custom_tool", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "custom_tool"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "read"));
+        assertFalse(configManager.isPlayerToolEnabled(player, "write"));
+    }
+
+    @Test
+    @DisplayName("不同玩家的权限互相隔离")
+    void testPlayerPermissionIsolation() {
+        Player other = mock(Player.class);
+        when(other.getUniqueId()).thenReturn(UUID.randomUUID());
+
+        configManager.setPlayerToolEnabled(player, "read", true);
+
+        assertTrue(configManager.isPlayerToolEnabled(player, "read"));
+        assertFalse(configManager.isPlayerToolEnabled(other, "read"));
     }
 }

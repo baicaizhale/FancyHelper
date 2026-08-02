@@ -199,7 +199,7 @@ public class ToolExecutor {
      * 解析工具调用字符串
      * 支持统一的工具调用格式：#工具名: 参数
      */
-    public ToolParseResult parseToolCall(String toolCall) {
+    public static ToolParseResult parseToolCall(String toolCall) {
         String toolName;
         String args = "";
 

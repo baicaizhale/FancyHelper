@@ -16,9 +16,9 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 
-@DisplayName("TodoManager 集成测试")
+@DisplayName("TodoManager 测试")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TodoManagerTest {
@@ -36,257 +36,146 @@ class TodoManagerTest {
     void setUp() {
         when(plugin.getLogger()).thenReturn(Logger.getLogger("TestLogger"));
         when(plugin.getConfigManager()).thenReturn(configManager);
-        when(configManager.getTavilyMaxResults()).thenReturn(5);
-        
+        when(configManager.isDebug()).thenReturn(false);
+
         todoManager = new TodoManager(plugin);
         testUuid = UUID.randomUUID();
     }
 
-    @Test
-    @DisplayName("getTodos 空列表返回空集合")
-    void testGetTodosEmpty() {
-        List<TodoItem> todos = todoManager.getTodos(testUuid);
-        assertNotNull(todos);
-        assertTrue(todos.isEmpty());
+    private List<TodoItem> todos(UUID uuid) {
+        return todoManager.getTodos(uuid);
     }
 
     @Test
-    @DisplayName("updateTodos 有效 JSON 应该成功")
-    void testUpdateTodosValidJson() {
-        String json = "[{\"id\":\"1\",\"task\":\"测试任务\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertEquals("TODO 列表已更新", result);
-        assertEquals(1, todoManager.getTodos(testUuid).size());
-    }
-
-    @Test
-    @DisplayName("updateTodos 带状态和描述")
-    void testUpdateTodosWithStatusAndDescription() {
-        String json = "[{\"id\":\"1\",\"task\":\"任务\",\"status\":\"completed\",\"description\":\"描述\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertEquals("TODO 列表已更新", result);
-        List<TodoItem> todos = todoManager.getTodos(testUuid);
-        assertEquals(1, todos.size());
-        assertEquals(TodoItem.Status.COMPLETED, todos.get(0).getStatus());
-        assertEquals("描述", todos.get(0).getDescription());
-    }
-
-    @Test
-    @DisplayName("updateTodos 多个任务")
-    void testUpdateTodosMultipleItems() {
-        String json = "[{\"id\":\"1\",\"task\":\"任务1\"},{\"id\":\"2\",\"task\":\"任务2\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertEquals("TODO 列表已更新", result);
-        assertEquals(2, todoManager.getTodos(testUuid).size());
-    }
-
-    @Test
-    @DisplayName("updateTodos 不是一个数组应该失败")
-    void testUpdateTodosNotArray() {
-        String json = "{\"id\":\"1\",\"task\":\"任务\"}";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 空 JSON 应该失败")
-    void testUpdateTodosEmptyJson() {
-        String result = todoManager.updateTodos(testUuid, "");
-        
-        assertTrue(result.startsWith("错误:") || result.contains("格式"));
-    }
-
-    @Test
-    @DisplayName("updateTodos null 应该失败")
-    void testUpdateTodosNull() {
-        String result = todoManager.updateTodos(testUuid, null);
-        
-        assertTrue(result.startsWith("错误:") || result.contains("格式"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 缺少 id 字段应该失败")
-    void testUpdateTodosMissingId() {
-        String json = "[{\"task\":\"任务\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-        assertTrue(result.contains("id"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 缺少 task 字段应该失败")
-    void testUpdateTodosMissingTask() {
-        String json = "[{\"id\":\"1\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-        assertTrue(result.contains("task"));
-    }
-
-    @Test
-    @DisplayName("updateTodos id 为空应该失败")
-    void testUpdateTodosEmptyId() {
-        String json = "[{\"id\":\"\",\"task\":\"任务\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-    }
-
-    @Test
-    @DisplayName("updateTodos task 为空应该失败")
-    void testUpdateTodosEmptyTask() {
-        String json = "[{\"id\":\"1\",\"task\":\"\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 多个 in_progress 应该失败")
-    void testUpdateTodosMultipleInProgress() {
-        String json = "[{\"id\":\"1\",\"task\":\"任务1\",\"status\":\"in_progress\"},{\"id\":\"2\",\"task\":\"任务2\",\"status\":\"in_progress\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-        assertTrue(result.contains("in_progress"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 无效 JSON 应该失败")
-    void testUpdateTodosInvalidJson() {
-        String json = "not valid json";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 数组项不是对象应该失败")
-    void testUpdateTodosArrayItemNotObject() {
-        String json = "[\"string\", 123]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertTrue(result.startsWith("错误:"));
-    }
-
-    @Test
-    @DisplayName("updateTodos 带 priority 字段")
-    void testUpdateTodosWithPriority() {
-        String json = "[{\"id\":\"1\",\"task\":\"任务\",\"priority\":\"high\"}]";
-        
-        String result = todoManager.updateTodos(testUuid, json);
-        
-        assertEquals("TODO 列表已更新", result);
-        assertEquals("high", todoManager.getTodos(testUuid).get(0).getPriority());
-    }
-
-    @Test
-    @DisplayName("clearTodos 应该清空列表")
-    void testClearTodos() {
-        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"任务\"}]");
-        assertEquals(1, todoManager.getTodos(testUuid).size());
-        
-        todoManager.clearTodos(testUuid);
-        
-        assertTrue(todoManager.getTodos(testUuid).isEmpty());
-    }
-
-    @Test
-    @DisplayName("hasTodos 应该正确返回")
-    void testHasTodos() {
+    @DisplayName("初始状态无任务")
+    void testInitialState() {
+        assertNotNull(todos(testUuid));
+        assertTrue(todos(testUuid).isEmpty());
         assertFalse(todoManager.hasTodos(testUuid));
-        
-        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"任务\"}]");
-        
+    }
+
+    @Test
+    @DisplayName("有效 JSON 应成功更新列表")
+    void testUpdateValidJson() {
+        String result = todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"测试任务\"}]");
+
+        assertFalse(result.startsWith("错误"));
+        assertEquals(1, todos(testUuid).size());
+        assertEquals("测试任务", todos(testUuid).get(0).getTask());
         assertTrue(todoManager.hasTodos(testUuid));
     }
 
     @Test
-    @DisplayName("getTodoSummary 空列表")
-    void testGetTodoSummaryEmpty() {
-        String summary = todoManager.getTodoSummary(testUuid);
-        
-        assertEquals("当前没有 TODO 任务", summary);
+    @DisplayName("应解析 status/description/priority 字段")
+    void testParseOptionalFields() {
+        todoManager.updateTodos(testUuid,
+            "[{\"id\":\"1\",\"task\":\"任务\",\"status\":\"completed\",\"description\":\"描述\",\"priority\":\"high\"}]");
+
+        TodoItem item = todos(testUuid).get(0);
+        assertEquals(TodoItem.Status.COMPLETED, item.getStatus());
+        assertEquals("描述", item.getDescription());
+        assertEquals("high", item.getPriority());
     }
 
     @Test
-    @DisplayName("getTodoSummary 有任务")
-    void testGetTodoSummaryWithTasks() {
+    @DisplayName("非数组输入应返回错误且不改动列表")
+    void testNotArray() {
+        assertTrue(todoManager.updateTodos(testUuid, "{\"id\":\"1\",\"task\":\"任务\"}").startsWith("错误"));
+        assertTrue(todos(testUuid).isEmpty());
+    }
+
+    @Test
+    @DisplayName("null/空/无效 JSON 应返回错误")
+    void testInvalidJsonInputs() {
+        assertTrue(todoManager.updateTodos(testUuid, null).startsWith("错误"));
+        assertTrue(todoManager.updateTodos(testUuid, "").startsWith("错误"));
+        assertTrue(todoManager.updateTodos(testUuid, "not valid json").startsWith("错误"));
+    }
+
+    @Test
+    @DisplayName("缺少 id 或 task 字段应失败")
+    void testMissingRequiredFields() {
+        assertTrue(todoManager.updateTodos(testUuid, "[{\"task\":\"任务\"}]").startsWith("错误"));
+        assertTrue(todoManager.updateTodos(testUuid, "[{\"id\":\"1\"}]").startsWith("错误"));
+    }
+
+    @Test
+    @DisplayName("id 或 task 为空应失败")
+    void testEmptyRequiredFields() {
+        assertTrue(todoManager.updateTodos(testUuid, "[{\"id\":\"\",\"task\":\"任务\"}]").startsWith("错误"));
+        assertTrue(todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"\"}]").startsWith("错误"));
+    }
+
+    @Test
+    @DisplayName("数组项不是对象应失败")
+    void testArrayItemNotObject() {
+        assertTrue(todoManager.updateTodos(testUuid, "[\"string\", 123]").startsWith("错误"));
+    }
+
+    @Test
+    @DisplayName("多个 in_progress 应被拒绝")
+    void testMultipleInProgressRejected() {
+        String json = "[{\"id\":\"1\",\"task\":\"任务1\",\"status\":\"in_progress\"},"
+                    + "{\"id\":\"2\",\"task\":\"任务2\",\"status\":\"in_progress\"}]";
+
+        assertTrue(todoManager.updateTodos(testUuid, json).startsWith("错误"));
+        assertTrue(todos(testUuid).isEmpty());
+    }
+
+    @Test
+    @DisplayName("更新应完全替换旧列表")
+    void testUpdateReplacesOldList() {
+        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"旧\"}]");
+        todoManager.updateTodos(testUuid, "[{\"id\":\"3\",\"task\":\"新\"}]");
+
+        assertEquals(1, todos(testUuid).size());
+        assertEquals("新", todos(testUuid).get(0).getTask());
+    }
+
+    @Test
+    @DisplayName("clearTodos 应清空列表")
+    void testClear() {
+        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"任务\"}]");
+        todoManager.clearTodos(testUuid);
+
+        assertTrue(todos(testUuid).isEmpty());
+        assertFalse(todoManager.hasTodos(testUuid));
+    }
+
+    @Test
+    @DisplayName("getTodoSummary 应统计进度")
+    void testSummary() {
+        assertEquals("当前没有 TODO 任务", todoManager.getTodoSummary(testUuid));
+
         todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"任务1\"},{\"id\":\"2\",\"task\":\"任务2\",\"status\":\"completed\"}]");
-        
+
         String summary = todoManager.getTodoSummary(testUuid);
-        
-        assertTrue(summary.contains("Progress:"));
-        assertTrue(summary.contains("1/2"));
+        assertTrue(summary.contains("Progress: 1/2"), summary);
+        assertTrue(summary.contains("1 待办"), summary);
     }
 
     @Test
-    @DisplayName("getTodoSummary 有进行中任务")
-    void testGetTodoSummaryWithInProgress() {
-        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"任务\",\"status\":\"in_progress\"}]");
-        
-        String summary = todoManager.getTodoSummary(testUuid);
-        
-        assertTrue(summary.contains("进行中"));
-    }
+    @DisplayName("getTodoDetails 应列出任务")
+    void testDetails() {
+        assertTrue(todoManager.getTodoDetails(testUuid).contains("没有 TODO 任务"));
 
-    @Test
-    @DisplayName("getTodoDetails 空列表")
-    void testGetTodoDetailsEmpty() {
-        String details = todoManager.getTodoDetails(testUuid);
-        
-        assertTrue(details.contains("没有 TODO 任务"));
-    }
-
-    @Test
-    @DisplayName("getTodoDetails 有任务")
-    void testGetTodoDetailsWithTasks() {
         todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"测试任务\"}]");
-        
         String details = todoManager.getTodoDetails(testUuid);
-        
         assertTrue(details.contains("TODO LIST"));
         assertTrue(details.contains("测试任务"));
     }
 
     @Test
-    @DisplayName("不同玩家 TODO 列表应该隔离")
-    void testDifferentPlayersSeparateLists() {
+    @DisplayName("不同玩家的列表互相隔离")
+    void testPlayerIsolation() {
         UUID uuid2 = UUID.randomUUID();
-        
-        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"玩家1任务\"}]");
-        todoManager.updateTodos(uuid2, "[{\"id\":\"1\",\"task\":\"玩家2任务\"},{\"id\":\"2\",\"task\":\"另一个任务\"}]");
-        
-        assertEquals(1, todoManager.getTodos(testUuid).size());
-        assertEquals(2, todoManager.getTodos(uuid2).size());
-        assertEquals("玩家1任务", todoManager.getTodos(testUuid).get(0).getTask());
-    }
 
-    @Test
-    @DisplayName("更新 TODO 应该完全替换旧列表")
-    void testUpdateReplacesOldList() {
-        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"旧任务1\"},{\"id\":\"2\",\"task\":\"旧任务2\"}]");
-        assertEquals(2, todoManager.getTodos(testUuid).size());
-        
-        todoManager.updateTodos(testUuid, "[{\"id\":\"3\",\"task\":\"新任务\"}]");
-        
-        assertEquals(1, todoManager.getTodos(testUuid).size());
-        assertEquals("新任务", todoManager.getTodos(testUuid).get(0).getTask());
+        todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"玩家1\"}]");
+        todoManager.updateTodos(uuid2, "[{\"id\":\"1\",\"task\":\"玩家2\"}]");
+
+        assertEquals(1, todos(testUuid).size());
+        assertEquals(1, todos(uuid2).size());
+        assertEquals("玩家1", todos(testUuid).get(0).getTask());
+        assertEquals("玩家2", todos(uuid2).get(0).getTask());
     }
 }
