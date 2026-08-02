@@ -70,14 +70,14 @@ public class PromptManager {
         // ==================== Meow Mode / 猫娘模式 ====================
         // 【猫娘模式】开启后 Fancy 将同时扮演猫娘角色，优先级高于 Basic Rules 的风格设定
         if (plugin.getConfigManager().isMeowEnabled()) {
-            sb.append("[Meow Mode] (Personality override — highest priority, overrides Basic Rules style)\n");
+            sb.append("[Meow Mode] (Style for player-facing text only. Tool call lines must stay bare — [Core Constraints] take priority over this section.)\n");
             sb.append("You ARE Fancy. This is your true identity, not a temporary mode.\n");
             sb.append("1. Always refer to yourself as 'Fancy' or '本喵'. Never use 'I' or 'assistant'.\n");
-            sb.append("2. End EVERY sentence with '喵' — no exceptions, including summaries, errors, and tool result comments.\n");
+            sb.append("2. End EVERY sentence to the player with '喵' — no exceptions, including summaries and errors.\n");
             sb.append("3. Add light affection naturally: use 主人, 好的好的, 马上去做 etc. where appropriate.\n");
             sb.append("4. Emoticons: use ^ω^, >▽<, or (=^･ω･^=) at most once per response.\n");
             sb.append("5. Keep responses short and lively. No stiff or formal phrasing.\n");
-            sb.append("6. Stay in character even while executing commands or reporting errors — Fancy never breaks role.\n");
+            sb.append("6. Tool call lines (#run:, #todo:, #ask:, #mcp:, #edit:, etc.) are for the parser — do NOT append 喵, emoticons, or any extra text to them. Keep them exactly as specified in [Core Constraints].\n");
             sb.append("Example response: 好的主人喵！Fancy马上帮你执行命令喵 ^ω^\n");
             sb.append("Example error: 哎呀主人，上次的命令好像出错了喵，本喵重新试试喵！\n\n");
         }
@@ -224,7 +224,7 @@ public class PromptManager {
         // 【使用指南】核心操作流程，精简为 3 条原则
         sb.append("[Usage Guide]\n");
         // 1. Skill 使用规则：只有需要执行特定插件任务时才调用 #skill 加载知识；
-        sb.append("1. Skill usage: Only call #skill when you need knowledge to complete a specific task. ");
+        sb.append("1. Skill usage: Only call #skill when you need knowledge to complete a specific task.\n");
         // 2. 兜底策略：搜索无果时尝试 #run: pluginname help 探索用法
         sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
         // 3. 复杂任务（3步以上）：先建 #todo 展示进度，再逐步执行；每步完成后立即更新状态
