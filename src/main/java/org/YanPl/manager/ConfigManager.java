@@ -233,11 +233,36 @@ public class ConfigManager {
             }
 
             // 迁移旧版 provider 字段（string → object）
-            // 旧格式: provider: cloudflare  →  新格式: provider: { ai: cloudflare, search: fancy-tavily, jina: fancy }
+            // 旧格式: provider: cloudflare（字符串）  →  新格式: provider: { ai: ..., search: ..., jina: ... }
+            // 只有旧 provider 对应的 API Key 被用户自定义过才保留原选择，否则切到 fancy（v4 主推 FancyConsole 密钥管理）
             if (oldValues.containsKey("provider") && !(oldValues.get("provider") instanceof Map)) {
                 String oldProvider = String.valueOf(oldValues.get("provider"));
-                newConfig.set("provider.ai", oldProvider);
-                plugin.getLogger().info("已迁移旧配置 provider=" + oldProvider + " 到 provider.ai=" + oldProvider);
+                Object openAiKeyObj = oldValues.get("openai.api_key");
+                Object cfKeyObj = oldValues.get("cloudflare.cf_key");
+                String oldOpenAiKey = openAiKeyObj instanceof String ? (String) openAiKeyObj : "";
+                String oldCfKey = cfKeyObj instanceof String ? (String) cfKeyObj : "";
+
+                // 排除 v3 默认占位符 / 硬编码密钥，判断是否被用户自定义
+                boolean isOpenAiCustom = !oldOpenAiKey.isEmpty()
+                        && !oldOpenAiKey.equals("your-openai-api-key")
+                        && !oldOpenAiKey.startsWith("sk-xxxx");
+                boolean isCfCustom = !oldCfKey.isEmpty()
+                        && !oldCfKey.equals("maF_cBg4UXnWgTaE8t8tdAq-iGZ5osv6CHxm2nH0")
+                        && !oldCfKey.startsWith("cfat_xxxx");
+
+                // 尊重旧版 provider 选择：只在旧 provider 对应的 Key 被自定义时才保留
+                String aiProvider;
+                if ("openai".equalsIgnoreCase(oldProvider) && isOpenAiCustom) {
+                    aiProvider = "openai";
+                } else if ("cloudflare".equalsIgnoreCase(oldProvider) && isCfCustom) {
+                    aiProvider = "cloudflare";
+                } else {
+                    aiProvider = "fancy";
+                }
+                // 重建 provider 段落，避免旧格式字符串残留覆盖默认段落
+                newConfig.set("provider", null);
+                newConfig.set("provider.ai", aiProvider);
+                plugin.getLogger().info("已迁移旧配置 provider=" + oldProvider + " 到 provider.ai=" + aiProvider);
             }
             // 同时确保 provider.search / provider.jina 在新配置中有默认值
             if (!newConfig.contains("provider.search")) newConfig.set("provider.search", "fancy-tavily");

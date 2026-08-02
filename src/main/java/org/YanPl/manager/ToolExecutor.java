@@ -435,6 +435,10 @@ public class ToolExecutor {
         cliManager.setPendingCommand(uuid, pendingStr);
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
 
+        // 确认时提前推送 view-fancy 预览链接，玩家可在点击 ✔ 前查看（YOLO 模式则在执行成功后推送）
+        File root = Bukkit.getWorldContainer();
+        pushPreviewLinkAsync(player, root, type, args);
+
         String[] parts = pathArg.split("\\|", "edit".equals(type) ? 4 : 2);
         String filePath = parts.length > 0 ? parts[0].trim() : "";
         String label = "edit".equals(type) ? "修改" : "覆写";
@@ -449,6 +453,32 @@ public class ToolExecutor {
         nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "取消执行")));
         msg.addExtra(nBtn);
         player.spigot().sendMessage(msg);
+    }
+
+    /**
+     * 确认权限时异步推送 view-fancy 预览链接。
+     * #edit 用 dry-run 计算出修改前后 diff；#write 直接提交目标内容。
+     * 推送失败不阻塞确认流程。
+     */
+    private void pushPreviewLinkAsync(Player player, File root, String type, String args) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            String viewUrl = null;
+            try {
+                if ("edit".equals(type)) {
+                    EditPreview preview = computeEditPreview(root, args.trim());
+                    if (preview.success) {
+                        viewUrl = submitEditToViewFancy(preview.path, preview.before, preview.after);
+                    }
+                } else if ("write".equals(type)) {
+                    viewUrl = submitToViewFancy(args);
+                }
+            } catch (IOException ignored) {
+                // 预览失败不影响确认与执行
+            }
+            if (viewUrl != null && plugin.isEnabled()) {
+                sendViewLink(player, viewUrl);
+            }
+        });
     }
 
     /**
@@ -493,20 +523,19 @@ public class ToolExecutor {
                     cliManager.feedbackToAI(player, "#" + type + "_result: " + result);
                 });
 
-                // #write 成功后异步推送到 view-fancy，不阻塞结果展示
+                // #write / #edit 成功后推送到 view-fancy（仅 YOLO 模式；NORMAL/SMART 已在确认时推送预览）
+                String viewUrl = null;
                 if ("write".equals(type) && result.startsWith("成功写入文件:")) {
-                    String viewUrl = submitToViewFancy(args);
-                    if (viewUrl != null && plugin.isEnabled()) {
-                        final String fViewUrl = viewUrl;
-                        Bukkit.getScheduler().runTask(plugin, () -> {
-                            TextComponent link = new TextComponent(ChatColor.GRAY + "📄 在线查看: ");
-                            TextComponent urlComp = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + fViewUrl);
-                            urlComp.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, fViewUrl));
-                            urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击在浏览器中查看")));
-                            link.addExtra(urlComp);
-                            player.spigot().sendMessage(link);
-                        });
+                    viewUrl = submitToViewFancy(args);
+                } else if ("edit".equals(type) && result.startsWith("成功修改文件:")
+                        && isYoloMode(player)) {
+                    EditPreview preview = computeEditPreview(root, args.trim());
+                    if (preview.success) {
+                        viewUrl = submitEditToViewFancy(preview.path, preview.before, preview.after);
                     }
+                }
+                if (viewUrl != null && plugin.isEnabled()) {
+                    sendViewLink(player, viewUrl);
                 }
             } catch (Exception e) {
                 plugin.getCloudErrorReport().report(e);
@@ -515,6 +544,22 @@ public class ToolExecutor {
                     cliManager.feedbackToAI(player, "#" + type + "_result: 错误 - " + e.getMessage());
                 });
             }
+        });
+    }
+
+    private boolean isYoloMode(Player player) {
+        DialogueSession session = cliManager.getSession(player.getUniqueId());
+        return session != null && session.getMode() == DialogueSession.Mode.YOLO;
+    }
+
+    private void sendViewLink(Player player, String viewUrl) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            TextComponent link = new TextComponent(ChatColor.GRAY + "📄 在线查看: ");
+            TextComponent urlComp = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + viewUrl);
+            urlComp.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, viewUrl));
+            urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击在浏览器中查看")));
+            link.addExtra(urlComp);
+            player.spigot().sendMessage(link);
         });
     }
 
@@ -549,6 +594,42 @@ public class ToolExecutor {
         } catch (Exception e) {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().warning("[ViewFancy] 推送失败: " + e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 推送 #edit 的修改前后内容到 view-fancy，前端渲染成 git diff 风格
+     * 可由确认时预览或 YOLO 执行成功后调用
+     */
+    private String submitEditToViewFancy(String path, String before, String after) {
+        if (path == null || before == null || after == null) return null;
+        try {
+            final String baseUrl = "https://view.fancy.baicaizhale.top";
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            String json = new com.google.gson.Gson().toJson(java.util.Map.of(
+                "path", path,
+                "type", "edit",
+                "before", before,
+                "after", after
+            ));
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(baseUrl + "/api/submit"))
+                .header("Content-Type", "application/json")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                .timeout(java.time.Duration.ofSeconds(10))
+                .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(response.body()).getAsJsonObject();
+                String id = obj.get("id").getAsString();
+                return baseUrl + "/" + id;
+            }
+        } catch (Exception e) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().warning("[ViewFancy] edit 推送失败: " + e.getMessage());
             }
         }
         return null;
@@ -688,21 +769,48 @@ public class ToolExecutor {
      * 支持自动搜索模式：range 可以是 "auto" 或省略（使用 "auto"）
      */
     private String executeDiffOperation(File root, String pathArg) throws IOException {
+        return computeEdit(root, pathArg, true).result;
+    }
+
+    /**
+     * #edit 的 dry-run 预览：与执行共用同一套匹配/替换逻辑，但不写盘
+     */
+    private EditPreview computeEditPreview(File root, String pathArg) throws IOException {
+        return computeEdit(root, pathArg, false);
+    }
+
+    /**
+     * edit 操作的执行结果：成功时为完整修改前后内容，失败时为错误消息
+     */
+    private static class EditPreview {
+        boolean success;
+        String result;
+        String path;
+        String before;
+        String after;
+    }
+
+    /**
+     * #edit 核心逻辑：解析参数、匹配、替换。writeToDisk 为 true 时写入文件，为 false 时仅计算（dry-run 预览）
+     */
+    private EditPreview computeEdit(File root, String pathArg, boolean writeToDisk) throws IOException {
+        EditPreview out = new EditPreview();
         String[] editParts = pathArg.split("\\|", 4);
-        
+
         // 支持3种格式：
         // 1. path|range|original|replacement (4部分，带行号)
         // 2. path|original|replacement (3部分，自动搜索)
         // 3. path|auto|original|replacement (4部分，但range是auto)
-        
+
         String path;
         String rangeStr;
         String original;
         String replacement;
         boolean autoSearch = false;
-        
+
         if (editParts.length < 3) {
-            return "错误: #edit 至少需要3个参数，格式：#edit: path|original|replacement 或 #edit: path|range|original|replacement";
+            out.result = "错误: #edit 至少需要3个参数，格式：#edit: path|original|replacement 或 #edit: path|range|original|replacement";
+            return out;
         } else if (editParts.length == 3) {
             // 3部分格式：path|original|replacement
             path = editParts[0].trim();
@@ -721,11 +829,11 @@ public class ToolExecutor {
                 autoSearch = true;
             }
         }
-        
+
         // 解析行号范围
         int startLine = 1;
         int endLine = -1; // -1 表示文件末尾
-        
+
         if (!autoSearch) {
             if (rangeStr.matches("^\\d+-\\d+$")) {
                 // 范围格式：10-15
@@ -734,7 +842,8 @@ public class ToolExecutor {
                     startLine = Integer.parseInt(range[0]);
                     endLine = Integer.parseInt(range[1]);
                 } catch (NumberFormatException ignored) {
-                    return "错误: 行号范围格式不正确，正确格式：10-15、10 或 auto";
+                    out.result = "错误: 行号范围格式不正确，正确格式：10-15、10 或 auto";
+                    return out;
                 }
             } else if (rangeStr.matches("^\\d+$")) {
                 // 单行格式：10
@@ -742,25 +851,29 @@ public class ToolExecutor {
                     startLine = Integer.parseInt(rangeStr);
                     endLine = startLine;
                 } catch (NumberFormatException ignored) {
-                    return "错误: 行号格式不正确，正确格式：10-15、10 或 auto";
+                    out.result = "错误: 行号格式不正确，正确格式：10-15、10 或 auto";
+                    return out;
                 }
             } else {
-                return "错误: 行号范围格式不正确，正确格式：10-15、10 或 auto";
+                out.result = "错误: 行号范围格式不正确，正确格式：10-15、10 或 auto";
+                return out;
             }
         }
 
         File file = resolvePathCaseInsensitive(root, path);
-        
+
         if (!isWithinRoot(root, file)) {
-            return "错误: 路径超出服务器目录限制";
+            out.result = "错误: 路径超出服务器目录限制";
+            return out;
         }
         if (!file.exists()) {
-            return "错误: 文件不存在";
+            out.result = "错误: 文件不存在";
+            return out;
         }
 
         // 读取文件内容
         List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-        
+
         // 自动搜索模式下，搜索整个文件
         if (autoSearch) {
             startLine = 1;
@@ -768,34 +881,36 @@ public class ToolExecutor {
         } else {
             // 验证行号范围
             if (startLine < 1 || startLine > lines.size()) {
-                return "错误: 起始行号无效 (文件总行数: " + lines.size() + ")";
+                out.result = "错误: 起始行号无效 (文件总行数: " + lines.size() + ")";
+                return out;
             }
             if (endLine > lines.size()) {
                 endLine = lines.size();
             }
             if (startLine > endLine) {
-                return "错误: 起始行号不能大于结束行号";
+                out.result = "错误: 起始行号不能大于结束行号";
+                return out;
             }
         }
-        
+
         // 将 original 按行分割，并去掉行号前缀（如果 AI 从 #read 复制了行号）
         String[] originalLines = original.split("\n");
         int originalLineCount = originalLines.length;
-        
+
         // 去掉每行的行号前缀（格式：数字: ）
         for (int j = 0; j < originalLines.length; j++) {
             originalLines[j] = removeLineNumberPrefix(originalLines[j]);
         }
-        
+
         // 在给定行号范围内查找所有匹配位置
         List<Integer> matchPositions = new java.util.ArrayList<>();
-        
+
         // 计算搜索范围：从 startLine 到 endLine - originalLineCount + 1
         int searchEndLine = endLine - originalLineCount + 1;
         if (searchEndLine < startLine) {
             searchEndLine = startLine;
         }
-        
+
         for (int i = startLine - 1; i <= searchEndLine - 1 && i < lines.size(); i++) {
             boolean match = true;
             for (int j = 0; j < originalLineCount; j++) {
@@ -814,14 +929,15 @@ public class ToolExecutor {
                 matchPositions.add(i); // 记录匹配的起始行索引（0-based）
             }
         }
-        
+
         // 根据匹配结果处理
         if (matchPositions.isEmpty()) {
             // 没有找到匹配
             if (autoSearch) {
-                return "错误: 在文件中未找到包含指定内容的行\n" +
-                       "查找内容: " + original + "\n" +
-                       "提示：请提供更简短的关键内容（如 'enabled: true' 而不是整行）";
+                out.result = "错误: 在文件中未找到包含指定内容的行\n" +
+                             "查找内容: " + original + "\n" +
+                             "提示：请提供更简短的关键内容（如 'enabled: true' 而不是整行）";
+                return out;
             } else {
                 // 构建实际内容用于显示
                 StringBuilder rangeContent = new StringBuilder();
@@ -831,10 +947,11 @@ public class ToolExecutor {
                         rangeContent.append("\n");
                     }
                 }
-                return "错误: 在给定行号范围 " + rangeStr + " 内未找到包含指定内容的行\n" +
-                       "查找内容: " + original + "\n" +
-                       "行号范围内的实际内容:\n" + rangeContent.toString() + "\n" +
-                       "提示：请提供更简短的关键内容（如 'enabled: true' 而不是整行）";
+                out.result = "错误: 在给定行号范围 " + rangeStr + " 内未找到包含指定内容的行\n" +
+                             "查找内容: " + original + "\n" +
+                             "行号范围内的实际内容:\n" + rangeContent.toString() + "\n" +
+                             "提示：请提供更简短的关键内容（如 'enabled: true' 而不是整行）";
+                return out;
             }
         } else if (matchPositions.size() > 1) {
             // 找到多个匹配
@@ -858,21 +975,22 @@ public class ToolExecutor {
             }
             sb.append("\n请使用更具体的行号范围（如 ").append(matchPositions.get(0) + 1).append("-")
               .append(matchPositions.get(0) + originalLineCount).append("）来唯一确定要替换的位置。");
-            return sb.toString();
+            out.result = sb.toString();
+            return out;
         }
-        
+
         // 只有一个匹配，执行替换
         int matchStartIndex = matchPositions.get(0);
         int matchEndIndex = matchStartIndex + originalLineCount;
-        
+
         // 替换内容
         List<String> newLines = new java.util.ArrayList<>();
-        
+
         // 复制匹配位置之前的行
         for (int i = 0; i < matchStartIndex; i++) {
             newLines.add(lines.get(i));
         }
-        
+
         // 插入修改后的内容（行内替换，保留行内其他部分）
         String[] replacementLines = replacement.split("\n");
         for (int j = 0; j < originalLineCount; j++) {
@@ -888,20 +1006,22 @@ public class ToolExecutor {
             }
             newLines.add(newLine);
         }
-        
+
         // 如果 replacement 行数多于 original 行数，添加剩余的行
         for (int j = originalLineCount; j < replacementLines.length; j++) {
             newLines.add(replacementLines[j]);
         }
-        
+
         // 复制匹配位置之后的行
         for (int i = matchEndIndex; i < lines.size(); i++) {
             newLines.add(lines.get(i));
         }
-        
-        // 写入文件
-        Files.write(file.toPath(), newLines, StandardCharsets.UTF_8);
-        
+
+        // 写盘（仅实际执行时）
+        if (writeToDisk) {
+            Files.write(file.toPath(), newLines, StandardCharsets.UTF_8);
+        }
+
         // 返回修改前后的对比
         int actualStartLine = matchStartIndex + 1;
         int actualEndLine = matchEndIndex;
@@ -910,8 +1030,17 @@ public class ToolExecutor {
         result.append("行号范围: ").append(actualStartLine).append("-").append(actualEndLine).append("\n");
         result.append("修改前:\n").append(original).append("\n");
         result.append("修改后:\n").append(replacement);
-        
-        return result.toString();
+
+        out.success = true;
+        out.path = path;
+        out.before = joinLines(lines);
+        out.after = joinLines(newLines);
+        out.result = result.toString();
+        return out;
+    }
+
+    private String joinLines(List<String> lines) {
+        return String.join("\n", lines);
     }
 
     /**
