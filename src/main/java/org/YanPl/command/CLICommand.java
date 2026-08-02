@@ -54,6 +54,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 player.sendMessage(ChatColor.RED + "你没有权限使用此命令。");
                 return true;
             }
+
+            // AI 提供商非 Fancy（BYOK）时也能进入 CLI；但若搜索/网页抓取服务走 Fancy 且未绑定，进入时提醒
+            if (plugin.getCliManager().getSession(player.getUniqueId()) == null
+                    && !plugin.getFancyConsoleManager().hasApiKey()
+                    && (plugin.getConfigManager().isFancyConsoleSearch() || plugin.getConfigManager().isFancyConsoleJina())) {
+                showFancyServiceBindWarning(player);
+            }
+
             toggleCLIMode(player);
             return true;
         }
@@ -417,10 +425,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage("");
         player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f未检测到 API Key 或 BYOK 配置"));
         player.sendMessage(ColorUtil.translateCustomColors("§7  请先在 FancyConsole 注册账号以获取 API Key"));
-        player.sendMessage("");
 
         net.md_5.bungee.api.chat.TextComponent link = new net.md_5.bungee.api.chat.TextComponent(
-                ColorUtil.translateCustomColors("§8[ §b点击此处注册 §8]"));
+                net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
+                        ColorUtil.translateCustomColors("     §8[ §b点击此处注册 §8]")));
         link.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
                 net.md_5.bungee.api.chat.ClickEvent.Action.OPEN_URL, regUrl));
         link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
@@ -435,11 +443,43 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     /**
+     * 展示搜索/网页抓取服务走 Fancy 但未完成绑定的提醒（不阻止进入 CLI）
+     */
+    private void showFancyServiceBindWarning(Player player) {
+        boolean searchFancy = plugin.getConfigManager().isFancyConsoleSearch();
+        boolean jinaFancy = plugin.getConfigManager().isFancyConsoleJina();
+
+        String servicePart;
+        if (searchFancy && jinaFancy) {
+            servicePart = "搜索服务和网页抓取服务";
+        } else if (searchFancy) {
+            servicePart = "搜索服务";
+        } else {
+            servicePart = "网页抓取服务";
+        }
+
+        TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors(
+                "§zFancyHelper§b§r §7> §f当前" + servicePart + "提供商为 §bFancy§r§f，但是您暂未完成绑定。您可以自行配置密钥或点击 ")));
+
+        TextComponent link = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§8[ §b此处 §8]")));
+        link.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, plugin.getFancyConsoleManager().getRegistrationUrl()));
+        link.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("§7点击注册")));
+
+        msg.addExtra(link);
+        msg.addExtra(new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§f 完成绑定。"))));
+        player.spigot().sendMessage(msg);
+    }
+
+    /**
      * 处理 /cli bind <key> 绑定 API Key
      */
     private boolean handleBind(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §c用法: /fancyhelper bind <API Key>"));
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f用法: /fancyhelper bind <API Key>"));
+            // 仅当尚未绑定（API Key 为空）时才展示注册引导
+            if (!plugin.getFancyConsoleManager().hasApiKey()) {
+                showRegistrationPrompt(player);
+            }
             return true;
         }
 
@@ -481,13 +521,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             plugin.getConfigManager().loadConfig();
             plugin.getConfigManager().loadPlayerData();
+            plugin.getFancyConsoleManager().reload();
             plugin.getWorkspaceIndexer().indexAll();
             plugin.getEulaManager().reload();
             plugin.getSkillManager().reloadSkills();
             if (plugin.getMcpManager() != null) {
                 plugin.getMcpManager().reload();
             }
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置、玩家数据、工作区、EULA、Skill 与 MCP 已重新加载。"));
+            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置、玩家数据、FancyConsole、工作区、EULA、Skill 与 MCP 已重新加载。"));
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {

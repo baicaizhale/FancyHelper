@@ -73,6 +73,13 @@ public class FancyConsoleManager {
     }
 
     /**
+     * 重新加载 client-fancy.yml（用于 /cli reload）
+     */
+    public void reload() {
+        config = YamlConfiguration.loadConfiguration(configFile);
+    }
+
+    /**
      * 是否有可用的 FancyConsole API Key
      */
     public boolean hasApiKey() {

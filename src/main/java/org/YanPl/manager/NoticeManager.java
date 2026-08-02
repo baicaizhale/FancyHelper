@@ -100,7 +100,7 @@ public class NoticeManager {
             plugin.getConfigManager().savePlayerData();
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f已将公告标记为已读"));
         } else {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该公告被你标记为已读"));
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该公告已经被你标记为已读"));
         }
     }
 

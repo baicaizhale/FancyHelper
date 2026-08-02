@@ -63,7 +63,7 @@ settings:
 provider:
   # AI: fancy | openai | cloudflare
   ai: fancy
-  # 搜索: fancy-tavily | fancy-metaso | tavily | metaso
+  # 搜索: fancy-tavily | tavily | metaso
   search: fancy-tavily
   # Jina: fancy | none（关闭网页抓取）
   jina: fancy
