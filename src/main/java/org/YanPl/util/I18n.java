@@ -2,6 +2,8 @@ package org.YanPl.util;
 
 import org.YanPl.FancyHelper;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -23,6 +25,20 @@ public class I18n {
     public static final String LANG_LZH_CN = "lzh-cn";
 
     private I18n() {
+    }
+
+    /**
+     * 将多个语言分块合并为一张不可变表。
+     * 语言表体量较大，若全部塞进单个 {@link Map#ofEntries}，javac 对超长 varargs
+     * 的泛型推断会随条目数超线性变慢（实测 470 条约 47s，拆块后约 2s）。
+     */
+    @SafeVarargs
+    private static Map<String, String> table(Map<String, String>... chunks) {
+        Map<String, String> merged = new HashMap<>();
+        for (Map<String, String> chunk : chunks) {
+            merged.putAll(chunk);
+        }
+        return Collections.unmodifiableMap(merged);
     }
 
     /**
@@ -74,7 +90,8 @@ public class I18n {
     // ============================================================
     //  简体中文（基准表）
     // ============================================================
-    private static final Map<String, String> ZH_CN = Map.ofEntries(
+    private static final Map<String, String> ZH_CN = table(
+    Map.ofEntries(
         // ---- CLICommand / 通用命令 ----
         Map.entry("cli.only.player", "§c该命令仅限玩家使用。"),
         Map.entry("cli.no.perm.cmd", "§c你没有权限使用此命令。"),
@@ -136,7 +153,9 @@ public class I18n {
         // ---- 注册 / 绑定流程 ----
         Map.entry("cli.reg.no.key", "§zFancyConsole§b§r §7> §f未检测到 API Key 或 BYOK 配置"),
         Map.entry("cli.reg.hint", "§7  请先在 FancyConsole 注册账号以获取 API Key"),
-        Map.entry("cli.reg.click", "     §8[ §b点击此处注册 §8]"),
+        Map.entry("cli.reg.click", "     §8[ §b点击此处注册 §8]")
+    ),
+    Map.ofEntries(
         Map.entry("cli.reg.hover", "§7点击打开注册页面"),
         Map.entry("cli.reg.after", "§7  注册完成后，在游戏内输入:"),
         Map.entry("cli.reg.bind.cmd", "§b  /fancyhelper bind <你的API Key>"),
@@ -201,7 +220,9 @@ public class I18n {
         Map.entry("cli.memory.add.usage", "§c用法: /cli memory add <内容> 或 /cli memory add <分类>|<内容>"),
         Map.entry("cli.memory.invalid.index", "§c请输入有效的序号"),
         Map.entry("cli.memory.del.usage", "§c用法: /cli memory del <序号>"),
-        Map.entry("cli.memory.edit.usage", "§c用法: /cli memory edit <序号> <新内容>"),
+        Map.entry("cli.memory.edit.usage", "§c用法: /cli memory edit <序号> <新内容>")
+    ),
+    Map.ofEntries(
         Map.entry("cli.memory.empty", "§7  暂无记忆记录。"),
         Map.entry("cli.memory.empty.hint", "§7  AI 将不会保留任何长期记忆。"),
         Map.entry("cli.memory.edit.hover", "§7点击修改此记忆"),
@@ -264,7 +285,9 @@ public class I18n {
         Map.entry("cli.mcp.status.no.tools", "§e(已连接，无工具)"),
         Map.entry("cli.mcp.status.enabled", "§a(已连接, 已启用 {0}/{1})"),
         Map.entry("cli.mcp.view.tools", "[查看工具]"),
-        Map.entry("cli.mcp.view.hover", "§7查看 {0} 的工具列表"),
+        Map.entry("cli.mcp.view.hover", "§7查看 {0} 的工具列表")
+    ),
+    Map.ofEntries(
         Map.entry("cli.mcp.hint", "§7提示: /cli mcp toggle <server> <tool> 快速切换"),
         Map.entry("cli.mcp.server.not.found", "§zFancyHelper§b§r §7> §c未找到 MCP 服务器: {0}"),
         Map.entry("cli.mcp.connected", "§a已连接"),
@@ -329,7 +352,9 @@ public class I18n {
         Map.entry("clim.mode.normal", "§f⨀ 已切换至 Normal 模式。"),
         Map.entry("clim.yolo.warn1", "§7在此模式下，Fancy 将拥有自动执行服务器命令的权限。"),
         Map.entry("clim.yolo.warn2", "§7这意味着它可能会在未经您确认的情况下执行任何操作。"),
-        Map.entry("clim.yolo.warn3", "§7请确保您信任 AI 的决定，并承担由此产生的风险。"),
+        Map.entry("clim.yolo.warn3", "§7请确保您信任 AI 的决定，并承担由此产生的风险。")
+    ),
+    Map.ofEntries(
         Map.entry("clim.yolo.send", "§f发送 "),
         Map.entry("clim.yolo.agree.suffix", "§f 表示确认并进入 YOLO 模式。"),
         Map.entry("clim.yolo.agree.hover", "§c点击确认并进入 YOLO 模式"),
@@ -389,7 +414,9 @@ public class I18n {
         Map.entry("clim.exit.thinking", " (思考 {0}s)"),
         Map.entry("clim.confirm.prompt", "§c请确认命令 [Y/N]"),
         Map.entry("clim.warn.no.send", "§zFancyHelper§b§r §7> §f请不要在 Fancy 生成内容时发送消息"),
-        Map.entry("clim.warn.interrupt", "§e[点击打断]"),
+        Map.entry("clim.warn.interrupt", "§e[点击打断]")
+    ),
+    Map.ofEntries(
         Map.entry("clim.warn.interrupt.hover", "点击打断生成"),
         Map.entry("clim.retry.nothing", "§7没有可重试的操作。"),
         Map.entry("clim.retry.retrying", "§7⇒ 正在重试 AI 调用..."),
@@ -453,11 +480,13 @@ public class I18n {
         Map.entry("tool.ask.parse.fail", "§cJSON 解析失败: {0}"),
         Map.entry("tool.webfetch.need.url", "§c错误: #webfetch 工具需要提供URL参数"),
         Map.entry("tool.webfetch.fetching", "§7>> §fWebFetch {0}"),
-        Map.entry("tool.webfetch.fail", "§c读取网页失败: {0}"),
+        Map.entry("tool.webfetch.fail", "§c读取网页失败: {0}")
 
         // ============================================================
         //  GuiManager
         // ============================================================
+    ),
+    Map.ofEntries(
         Map.entry("gui.settings.title", "&zFancyHelper &8| &7Settings"),
         Map.entry("gui.mode.title", "&zFancyHelper &8| &7模式选择"),
         Map.entry("gui.mode.normal.name", "&a&lNormal 模式"),
@@ -525,7 +554,9 @@ public class I18n {
         Map.entry("todo.inprogress", " | {0} 进行中"),
         Map.entry("todo.pending", " | {0} 待办"),
         Map.entry("todo.book.title", "TODO 列表"),
-        Map.entry("todo.all.done", "✓ 所有任务已完成！"),
+        Map.entry("todo.all.done", "✓ 所有任务已完成！")
+    ),
+    Map.ofEntries(
         Map.entry("todo.all.done.hint", "输入 /cli todo 可以继续查看或更新任务列表。"),
         Map.entry("todo.display.empty", "§7TODO: 暂无任务"),
         Map.entry("todo.click.zoom", "§7» 点击放大"),
@@ -597,19 +628,23 @@ public class I18n {
         Map.entry("skillmgr.none", "§c暂无可用 Skill"),
         Map.entry("skillmgr.list.title", "§6========== 可用 Skill 列表 =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),
-        Map.entry("skillmgr.list.count", "§7共 {0} 个 Skill | 使用 /fancy skill info <id> 查看详情"),
+        Map.entry("skillmgr.list.count", "§7共 {0} 个 Skill | 使用 /fancy skill info <id> 查看详情")
 
         // ============================================================
         //  PromptManager 语言指令
         // ============================================================
+    ),
+    Map.ofEntries(
         Map.entry("prompt.lang.default", "Default: Simplified Chinese. Follow player preferences if specified."),
         Map.entry("prompt.lang.plan", "Default: Simplified Chinese.")
-    );
+    )
+);
 
     // ============================================================
     //  美式英文
     // ============================================================
-    private static final Map<String, String> EN_US = Map.ofEntries(
+    private static final Map<String, String> EN_US = table(
+    Map.ofEntries(
         // ---- CLICommand / 通用命令 ----
         Map.entry("cli.only.player", "§cThis command can only be used by players."),
         Map.entry("cli.no.perm.cmd", "§cYou don't have permission to use this command."),
@@ -671,7 +706,9 @@ public class I18n {
         // ---- 注册 / 绑定流程 ----
         Map.entry("cli.reg.no.key", "§zFancyConsole§b§r §7> §fNo API Key or BYOK configuration detected"),
         Map.entry("cli.reg.hint", "§7  Please register an account on FancyConsole to get an API Key"),
-        Map.entry("cli.reg.click", "     §8[ §bClick here to register §8]"),
+        Map.entry("cli.reg.click", "     §8[ §bClick here to register §8]")
+    ),
+    Map.ofEntries(
         Map.entry("cli.reg.hover", "§7Click to open the registration page"),
         Map.entry("cli.reg.after", "§7  After registering, enter the following in-game:"),
         Map.entry("cli.reg.bind.cmd", "§b  /fancyhelper bind <your API Key>"),
@@ -736,7 +773,9 @@ public class I18n {
         Map.entry("cli.memory.add.usage", "§cUsage: /cli memory add <content> or /cli memory add <category>|<content>"),
         Map.entry("cli.memory.invalid.index", "§cPlease enter a valid index"),
         Map.entry("cli.memory.del.usage", "§cUsage: /cli memory del <index>"),
-        Map.entry("cli.memory.edit.usage", "§cUsage: /cli memory edit <index> <new content>"),
+        Map.entry("cli.memory.edit.usage", "§cUsage: /cli memory edit <index> <new content>")
+    ),
+    Map.ofEntries(
         Map.entry("cli.memory.empty", "§7  No memories yet."),
         Map.entry("cli.memory.empty.hint", "§7  The AI will not keep any long-term memory."),
         Map.entry("cli.memory.edit.hover", "§7Click to edit this memory"),
@@ -799,7 +838,9 @@ public class I18n {
         Map.entry("cli.mcp.status.no.tools", "§e(connected, no tools)"),
         Map.entry("cli.mcp.status.enabled", "§a(connected, {0}/{1} enabled)"),
         Map.entry("cli.mcp.view.tools", "[View tools]"),
-        Map.entry("cli.mcp.view.hover", "§7View tools of {0}"),
+        Map.entry("cli.mcp.view.hover", "§7View tools of {0}")
+    ),
+    Map.ofEntries(
         Map.entry("cli.mcp.hint", "§7Tip: /cli mcp toggle <server> <tool> to toggle quickly"),
         Map.entry("cli.mcp.server.not.found", "§zFancyHelper§b§r §7> §cMCP server not found: {0}"),
         Map.entry("cli.mcp.connected", "§aConnected"),
@@ -864,7 +905,9 @@ public class I18n {
         Map.entry("clim.mode.normal", "§f⨀ Switched to Normal mode."),
         Map.entry("clim.yolo.warn1", "§7In this mode, Fancy is granted permission to auto-execute server commands."),
         Map.entry("clim.yolo.warn2", "§7This means it may perform any action without your confirmation."),
-        Map.entry("clim.yolo.warn3", "§7Make sure you trust the AI's decisions and accept the associated risks."),
+        Map.entry("clim.yolo.warn3", "§7Make sure you trust the AI's decisions and accept the associated risks.")
+    ),
+    Map.ofEntries(
         Map.entry("clim.yolo.send", "§fSend "),
         Map.entry("clim.yolo.agree.suffix", "§f to confirm and enter YOLO mode."),
         Map.entry("clim.yolo.agree.hover", "§cClick to confirm and enter YOLO mode"),
@@ -924,7 +967,9 @@ public class I18n {
         Map.entry("clim.exit.thinking", " (thinking {0}s)"),
         Map.entry("clim.confirm.prompt", "§cPlease confirm the command [Y/N]"),
         Map.entry("clim.warn.no.send", "§zFancyHelper§b§r §7> §fPlease don't send messages while Fancy is generating"),
-        Map.entry("clim.warn.interrupt", "§e[Click to interrupt]"),
+        Map.entry("clim.warn.interrupt", "§e[Click to interrupt]")
+    ),
+    Map.ofEntries(
         Map.entry("clim.warn.interrupt.hover", "Click to interrupt generation"),
         Map.entry("clim.retry.nothing", "§7Nothing to retry."),
         Map.entry("clim.retry.retrying", "§7⇒ Retrying AI call..."),
@@ -988,11 +1033,13 @@ public class I18n {
         Map.entry("tool.ask.parse.fail", "§cJSON parse failed: {0}"),
         Map.entry("tool.webfetch.need.url", "§cError: #webfetch tool requires a URL argument"),
         Map.entry("tool.webfetch.fetching", "§7>> §fWebFetch {0}"),
-        Map.entry("tool.webfetch.fail", "§cFailed to read web page: {0}"),
+        Map.entry("tool.webfetch.fail", "§cFailed to read web page: {0}")
 
         // ============================================================
         //  GuiManager
         // ============================================================
+    ),
+    Map.ofEntries(
         Map.entry("gui.settings.title", "&zFancyHelper &8| &7Settings"),
         Map.entry("gui.mode.title", "&zFancyHelper &8| &7Mode Select"),
         Map.entry("gui.mode.normal.name", "&a&lNormal Mode"),
@@ -1060,7 +1107,9 @@ public class I18n {
         Map.entry("todo.inprogress", " | {0} in progress"),
         Map.entry("todo.pending", " | {0} pending"),
         Map.entry("todo.book.title", "TODO List"),
-        Map.entry("todo.all.done", "✓ All tasks completed!"),
+        Map.entry("todo.all.done", "✓ All tasks completed!")
+    ),
+    Map.ofEntries(
         Map.entry("todo.all.done.hint", "Type /cli todo to keep viewing or updating the task list."),
         Map.entry("todo.display.empty", "§7TODO: No tasks"),
         Map.entry("todo.click.zoom", "§7» Click to enlarge"),
@@ -1132,19 +1181,23 @@ public class I18n {
         Map.entry("skillmgr.none", "§cNo Skills available"),
         Map.entry("skillmgr.list.title", "§6========== Available Skills =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),
-        Map.entry("skillmgr.list.count", "§7{0} Skills | Use /fancy skill info <id> for details"),
+        Map.entry("skillmgr.list.count", "§7{0} Skills | Use /fancy skill info <id> for details")
 
         // ============================================================
         //  PromptManager 语言指令
         // ============================================================
+    ),
+    Map.ofEntries(
         Map.entry("prompt.lang.default", "Default: English (US). Follow player preferences if specified."),
         Map.entry("prompt.lang.plan", "Default: English (US).")
-    );
+    )
+);
 
     // ============================================================
     //  文言文（古风调、偏娱乐）
     // ============================================================
-    private static final Map<String, String> LZH_CN = Map.ofEntries(
+    private static final Map<String, String> LZH_CN = table(
+    Map.ofEntries(
         // ---- CLICommand / 通用命令 ----
         Map.entry("cli.only.player", "§c此令惟玩家可用。"),
         Map.entry("cli.no.perm.cmd", "§c汝无权用此令。"),
@@ -1206,7 +1259,9 @@ public class I18n {
         // ---- 注册 / 绑定流程 ----
         Map.entry("cli.reg.no.key", "§zFancyConsole§b§r §7> §f未察 API Key 或 BYOK 之设"),
         Map.entry("cli.reg.hint", "§7  请先于 FancyConsole 注册以得 API Key"),
-        Map.entry("cli.reg.click", "     §8[ §b点此注册 §8]"),
+        Map.entry("cli.reg.click", "     §8[ §b点此注册 §8]")
+    ),
+    Map.ofEntries(
         Map.entry("cli.reg.hover", "§7点此开注册之页"),
         Map.entry("cli.reg.after", "§7  注册既毕，于游戏内输入:"),
         Map.entry("cli.reg.bind.cmd", "§b  /fancyhelper bind <汝之API Key>"),
@@ -1271,7 +1326,9 @@ public class I18n {
         Map.entry("cli.memory.add.usage", "§c用法: /cli memory add <内容> 或 /cli memory add <分类>|<内容>"),
         Map.entry("cli.memory.invalid.index", "§c请输有效之号"),
         Map.entry("cli.memory.del.usage", "§c用法: /cli memory del <号>"),
-        Map.entry("cli.memory.edit.usage", "§c用法: /cli memory edit <号> <新文>"),
+        Map.entry("cli.memory.edit.usage", "§c用法: /cli memory edit <号> <新文>")
+    ),
+    Map.ofEntries(
         Map.entry("cli.memory.empty", "§7  今无记忆。"),
         Map.entry("cli.memory.empty.hint", "§7  AI 将不留长忆。"),
         Map.entry("cli.memory.edit.hover", "§7点此改此忆"),
@@ -1334,7 +1391,9 @@ public class I18n {
         Map.entry("cli.mcp.status.no.tools", "§e(已连，无具)"),
         Map.entry("cli.mcp.status.enabled", "§a(已连, 已启 {0}/{1})"),
         Map.entry("cli.mcp.view.tools", "[观其具]"),
-        Map.entry("cli.mcp.view.hover", "§7观 {0} 之工具单"),
+        Map.entry("cli.mcp.view.hover", "§7观 {0} 之工具单")
+    ),
+    Map.ofEntries(
         Map.entry("cli.mcp.hint", "§7示: /cli mcp toggle <server> <tool> 速切"),
         Map.entry("cli.mcp.server.not.found", "§zFancyHelper§b§r §7> §c未见 MCP 伺服: {0}"),
         Map.entry("cli.mcp.connected", "§a已连"),
@@ -1399,7 +1458,9 @@ public class I18n {
         Map.entry("clim.mode.normal", "§f⨀ 已入 Normal 之境。"),
         Map.entry("clim.yolo.warn1", "§7此境之下，Fancy 得自施伺服之令之权。"),
         Map.entry("clim.yolo.warn2", "§7是谓其可不经汝许而行诸般之事。"),
-        Map.entry("clim.yolo.warn3", "§7请信 AI 之断，并自承其险。"),
+        Map.entry("clim.yolo.warn3", "§7请信 AI 之断，并自承其险。")
+    ),
+    Map.ofEntries(
         Map.entry("clim.yolo.send", "§f发 "),
         Map.entry("clim.yolo.agree.suffix", "§f 即许以入 YOLO 之境。"),
         Map.entry("clim.yolo.agree.hover", "§c点此确而入 YOLO 之境"),
@@ -1459,7 +1520,9 @@ public class I18n {
         Map.entry("clim.exit.thinking", " (思 {0}s)"),
         Map.entry("clim.confirm.prompt", "§c请确认此令 [Y/N]"),
         Map.entry("clim.warn.no.send", "§zFancyHelper§b§r §7> §fFancy 生语之际，莫发他言"),
-        Map.entry("clim.warn.interrupt", "§e[点此打断]"),
+        Map.entry("clim.warn.interrupt", "§e[点此打断]")
+    ),
+    Map.ofEntries(
         Map.entry("clim.warn.interrupt.hover", "点此断其生成"),
         Map.entry("clim.retry.nothing", "§7无有可重试之举。"),
         Map.entry("clim.retry.retrying", "§7⇒ 方重试 AI 之呼..."),
@@ -1523,11 +1586,13 @@ public class I18n {
         Map.entry("tool.ask.parse.fail", "§cJSON 析之不成: {0}"),
         Map.entry("tool.webfetch.need.url", "§c误: #webfetch 之具须供 URL 之参"),
         Map.entry("tool.webfetch.fetching", "§7>> §fWebFetch {0}"),
-        Map.entry("tool.webfetch.fail", "§c读网页不成: {0}"),
+        Map.entry("tool.webfetch.fail", "§c读网页不成: {0}")
 
         // ============================================================
         //  GuiManager
         // ============================================================
+    ),
+    Map.ofEntries(
         Map.entry("gui.settings.title", "&zFancyHelper &8| &7Settings"),
         Map.entry("gui.mode.title", "&zFancyHelper &8| &7选境"),
         Map.entry("gui.mode.normal.name", "&a&lNormal 之境"),
@@ -1595,7 +1660,9 @@ public class I18n {
         Map.entry("todo.inprogress", " | {0} 方行"),
         Map.entry("todo.pending", " | {0} 待办"),
         Map.entry("todo.book.title", "TODO 之单"),
-        Map.entry("todo.all.done", "✓ 诸务皆成矣！"),
+        Map.entry("todo.all.done", "✓ 诸务皆成矣！")
+    ),
+    Map.ofEntries(
         Map.entry("todo.all.done.hint", "输 /cli todo 可续观或更此单。"),
         Map.entry("todo.display.empty", "§7TODO: 今无务"),
         Map.entry("todo.click.zoom", "§7» 点此放大"),
@@ -1667,12 +1734,15 @@ public class I18n {
         Map.entry("skillmgr.none", "§c今无可用 Skill"),
         Map.entry("skillmgr.list.title", "§6========== 可用 Skill 之单 =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),
-        Map.entry("skillmgr.list.count", "§7凡 {0} 个 Skill | 用 /fancy skill info <id> 观其详"),
+        Map.entry("skillmgr.list.count", "§7凡 {0} 个 Skill | 用 /fancy skill info <id> 观其详")
 
         // ============================================================
         //  PromptManager 语言指令
         // ============================================================
+    ),
+    Map.ofEntries(
         Map.entry("prompt.lang.default", "Default: Classical Chinese (文言文). Follow player preferences if specified."),
         Map.entry("prompt.lang.plan", "Default: Classical Chinese (文言文).")
-    );
+    )
+);
 }
