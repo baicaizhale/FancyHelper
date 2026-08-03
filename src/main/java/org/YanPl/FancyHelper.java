@@ -23,6 +23,7 @@ import org.YanPl.manager.StatsManager;
 import org.YanPl.manager.FancyConsoleManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
+import org.YanPl.util.I18n;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -80,6 +81,9 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化配置管理器
             configManager = new ConfigManager(this);
+
+            // 初始化国际化工具（语言表硬编码，语言从 config.yml 动态读取）
+            I18n.init(this);
 
             // 初始化 FancyConsole 集成
             fancyConsoleManager = new FancyConsoleManager(this);

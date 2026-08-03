@@ -14,7 +14,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 
 import java.lang.reflect.Method;
 
@@ -94,14 +94,14 @@ public class ChatListener implements Listener {
 
         if (cmd.equals("/stop")) {
             event.setCancelled(true);
-            player.sendMessage(ColorUtil.translateCustomColors("§e⚡ 检测到 /stop，是否想输入 stop 打断 AI？已为你执行打断。"));
+            player.sendMessage(I18n.t("chat.stop.detected"));
             plugin.getCliManager().handleChat(player, "stop");
         } else if (cmd.equals("/exit")) {
             event.setCancelled(true);
-            TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§7你是否想退出 CLI 模式？ ")));
-            TextComponent escapeBtn = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§6§l[ Escape ]")));
+            TextComponent msg = new TextComponent(TextComponent.fromLegacyText(I18n.t("chat.exit.ask")));
+            TextComponent escapeBtn = new TextComponent(TextComponent.fromLegacyText(I18n.t("chat.escape")));
             escapeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exit"));
-            escapeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ColorUtil.translateCustomColors("§7点击退出 CLI 模式"))));
+            escapeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("chat.exit.hover"))));
             msg.addExtra(escapeBtn);
             player.spigot().sendMessage(msg);
         }

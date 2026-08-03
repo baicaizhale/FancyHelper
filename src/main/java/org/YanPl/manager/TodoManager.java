@@ -8,6 +8,7 @@ import com.google.gson.JsonSyntaxException;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.TodoItem;
+import org.YanPl.util.I18n;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -177,7 +178,7 @@ public class TodoManager {
     public String getTodoSummary(UUID uuid) {
         List<TodoItem> todos = getTodos(uuid);
         if (todos.isEmpty()) {
-            return "当前没有 TODO 任务";
+            return I18n.t("todo.none");
         }
 
         int total = todos.size();
@@ -186,13 +187,13 @@ public class TodoManager {
         int pending = (int) todos.stream().filter(t -> t.getStatus() == TodoItem.Status.PENDING).count();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Progress: ").append(completed).append("/").append(total).append(" 已完成");
+        sb.append(I18n.t("todo.progress", completed, total));
         
         if (inProgress > 0) {
-            sb.append(" | ").append(inProgress).append(" 进行中");
+            sb.append(I18n.t("todo.inprogress", inProgress));
         }
         if (pending > 0) {
-            sb.append(" | ").append(pending).append(" 待办");
+            sb.append(I18n.t("todo.pending", pending));
         }
 
         return sb.toString();
@@ -207,11 +208,11 @@ public class TodoManager {
     public String getTodoDetails(UUID uuid) {
         List<TodoItem> todos = getTodos(uuid);
         if (todos.isEmpty()) {
-            return ChatColor.GRAY + "当前没有 TODO 任务";
+            return ChatColor.GRAY + I18n.t("todo.none");
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(ChatColor.GOLD).append(ChatColor.BOLD).append("==== TODO LIST ====\n");
+        sb.append(ChatColor.GOLD).append(ChatColor.BOLD).append(I18n.t("todo.details.header")).append("\n");
         
         for (int i = 0; i < todos.size(); i++) {
             TodoItem todo = todos.get(i);
@@ -245,9 +246,7 @@ public class TodoManager {
         sb.append("\n")
           .append(ChatColor.GOLD)
           .append(ChatColor.BOLD)
-          .append("== Progress  ")
-          .append(getProgressText(todos))
-          .append(" ==");
+          .append(I18n.t("todo.details.progress", getProgressText(todos)));
         
         return sb.toString();
     }
@@ -276,7 +275,7 @@ public class TodoManager {
         BookMeta meta = (BookMeta) book.getItemMeta();
 
         if (meta != null) {
-            meta.setTitle("TODO 列表");
+            meta.setTitle(I18n.t("todo.book.title"));
             meta.setAuthor("FancyHelper");
 
             final int MAX_PAGE_CHARS = 128;
@@ -320,7 +319,7 @@ public class TodoManager {
             if (!todos.isEmpty()) {
                 boolean allCompleted = todos.stream().allMatch(t -> t.getStatus() == TodoItem.Status.COMPLETED);
                 if (allCompleted) {
-                    meta.addPage(ChatColor.GREEN + "\n\n✓ 所有任务已完成！\n\n" + ChatColor.RESET + "输入 /cli todo 可以继续查看或更新任务列表。");
+                    meta.addPage(ChatColor.GREEN + "\n\n" + I18n.t("todo.all.done") + "\n\n" + ChatColor.RESET + I18n.t("todo.all.done.hint"));
                 }
             }
 
@@ -342,7 +341,7 @@ public class TodoManager {
         net.md_5.bungee.api.chat.TextComponent component = new net.md_5.bungee.api.chat.TextComponent();
 
         if (todos.isEmpty()) {
-            component.setText(ChatColor.GRAY + "TODO: 暂无任务");
+            component.setText(I18n.t("todo.display.empty"));
             return component;
         }
 
@@ -358,7 +357,7 @@ public class TodoManager {
 
         // 设置悬停事件：显示详细列表
         String details = getTodoDetails(uuid);
-        String hoverText = ChatColor.AQUA + details + "\n\n" + ChatColor.GRAY + "» 点击放大";
+        String hoverText = ChatColor.AQUA + details + "\n\n" + I18n.t("todo.click.zoom");
 
         component.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                 net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,

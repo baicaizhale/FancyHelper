@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import org.YanPl.FancyHelper;
+import org.YanPl.util.I18n;
 import org.bukkit.entity.Player;
 
 import java.io.File;
@@ -59,7 +60,7 @@ public class InstructionManager {
         List<PlayerInstruction> instructions = getInstructions(uuid);
         
         if (instructions.size() >= 50) {
-            return "error: 已达到最大记忆数量限制 (50条)，请先删除一些旧记忆";
+            return "error: " + I18n.t("inst.error.max");
         }
         
         PlayerInstruction instruction = new PlayerInstruction(content, category);
@@ -77,7 +78,7 @@ public class InstructionManager {
         List<PlayerInstruction> instructions = getInstructions(uuid);
         
         if (index < 1 || index > instructions.size()) {
-            return "error: 无效的序号，当前共有 " + instructions.size() + " 条记忆";
+            return "error: " + I18n.t("inst.error.invalid.index", instructions.size());
         }
         
         PlayerInstruction removed = instructions.remove(index - 1);
@@ -94,11 +95,11 @@ public class InstructionManager {
         List<PlayerInstruction> instructions = getInstructions(uuid);
         
         if (index < 1 || index > instructions.size()) {
-            return "error: 无效的序号，当前共有 " + instructions.size() + " 条记忆";
+            return "error: " + I18n.t("inst.error.invalid.index", instructions.size());
         }
         
         if (content == null || content.trim().isEmpty()) {
-            return "error: 记忆内容不能为空";
+            return "error: " + I18n.t("inst.error.empty");
         }
         
         PlayerInstruction updated = new PlayerInstruction(content.trim(), category);

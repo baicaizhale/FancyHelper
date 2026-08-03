@@ -11,6 +11,7 @@ import org.YanPl.model.DialogueSession;
 import org.YanPl.mcp.client.McpClientManager;
 import org.YanPl.mcp.core.McpTypes;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -162,7 +163,7 @@ public class ToolExecutor {
                 break;
 
             default:
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知工具: " + toolName));
+                player.sendMessage(I18n.t("tool.unknown", toolName));
                 String error = "#error: 未知工具 " + toolName + "。请仅使用系统提示中定义的工具。";
                 cliManager.feedbackToAI(player, error);
                 if (session != null) {
@@ -231,20 +232,20 @@ public class ToolExecutor {
 
         if (lowerToolName.equals("#remember") || lowerToolName.equals("#forget") ||
             lowerToolName.equals("#edit_memory")) {
-            TextComponent message = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§f⁕ Fancy 正在记住你说的话.. ")));
-            TextComponent manageBtn = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§f[管理记忆]")));
+            TextComponent message = new TextComponent(TextComponent.fromLegacyText(I18n.t("tool.memory.remembering")));
+            TextComponent manageBtn = new TextComponent(TextComponent.fromLegacyText(I18n.t("tool.memory.manage")));
             manageBtn.setColor(net.md_5.bungee.api.ChatColor.of(ColorUtil.getColorZ()));
             manageBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
-            manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ColorUtil.translateCustomColors("§7点击管理偏好记忆"))));
+            manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.memory.manage.hover"))));
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
         } else if (lowerToolName.equals("#exit")) {
-            player.sendMessage(ColorUtil.translateCustomColors("§7〇 Exiting..."));
+            player.sendMessage(I18n.t("tool.exit"));
         } else if (lowerToolName.equals("#skill")) {
             String skillId = args.trim().toLowerCase();
             org.YanPl.model.Skill skill = plugin.getSkillManager().getSkill(skillId);
             String skillName = skill != null ? skill.getDisplayName() : args;
-            player.sendMessage(ColorUtil.translateCustomColors("§7◌ Run Skill: " + skillName));
+            player.sendMessage(I18n.t("tool.skill.run", skillName));
         }
     }
 
@@ -253,7 +254,7 @@ public class ToolExecutor {
      */
     private boolean handleRunTool(Player player, String command, DialogueSession session) {
         if (command.isEmpty()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f#run 工具需要提供命令参数"));
+            player.sendMessage(I18n.t("tool.run.need.args"));
             String error = "#error: #run 工具需要提供命令参数，例如 #run: say hello";
             cliManager.feedbackToAI(player, error);
             if (session != null) {
@@ -269,7 +270,7 @@ public class ToolExecutor {
 
         // SMART 模式下评估风险
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
-            player.sendMessage(ColorUtil.translateCustomColors("§7⁕ 正在评估操作风险..."));
+            player.sendMessage(I18n.t("tool.run.assessing"));
             cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.THINKING);
             
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -281,7 +282,7 @@ public class ToolExecutor {
                     if (assessment.level >= threshold) {
                         cliManager.sendSmartRiskConfirm(player, "run", cleanCommand, assessment);
                     } else {
-                        player.sendMessage(ColorUtil.translateCustomColors("§6>> SMART RUN §f" + cleanCommand));
+                        player.sendMessage(I18n.t("tool.run.smart", cleanCommand));
                         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                         executeCommand(player, cleanCommand);
                     }
@@ -293,13 +294,13 @@ public class ToolExecutor {
         // YOLO 模式下风险命令需要确认
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
             if (isRiskyCommand(cleanCommand)) {
-                player.sendMessage(ColorUtil.translateCustomColors("§e⨀ 检测到风险命令，执行可能带来无法挽回的后果，请检查命令"));
+                player.sendMessage(I18n.t("tool.run.risky"));
                 cliManager.setPendingCommand(uuid, cleanCommand);
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
                 sendConfirmButtons(player, cleanCommand);
                 return true;
             } else {
-                player.sendMessage(ColorUtil.translateCustomColors("§6>> YOLO RUN §f" + cleanCommand));
+                player.sendMessage(I18n.t("tool.run.yolo", cleanCommand));
                 cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
                 executeCommand(player, cleanCommand);
                 return true;
@@ -366,12 +367,12 @@ public class ToolExecutor {
             String displayType = type.equals("ls") ? "ListDir" : "ReadFile";
             String[] parts = pathArg.split("\\s+");
             String displayPath = parts.length > 0 ? parts[0] : "";
-            player.sendMessage(ChatColor.GRAY + ">> " + ChatColor.WHITE + displayType + " " + displayPath);
+            player.sendMessage(I18n.t("tool.file.display", displayType, displayPath));
 
             // 检查是否被冻结
             long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
             if (freezeRemaining > 0) {
-                player.sendMessage(ChatColor.RED + "验证已冻结，请在 " + freezeRemaining + " 秒后重试。");
+                player.sendMessage(I18n.t("tool.verify.frozen", freezeRemaining));
                 return;
             }
 
@@ -388,7 +389,7 @@ public class ToolExecutor {
                 }
                 executeFileOperation(player, type, args);
             } else {
-                player.sendMessage(ChatColor.YELLOW + "检测到调用 " + toolName + "，但该工具尚未完成首次验证。");
+                player.sendMessage(I18n.t("tool.verify.first.use", toolName));
                 plugin.getVerificationManager().startVerification(player, toolName, () -> {
                     plugin.getConfigManager().setPlayerToolEnabled(player, toolName, true);
                     cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
@@ -447,16 +448,16 @@ public class ToolExecutor {
 
         String[] parts = pathArg.split("\\|", "edit".equals(type) ? 4 : 2);
         String filePath = parts.length > 0 ? parts[0].trim() : "";
-        String label = "edit".equals(type) ? "修改" : "覆写";
-        TextComponent msg = new TextComponent(ChatColor.GRAY + "✍ 正在" + label + "文件 " + ChatColor.WHITE + filePath + "    ");
+        String label = "edit".equals(type) ? I18n.t("tool.edit.modifying", filePath) : I18n.t("tool.edit.overwriting", filePath);
+        TextComponent msg = new TextComponent(label);
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
-        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "确认执行操作")));
+        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.confirm.yes"))));
         msg.addExtra(yBtn);
         msg.addExtra(new TextComponent(" / "));
         TextComponent nBtn = new TextComponent(ChatColor.RED + "✘");
         nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli cancel"));
-        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "取消执行")));
+        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.confirm.no"))));
         msg.addExtra(nBtn);
         player.spigot().sendMessage(msg);
     }
@@ -496,13 +497,13 @@ public class ToolExecutor {
 
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔");
         yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli confirm"));
-        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("确认执行操作")));
+        yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.confirm.yes"))));
 
         TextComponent spacer = new TextComponent(" / ");
 
         TextComponent nBtn = new TextComponent(ChatColor.RED + "✘");
         nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli cancel"));
-        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("取消执行")));
+        nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.confirm.no"))));
 
         message.addExtra(yBtn);
         message.addExtra(spacer);
@@ -560,10 +561,10 @@ public class ToolExecutor {
 
     private void sendViewLink(Player player, String viewUrl) {
         Bukkit.getScheduler().runTask(plugin, () -> {
-            TextComponent link = new TextComponent(ChatColor.GRAY + "📄 在线查看: ");
+            TextComponent link = new TextComponent(I18n.t("tool.view.online"));
             TextComponent urlComp = new TextComponent(ChatColor.AQUA + "" + ChatColor.UNDERLINE + viewUrl);
             urlComp.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, viewUrl));
-            urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击在浏览器中查看")));
+            urlComp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.view.hover"))));
             link.addExtra(urlComp);
             player.spigot().sendMessage(link);
         });
@@ -1161,23 +1162,23 @@ public class ToolExecutor {
         if (result.startsWith("错误:")) return;
 
         if (type.equals("ls")) {
-            player.sendMessage(ChatColor.GRAY + "〇 已获取目录列表。");
+            player.sendMessage(I18n.t("tool.ls.done"));
         } else if (type.equals("read")) {
-            player.sendMessage(ChatColor.GRAY + "〇 已读取文件内容 (" + (result.length() / 1024.0) + "KB)。");
+            player.sendMessage(I18n.t("tool.read.done", String.format("%.1f", result.length() / 1024.0)));
         } else if (type.equals("edit")) {
-            player.sendMessage(ChatColor.GRAY + "〇 已成功修改文件。");
+            player.sendMessage(I18n.t("tool.edit.done"));
             if (result.contains("修改前:\n") && result.contains("修改后:\n")) {
                 String[] parts = result.split("修改前:\n|修改后:\n");
                 if (parts.length >= 3) {
                     String[] beforeLines = parts[1].split("\n");
                     String[] afterLines = parts[2].split("\n");
                     player.sendMessage(ChatColor.GRAY + "─────────────────────────────────");
-                    player.sendMessage(ChatColor.GRAY + "修改前:");
+                    player.sendMessage(I18n.t("tool.edit.before"));
                     for (String line : beforeLines) {
                         player.sendMessage(ChatColor.GRAY + "  " + line);
                     }
                     player.sendMessage(ChatColor.GRAY + "─────────────────────────────────");
-                    player.sendMessage(ChatColor.GRAY + "修改后:");
+                    player.sendMessage(I18n.t("tool.edit.after"));
                     for (String line : afterLines) {
                         player.sendMessage(ChatColor.GRAY + "  " + line);
                     }
@@ -1213,7 +1214,7 @@ public class ToolExecutor {
         }
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            player.sendMessage(ChatColor.GRAY + "⇒ 命令已下发，等待反馈中...");
+            player.sendMessage(I18n.t("tool.run.dispatched"));
 
             boolean success;
             String commandError = null;
@@ -1256,7 +1257,7 @@ public class ToolExecutor {
                 }
 
                 // 如果没有输出，延长等待 5 秒 (100 ticks)
-                player.sendMessage(ChatColor.GRAY + "⇒ 暂无反馈，延长等待 5秒...");
+                player.sendMessage(I18n.t("tool.run.no.feedback"));
 
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     String delayedPacketOutput = "";
@@ -1847,10 +1848,10 @@ public class ToolExecutor {
             if (request.question != null && !request.question.isEmpty()) {
                 handleJsonAskTool(player, request);
             } else {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fJSON 格式错误：缺少 question 字段"));
+                player.sendMessage(I18n.t("tool.ask.missing.question"));
             }
         } catch (Exception e) {
-            player.sendMessage(ChatColor.RED + "JSON 解析失败: " + e.getMessage());
+            player.sendMessage(I18n.t("tool.ask.parse.fail", e.getMessage()));
         }
     }
 
@@ -2180,7 +2181,7 @@ public class ToolExecutor {
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
 
         if (args == null || args.trim().isEmpty()) {
-            player.sendMessage(ChatColor.RED + "错误: #webfetch 工具需要提供URL参数");
+            player.sendMessage(I18n.t("tool.webfetch.need.url"));
             cliManager.feedbackToAI(player, "#webfetch_result: error - 需要提供URL参数，例如 #webfetch: https://example.com");
             return;
         }
@@ -2210,7 +2211,7 @@ public class ToolExecutor {
      */
     private void executeWebFetch(Player player, String url) {
         // 显示工具调用信息
-        player.sendMessage(ChatColor.GRAY + ">> " + ChatColor.WHITE + "WebFetch " + url);
+        player.sendMessage(I18n.t("tool.webfetch.fetching", url));
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -2226,7 +2227,7 @@ public class ToolExecutor {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     String errorMessage = "#webfetch_result: 错误 - " + e.getMessage();
                     cliManager.feedbackToAI(player, errorMessage);
-                    player.sendMessage(ChatColor.RED + "读取网页失败: " + e.getMessage());
+                    player.sendMessage(I18n.t("tool.webfetch.fail", e.getMessage()));
                 });
             }
         });

@@ -1,7 +1,7 @@
 package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
-import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -65,15 +65,15 @@ public class VerificationManager {
 
             if (type.equals("read") || type.equals("ls")) {
                 Files.write(verifyFile.toPath(), password.getBytes());
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f验证文件已生成：§eplugins/FancyHelper/verify/" + verifyFile.getName()));
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e请读取该文件并将其中的数字密码发送到聊天框进行验证。"));
+                player.sendMessage(I18n.t("verify.file.generated.read", verifyFile.getName()));
+                player.sendMessage(I18n.t("verify.read.prompt"));
             } else {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e验证文件已生成：§fplugins/FancyHelper/verify/" + verifyFile.getName()));
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e请将数字密码 §b" + password + "§e 写入该文件中。"));
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e写入完成后，请在聊天框输入任意内容触发验证检查。"));
+                player.sendMessage(I18n.t("verify.file.generated.edit", verifyFile.getName()));
+                player.sendMessage(I18n.t("verify.write.prompt", password));
+                player.sendMessage(I18n.t("verify.trigger.prompt"));
             }
         } catch (IOException e) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c生成验证文件失败: " + e.getMessage()));
+            player.sendMessage(I18n.t("verify.generate.fail", e.getMessage()));
             plugin.getCloudErrorReport().report(e);
         }
 
@@ -84,7 +84,7 @@ public class VerificationManager {
             if (activeSessions.containsKey(uuid) && activeSessions.get(uuid) == session) {
                 activeSessions.remove(uuid);
                 if (verifyFile.exists()) verifyFile.delete();
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c验证已超时，文件已删除。"));
+                player.sendMessage(I18n.t("verify.timeout.deleted"));
             }
         }, 10 * 60 * 20L);
     }
@@ -101,7 +101,7 @@ public class VerificationManager {
             long unfreezeTime = frozenPlayers.get(uuid);
             if (System.currentTimeMillis() < unfreezeTime) {
                 long remainingSeconds = (unfreezeTime - System.currentTimeMillis()) / 1000;
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c验证已冻结，请在 " + remainingSeconds + " 秒后重试。"));
+                player.sendMessage(I18n.t("verify.frozen", remainingSeconds));
                 return true;
             } else {
                 frozenPlayers.remove(uuid);
@@ -114,7 +114,7 @@ public class VerificationManager {
         if (System.currentTimeMillis() > session.expiry) {
             activeSessions.remove(uuid);
             new File(verifyDir, player.getName() + "-" + session.type + ".txt").delete();
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c验证已超时。"));
+            player.sendMessage(I18n.t("verify.timeout"));
             return true;
         }
 
@@ -141,7 +141,7 @@ public class VerificationManager {
         if (success) {
             activeSessions.remove(uuid);
             new File(verifyDir, player.getName() + "-" + session.type + ".txt").delete();
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a验证成功！权限已开启。"));
+            player.sendMessage(I18n.t("verify.success"));
             if (session.onVerify != null) {
                 session.onVerify.run();
             }
@@ -154,12 +154,12 @@ public class VerificationManager {
                 // 冻结玩家 1 分钟
                 frozenPlayers.put(uuid, System.currentTimeMillis() + 60 * 1000);
                 
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c尝试次数过多，验证已取消。已冻结 1 分钟，请在 60 秒后重试。"));
+                player.sendMessage(I18n.t("verify.too.many"));
             } else {
                 if (session.type.equals("read") || session.type.equals("ls")) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c密码错误，请重试（剩余次数: " + (3 - session.attempts) + "）"));
+                    player.sendMessage(I18n.t("verify.wrong.password", 3 - session.attempts));
                 } else {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c文件内容不匹配，请确保已正确写入密码并重试（剩余次数: " + (3 - session.attempts) + "）"));
+                    player.sendMessage(I18n.t("verify.wrong.content", 3 - session.attempts));
                 }
             }
         }

@@ -8,6 +8,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -98,9 +99,9 @@ public class NoticeManager {
             readPlayers.add(uuid);
             playerData.set("notice.read_players", readPlayers);
             plugin.getConfigManager().savePlayerData();
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f已将公告标记为已读"));
+            player.sendMessage(I18n.t("notice.marked"));
         } else {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f该公告已经被你标记为已读"));
+            player.sendMessage(I18n.t("notice.already"));
         }
     }
 
@@ -253,7 +254,7 @@ public class NoticeManager {
 
             player.sendMessage(ColorUtil.translateCustomColors("§8§m------------------------------------"));
             player.sendMessage("");
-            player.sendMessage(ColorUtil.translateCustomColors("§8▌ §e✦ §zFancyHelper §8── §7公告"));
+            player.sendMessage(I18n.t("notice.title"));
             player.sendMessage("");
             if (noticeData.text != null && !noticeData.text.isEmpty()) {
                 for (String line : noticeData.text.split("\\n")) {
@@ -263,8 +264,8 @@ public class NoticeManager {
             player.sendMessage("");
 
             if (!hasRead(player)) {
-                TextComponent readButton = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§8▌ §7[§a ✔ 标为已读§7 ]")));
-                readButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ColorUtil.translateCustomColors("§7点击将此公告标记为已读"))));
+                TextComponent readButton = new TextComponent(TextComponent.fromLegacyText(I18n.t("notice.read.btn")));
+                readButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("notice.read.hover"))));
                 readButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/fancyhelper notice read"));
 
                 player.spigot().sendMessage(readButton);

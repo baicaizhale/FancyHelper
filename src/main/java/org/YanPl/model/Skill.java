@@ -1,5 +1,7 @@
 package org.YanPl.model;
 
+import org.YanPl.util.I18n;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -293,7 +295,7 @@ public class Skill {
         }
 
         if (!metadata.getTriggers().isEmpty()) {
-            lines.add("§8▌ §7触发: §f" + String.join(", ", metadata.getTriggers()));
+            lines.add("§8▌ §7" + I18n.t("skill.detail.trigger") + ": §f" + String.join(", ", metadata.getTriggers()));
         }
 
         if (!metadata.getTriggerWeights().isEmpty()) {
@@ -305,7 +307,7 @@ public class Skill {
         }
 
         if (!metadata.getCategories().isEmpty()) {
-            lines.add("§8▌ §7分类: §f" + String.join(", ", metadata.getCategories()));
+            lines.add("§8▌ §7" + I18n.t("skill.detail.category") + ": §f" + String.join(", ", metadata.getCategories()));
         }
 
         String sourceStr = isRemote ? "Remote" : (isBuiltIn ? "Built-in" : "Local");

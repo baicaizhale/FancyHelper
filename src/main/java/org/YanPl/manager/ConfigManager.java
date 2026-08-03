@@ -656,6 +656,24 @@ public class ConfigManager {
     }
 
     /**
+     * 获取插件显示语言（en-us | zh-cn | lzh-cn）
+     * 非法值或缺失时回退到 zh-cn。
+     *
+     * @return 语言代码
+     */
+    public String getLanguage() {
+        String lang = config.getString("settings.language", "zh-cn");
+        if (lang == null) {
+            return "zh-cn";
+        }
+        String lower = lang.trim().toLowerCase();
+        if ("en-us".equals(lower) || "zh-cn".equals(lower) || "lzh-cn".equals(lower)) {
+            return lower;
+        }
+        return "zh-cn";
+    }
+
+    /**
      * 获取日志保留天数
      * @return 日志保留天数
      */
