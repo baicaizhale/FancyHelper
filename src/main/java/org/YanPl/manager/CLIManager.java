@@ -12,6 +12,7 @@ import org.YanPl.model.DialogueSession;
 import org.YanPl.model.SessionRecord;
 import org.YanPl.model.Skill;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.PlayerListFileUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -153,11 +154,20 @@ public class CLIManager {
         this.ai = new LLMClient(plugin);
         this.promptManager = new PromptManager(plugin);
         this.toolExecutor = new ToolExecutor(plugin, this);
-        this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
-        this.yoloAgreedPlayersFile = new File(plugin.getDataFolder(), "yolo_agreed_players.txt");
-        this.yoloModePlayersFile = new File(plugin.getDataFolder(), "yolo_mode_players.txt");
-        this.smartModePlayersFile = new File(plugin.getDataFolder(), "smart_mode_players.txt");
-        this.planModePlayersFile = new File(plugin.getDataFolder(), "plan_mode_players.txt");
+        File runtimeDir = new File(plugin.getDataFolder(), "runtime");
+        if (!runtimeDir.exists()) {
+            runtimeDir.mkdirs();
+        }
+        this.agreedPlayersFile = new File(runtimeDir, "agreed_players.json");
+        this.yoloAgreedPlayersFile = new File(runtimeDir, "yolo_agreed_players.json");
+        this.yoloModePlayersFile = new File(runtimeDir, "yolo_mode_players.json");
+        this.smartModePlayersFile = new File(runtimeDir, "smart_mode_players.json");
+        this.planModePlayersFile = new File(runtimeDir, "plan_mode_players.json");
+        // 旧版本（config.yml 版本 <= 4.1.1）自动迁移：txt -> runtime JSON
+        // 兜底：只要检测到旧版 txt 文件存在也执行迁移，避免配置版本已更新但文件未迁移的情况
+        if (plugin.getConfigManager().isLegacyPlayerListMigrationNeeded() || hasLegacyPlayerFiles()) {
+            migrateLegacyPlayerFiles();
+        }
         loadAgreedPlayers();
         loadYoloAgreedPlayers();
         loadYoloModePlayers();
@@ -171,14 +181,8 @@ public class CLIManager {
 
     public void loadAgreedPlayers() {
         agreedPlayers.clear();
-        if (!agreedPlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(agreedPlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    agreedPlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            agreedPlayers.addAll(PlayerListFileUtil.readJson(agreedPlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载已同意协议的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -187,14 +191,8 @@ public class CLIManager {
 
     public void loadYoloAgreedPlayers() {
         yoloAgreedPlayers.clear();
-        if (!yoloAgreedPlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(yoloAgreedPlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    yoloAgreedPlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            yoloAgreedPlayers.addAll(PlayerListFileUtil.readJson(yoloAgreedPlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载已同意 YOLO 协议的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -204,10 +202,7 @@ public class CLIManager {
     private void saveAgreedPlayer(UUID uuid) {
         agreedPlayers.add(uuid);
         try {
-            java.nio.file.Files.write(agreedPlayersFile.toPath(), 
-                (uuid.toString() + "\n").getBytes(), 
-                java.nio.file.StandardOpenOption.CREATE, 
-                java.nio.file.StandardOpenOption.APPEND);
+            PlayerListFileUtil.writeJson(agreedPlayersFile, agreedPlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存已同意协议的玩家: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -217,10 +212,7 @@ public class CLIManager {
     private void saveYoloAgreedPlayer(UUID uuid) {
         yoloAgreedPlayers.add(uuid);
         try {
-            java.nio.file.Files.write(yoloAgreedPlayersFile.toPath(), 
-                (uuid.toString() + "\n").getBytes(), 
-                java.nio.file.StandardOpenOption.CREATE, 
-                java.nio.file.StandardOpenOption.APPEND);
+            PlayerListFileUtil.writeJson(yoloAgreedPlayersFile, yoloAgreedPlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存已同意 YOLO 协议的玩家: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -229,14 +221,8 @@ public class CLIManager {
 
     public void loadYoloModePlayers() {
         yoloModePlayers.clear();
-        if (!yoloModePlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(yoloModePlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    yoloModePlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            yoloModePlayers.addAll(PlayerListFileUtil.readJson(yoloModePlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载处于 YOLO 模式的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -257,11 +243,7 @@ public class CLIManager {
 
     private void writeYoloModePlayers() {
         try {
-            List<String> lines = new ArrayList<>();
-            for (UUID uuid : yoloModePlayers) {
-                lines.add(uuid.toString());
-            }
-            java.nio.file.Files.write(yoloModePlayersFile.toPath(), lines);
+            PlayerListFileUtil.writeJson(yoloModePlayersFile, yoloModePlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 YOLO 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -270,14 +252,8 @@ public class CLIManager {
 
     public void loadSmartModePlayers() {
         smartModePlayers.clear();
-        if (!smartModePlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(smartModePlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    smartModePlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            smartModePlayers.addAll(PlayerListFileUtil.readJson(smartModePlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载处于 SMART 模式的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -298,13 +274,7 @@ public class CLIManager {
 
     private void writeSmartModePlayers() {
         try {
-            List<String> lines = new ArrayList<>();
-            for (UUID uuid : smartModePlayers) {
-                lines.add(uuid.toString());
-            }
-            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines,
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            PlayerListFileUtil.writeJson(smartModePlayersFile, smartModePlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 SMART 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -313,14 +283,8 @@ public class CLIManager {
 
     public void loadPlanModePlayers() {
         planModePlayers.clear();
-        if (!planModePlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(planModePlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    planModePlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            planModePlayers.addAll(PlayerListFileUtil.readJson(planModePlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载处于 Plan 模式的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -341,15 +305,48 @@ public class CLIManager {
 
     private void writePlanModePlayers() {
         try {
-            List<String> lines = new ArrayList<>();
-            for (UUID uuid : planModePlayers) {
-                lines.add(uuid.toString());
-            }
-            java.nio.file.Files.write(planModePlayersFile.toPath(), lines,
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            PlayerListFileUtil.writeJson(planModePlayersFile, planModePlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 Plan 模式玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    /**
+     * 是否仍存在旧版 txt 玩家列表文件
+     */
+    private boolean hasLegacyPlayerFiles() {
+        return new File(plugin.getDataFolder(), "agreed_players.txt").exists()
+                || new File(plugin.getDataFolder(), "yolo_agreed_players.txt").exists()
+                || new File(plugin.getDataFolder(), "yolo_mode_players.txt").exists()
+                || new File(plugin.getDataFolder(), "smart_mode_players.txt").exists()
+                || new File(plugin.getDataFolder(), "plan_mode_players.txt").exists();
+    }
+
+    /**
+     * 迁移旧版玩家列表文件（txt）到 runtime 目录 JSON 格式
+     */
+    private void migrateLegacyPlayerFiles() {
+        migrateLegacyFile(new File(plugin.getDataFolder(), "agreed_players.txt"), agreedPlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "yolo_agreed_players.txt"), yoloAgreedPlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "yolo_mode_players.txt"), yoloModePlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "smart_mode_players.txt"), smartModePlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "plan_mode_players.txt"), planModePlayersFile);
+    }
+
+    /**
+     * 迁移单个旧版玩家列表文件：读取 txt，写入 JSON，删除旧文件
+     */
+    private void migrateLegacyFile(File legacyFile, File jsonFile) {
+        if (!legacyFile.exists()) return;
+        try {
+            Set<UUID> uuids = PlayerListFileUtil.readLegacyTxt(legacyFile);
+            PlayerListFileUtil.writeJson(jsonFile, uuids);
+            Files.deleteIfExists(legacyFile.toPath());
+            plugin.getLogger().info("已迁移旧版玩家列表文件 " + legacyFile.getName() + " -> " + jsonFile.getName()
+                    + "（" + uuids.size() + " 名玩家）");
+        } catch (IOException e) {
+            plugin.getLogger().warning("迁移旧版玩家列表文件失败 " + legacyFile.getName() + ": " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
         }
     }

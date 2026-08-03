@@ -37,6 +37,13 @@ public class FileWatcherManager {
 
             path.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
 
+            // 玩家列表 JSON 存放在 runtime 子目录，需单独注册监听
+            Path runtimePath = path.resolve("runtime");
+            if (!Files.exists(runtimePath)) {
+                Files.createDirectories(runtimePath);
+            }
+            runtimePath.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+
             watchThread = new Thread(() -> {
                 while (running.get()) {
                     WatchKey key;
@@ -94,17 +101,25 @@ public class FileWatcherManager {
                     plugin.getConfigManager().loadPlayerData();
                     plugin.getLogger().info("检测到 playerdata.yml 变动，已自动重载。");
                     break;
-                case "agreed_players.txt":
+                case "agreed_players.json":
                     plugin.getCliManager().loadAgreedPlayers();
-                    plugin.getLogger().info("检测到 agreed_players.txt 变动，已自动重载。");
+                    plugin.getLogger().info("检测到 agreed_players.json 变动，已自动重载。");
                     break;
-                case "yolo_agreed_players.txt":
+                case "yolo_agreed_players.json":
                     plugin.getCliManager().loadYoloAgreedPlayers();
-                    plugin.getLogger().info("检测到 yolo_agreed_players.txt 变动，已自动重载。");
+                    plugin.getLogger().info("检测到 yolo_agreed_players.json 变动，已自动重载。");
                     break;
-                case "yolo_mode_players.txt":
+                case "yolo_mode_players.json":
                     plugin.getCliManager().loadYoloModePlayers();
-                    plugin.getLogger().info("检测到 yolo_mode_players.txt 变动，已自动重载。");
+                    plugin.getLogger().info("检测到 yolo_mode_players.json 变动，已自动重载。");
+                    break;
+                case "smart_mode_players.json":
+                    plugin.getCliManager().loadSmartModePlayers();
+                    plugin.getLogger().info("检测到 smart_mode_players.json 变动，已自动重载。");
+                    break;
+                case "plan_mode_players.json":
+                    plugin.getCliManager().loadPlanModePlayers();
+                    plugin.getLogger().info("检测到 plan_mode_players.json 变动，已自动重载。");
                     break;
             }
         });

@@ -633,4 +633,43 @@ class ConfigManagerTest {
         assertTrue(configManager.isPlayerToolEnabled(player, "read"));
         assertFalse(configManager.isPlayerToolEnabled(other, "read"));
     }
+
+    // ==================== 玩家列表文件迁移（runtime JSON） ====================
+
+    @Test
+    @DisplayName("旧版本 4.1.1 应标记需要迁移玩家列表文件")
+    void testLegacyVersion411_RequiresMigration() {
+        assertTrue(ConfigManager.isLegacyPlayerListVersion("4.1.1"));
+    }
+
+    @Test
+    @DisplayName("旧版本 4.1.0 应标记需要迁移")
+    void testLegacyVersion410_RequiresMigration() {
+        assertTrue(ConfigManager.isLegacyPlayerListVersion("4.1.0"));
+    }
+
+    @Test
+    @DisplayName("旧版本 3.x.x 应标记需要迁移")
+    void testLegacyVersion3x_RequiresMigration() {
+        assertTrue(ConfigManager.isLegacyPlayerListVersion("3.2.1"));
+        assertTrue(ConfigManager.isLegacyPlayerListVersion("3.0.0"));
+    }
+
+    @Test
+    @DisplayName("新版本 4.1.2 不应标记需要迁移")
+    void testNewVersion412_NoMigration() {
+        assertFalse(ConfigManager.isLegacyPlayerListVersion("4.1.2"));
+    }
+
+    @Test
+    @DisplayName("更高版本 4.2.0 不应标记需要迁移")
+    void testNewerVersion420_NoMigration() {
+        assertFalse(ConfigManager.isLegacyPlayerListVersion("4.2.0"));
+    }
+
+    @Test
+    @DisplayName("空版本号应标记需要迁移（视为旧配置）")
+    void testEmptyVersion_RequiresMigration() {
+        assertTrue(ConfigManager.isLegacyPlayerListVersion(""));
+    }
 }
