@@ -31,7 +31,11 @@ class I18nTest {
     void testPlaceholders() {
         I18n.init(null);
         assertEquals("Progress: 3/10 已完成", I18n.t("todo.progress", 3, 10));
-        assertEquals("§zFancyHelper§b§r §7> §c未找到 Skill: minecraft", I18n.t("cli.skill.not.found", "minecraft"));
+        // 注意：返回值经 ColorUtil.translateCustomColors 处理，§z 会被转为 hex 颜色码，
+        // 因此这里只断言占位符替换后的关键文本片段
+        String notFound = I18n.t("cli.skill.not.found", "minecraft");
+        assertTrue(notFound.contains("未找到 Skill: minecraft"), "占位符 {0} 应被替换: " + notFound);
+        assertFalse(notFound.contains("{0}"), "不应残留未替换的占位符");
     }
 
     @Test

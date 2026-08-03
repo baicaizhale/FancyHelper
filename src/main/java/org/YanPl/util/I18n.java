@@ -1664,8 +1664,6 @@ public class I18n {
         Map.entry("upd.join.new", "§zFancyHelper§b§r §7> §f察得新版: §a{0}"),
         Map.entry("skill.detail.trigger", "触发之词"),
         Map.entry("skill.detail.category", "类属"),
-        Map.entry("skill.detail.trigger", "触发之词"),
-        Map.entry("skill.detail.category", "类属"),
         Map.entry("skillmgr.none", "§c今无可用 Skill"),
         Map.entry("skillmgr.list.title", "§6========== 可用 Skill 之单 =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),

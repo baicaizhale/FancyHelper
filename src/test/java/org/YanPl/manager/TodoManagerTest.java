@@ -2,6 +2,7 @@ package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
 import org.YanPl.model.TodoItem;
+import org.YanPl.util.I18n;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -161,7 +162,8 @@ class TodoManagerTest {
 
         todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"测试任务\"}]");
         String details = todoManager.getTodoDetails(testUuid);
-        assertTrue(details.contains("TODO LIST"));
+        // 表头已 i18n 化（zh-cn 基准表为 "==== TODO 列表 ===="）
+        assertTrue(details.contains(I18n.t("todo.details.header")), details);
         assertTrue(details.contains("测试任务"));
     }
 
