@@ -172,6 +172,9 @@ public final class FancyHelper extends JavaPlugin {
             Metrics metrics = new Metrics(this, pluginId);
             statsManager = new StatsManager(this, metrics);
 
+            // 当提供商使用 Fancy 且已配置 API Key 时，校验该 Key 对当前 server-id 是否有效
+            checkFancyConsoleApiKey();
+
             // 检查 server.properties 中的安全配置并提示
             checkSecureProfile();
 
@@ -322,6 +325,56 @@ public final class FancyHelper extends JavaPlugin {
         } catch (Exception e) {
             // 反射调用可能失败，可安全忽略
         }
+    }
+
+    /**
+     * 当提供商配置中使用了 Fancy（AI/搜索/网页抓取任一）且 client-fancy.yml 已配置 API Key 时，
+     * 异步校验该 Key 对当前 server-id 是否有效，无效时在控制台给出重新绑定的提示。
+     */
+    private void checkFancyConsoleApiKey() {
+        boolean fancyInUse = configManager.isFancyConsoleAi()
+                || configManager.isFancyConsoleSearch()
+                || configManager.isFancyConsoleJina();
+        if (!fancyInUse) {
+            return;
+        }
+        if (!fancyConsoleManager.hasApiKey()) {
+            return;
+        }
+
+        String apiKey = fancyConsoleManager.getApiKey();
+        // 延迟 1 秒异步执行，避免与插件启动流程竞争
+        Bukkit.getScheduler().runTaskLaterAsynchronously(this, () -> {
+            try {
+                FancyConsoleManager.ValidateKeyResult result = fancyConsoleManager.validateKey(apiKey);
+                if (result.valid) {
+                    if (configManager.isDebug()) {
+                        getLogger().info("[FancyConsole] API Key 验证通过（" + result.email + "）");
+                    }
+                    return;
+                }
+
+                String error = result.error != null ? result.error : "验证失败";
+                // 连接失败不代表 Key 无效，仅调试模式提示，避免误报
+                if (error.startsWith("无法连接到")) {
+                    if (configManager.isDebug()) {
+                        getLogger().warning("[FancyConsole] API Key 验证时无法连接服务端: " + error);
+                    }
+                    return;
+                }
+
+                getLogger().warning("============================================");
+                getLogger().warning("FancyConsole API Key 验证失败: " + error);
+                getLogger().warning("当前配置的 API Key 对服务器 ID (" + fancyConsoleManager.getServerId() + ") 无效。");
+                getLogger().warning("请使用 /fancyhelper bind <API Key> 重新绑定，或前往 FancyConsole 控制台检查。");
+                getLogger().warning("============================================");
+            } catch (Exception e) {
+                // 后台校验失败不影响启动，仅调试模式记录
+                if (configManager.isDebug()) {
+                    getLogger().warning("[FancyConsole] API Key 校验异常: " + e.getMessage());
+                }
+            }
+        }, 20L);
     }
 
     /**
