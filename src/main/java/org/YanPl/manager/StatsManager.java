@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class StatsManager {
@@ -31,6 +32,11 @@ public class StatsManager {
     private final File dataFile;
     private final Object saveLock = new Object();
     private final long pluginStartTime;
+    /**
+     * 定时上报调度链是否正在运行（防止配置重载后重复调度）。
+     * 用 CAS 保证并发下最多只有一条调度链。
+     */
+    private final AtomicBoolean schedulerActive = new AtomicBoolean(false);
 
     public StatsManager(FancyHelper plugin, Metrics metrics) {
         this.plugin = plugin;
@@ -39,7 +45,11 @@ public class StatsManager {
         load();
         registerCharts(metrics);
         startAutoSave();
-        scheduleNextReport();
+        if (plugin.getConfigManager().isStatsReportEnabled()) {
+            scheduleNextReport();
+        } else {
+            plugin.getLogger().info("[StatsManager] 统计上报已禁用（settings.stats_report=false），不会定时上报");
+        }
     }
 
     // ==================== 持久化 ====================
@@ -217,6 +227,16 @@ public class StatsManager {
      * 调度下一次定时上报
      */
     private void scheduleNextReport() {
+        // 统计上报已关闭（含配置重载后关闭的情况），不再调度下一次
+        if (!plugin.getConfigManager().isStatsReportEnabled()) {
+            schedulerActive.set(false);
+            return;
+        }
+        // 已有一条调度链在运行，避免重载后重复调度（CAS 保证并发下唯一）
+        if (!schedulerActive.compareAndSet(false, true)) {
+            return;
+        }
+
         long delayMs = millisToNextReport();
         long delayTicks = Math.max(1, delayMs / 50);
 
@@ -230,15 +250,30 @@ public class StatsManager {
             } catch (Exception e) {
                 plugin.getLogger().warning("[StatsManager] 上报失败: " + e.getMessage());
             }
-            // 上报完成后调度下一次
+            // 先释放调度标记再调度下一次，保证内部递归链不被打断
+            schedulerActive.set(false);
             scheduleNextReport();
         }, delayTicks);
+    }
+
+    /**
+     * 配置重载后调用：若统计上报已启用，则重新开始定时上报（内部 CAS 自动去重）。
+     */
+    public void onConfigReload() {
+        if (plugin.getConfigManager().isStatsReportEnabled()) {
+            scheduleNextReport();
+        }
     }
 
     /**
      * 执行上报
      */
     private void doReport() {
+        // 配置重载后关闭统计上报时，跳过已排队的定时任务
+        if (!plugin.getConfigManager().isStatsReportEnabled()) {
+            return;
+        }
+
         if (!plugin.getFancyConsoleManager().isReady()) {
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[StatsManager] 跳过上报：未配置 API Key");

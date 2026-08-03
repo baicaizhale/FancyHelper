@@ -528,6 +528,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             if (plugin.getMcpManager() != null) {
                 plugin.getMcpManager().reload();
             }
+            plugin.getStatsManager().onConfigReload();
             sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置、玩家数据、FancyConsole、工作区、EULA、Skill 与 MCP 已重新加载。"));
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
@@ -536,6 +537,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f工作区索引已重新加载。"));
             } else if (target.equals("config")) {
                 plugin.getConfigManager().loadConfig();
+                plugin.getStatsManager().onConfigReload();
                 sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置文件已重新加载。"));
             } else if (target.equals("playerdata")) {
                 plugin.getConfigManager().loadPlayerData();

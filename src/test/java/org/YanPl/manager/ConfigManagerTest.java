@@ -230,6 +230,26 @@ class ConfigManagerTest {
     }
 
     @Test
+    @DisplayName("isStatsReportEnabled 应返回配置值")
+    void testIsStatsReportEnabled_ReturnsConfigValue() {
+        when(config.getBoolean("settings.stats_report", true)).thenReturn(false);
+
+        boolean result = configManager.isStatsReportEnabled();
+
+        assertFalse(result);
+    }
+
+    @Test
+    @DisplayName("isStatsReportEnabled 默认应返回 true")
+    void testIsStatsReportEnabled_Default_ReturnsTrue() {
+        when(config.getBoolean("settings.stats_report", true)).thenReturn(true);
+
+        boolean result = configManager.isStatsReportEnabled();
+
+        assertTrue(result);
+    }
+
+    @Test
     @DisplayName("isCheckUpdate 应返回配置值")
     void testIsCheckUpdate_ReturnsConfigValue() {
         when(config.getBoolean("settings.check_update", true)).thenReturn(false);

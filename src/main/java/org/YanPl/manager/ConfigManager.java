@@ -450,6 +450,14 @@ public class ConfigManager {
         return config.getBoolean("settings.auto_report", true);
     }
 
+    /**
+     * 获取是否启用统计数据上报（定时上报到 FancyConsole）
+     * @return 是否启用
+     */
+    public boolean isStatsReportEnabled() {
+        return config.getBoolean("settings.stats_report", true);
+    }
+
     public boolean isCheckUpdate() {
         return config.getBoolean("settings.check_update", true);
     }
