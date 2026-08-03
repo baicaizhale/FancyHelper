@@ -50,30 +50,42 @@ mvn clean package
   - `§z` / `&z` → `#30AEE5` (明亮的天蓝色)
   - 颜色转换实现见：`src\main\java\org\YanPl\util\ColorUtil.java`
 
-### 消息格式规范与 ColorUtil 正确调用方式
+### 消息格式规范与多语言（I18n）
 
-所有发送给玩家/控制台的消息（包括提示、报错、公告、ActionBar、Title 等）**必须**通过 `ColorUtil.translateCustomColors(...)` 进行统一转换，以保证 `§z`、`&z` 等品牌专属色和标准颜色代码能被正确解析。
+插件支持三语言：`zh-cn`（简体中文，基准表）、`en-us`（美式英文）、`lzh-cn`（文言文），通过 `config.yml` 的 `settings.language` 切换（`/cli reload` 即时生效）。语言表硬编码在 `src\main\java\org\YanPl\util\I18n.java`，**不需要也不应该**放入 `src\main\resources`。
 
-统一前缀格式：
+#### 多语言规则（重要）
+1. **玩家可见消息**（sendMessage、TextComponent、GUI 物品名/Lore、书本页等）**必须**通过 `I18n.t("key", args...)` 获取，禁止硬编码中文/英文文本。
+2. 新增消息时，key 必须在 `I18n.java` 的**三张语言表**（ZH_CN / EN_US / LZH_CN）中都添加；key 缺失时回退中文，中文也缺失时原样返回 key。
+3. `I18n.t()` 返回前已自动调用 `ColorUtil.translateCustomColors(...)` 处理颜色码，**不要**再对返回值重复包裹 ColorUtil。
+4. **不翻译**的内容：控制台消息（`Bukkit.getConsoleSender()`）、`plugin.getLogger()` 调试日志、AI 提示词/协议串（如 `#error:`、`#run_result`）。这些可直接使用 `ColorUtil.translateCustomColors(...)` 或保持原样。
+5. 占位符使用 `{0}`、`{1}` 等格式，调用时按顺序传参。
+
+#### 统一前缀格式
 ```text
 §zFancyHelper§b§r §7> §f
 ```
 整条消息**默认使用白色（§f）**，不允许整体使用其他颜色，仅允许在部分高亮处使用其他颜色（如 `§a` 成功、`§c` 错误）。
 
 #### 错误调用方式（必须避免）
-1. **直接使用 `ChatColor` 常量拼接**（绕过 ColorUtil）：
+1. **玩家可见消息硬编码文本**：
+   ```java
+   // ✗ 错误：绕过 I18n，无法随语言切换
+   player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c操作失败"));
+   ```
+2. **直接使用 `ChatColor` 常量拼接**（绕过 ColorUtil/I18n）：
    ```java
    // ✗ 错误：直接使用 ChatColor.RED 等原生常量
    player.sendMessage(ChatColor.RED + "操作失败");
    ```
-2. **直接发送原始字符串**（绕过 ColorUtil）：
+3. **直接发送原始字符串**（绕过 ColorUtil）：
    ```java
    // ✗ 错误：发送包含 § 或 & 的字符串但不加 ColorUtil
    player.sendMessage("§8▌ §e✦ §fFancyHelper");
    ```
-3. **Bungee/Spigot 组件与 ActionBar/Title 未转换**：
+4. **Bungee/Spigot 组件与 ActionBar/Title 未转换**：
    ```java
-   // ✗ 错误：在构造 HoverEvent/TextComponent 时未经过 ColorUtil
+   // ✗ 错误：在构造 HoverEvent/TextComponent 时未经过 ColorUtil/I18n
    TextComponent btn = new TextComponent(ChatColor.GRAY + "点击");
    // ✗ 错误：ActionBar 和 Title 传入原始字符串
    player.sendTitle("", rawSubtitle, 0, 20, 0);
@@ -82,21 +94,29 @@ mvn clean package
 #### ✅ 正确调用范式
 1. **纯文本发送（sendMessage）**：
    ```java
-   // ✓ 正确：必须包裹一层 ColorUtil.translateCustomColors
-   player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c操作失败"));
+   // ✓ 正确：玩家可见消息走 I18n.t（内部已处理 ColorUtil）
+   player.sendMessage(I18n.t("cli.xxx.failed"));
+   // 带参数：
+   player.sendMessage(I18n.t("cli.xxx.count", count));
    ```
 2. **交互式 Component（Click/Hover）**：
    ```java
-   // ✓ 正确：使用 TextComponent.fromLegacyText 结合 ColorUtil（注意：直接 new TextComponent(String) 会导致 hex 颜色失效）
-   TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f交互文本")));
+   // ✓ 正确：使用 TextComponent.fromLegacyText 结合 I18n.t（注意：直接 new TextComponent(String) 会导致 hex 颜色失效）
+   TextComponent msg = new TextComponent(TextComponent.fromLegacyText(I18n.t("cli.xxx.interactive")));
    ```
 3. **Title 与 ActionBar**：
    ```java
-   // ✓ 正确：传递给 Title 和 ActionBar 前先使用 ColorUtil 转换
-   player.sendTitle("", ColorUtil.translateCustomColors(rawSubtitle), 0, 20, 0);
+   // ✓ 正确：传递给 Title 和 ActionBar 前先经过 I18n.t / ColorUtil 转换
+   player.sendTitle("", I18n.t("cli.xxx.title"), 0, 20, 0);
    ```
-4. **自定义 Helper 方法封装**：
-   在使用类似 `msg(String)` 等快捷消息辅助方法时，需确保该方法最终返回值经过了 `ColorUtil.translateCustomColors(...)` 统一处理。
+4. **控制台消息 / 调试日志**（无需翻译，直接用 ColorUtil）：
+   ```java
+   // ✓ 正确：仅控制台可见，保持中文即可
+   Bukkit.getConsoleSender().sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本"));
+   plugin.getLogger().info("[CLI] 调试信息");
+   ```
+5. **自定义 Helper 方法封装**：
+   在使用类似 `msg(String)` 等快捷消息辅助方法时，需确保该方法最终返回值经过了 `ColorUtil.translateCustomColors(...)` / `I18n.t(...)` 统一处理。
 
 ## After Making Changes
 
