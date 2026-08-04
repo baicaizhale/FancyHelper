@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -63,7 +64,8 @@ public class StreamingHandler {
         this.errorOccurred = false;
         this.gson = new Gson();
         this.logger = plugin.getLogger();
-        this.readTimeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
+        // 钳制下限，避免配置为 0/负数时看门狗立即触发
+        this.readTimeoutSeconds = Math.max(1, plugin.getConfigManager().getApiTimeoutSeconds());
     }
     
     /**
@@ -181,8 +183,13 @@ public class StreamingHandler {
         StringBuilder fullText = new StringBuilder();
         StringBuilder nonSseFallback = new StringBuilder();  // 非SSE回退缓冲
 
+        // 看门狗共享状态：只有真实模型数据（data: 行）才重置计时，
+        // SSE 心跳注释行（如 ": keep-alive"）仅保活连接，不视为有效进度，
+        // 避免上游真正挂起时（心跳不断但无数据）无限等待
+        AtomicLong lastReadTime = new AtomicLong(System.currentTimeMillis());
+
         // 包装 InputStream 以支持读取超时和取消检查
-        InputStream timeoutIn = createTimeoutInputStream(response.body());
+        InputStream timeoutIn = createTimeoutInputStream(response.body(), lastReadTime);
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(timeoutIn, StandardCharsets.UTF_8))) {
@@ -201,7 +208,15 @@ public class StreamingHandler {
                         continue;
                     }
 
+                    // SSE 注释行（如 FancyConsole 的心跳 ": keep-alive"）：跳过，
+                    // 既不污染 nonSseFallback，也不计入看门狗进度
+                    if (line.startsWith(":")) {
+                        continue;
+                    }
+
                     if (line.startsWith("data:")) {
+                        // 真实模型数据到达 → 重置看门狗计时
+                        lastReadTime.set(System.currentTimeMillis());
                         foundDataPrefix = true;
                         String data = line.substring(5).trim();
 
@@ -316,6 +331,13 @@ public class StreamingHandler {
             }
             
         } catch (IOException e) {
+            // 取消触发的读取中断（看门狗关闭底层流导致 readLine 抛出）属正常流程，不视为错误：
+            // 优雅返回已累积的文本，避免上游调用方把“用户取消”误判为错误/超时并展示错误消息
+            if (isCancelled.get()) {
+                logger.info("[Stream] 流式读取因取消而终止");
+                return fullText.toString();
+            }
+
             errorOccurred = true;
             logger.warning("[Stream] IO异常: " + e.getMessage());
             
@@ -789,46 +811,71 @@ public class StreamingHandler {
 
     /**
      * 创建支持读取超时的 InputStream 包装器
-     * 当 AI 服务器停止发送数据超过配置超时时间时，自动抛出 IOException
+     *
+     * 注意：不再依赖 InputStream.available() 轮询判断“是否有数据”。
+     * java.net.http.HttpClient 的响应流在 HTTP/1.1 chunked 传输下 available()
+     * 可能持续返回 0（即使数据已到达内部缓冲），导致“数据明明在传却被误判为无数据”而提前超时。
+     *
+     * 改为“阻塞读 + 看门狗”方案：
+     *  - read() 直接阻塞在底层流上，数据到达即返回；
+     *  - 看门狗线程监控距最后一次“真实数据”读取的时间（由调用方在 data: 行时更新 lastReadTime），
+     *    超过 readTimeoutSeconds 仍无真实数据时主动关闭底层流解除阻塞，并抛出明确的超时异常；
+     *    心跳注释行不算有效进度，保证上游真挂起时仍能超时。
+     *
      * @param in 原始输入流
+     * @param lastReadTime 共享的最后一次真实数据读取时间戳（由行处理循环更新）
      * @return 带超时控制的输入流
      */
-    private InputStream createTimeoutInputStream(InputStream in) {
+    private InputStream createTimeoutInputStream(InputStream in, AtomicLong lastReadTime) {
+        AtomicBoolean timedOut = new AtomicBoolean(false);
+        AtomicBoolean closed = new AtomicBoolean(false);
+
+        Thread watchdog = new Thread(() -> {
+            while (!closed.get()) {
+                if (isCancelled.get()) {
+                    // 取消时关闭流以解除阻塞中的 read()
+                    try { in.close(); } catch (IOException ignored) {}
+                    return;
+                }
+                long idle = System.currentTimeMillis() - lastReadTime.get();
+                if (idle >= readTimeoutSeconds * 1000L) {
+                    timedOut.set(true);
+                    try { in.close(); } catch (IOException ignored) {}
+                    return;
+                }
+                try {
+                    Thread.sleep(READ_POLL_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "FancyHelper-StreamWatchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
+
         return new InputStream() {
 
             @Override
             public int read() throws IOException {
-                waitForData();
-                int b = in.read();
+                int b;
+                try {
+                    b = in.read();
+                } catch (IOException e) {
+                    throw translateReadError(e, timedOut);
+                }
                 return b;
             }
 
             @Override
             public int read(byte[] b, int off, int len) throws IOException {
-                waitForData();
-                int n = in.read(b, off, len);
-                return n;
-            }
-
-            /**
-             * 等待数据可用，带有超时和取消检查
-             */
-            private void waitForData() throws IOException {
-                long deadline = System.currentTimeMillis() + readTimeoutSeconds * 1000L;
+                int n;
                 try {
-                    while (in.available() == 0) {
-                        if (isCancelled.get()) {
-                            throw new IOException("流式读取已取消");
-                        }
-                        if (System.currentTimeMillis() > deadline) {
-                            throw new IOException("流式读取超时 (" + readTimeoutSeconds + " 秒无数据)");
-                        }
-                        Thread.sleep(READ_POLL_INTERVAL_MS);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("流式读取被中断", e);
+                    n = in.read(b, off, len);
+                } catch (IOException e) {
+                    throw translateReadError(e, timedOut);
                 }
+                return n;
             }
 
             @Override
@@ -838,8 +885,22 @@ public class StreamingHandler {
 
             @Override
             public void close() throws IOException {
+                closed.set(true);
                 in.close();
             }
         };
+    }
+
+    /**
+     * 将底层流读取异常转换为明确的超时/取消提示
+     */
+    private IOException translateReadError(IOException e, AtomicBoolean timedOut) {
+        if (timedOut.get()) {
+            return new IOException("流式读取超时 (" + readTimeoutSeconds + " 秒无数据)");
+        }
+        if (isCancelled.get()) {
+            return new IOException("流式读取已取消");
+        }
+        return e;
     }
 }
