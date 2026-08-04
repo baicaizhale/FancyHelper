@@ -162,7 +162,7 @@ class TodoManagerTest {
 
         todoManager.updateTodos(testUuid, "[{\"id\":\"1\",\"task\":\"测试任务\"}]");
         String details = todoManager.getTodoDetails(testUuid);
-        // 表头已 i18n 化（zh-cn 基准表为 "==== TODO 列表 ===="）
+        // 表头已 i18n 化（zh-cn 基准表）
         assertTrue(details.contains(I18n.t("todo.details.header")), details);
         assertTrue(details.contains("测试任务"));
     }
