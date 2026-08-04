@@ -23,14 +23,20 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 ## Features
 
 - **Chat-based Management** — Type `/cli` to enter conversation mode. Manage your server as if you're chatting with a human co-admin.
-- **AI Command Generation** — Integrated with CloudFlare Workers AI (default: `gpt-oss-120b`). You state the intent; it writes the command.
-- **Multi-Model Support** — Supports CloudFlare, OpenAI, DeepSeek, Azure OpenAI, local Ollama models, and more.
-- **Pre-execution Confirmation** — AI-generated commands require manual confirmation (`y`/`n`) by default to prevent accidents.
-- **YOLO Mode** — Tired of confirming? After agreeing to the terms, most commands execute automatically, though high-risk operations like `op`, `ban`, and `stop` still require approval.
-- **Real-time Status Bar** — The Action Bar displays what the AI is currently doing (Thinking / Executing / Waiting for confirmation).
-- **Built-in Wiki Search** — Comes with documentation presets for LuckPerms, EssentialsX, WorldEdit and other major plugins. Falls back to web search if nothing is found.
+- **AI Command Generation** — Defaults to FancyConsole (keyless AI relay). Also supports OpenAI-compatible endpoints such as OpenAI, DeepSeek, and CloudFlare Workers AI (BYOK).
+- **Four Conversation Modes** — **Normal**: every command needs confirmation. **YOLO**: after agreeing to the terms, most commands run automatically, though high-risk ones like `op`, `ban`, and `stop` still ask. **SMART**: the AI judges risk and executes low-risk commands directly. **Plan**: plan first, then execute — great for complex tasks.
+- **Pre-execution Confirmation** — In Normal mode, AI-generated commands require manual confirmation (`y`/`n`) to prevent accidents.
+- **Real-time Status Bar** — The Action Bar displays what the AI is doing (Thinking / Executing / Waiting for confirmation), with streaming output word by word.
+- **Built-in Wiki Search** — Comes with documentation presets (Skills) for LuckPerms, EssentialsX, WorldEdit and other major plugins. Falls back to web search (Tavily / Metaso) if nothing is found.
+- **Skill System** — Inject markdown knowledge files into the AI for specific plugins. Online market for one-click install/update.
 - **Feedback Loop** — The output of executed commands is fed back to the AI. If something fails, the AI can correct itself.
-- **Automatic Config Updates** — No need to manually edit configs during upgrades; it handles them automatically.
+- **File Tools** — Let the AI read and edit server config files (`#read` / `#edit` / `#write`). First-time use requires verification.
+- **MCP Client** — Connect to external MCP tool servers, letting the AI call any external tool.
+- **Todo List** — The AI maintains a task list via `#todo`, viewable in-game as a book.
+- **Preference Memory** — The AI remembers each player's long-term preferences (`#remember` / `#forget`).
+- **Session Resume** — Conversation history is persisted. Use `/cli resume` to pick up where you left off.
+- **Auto Updates** — Detects new versions, downloads and hot-reloads automatically — no server restart needed.
+- **Multi-language** — Plugin UI supports Simplified Chinese / English / Classical Chinese. Switch in `config.yml`.
 - **Anti-Loop Protection** — Automatically intercepts the AI if it starts repeating operations or making excessive calls.
 
 ## Compatibility
@@ -38,10 +44,12 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 | Server | Version | Java |
 |--------|------|------|
 | Spigot | 1.18+ | 17+ |
-| Paper | 1.18+ | 17+ |
+| Paper (recommended) | 1.18+ | 17+ |
+
+> Paper and its forks (Purpur, Pufferfish, etc.) are recommended. Spigot works, but the plugin warns at startup because some advanced features rely on Paper-specific APIs.
 
 **Dependencies:**
-- [ProtocolLib](https://www.spigotmc.org/resources/protocollib.1997/) 5.4.0+ — Used to capture command output and intercept system messages. The plugin works without it, but some features will be incomplete.
+- [ProtocolLib](https://www.spigotmc.org/resources/protocollib.1997/) 5.4.0+ — **Required**, used to capture command output and intercept system messages. The plugin disables itself without it.
   You can use `/fancy lib install protocollib` to download and install it automatically (OP permission required).
 
 ## Demo
@@ -65,16 +73,27 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 ### Installation
 
 1. Download `FancyHelper.jar` and place it in the server's `plugins` folder.
-2. Install the dependency ProtocolLib (make sure to match the version to your server).
+2. Install the required dependency ProtocolLib (make sure to match the version to your server).
 3. Restart the server; configuration files will be generated automatically.
 
-### Configure AI (Optional, defaults to CloudFlare)
+### Configure AI
+
+The plugin defaults to **FancyConsole** (a keyless AI relay service). It works out of the box, but you need to register and bind once:
+
+1. Type `/cli` in-game and click the registration link, or visit `https://console.fancy.baicaizhale.top/register?server=<your-server-id>`.
+2. After registering, get your API Key and bind it in-game: `/cli bind <API Key>`.
+3. Once bound, you can start chatting.
+
+**Bring Your Own Key (BYOK):** Set `provider.ai` to `openai` or `cloudflare` in `config.yml`, then fill in the corresponding `api_key` / `cf_key`.
 
 **CloudFlare Workers AI:**
 Tutorial: [![blog](https://img.shields.io/badge/CF%20Key%20Setup%20Guide-Blog-blue)](https://blog.baicaizhale.top/post/create-cf-key-for-fhai)
 
-**OpenAI Compatible API:**
+**OpenAI Compatible API (DeepSeek, OpenAI, etc.):**
 Tutorial: [![blog](https://img.shields.io/badge/OpenAI%20Compatible%20Providers-Blog-blue)](https://blog.baicaizhale.top/post/openai-compatible-providers)
+
+**MCP Tool Servers:**
+Tutorial: [![blog](https://img.shields.io/badge/MCP%20Setup%20Guide-Blog-blue)](https://blog.baicaizhale.top/post/mcp-config)
 
 ### Usage
 
@@ -90,8 +109,14 @@ Tutorial: [![blog](https://img.shields.io/badge/OpenAI%20Compatible%20Providers-
 | `stop` | Interrupt the AI or cancel current operation |
 | `y` / `n` | Confirm / Cancel execution |
 | `agree` | Agree to terms or enable YOLO mode |
+| `/cli yolo` | Switch to YOLO mode (auto-execute) |
+| `/cli smart` | Switch to SMART mode (AI judges risk) |
+| `/cli plan` | Enter Plan mode |
 | `/cli retry` | Retry the previous AI response |
 | `/cli exempt_anti_loop` | Temporarily disable anti-loop detection |
+| `/cli resume` | Resume a previous session |
+| `/cli skill list` | List installed Skills |
+| `/cli todo` | Open the todo list book |
 | `!message` | Start with `!` to send normal chat messages, bypassing AI |
 
 ## Commands & Permissions
@@ -99,7 +124,21 @@ Tutorial: [![blog](https://img.shields.io/badge/OpenAI%20Compatible%20Providers-
 | Command | Description | Default Permission |
 | :--- | :--- | :--- |
 | `/fancyhelper` | Main command (Aliases: `/cli`, `/fancy`) | `fancyhelper.cli` |
-| `/fancyhelper reload` | Reload plugin configuration | `fancyhelper.reload` |
+| `/fancyhelper bind <key>` | Bind a FancyConsole API Key | OP |
+| `/fancyhelper reload [target]` | Reload plugin config (`config` / `workspace` / `playerdata` / `skill` / `mcp` / `deeply`) | `fancyhelper.reload` |
+| `/fancyhelper status` | Show plugin status | `fancyhelper.cli` |
+| `/fancyhelper yolo` / `smart` / `normal` / `plan` | Switch conversation mode | `fancyhelper.cli` |
+| `/fancyhelper settings` | Open personal settings (streaming, display position, sound, etc.) | `fancyhelper.cli` |
+| `/fancyhelper tools` | Manage file tool permissions (read / write) | `fancyhelper.cli` |
+| `/fancyhelper memory` | Manage AI preference memory | `fancyhelper.cli` |
+| `/fancyhelper resume` | Resume a previous session | `fancyhelper.cli` |
+| `/fancyhelper todo` | Open the todo list | `fancyhelper.cli` |
+| `/fancyhelper skill <list\|info\|load>` | Skill list / details / load | `fancyhelper.skill.use` |
+| `/fancyhelper skill <reload\|install\|upgrade>` | Manage Skills (reload / install / update) | `fancyhelper.skill.admin` |
+| `/fancyhelper mcp tools` | View MCP external tools | `fancyhelper.cli` |
+| `/fancyhelper checkupdate` | Check for plugin updates | `fancyhelper.cli` |
+| `/fancyhelper upgrade` | Download and install the new version | `fancyhelper.reload` |
+| `/fancyhelper notice` | View plugin announcements | `fancyhelper.notice` |
 | `/fancyhelper lib install protocollib` | Download and install ProtocolLib dependency | OP |
 
 | Permission | Description | Default |
@@ -116,6 +155,10 @@ Tutorial: [![blog](https://img.shields.io/badge/OpenAI%20Compatible%20Providers-
 
 This is caused by Minecraft's `enforce-secure-profile` security setting, not the plugin itself.
 FancyHelper will automatically attempt to set this to `false` in `server.properties`. Restart the server after the change. If it fails, edit manually and restart.
+
+**Can't find ProtocolLib / plugin fails to load?**
+
+ProtocolLib is now a **required dependency** of FancyHelper. Download the version matching your server from [SpigotMC](https://www.spigotmc.org/resources/protocollib.1997/), put it in the `plugins` folder, and restart. You can also run `/fancy lib install protocollib` as OP to install it automatically.
 
 ## Contributing
 
