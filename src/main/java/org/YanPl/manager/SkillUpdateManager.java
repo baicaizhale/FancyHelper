@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.Skill;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -112,7 +113,7 @@ public class SkillUpdateManager implements Listener {
     public void checkForUpdates(Player sender, boolean silentNoUpdate) {
         if (checking) {
             if (sender != null) {
-                sender.sendMessage(msg("正在检查中，请稍候..."));
+                sender.sendMessage(msg(I18n.t("supd.checking")));
             }
             return;
         }
@@ -132,7 +133,7 @@ public class SkillUpdateManager implements Listener {
      */
     public void downloadUpdates(Player sender) {
         if (pendingUpdates.isEmpty()) {
-            notify(sender, "§e没有待更新的 Skill，请先执行 checkupdate");
+            notify(sender, I18n.t("supd.no.pending"));
             return;
         }
 
@@ -174,24 +175,24 @@ public class SkillUpdateManager implements Listener {
      */
     public boolean installSkill(String skillId, Player sender) {
         if (skillManager.hasSkill(skillId)) {
-            notify(sender, "§eSkill §b" + skillId + " §e已安装，无需重复安装");
+            notify(sender, I18n.t("supd.already.installed", skillId));
             return false;
         }
 
         JsonObject manifest = fetchManifest();
         if (manifest == null || !manifest.has("skills")) {
-            notify(sender, "§c无法获取远程 Skill 清单");
+            notify(sender, I18n.t("supd.manifest.fail"));
             return false;
         }
 
         JsonObject skillsObj = manifest.getAsJsonObject("skills");
         if (!skillsObj.has(skillId)) {
-            notify(sender, "§c远程仓库中不存在 Skill: " + skillId);
+            notify(sender, I18n.t("supd.not.in.repo", skillId));
             return false;
         }
 
         String remoteVersion = getJsonString(skillsObj.getAsJsonObject(skillId), "version");
-        notify(sender, "§f正在安装 §b" + skillId + " §fv" + (remoteVersion != null ? remoteVersion : "?") + "§f...");
+        notify(sender, I18n.t("supd.installing", skillId, remoteVersion != null ? remoteVersion : "?"));
 
         // 记录附属文件列表
         List<String> files = parseFilesList(skillsObj.getAsJsonObject(skillId));
@@ -203,10 +204,10 @@ public class SkillUpdateManager implements Listener {
         if (success) {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 skillManager.reloadSkills();
-                notify(sender, "§aSkill §b" + skillId + " §a安装成功！");
+                notify(sender, I18n.t("supd.installed", skillId));
             });
         } else {
-            notify(sender, "§cSkill §b" + skillId + " §c安装失败");
+            notify(sender, I18n.t("supd.install.fail", skillId));
         }
         return success;
     }
@@ -227,14 +228,14 @@ public class SkillUpdateManager implements Listener {
                     getMirrorUrl("manifest.json"),
                     getDirectUrl("manifest.json"));
             if (body == null) {
-                notify(sender, "§c获取 Skill 更新清单失败（主源/镜像/直连均不可用）");
+                notify(sender, I18n.t("supd.fetch.fail"));
                 plugin.getLogger().warning("[SkillUpdate] 获取 manifest 失败（主源/镜像/直连均不可用）");
                 return;
             }
 
             JsonObject manifest = JsonParser.parseString(body).getAsJsonObject();
             if (!manifest.has("skills")) {
-                notify(sender, "§cSkill 更新清单格式错误");
+                notify(sender, I18n.t("supd.bad.manifest"));
                 return;
             }
 
@@ -268,14 +269,14 @@ public class SkillUpdateManager implements Listener {
 
             if (sender != null) {
                 if (hasUpdates) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper §7> §a发现 §e" + updateCount + " §a个 Skill 更新，正在自动下载..."));
+                    sender.sendMessage(I18n.t("supd.found", updateCount));
                     for (Map.Entry<String, String> entry : pendingUpdates.entrySet()) {
                         Skill local = skillManager.getSkill(entry.getKey());
-                        String localVer = local != null ? local.getMetadata().getVersion() : "未安装";
+                        String localVer = local != null ? local.getMetadata().getVersion() : I18n.t("supd.not.installed");
                         sender.sendMessage(" §7- §b" + entry.getKey() + " §7" + localVer + " §7→ §a" + entry.getValue());
                     }
                 } else if (!silentNoUpdate) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper §7> §a所有 Skill 已是最新版本"));
+                    sender.sendMessage(I18n.t("supd.up.to.date"));
                 }
             }
 
@@ -288,7 +289,7 @@ public class SkillUpdateManager implements Listener {
 
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "[SkillUpdate] 检查更新异常", e);
-            notify(sender, "§c检查更新时发生错误: " + e.getMessage());
+            notify(sender, I18n.t("supd.check.error", e.getMessage()));
         } finally {
             checking = false;
         }
@@ -302,7 +303,7 @@ public class SkillUpdateManager implements Listener {
         int failed = 0;
         int total = pendingUpdates.size();
 
-        notify(sender, "§f开始下载 §e" + total + " §f个 Skill 更新...");
+        notify(sender, I18n.t("supd.download.start", total));
 
         for (Map.Entry<String, String> entry : pendingUpdates.entrySet()) {
             String skillId = entry.getKey();
@@ -324,7 +325,7 @@ public class SkillUpdateManager implements Listener {
             pendingFiles.clear();
             hasUpdates = false;
 
-            notify(sender, "§aSkill 更新完成！成功: §e" + finalSuccess + "§a, 失败: §c" + finalFailed);
+            notify(sender, I18n.t("supd.done", finalSuccess, finalFailed));
             plugin.getLogger().info("[SkillUpdate] 更新完成: " + finalSuccess + " 成功, " + finalFailed + " 失败");
         });
     }

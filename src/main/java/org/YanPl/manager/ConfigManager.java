@@ -21,6 +21,7 @@ public class ConfigManager {
     private File playerDataFile;
     private boolean configLoadFailed = false;
     private String configLoadError = "";
+    private boolean legacyPlayerListMigrationNeeded = false;
 
     private static final String SKILL_PRIMARY_MIRROR = "https://fancy-skill.baicaizhale.top/";
     private static final String SKILL_REPO_BASE = "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/";
@@ -162,6 +163,8 @@ public class ConfigManager {
             return;
         }
         String configVersion = currentConfig.getString("version", "");
+        // 旧版本（<= 4.1.1，如 3.x.x）需要把玩家列表文件从 txt 迁移为 runtime 目录下的 JSON 格式
+        legacyPlayerListMigrationNeeded = isLegacyPlayerListVersion(configVersion);
         String pluginVersion = plugin.getDescription().getVersion();
 
         if (!configVersion.equals(pluginVersion)) {
@@ -489,6 +492,21 @@ public class ConfigManager {
     }
 
     /**
+     * 是否需要迁移旧版玩家列表文件（txt -> runtime JSON）
+     * @return config.yml 版本 <= 4.1.1（如 3.x.x）时为 true
+     */
+    public boolean isLegacyPlayerListMigrationNeeded() {
+        return legacyPlayerListMigrationNeeded;
+    }
+
+    /**
+     * 判断配置版本是否为需要迁移玩家列表的旧版本（<= 4.1.1）
+     */
+    static boolean isLegacyPlayerListVersion(String configVersion) {
+        return ToolExecutor.compareVersions(configVersion, "4.1.1") <= 0;
+    }
+
+    /**
      * 获取插件 CDN 下载基地址
      */
     public String getPluginCdnBase() {
@@ -635,6 +653,24 @@ public class ConfigManager {
      */
     public boolean isDebug() {
         return config.getBoolean("settings.debug", false);
+    }
+
+    /**
+     * 获取插件显示语言（en-us | zh-cn | lzh-cn）
+     * 非法值或缺失时回退到 zh-cn。
+     *
+     * @return 语言代码
+     */
+    public String getLanguage() {
+        String lang = config.getString("settings.language", "zh-cn");
+        if (lang == null) {
+            return "zh-cn";
+        }
+        String lower = lang.trim().toLowerCase();
+        if ("en-us".equals(lower) || "zh-cn".equals(lower) || "lzh-cn".equals(lower)) {
+            return lower;
+        }
+        return "zh-cn";
     }
 
     /**

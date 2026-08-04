@@ -3,6 +3,7 @@ package org.YanPl.manager;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.Skill;
 import org.YanPl.model.SkillMetadata;
+import org.YanPl.util.I18n;
 import org.bukkit.entity.Player;
 
 import java.io.File;
@@ -392,18 +393,18 @@ public class SkillManager {
         List<Skill> skills = registry.getAllSkills();
 
         if (skills.isEmpty()) {
-            lines.add("§c暂无可用 Skill");
+            lines.add(I18n.t("skillmgr.none"));
             return lines;
         }
 
-        lines.add("§6========== 可用 Skill 列表 ==========");
+        lines.add(I18n.t("skillmgr.list.title"));
 
         for (Skill skill : skills) {
             lines.add("  " + skill.getShortInfo());
         }
 
-        lines.add("§6====================================");
-        lines.add("§7共 " + skills.size() + " 个 Skill | 使用 /fancy skill info <id> 查看详情");
+        lines.add(I18n.t("skillmgr.list.bottom"));
+        lines.add(I18n.t("skillmgr.list.count", skills.size()));
 
         return lines;
     }

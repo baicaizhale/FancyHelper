@@ -54,7 +54,7 @@ public class ErrorHandler {
         handleAsyncError(player, operation, error, () -> {
             if (player != null && player.isOnline()) {
                 String message = userMessage != null ? userMessage :
-                    ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f" + operation + "失败: " + error.getMessage());
+                    I18n.t("error.operation.failed", operation, error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName());
                 player.sendMessage(message);
             }
         });
@@ -99,7 +99,7 @@ public class ErrorHandler {
         return () -> {
             if (player == null || !player.isOnline()) return;
             
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e操作失败，点击 §a[重试]§e 重新尝试"));
+            player.sendMessage(I18n.t("error.retry"));
             // 注意：实际的点击按钮需要在调用处创建，因为需要 TextComponent
         };
     }

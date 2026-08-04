@@ -10,6 +10,7 @@ import org.YanPl.manager.StatsManager;
 import org.YanPl.model.DialogueSession;
 import org.YanPl.model.SessionRecord;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -39,7 +40,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
             if (!(sender instanceof Player)) {
-                sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+                sender.sendMessage(I18n.t("cli.only.player"));
                 return true;
             }
 
@@ -51,7 +52,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
             Player player = (Player) sender;
             if (!player.hasPermission("fancyhelper.cli")) {
-                player.sendMessage(ChatColor.RED + "你没有权限使用此命令。");
+                player.sendMessage(I18n.t("cli.no.perm.cmd"));
                 return true;
             }
 
@@ -70,13 +71,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         switch (subCommand) {
             case "bind":
                 if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+                    sender.sendMessage(I18n.t("cli.only.player"));
                     return true;
                 }
                 return handleBind((Player) sender, args);
             case "reload":
                 if (!sender.hasPermission("fancyhelper.reload")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限执行重载。"));
+                    sender.sendMessage(I18n.t("cli.no.perm.reload"));
                     return true;
                 }
                 handleReload(sender, args);
@@ -89,17 +90,17 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "update":
             case "checkupdate":
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在检查更新..."));
+                sender.sendMessage(I18n.t("cli.checking.update"));
                 plugin.getUpdateManager().checkForUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
             case "notice":
                 if (!sender.hasPermission("fancyhelper.notice")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限查看公告。"));
+                    sender.sendMessage(I18n.t("cli.no.perm.notice"));
                     return true;
                 }
                 if (args.length > 1 && args[1].equalsIgnoreCase("read")) {
                     if (!(sender instanceof Player)) {
-                        sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                        sender.sendMessage(I18n.t("cli.only.player.sub"));
                         return true;
                     }
                     plugin.getNoticeManager().markAsRead((Player) sender);
@@ -110,7 +111,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "upgrade":
             case "download":
                 if (!sender.hasPermission("fancyhelper.reload")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限执行更新。"));
+                    sender.sendMessage(I18n.t("cli.no.perm.update"));
                     return true;
                 }
                 plugin.getUpdateManager().downloadAndInstall(sender instanceof Player ? (Player) sender : null, true);
@@ -152,27 +153,27 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "resume_confirm":
             case "resume_delete":
                 if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    sender.sendMessage(I18n.t("cli.only.player.sub"));
                     return true;
                 }
                 Player player = (Player) sender;
                 return handlePlayerSubCommand(player, subCommand, args);
             case "sound":
                 if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    sender.sendMessage(I18n.t("cli.only.player.sub"));
                     return true;
                 }
                 player = (Player) sender;
                 return handlePlayerSubCommand(player, subCommand, args);
             case "skill":
                 if (!sender.hasPermission("fancyhelper.skill.use")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有权限使用 Skill 命令。"));
+                    sender.sendMessage(I18n.t("cli.no.perm.skill"));
                     return true;
                 }
                 return handleSkillCommand(sender, args);
             case "mcp":
                 if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+                    sender.sendMessage(I18n.t("cli.only.player"));
                     return true;
                 }
                 return handleMcpCommand((Player) sender, args);
@@ -194,40 +195,40 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f可用子命令:"));
-        sender.sendMessage(" §7- §b/cli §f: 切换进入/退出 CLI 模式");
-        sender.sendMessage(" §7- §b/cli bind <key> §f: 绑定 FancyConsole API Key");
-        sender.sendMessage(" §7- §b/cli reload §f: 重新加载配置与工作区");
-        sender.sendMessage(" §7- §b/cli reload deeply §f: 深度重载（完全重启插件）");
-        sender.sendMessage(" §7- §b/cli status §f: 查看插件运行状态");
-        sender.sendMessage(" §7- §b/cli stats §f: 手动上报统计数据（测试用）");
-        sender.sendMessage(" §7- §b/cli checkupdate §f: 检查更新");
-        sender.sendMessage(" §7- §b/cli upgrade §f: 下载并安装更新");
-        sender.sendMessage(" §7- §b/cli notice §f: 查看系统公告");
-        sender.sendMessage(" §7- §b/cli notice read §f: 将公告标记为已读");
-        sender.sendMessage(" §7- §b/cli todo §f: 查看待办事项列表");
-        sender.sendMessage(" §7- §b/cli settings §f: 打开个人设置界面");
-        sender.sendMessage(" §7- §b/cli memory §f: 管理偏好记忆");
-        sender.sendMessage(" §7- §b/cli tools §f: 查看工具列表");
-        sender.sendMessage(" §7- §b/cli toggle <ls|read|edit> §f: 启用/禁用工具");
-        sender.sendMessage(" §7- §b/cli display §f: 切换显示位置");
-        sender.sendMessage(" §7- §b/cli yolo §f: 切换到 YOLO 模式（自动执行命令）");
-        sender.sendMessage(" §7- §b/cli smart §f: 切换到 SMART 模式（AI评估风险）");
-        sender.sendMessage(" §7- §b/cli normal §f: 切换到普通模式（需要确认）");
-        sender.sendMessage(" §7- §b/cli retry §f: 重试上一次失败的 AI 调用");
-        sender.sendMessage(" §7- §b/cli stop §f: 停止当前 AI 对话");
-        sender.sendMessage(" §7- §b/cli exit §f: 退出 CLI 模式");
-        sender.sendMessage(" §7- §b/cli compact §f: 使用AI智能压缩当前会话上下文");
-        sender.sendMessage(" §7- §b/cli streaming §f: 切换流式输出开关");
-        sender.sendMessage(" §7- §b/cli sound §f: 切换声音反馈开关");
-        sender.sendMessage(" §7- §b/cli resume §f: 查看历史对话列表");
-        sender.sendMessage(" §7- §b/cli skill §f: Skill 管理命令");
-        sender.sendMessage(" §7  §b/cli skill list §f: 列出所有 Skill");
-        sender.sendMessage(" §7  §b/cli skill info <id> §f: 查看 Skill 详情");
-        sender.sendMessage(" §7  §b/cli skill load <id> §f: 加载 Skill 到当前对话");
-        sender.sendMessage(" §7- §b/cli mcp tools §f: 查看 MCP 外部工具");
-        sender.sendMessage(" §7  §b/cli mcp tools <server> §f: 查看指定服务器的工具");
-        sender.sendMessage(" §7  §b/cli mcp toggle <server> <tool> §f: 切换工具启用/禁用");
+        sender.sendMessage(I18n.t("cli.help.title"));
+        sender.sendMessage(I18n.t("cli.help.toggle"));
+        sender.sendMessage(I18n.t("cli.help.bind"));
+        sender.sendMessage(I18n.t("cli.help.reload"));
+        sender.sendMessage(I18n.t("cli.help.reload.deep"));
+        sender.sendMessage(I18n.t("cli.help.status"));
+        sender.sendMessage(I18n.t("cli.help.stats"));
+        sender.sendMessage(I18n.t("cli.help.checkupdate"));
+        sender.sendMessage(I18n.t("cli.help.upgrade"));
+        sender.sendMessage(I18n.t("cli.help.notice"));
+        sender.sendMessage(I18n.t("cli.help.notice.read"));
+        sender.sendMessage(I18n.t("cli.help.todo"));
+        sender.sendMessage(I18n.t("cli.help.settings"));
+        sender.sendMessage(I18n.t("cli.help.memory"));
+        sender.sendMessage(I18n.t("cli.help.tools"));
+        sender.sendMessage(I18n.t("cli.help.toggle.tools"));
+        sender.sendMessage(I18n.t("cli.help.display"));
+        sender.sendMessage(I18n.t("cli.help.yolo"));
+        sender.sendMessage(I18n.t("cli.help.smart"));
+        sender.sendMessage(I18n.t("cli.help.normal"));
+        sender.sendMessage(I18n.t("cli.help.retry"));
+        sender.sendMessage(I18n.t("cli.help.stop"));
+        sender.sendMessage(I18n.t("cli.help.exit"));
+        sender.sendMessage(I18n.t("cli.help.compact"));
+        sender.sendMessage(I18n.t("cli.help.streaming"));
+        sender.sendMessage(I18n.t("cli.help.sound"));
+        sender.sendMessage(I18n.t("cli.help.resume"));
+        sender.sendMessage(I18n.t("cli.help.skill"));
+        sender.sendMessage(I18n.t("cli.help.skill.list"));
+        sender.sendMessage(I18n.t("cli.help.skill.info"));
+        sender.sendMessage(I18n.t("cli.help.skill.load"));
+        sender.sendMessage(I18n.t("cli.help.mcp.tools"));
+        sender.sendMessage(I18n.t("cli.help.mcp.tools.server"));
+        sender.sendMessage(I18n.t("cli.help.mcp.toggle"));
     }
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
@@ -291,13 +292,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                         boolean currentState = plugin.getConfigManager().isPlayerToolEnabled(player, tool);
                         if (currentState) {
                             plugin.getConfigManager().setPlayerToolEnabled(player, tool, false);
-                            player.sendMessage(ChatColor.YELLOW + "工具 " + tool + " 已禁用。下次开启需要重新验证。");
+                            player.sendMessage(I18n.t("cli.tool.disabled", tool));
                             handleTools(player);
                         } else {
-                            player.sendMessage(ChatColor.AQUA + "正在为工具 " + tool + " 发起安全验证...");
+                            player.sendMessage(I18n.t("cli.tool.verifying", tool));
                             plugin.getVerificationManager().startVerification(player, tool, () -> {
                                 plugin.getConfigManager().setPlayerToolEnabled(player, tool, true);
-                                player.sendMessage(ChatColor.GREEN + "验证成功！工具 " + tool + " 已启用。");
+                                player.sendMessage(I18n.t("cli.tool.verified", tool));
                                 handleTools(player);
                             });
                         }
@@ -311,13 +312,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 String currentPos = plugin.getConfigManager().getPlayerDisplayPosition(player);
                 String newPos = currentPos.equalsIgnoreCase("actionbar") ? "subtitle" : "actionbar";
                 plugin.getConfigManager().setPlayerDisplayPosition(player, newPos);
-                player.sendMessage(ChatColor.GREEN + "状态显示位置已切换为: " + ChatColor.YELLOW + newPos);
+                player.sendMessage(I18n.t("cli.display.switched", newPos));
                 handleSettings(player);
                 return true;
             case "streaming":
                 boolean currentStreaming = plugin.getConfigManager().isPlayerStreamingEnabled(player);
                 plugin.getConfigManager().setPlayerStreamingEnabled(player, !currentStreaming);
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f流式输出已" + (!currentStreaming ? "开启" : "关闭")));
+                player.sendMessage(I18n.t(!currentStreaming ? "cli.streaming.on" : "cli.streaming.off"));
                 handleSettings(player);
                 return true;
             case "select":
@@ -327,7 +328,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             case "other":
-                player.sendMessage(ChatColor.GRAY + "> 请发送到聊天栏");
+                player.sendMessage(I18n.t("cli.other.chat"));
                 return true;
             case "exempt_anti_loop":
                 plugin.getCliManager().handleChat(player, "/cli exempt_anti_loop");
@@ -388,7 +389,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "sound":
                 boolean disabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
                 plugin.getConfigManager().setPlayerSoundDisabled(player.getUniqueId(), !disabled);
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f声音反馈已" + (disabled ? "开启" : "关闭")));
+                player.sendMessage(I18n.t(disabled ? "cli.sound.on" : "cli.sound.off"));
                 handleSettings(player);
                 return true;
         }
@@ -423,22 +424,22 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         String serverId = plugin.getFancyConsoleManager().getServerId();
 
         player.sendMessage("");
-        player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f未检测到 API Key 或 BYOK 配置"));
-        player.sendMessage(ColorUtil.translateCustomColors("§7  请先在 FancyConsole 注册账号以获取 API Key"));
+        player.sendMessage(I18n.t("cli.reg.no.key"));
+        player.sendMessage(I18n.t("cli.reg.hint"));
 
         net.md_5.bungee.api.chat.TextComponent link = new net.md_5.bungee.api.chat.TextComponent(
                 net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
-                        ColorUtil.translateCustomColors("     §8[ §b点击此处注册 §8]")));
+                        I18n.t("cli.reg.click")));
         link.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
                 net.md_5.bungee.api.chat.ClickEvent.Action.OPEN_URL, regUrl));
         link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                 net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new net.md_5.bungee.api.chat.hover.content.Text("§7点击打开注册页面")));
+                new net.md_5.bungee.api.chat.hover.content.Text(I18n.t("cli.reg.hover"))));
         player.spigot().sendMessage(link);
 
-        player.sendMessage(ColorUtil.translateCustomColors("§7  注册完成后，在游戏内输入:"));
-        player.sendMessage(ColorUtil.translateCustomColors("§b  /fancyhelper bind <你的API Key>"));
-        player.sendMessage(ColorUtil.translateCustomColors("§7  服务器 ID: §f" + serverId));
+        player.sendMessage(I18n.t("cli.reg.after"));
+        player.sendMessage(I18n.t("cli.reg.bind.cmd"));
+        player.sendMessage(I18n.t("cli.reg.server.id", serverId));
         player.sendMessage("");
     }
 
@@ -451,22 +452,22 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         String servicePart;
         if (searchFancy && jinaFancy) {
-            servicePart = "搜索服务和网页抓取服务";
+            servicePart = I18n.t("cli.service.both");
         } else if (searchFancy) {
-            servicePart = "搜索服务";
+            servicePart = I18n.t("cli.service.search");
         } else {
-            servicePart = "网页抓取服务";
+            servicePart = I18n.t("cli.service.jina");
         }
 
-        TextComponent msg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors(
-                "§zFancyHelper§b§r §7> §f当前" + servicePart + "提供商为 §bFancy§r§f，但是您暂未完成绑定。您可以自行配置密钥或点击 ")));
+        TextComponent msg = new TextComponent(TextComponent.fromLegacyText(
+                I18n.t("cli.fancy.warn", servicePart)));
 
-        TextComponent link = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§8[ §b此处 §8]")));
+        TextComponent link = new TextComponent(TextComponent.fromLegacyText(I18n.t("cli.fancy.here")));
         link.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, plugin.getFancyConsoleManager().getRegistrationUrl()));
-        link.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("§7点击注册")));
+        link.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.fancy.hover"))));
 
         msg.addExtra(link);
-        msg.addExtra(new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§f 完成绑定。"))));
+        msg.addExtra(new TextComponent(TextComponent.fromLegacyText(I18n.t("cli.fancy.done"))));
         player.spigot().sendMessage(msg);
     }
 
@@ -475,7 +476,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      */
     private boolean handleBind(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f用法: /fancyhelper bind <API Key>"));
+            player.sendMessage(I18n.t("cli.bind.usage"));
             // 仅当尚未绑定（API Key 为空）时才展示注册引导
             if (!plugin.getFancyConsoleManager().hasApiKey()) {
                 showRegistrationPrompt(player);
@@ -485,29 +486,29 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         String apiKey = args[1].trim();
         if (apiKey.isEmpty()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §cAPI Key 不能为空"));
+            player.sendMessage(I18n.t("cli.bind.empty"));
             return true;
         }
 
-        player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §f正在验证 API Key..."));
+        player.sendMessage(I18n.t("cli.bind.verifying"));
 
         org.YanPl.manager.FancyConsoleManager.ValidateKeyResult result =
                 plugin.getFancyConsoleManager().validateKey(apiKey);
 
         if (result.valid) {
             plugin.getFancyConsoleManager().setApiKey(apiKey);
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §aAPI Key 绑定成功!"));
+            player.sendMessage(I18n.t("cli.bind.success"));
             if (result.email != null && !result.email.isEmpty()) {
-                player.sendMessage(ColorUtil.translateCustomColors("§7  账号: §f" + result.email));
+                player.sendMessage(I18n.t("cli.bind.account", result.email));
             }
             if (result.tier != null && !result.tier.isEmpty()) {
-                player.sendMessage(ColorUtil.translateCustomColors("§7  层级: §f" + result.tier));
+                player.sendMessage(I18n.t("cli.bind.tier", result.tier));
             }
-            player.sendMessage(ColorUtil.translateCustomColors("§7  现在可以使用 §b/cli §7进入 AI 对话了"));
+            player.sendMessage(I18n.t("cli.bind.now.use"));
         } else {
-            String errorMsg = result.error != null ? result.error : "验证失败";
+            String errorMsg = result.error != null ? result.error : I18n.t("cli.bind.failed");
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §c" + errorMsg));
-            player.sendMessage(ColorUtil.translateCustomColors("§7  请确认 API Key 正确，或重新在网页注册"));
+            player.sendMessage(I18n.t("cli.bind.check"));
         }
         return true;
     }
@@ -529,36 +530,36 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getMcpManager().reload();
             }
             plugin.getStatsManager().onConfigReload();
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置、玩家数据、FancyConsole、工作区、EULA、Skill 与 MCP 已重新加载。"));
+            sender.sendMessage(I18n.t("cli.reload.all"));
         } else if (args.length == 2) {
             String target = args[1].toLowerCase();
             if (target.equals("workspace")) {
                 plugin.getWorkspaceIndexer().indexAll();
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f工作区索引已重新加载。"));
+                sender.sendMessage(I18n.t("cli.reload.workspace"));
             } else if (target.equals("config")) {
                 plugin.getConfigManager().loadConfig();
                 plugin.getStatsManager().onConfigReload();
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f配置文件已重新加载。"));
+                sender.sendMessage(I18n.t("cli.reload.config"));
             } else if (target.equals("playerdata")) {
                 plugin.getConfigManager().loadPlayerData();
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f玩家数据已重新加载。"));
+                sender.sendMessage(I18n.t("cli.reload.playerdata"));
             } else if (target.equals("eula")) {
                 plugin.getEulaManager().reload();
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fEULA 文件已重新加载。"));
+                sender.sendMessage(I18n.t("cli.reload.eula"));
             } else if (target.equals("skill")) {
                 plugin.getSkillManager().reloadSkills();
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fSkill 已重新加载，共 " + plugin.getSkillManager().getSkillCount() + " 个。"));
+                sender.sendMessage(I18n.t("cli.reload.skill", plugin.getSkillManager().getSkillCount()));
             } else if (target.equals("mcp")) {
                 if (plugin.getMcpManager() != null) {
                     plugin.getMcpManager().reload();
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP 已重新连接。"));
+                    sender.sendMessage(I18n.t("cli.reload.mcp"));
                 } else {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Manager 未初始化。"));
+                    sender.sendMessage(I18n.t("cli.reload.mcp.uninit"));
                 }
             } else if (target.equals("deeply") || target.equals("deep")) {
                 handleDeepReload(sender);
             } else {
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f用法: /fancy reload [workspace|config|playerdata|eula|skill|mcp|deeply]"));
+                sender.sendMessage(I18n.t("cli.reload.usage"));
             }
         }
     }
@@ -570,15 +571,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleDeepReload(CommandSender sender) {
         try {
             if (plugin.signalReloadService("RELOAD", null)) {
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在深度重载, 可能需要20s左右的时间等待响应"));
+                sender.sendMessage(I18n.t("cli.deep.reloading"));
 
                 // 信号已发送, 立即在主线程自卸载
                 Bukkit.getPluginManager().disablePlugin(plugin);
             } else {
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f深度重载失败: 无法连接到 ReloadService"));
+                sender.sendMessage(I18n.t("cli.deep.fail"));
             }
         } catch (Exception e) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f深度重载失败: " + e.getMessage()));
+            sender.sendMessage(I18n.t("cli.deep.error", e.getMessage()));
             plugin.getCloudErrorReport().report(e);
         }
     }
@@ -603,28 +604,28 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         // Version
         TextComponent versionLine = new TextComponent(ColorUtil.translateCustomColors("&7  Version: "));
         TextComponent versionVal = new TextComponent(ColorUtil.translateCustomColors("&f" + plugin.getDescription().getVersion()));
-        versionVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "插件当前版本")));
+        versionVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.hover.version"))));
         versionLine.addExtra(versionVal);
         player.spigot().sendMessage(versionLine);
 
         // Indexed Commands
         TextComponent cmdLine = new TextComponent(ColorUtil.translateCustomColors("&7  Indexed Commands: "));
         TextComponent cmdVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getWorkspaceIndexer().getIndexedCommands().size()));
-        cmdVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "已索引的原版/插件命令数量")));
+        cmdVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.hover.commands"))));
         cmdLine.addExtra(cmdVal);
         player.spigot().sendMessage(cmdLine);
 
         // Indexed Skills
         TextComponent skillLine = new TextComponent(ColorUtil.translateCustomColors("&7  Loaded Skills: "));
         TextComponent skillVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getSkillManager().getSkillCount()));
-        skillVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "已加载的 Skill 数量")));
+        skillVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.hover.skills"))));
         skillLine.addExtra(skillVal);
         player.spigot().sendMessage(skillLine);
 
         // Active Players
         TextComponent playerLine = new TextComponent(ColorUtil.translateCustomColors("&7  Active CLI Players: "));
         TextComponent playerVal = new TextComponent(ColorUtil.translateCustomColors("&e" + plugin.getCliManager().getActivePlayersCount()));
-        playerVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "当前处于 CLI 模式的玩家数量")));
+        playerVal.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.hover.players"))));
         playerLine.addExtra(playerVal);
         player.spigot().sendMessage(playerLine);
 
@@ -635,15 +636,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         TextComponent refreshBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aRefresh &8]"));
         refreshBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli status"));
-        refreshBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击刷新状态")));
+        refreshBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.refresh"))));
 
         TextComponent reloadBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &bReload &8]"));
         reloadBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli reload"));
-        reloadBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击重载配置与工作区")));
+        reloadBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.reload"))));
 
         TextComponent settingsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Settings &8]"));
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "打开个人设置界面")));
+        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.status.settings"))));
 
         actionLine.addExtra(refreshBtn);
         actionLine.addExtra(new TextComponent(" "));
@@ -660,11 +661,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      */
     private void handleStatsCommand(CommandSender sender) {
         if (!plugin.getFancyConsoleManager().isReady()) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未配置 API Key，无法上报统计。"));
+            sender.sendMessage(I18n.t("cli.stats.no.key"));
             return;
         }
 
-        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在上报统计数据..."));
+        sender.sendMessage(I18n.t("cli.stats.sending"));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             StatsManager.StatsSnapshot snapshot = plugin.getStatsManager().buildSnapshot();
@@ -672,9 +673,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a统计数据上报成功。"));
+                    sender.sendMessage(I18n.t("cli.stats.success"));
                 } else {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c统计数据上报失败，请检查网络或 API Key。"));
+                    sender.sendMessage(I18n.t("cli.stats.fail"));
                 }
             });
         });
@@ -696,7 +697,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         
         TextComponent modeBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
         // modeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli " + (isYolo ? "normal" : "yolo")));
-        modeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "不可在此处更改")));
+        modeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.settings.mode.hover"))));
         modeLine.addExtra(modeBtn);
         player.spigot().sendMessage(modeLine);
 
@@ -705,7 +706,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         TextComponent posLine = new TextComponent(ColorUtil.translateCustomColors("&7  Display: &f" + displayPos + "  "));
         TextComponent posBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Switch &8]"));
         posBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli display"));
-        posBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换状态显示位置 (actionbar/subtitle)")));
+        posBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.settings.pos.hover"))));
         posLine.addExtra(posBtn);
         player.spigot().sendMessage(posLine);
 
@@ -719,7 +720,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         streamLine.addExtra("  ");
         TextComponent streamBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Toggle &8]"));
         streamBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli streaming"));
-        streamBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换流式输出")));
+        streamBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.settings.stream.hover"))));
         streamLine.addExtra(streamBtn);
         player.spigot().sendMessage(streamLine);
 
@@ -733,7 +734,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         soundLine.addExtra("  ");
         TextComponent soundBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7Toggle &8]"));
         soundBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli sound"));
-        soundBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击切换声音反馈")));
+        soundBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.settings.sound.hover"))));
         soundLine.addExtra(soundBtn);
         player.spigot().sendMessage(soundLine);
 
@@ -744,11 +745,11 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         
         TextComponent toolsBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &6Tools &8]"));
         toolsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli tools"));
-        toolsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理文件工具权限")));
+        toolsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.settings.tools.hover"))));
         
         TextComponent memBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &bMemory &8]"));
         memBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
-        memBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击管理持久化记忆")));
+        memBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.settings.mem.hover"))));
         
         toolsLine.addExtra(toolsBtn);
         toolsLine.addExtra(new TextComponent(" "));
@@ -776,19 +777,19 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage("");
 
         // READ 权限（包含 #list #read）
-        sendToolLine(player, "read", "读取(read)", plugin.getConfigManager().isPlayerToolEnabled(player, "read"));
+        sendToolLine(player, "read", I18n.t("cli.tools.read"), plugin.getConfigManager().isPlayerToolEnabled(player, "read"));
 
         // WRITE 权限（包含 #edit #write，自动授予 read）
-        sendToolLine(player, "write", "写入(write)", plugin.getConfigManager().isPlayerToolEnabled(player, "write"));
+        sendToolLine(player, "write", I18n.t("cli.tools.write"), plugin.getConfigManager().isPlayerToolEnabled(player, "write"));
 
         player.sendMessage("");
-        player.sendMessage(ChatColor.GRAY + "  点击按钮切换工具权限。");
-        player.sendMessage(ChatColor.GRAY + "  重新启用需要验证。");
+        player.sendMessage(I18n.t("cli.tools.hint"));
+        player.sendMessage(I18n.t("cli.tools.verify.hint"));
         
         player.sendMessage("");
         TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.tools.back.hover"))));
         player.spigot().sendMessage(backBtn);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -800,10 +801,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         TextComponent statusBtn;
         if (enabled) {
             statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aEnabled &8]"));
-            statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击禁用 " + tool)));
+            statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.tools.disable.hover", tool))));
         } else {
             statusBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDisabled &8]"));
-            statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击启用 " + tool + " (需要验证)")));
+            statusBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.tools.enable.hover", tool))));
         }
         statusBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli toggle " + tool));
         
@@ -823,7 +824,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                         String content = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
                         handleMemoryAdd(player, content);
                     } else {
-                        player.sendMessage(ChatColor.RED + "用法: /cli memory add <内容> 或 /cli memory add <分类>|<内容>");
+                        player.sendMessage(I18n.t("cli.memory.add.usage"));
                     }
                     break;
                 case "del":
@@ -834,10 +835,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                             int index = Integer.parseInt(args[2]);
                             handleMemoryDelete(player, index);
                         } catch (NumberFormatException e) {
-                            player.sendMessage(ChatColor.RED + "请输入有效的序号");
+                            player.sendMessage(I18n.t("cli.memory.invalid.index"));
                         }
                     } else {
-                        player.sendMessage(ChatColor.RED + "用法: /cli memory del <序号>");
+                        player.sendMessage(I18n.t("cli.memory.del.usage"));
                     }
                     break;
                 case "edit":
@@ -848,10 +849,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                             String content = String.join(" ", Arrays.copyOfRange(args, 3, args.length));
                             handleMemoryEdit(player, index, content);
                         } catch (NumberFormatException e) {
-                            player.sendMessage(ChatColor.RED + "请输入有效的序号");
+                            player.sendMessage(I18n.t("cli.memory.invalid.index"));
                         }
                     } else {
-                        player.sendMessage(ChatColor.RED + "用法: /cli memory edit <序号> <新内容>");
+                        player.sendMessage(I18n.t("cli.memory.edit.usage"));
                     }
                     break;
                 case "clear":
@@ -877,8 +878,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage("");
 
         if (records.isEmpty()) {
-            player.sendMessage(ChatColor.GRAY + "  暂无历史对话。");
-            player.sendMessage(ChatColor.GRAY + "  退出 CLI 时会自动保存对话历史。");
+            player.sendMessage(I18n.t("cli.resume.empty"));
+            player.sendMessage(I18n.t("cli.resume.empty.hint"));
         } else {
             int totalPages = Math.max(1, (int) Math.ceil(records.size() / 6.0));
             if (page < 0) page = 0;
@@ -893,7 +894,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             for (int i = 0; i < pageRecords.size(); i++) {
                 SessionRecord record = pageRecords.get(i);
                 String sessionUUID = record.getSessionUUID();
-                String title = record.getTitle() != null ? record.getTitle() : "无标题";
+                String title = record.getTitle() != null ? record.getTitle() : I18n.t("cli.resume.no.title");
                 String timeStr = java.time.Instant.ofEpochMilli(record.getTimestamp())
                         .atZone(java.time.ZoneId.systemDefault())
                         .format(formatter);
@@ -912,14 +913,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 if (!isPendingDelete) {
                     // 点击恢复
                     titleText.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_confirm " + sessionUUID));
-                    titleText.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击恢复此对话")));
+                    titleText.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.resume.restore.hover"))));
                 }
                 line.addExtra(titleText);
 
                 TextComponent timeText = new TextComponent(ColorUtil.translateCustomColors(" &8(" + timeStr + ")"));
                 if (!isPendingDelete) {
                     timeText.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_confirm " + sessionUUID));
-                    timeText.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GREEN + "点击恢复此对话")));
+                    timeText.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.resume.restore.hover"))));
                 }
                 line.addExtra(timeText);
 
@@ -927,14 +928,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 line.addExtra("    ");
 
                 if (isPendingDelete) {
-                    TextComponent confirmDelBtn = new TextComponent(ChatColor.RED + "✘ 确认删除");
+                    TextComponent confirmDelBtn = new TextComponent(I18n.t("cli.resume.confirm.del"));
                     confirmDelBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID + " " + (page + 1)));
-                    confirmDelBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击确认删除此对话")));
+                    confirmDelBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.resume.confirm.del.hover"))));
                     line.addExtra(confirmDelBtn);
                 } else {
                     TextComponent delBtn = new TextComponent(ChatColor.RED + "✘");
                     delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume_delete " + sessionUUID + " " + (page + 1)));
-                    delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击删除此对话")));
+                    delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.resume.del.hover"))));
                     line.addExtra(delBtn);
                 }
 
@@ -949,9 +950,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
                 // 上一页按钮
                 if (page > 0) {
-                    TextComponent prevBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &f◀ 上一页 &8]"));
+                    TextComponent prevBtn = new TextComponent(I18n.t("cli.resume.prev"));
                     prevBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume " + page)); // page 是1-indexed显示
-                    prevBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "第 " + page + " 页")));
+                    prevBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.resume.page.hover", page))));
                     navLine.addExtra(prevBtn);
                 } else {
                     TextComponent prevBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7◀ 上一页 &8]"));
@@ -961,16 +962,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 navLine.addExtra(new TextComponent("    "));
 
                 // 页码指示
-                TextComponent pageInfo = new TextComponent(ColorUtil.translateCustomColors("&7第 " + (page + 1) + "/" + totalPages + " 页"));
+                TextComponent pageInfo = new TextComponent(I18n.t("cli.resume.page", page + 1, totalPages));
                 navLine.addExtra(pageInfo);
 
                 navLine.addExtra(new TextComponent("    "));
 
                 // 下一页按钮
                 if (page < totalPages - 1) {
-                    TextComponent nextBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &f下一页 ▶ &8]"));
+                    TextComponent nextBtn = new TextComponent(I18n.t("cli.resume.next"));
                     nextBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume " + (page + 2))); // 1-indexed
-                    nextBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "第 " + (page + 2) + " 页")));
+                    nextBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.resume.page.hover", page + 2))));
                     navLine.addExtra(nextBtn);
                 } else {
                     TextComponent nextBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7下一页 ▶ &8]"));
@@ -994,13 +995,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             // 二次确认，执行删除
             plugin.getCliManager().deleteSession(player.getUniqueId(), sessionUUID);
             plugin.getCliManager().clearPendingDeleteSession(player.getUniqueId());
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f对话已删除。"));
+            player.sendMessage(I18n.t("cli.resume.deleted"));
             // 刷新列表（保持当前页）
             showSessionList(player, returnPage);
         } else {
             // 设置待删除状态
             plugin.getCliManager().setPendingDeleteSession(player.getUniqueId(), sessionUUID);
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e再次点击 ✘ 确认删除。"));
+            player.sendMessage(I18n.t("cli.resume.confirm.again"));
             // 刷新列表以显示确认按钮（保持当前页）
             showSessionList(player, returnPage);
         }
@@ -1015,8 +1016,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage("");
         
         if (instructions.isEmpty()) {
-            player.sendMessage(ChatColor.GRAY + "  暂无记忆记录。");
-            player.sendMessage(ChatColor.GRAY + "  AI 将不会保留任何长期记忆。");
+            player.sendMessage(I18n.t("cli.memory.empty"));
+            player.sendMessage(I18n.t("cli.memory.empty.hint"));
         } else {
             for (int i = 0; i < instructions.size(); i++) {
                 InstructionManager.PlayerInstruction inst = instructions.get(i);
@@ -1037,14 +1038,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 
                 TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &eEdit &8]"));
                 editBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory edit " + (i + 1) + " " + inst.getContent()));
-                editBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击修改此记忆")));
+                editBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.memory.edit.hover"))));
                 actions.addExtra(editBtn);
                 
                 actions.addExtra(" ");
                 
                 TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDel &8]"));
                 delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory del " + (i + 1)));
-                delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击删除此记忆")));
+                delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.memory.del.hover"))));
                 actions.addExtra(delBtn);
                 
                 player.spigot().sendMessage(actions);
@@ -1059,14 +1060,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         
         TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aAdd Memory &8]"));
         addBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli memory add "));
-        addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击添加新记忆\n格式: 内容 或 分类|内容")));
+        addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.memory.add.hover"))));
         bottomLine.addExtra(addBtn);
         
         if (!instructions.isEmpty()) {
             bottomLine.addExtra("     ");
             TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cClear All &8]"));
             clearBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory clear"));
-            clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击清空所有记忆")));
+            clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.memory.clear.hover"))));
             bottomLine.addExtra(clearBtn);
         }
         
@@ -1075,7 +1076,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.sendMessage("");
         TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
         backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
-        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Return to main settings")));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.tools.back.hover"))));
         player.spigot().sendMessage(backBtn);
         
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
@@ -1094,13 +1095,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
         
         if (memoryContent.isEmpty()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c记忆内容不能为空"));
+            player.sendMessage(I18n.t("cli.memory.empty.content"));
             return;
         }
         
         String result = plugin.getInstructionManager().addInstruction(player, memoryContent, category);
         if (result.startsWith("success")) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已添加记忆: " + memoryContent));
+            player.sendMessage(I18n.t("cli.memory.added", memoryContent));
         } else {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
@@ -1110,7 +1111,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleMemoryDelete(Player player, int index) {
         String result = plugin.getInstructionManager().removeInstruction(player, index);
         if (result.startsWith("success")) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e已删除第 " + index + " 条记忆"));
+            player.sendMessage(I18n.t("cli.memory.deleted", index));
         } else {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
@@ -1130,13 +1131,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
         
         if (memoryContent.isEmpty()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c记忆内容不能为空"));
+            player.sendMessage(I18n.t("cli.memory.empty.content"));
             return;
         }
         
         String result = plugin.getInstructionManager().updateInstruction(player, index, memoryContent, category);
         if (result.startsWith("success")) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已修改第 " + index + " 条记忆"));
+            player.sendMessage(I18n.t("cli.memory.edited", index));
         } else {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
@@ -1146,7 +1147,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleMemoryClear(Player player) {
         String result = plugin.getInstructionManager().clearInstructions(player);
         if (result.startsWith("success")) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e已清空所有记忆"));
+            player.sendMessage(I18n.t("cli.memory.cleared"));
         } else {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
         }
@@ -1159,16 +1160,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private boolean handleSkillCommand(CommandSender sender, String[] args) {
         if (args.length < 2) {
             // 显示 Skill 帮助
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fSkill 管理命令:"));
-            sender.sendMessage(" §7- §b/cli skill list §f: 列出所有 Skill");
-            sender.sendMessage(" §7- §b/cli skill info <id> §f: 查看 Skill 详情");
-            sender.sendMessage(" §7- §b/cli skill load <id> §f: 加载 Skill 到当前对话");
+            sender.sendMessage(I18n.t("cli.skill.title"));
+            sender.sendMessage(I18n.t("cli.help.skill.list"));
+            sender.sendMessage(I18n.t("cli.help.skill.info"));
+            sender.sendMessage(I18n.t("cli.help.skill.load"));
             if (sender.hasPermission("fancyhelper.skill.admin")) {
-                sender.sendMessage(" §7- §b/cli skill reload §f: 重新加载所有 Skill");
-                sender.sendMessage(" §7- §b/cli skill checkupdate §f: 检查已有 Skill 更新");
-                sender.sendMessage(" §7- §b/cli skill upgrade §f: 下载并安装已有 Skill 更新");
-                sender.sendMessage(" §7- §b/cli skill list-remote §f: 列出远程仓库中可安装的 Skill");
-                sender.sendMessage(" §7- §b/cli skill install <id> §f: 从远程仓库安装指定 Skill");
+                sender.sendMessage(I18n.t("cli.help.skill.reload"));
+                sender.sendMessage(I18n.t("cli.help.skill.checkupdate"));
+                sender.sendMessage(I18n.t("cli.help.skill.upgrade"));
+                sender.sendMessage(I18n.t("cli.help.skill.list-remote"));
+                sender.sendMessage(I18n.t("cli.help.skill.install"));
             }
             return true;
         }
@@ -1181,68 +1182,68 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "info":
                 if (args.length < 3) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
-                    sender.sendMessage("§7用法: /cli skill info <id>");
+                    sender.sendMessage(I18n.t("cli.skill.need.id"));
+                    sender.sendMessage(I18n.t("cli.skill.info.usage"));
                 } else {
                     handleSkillInfo(sender, args[2]);
                 }
                 break;
             case "load":
                 if (!(sender instanceof Player)) {
-                    sender.sendMessage(ChatColor.RED + "该子命令仅限玩家使用。");
+                    sender.sendMessage(I18n.t("cli.only.player.sub"));
                     return true;
                 }
                 if (args.length < 3) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供 Skill ID"));
-                    sender.sendMessage("§7用法: /cli skill load <id>");
+                    sender.sendMessage(I18n.t("cli.skill.need.id"));
+                    sender.sendMessage(I18n.t("cli.skill.load.usage"));
                 } else {
                     handleSkillLoad((Player) sender, args[2]);
                 }
                 break;
             case "reload":
                 if (!sender.hasPermission("fancyhelper.skill.admin")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    sender.sendMessage(I18n.t("cli.skill.no.perm"));
                     return true;
                 }
                 plugin.getSkillManager().reloadSkills();
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §a已重新加载所有 Skill"));
-                sender.sendMessage("§7共加载 " + plugin.getSkillManager().getSkillCount() + " 个 Skill");
+                sender.sendMessage(I18n.t("cli.skill.reloaded"));
+                sender.sendMessage(I18n.t("cli.skill.reloaded.count", plugin.getSkillManager().getSkillCount()));
                 break;
             case "checkupdate":
                 if (!sender.hasPermission("fancyhelper.skill.admin")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    sender.sendMessage(I18n.t("cli.skill.no.perm"));
                     return true;
                 }
                 plugin.getSkillUpdateManager().checkForUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
             case "upgrade":
                 if (!sender.hasPermission("fancyhelper.skill.admin")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    sender.sendMessage(I18n.t("cli.skill.no.perm"));
                     return true;
                 }
                 plugin.getSkillUpdateManager().downloadUpdates(sender instanceof Player ? (Player) sender : null);
                 break;
             case "list-remote":
                 if (!sender.hasPermission("fancyhelper.skill.admin")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    sender.sendMessage(I18n.t("cli.skill.no.perm"));
                     return true;
                 }
                 handleSkillListRemote(sender);
                 break;
             case "install":
                 if (!sender.hasPermission("fancyhelper.skill.admin")) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你没有权限执行此操作"));
+                    sender.sendMessage(I18n.t("cli.skill.no.perm"));
                     return true;
                 }
                 if (args.length < 3) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请提供要安装的 Skill ID"));
-                    sender.sendMessage("§7用法: /cli skill install <id>");
+                    sender.sendMessage(I18n.t("cli.skill.install.need.id"));
+                    sender.sendMessage(I18n.t("cli.skill.install.usage"));
                 } else {
                     handleSkillInstall(sender, args[2]);
                 }
                 break;
             default:
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知子命令: " + subCommand));
+                sender.sendMessage(I18n.t("cli.skill.unknown.sub", subCommand));
                 break;
         }
 
@@ -1269,7 +1270,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             // 尝试搜索
             List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
             if (matches.isEmpty()) {
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 Skill: " + skillId));
+                sender.sendMessage(I18n.t("cli.skill.not.found", skillId));
                 return;
             }
             skill = matches.get(0);
@@ -1287,7 +1288,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleSkillLoad(Player player, String skillId) {
         // 检查是否在 CLI 模式
         if (!plugin.getCliManager().isInCLI(player)) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c请先进入 CLI 模式 (/cli)"));
+            player.sendMessage(I18n.t("cli.skill.need.cli"));
             return;
         }
 
@@ -1297,7 +1298,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             // 尝试搜索
             List<org.YanPl.model.Skill> matches = plugin.getSkillManager().searchSkills(skillId);
             if (matches.isEmpty()) {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 Skill: " + skillId));
+                player.sendMessage(I18n.t("cli.skill.not.found", skillId));
                 return;
             }
             skill = matches.get(0);
@@ -1311,30 +1312,30 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         if (session != null) {
         }
 
-        player.sendMessage(ColorUtil.translateCustomColors("§aSkill §7> §f" + skill.getMetadata().getName()));
+        player.sendMessage(I18n.t("cli.skill.loaded", skill.getMetadata().getName()));
     }
 
     /**
      * 处理 list-remote 子命令：列出远程仓库中可安装的 Skill
      */
     private void handleSkillListRemote(CommandSender sender) {
-        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在获取远程 Skill 列表..."));
+        sender.sendMessage(I18n.t("cli.skill.fetching.remote"));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             Map<String, String> remote = plugin.getSkillUpdateManager().listRemoteSkills();
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (remote.isEmpty()) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e远程仓库中没有新的 Skill 可安装"));
+                    sender.sendMessage(I18n.t("cli.skill.remote.empty"));
                     return;
                 }
 
-                sender.sendMessage(ColorUtil.translateCustomColors("§6========== 可安装的远程 Skill =========="));
+                sender.sendMessage(I18n.t("cli.skill.remote.title"));
                 for (Map.Entry<String, String> entry : remote.entrySet()) {
                     sender.sendMessage(" §7- §b" + entry.getKey() + " §7v" + entry.getValue());
                 }
                 sender.sendMessage(ColorUtil.translateCustomColors("§6========================================="));
-                sender.sendMessage("§7使用 §b/cli skill install <id> §7安装");
+                sender.sendMessage(I18n.t("cli.skill.remote.install"));
             });
         });
     }
@@ -1344,18 +1345,18 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      */
     private void handleSkillInstall(CommandSender sender, String skillId) {
         if (plugin.getSkillManager().hasSkill(skillId)) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §eSkill §b" + skillId + " §e已安装"));
+            sender.sendMessage(I18n.t("cli.skill.installed", skillId));
             return;
         }
 
-        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始安装 §b" + skillId + "§f..."));
+        sender.sendMessage(I18n.t("cli.skill.installing", skillId));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             boolean success = plugin.getSkillUpdateManager().installSkill(skillId, sender instanceof Player ? (Player) sender : null);
             if (!success) {
                 // installSkill 已经发送了具体错误消息，这里只补充
                 if (sender != null && !(sender instanceof Player)) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cSkill 安装失败"));
+                    sender.sendMessage(I18n.t("cli.skill.install.fail"));
                 }
             }
         });
@@ -1367,10 +1368,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     private boolean handleMcpCommand(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP 管理命令:"));
-            player.sendMessage(" §7- §b/cli mcp tools §f: 查看 MCP 外部工具");
-            player.sendMessage(" §7- §b/cli mcp tools <server> §f: 查看指定服务器的工具");
-            player.sendMessage(" §7- §b/cli mcp toggle <server> <tool> §f: 切换工具启用/禁用");
+            player.sendMessage(I18n.t("cli.mcp.title"));
+            player.sendMessage(I18n.t("cli.help.mcp.tools"));
+            player.sendMessage(I18n.t("cli.help.mcp.tools.server"));
+            player.sendMessage(I18n.t("cli.help.mcp.toggle"));
             return true;
         }
 
@@ -1385,13 +1386,13 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 break;
             case "toggle":
                 if (args.length < 4) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c用法: /cli mcp toggle <server> <tool>"));
+                    player.sendMessage(I18n.t("cli.mcp.toggle.usage"));
                 } else {
                     handleMcpToggle(player, args[2], args[3]);
                 }
                 break;
             default:
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未知 MCP 子命令: " + subCommand));
+                player.sendMessage(I18n.t("cli.mcp.unknown", subCommand));
                 break;
         }
         return true;
@@ -1399,16 +1400,16 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     private void handleMcpToolsOverview(Player player) {
         if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Client 未启用。请先在 config.yml 中配置并启用 mcp.client。"));
+            player.sendMessage(I18n.t("cli.mcp.not.enabled"));
             return;
         }
 
         List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo> allTools = plugin.getMcpManager().getAllToolsWithState();
 
-        player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━ MCP 工具管理 ━━━━━━━━");
+        player.sendMessage(I18n.t("cli.mcp.tools.header"));
 
         if (allTools.isEmpty()) {
-            player.sendMessage(ChatColor.GRAY + "  没有配置的 MCP 服务器或工具。");
+            player.sendMessage(I18n.t("cli.mcp.no.tools"));
         } else {
             // 按 serverName 分组
             Map<String, List<org.YanPl.mcp.client.McpClientManager.ExternalToolInfo>> grouped = new java.util.LinkedHashMap<>();
@@ -1423,32 +1424,32 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 org.YanPl.mcp.client.McpClientManager.ExternalToolInfo first = tools.get(0);
                 String status;
                 if (!first.serverConnected) {
-                    status = ChatColor.RED + "(未连接)";
+                    status = I18n.t("cli.mcp.status.disconnected");
                 } else if (tools.isEmpty() || (tools.size() == 1 && first.tool == null)) {
-                    status = ChatColor.YELLOW + "(已连接，无工具)";
+                    status = I18n.t("cli.mcp.status.no.tools");
                 } else {
                     long enabledCount = tools.stream().filter(t -> t.enabled).count();
-                    status = ChatColor.GREEN + "(已连接, 已启用 " + enabledCount + "/" + tools.size() + ")";
+                    status = I18n.t("cli.mcp.status.enabled", enabledCount, tools.size());
                 }
 
                 TextComponent line = new TextComponent("  " + ChatColor.WHITE + serverName + " " + status + "  ");
                 String colorHex = ColorUtil.getColorZ();
-                TextComponent viewBtn = new TextComponent("[查看工具]");
+                TextComponent viewBtn = new TextComponent(I18n.t("cli.mcp.view.tools"));
                 viewBtn.setColor(net.md_5.bungee.api.ChatColor.of(colorHex));
                 viewBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli mcp tools " + serverName));
-                viewBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "查看 " + serverName + " 的工具列表")));
+                viewBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.mcp.view.hover", serverName))));
                 line.addExtra(viewBtn);
                 player.spigot().sendMessage(line);
             }
         }
 
         player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        player.sendMessage(ChatColor.GRAY + "提示: /cli mcp toggle <server> <tool> 快速切换");
+        player.sendMessage(I18n.t("cli.mcp.hint"));
     }
 
     private void handleMcpServerTools(Player player, String serverName) {
         if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Client 未启用。"));
+            player.sendMessage(I18n.t("cli.mcp.not.enabled.short"));
             return;
         }
 
@@ -1461,15 +1462,15 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         if (serverTools.isEmpty()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到 MCP 服务器: " + serverName));
+            player.sendMessage(I18n.t("cli.mcp.server.not.found", serverName));
             return;
         }
 
         org.YanPl.mcp.client.McpClientManager.ExternalToolInfo first = serverTools.get(0);
-        String connStatus = first.serverConnected ? ChatColor.GREEN + "已连接" : ChatColor.RED + "未连接";
+        String connStatus = first.serverConnected ? I18n.t("cli.mcp.connected") : I18n.t("cli.mcp.disconnected");
 
-        player.sendMessage(ChatColor.DARK_GRAY + "===== MCP 工具: " + serverName + " =====");
-        player.sendMessage(ChatColor.GRAY + "连接状态: " + connStatus);
+        player.sendMessage(I18n.t("cli.mcp.server.header", serverName));
+        player.sendMessage(I18n.t("cli.mcp.conn.status", connStatus));
 
         int enabledCount = 0;
         for (org.YanPl.mcp.client.McpClientManager.ExternalToolInfo info : serverTools) {
@@ -1482,10 +1483,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
             TextComponent line = new TextComponent(icon + " " + toolName + "   ");
             TextComponent toggleBtn = e
-                ? new TextComponent(ChatColor.GRAY + "[" + ChatColor.RED + "禁用" + ChatColor.GRAY + "]")
-                : new TextComponent(ChatColor.GRAY + "[" + ChatColor.GREEN + "启用" + ChatColor.GRAY + "]");
+                ? new TextComponent(ChatColor.GRAY + "[" + ChatColor.RED + I18n.t("cli.mcp.disable") + ChatColor.GRAY + "]")
+                : new TextComponent(ChatColor.GRAY + "[" + ChatColor.GREEN + I18n.t("cli.mcp.enable") + ChatColor.GRAY + "]");
             toggleBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli mcp toggle " + serverName + " " + info.tool.name));
-            toggleBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(e ? "点击禁用此工具" : "点击启用此工具")));
+            toggleBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(e ? I18n.t("cli.mcp.disable.hover") : I18n.t("cli.mcp.enable.hover"))));
             line.addExtra(toggleBtn);
 
             player.spigot().sendMessage(line);
@@ -1496,36 +1497,36 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        player.sendMessage(ChatColor.GRAY + "已启用: " + enabledCount + "/" + serverTools.stream().filter(t -> t.tool != null).count()
-                + "  服务器: " + serverName + " (" + connStatus + ChatColor.GRAY + ")");
+        player.sendMessage(I18n.t("cli.mcp.enabled.summary",
+                enabledCount, serverTools.stream().filter(t -> t.tool != null).count(), serverName, connStatus));
     }
 
     private void handleMcpToggle(Player player, String serverName, String toolName) {
         if (plugin.getMcpManager() == null || !plugin.getMcpManager().isEnabled()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP Client 未启用。"));
+            player.sendMessage(I18n.t("cli.mcp.not.enabled.short"));
             return;
         }
 
         if (plugin.getMcpManager().getClientManager() == null) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cMCP Client Manager 未初始化。"));
+            player.sendMessage(I18n.t("cli.mcp.manager.uninit"));
             return;
         }
 
         plugin.getMcpManager().getClientManager().toggleTool(serverName, toolName);
         boolean nowEnabled = plugin.getMcpManager().getClientManager().isToolEnabled(serverName, toolName);
-        String status = nowEnabled ? ChatColor.GREEN + "已启用" : ChatColor.GRAY + "已禁用";
-        player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §fMCP 工具 §e" + serverName + "." + toolName + "§f " + status));
+        String status = nowEnabled ? I18n.t("cli.mcp.enabled") : I18n.t("cli.mcp.disabled");
+        player.sendMessage(I18n.t("cli.mcp.toggled", serverName, toolName, status));
 
         // 刷新工具列表 UI
         handleMcpServerTools(player, serverName);
     }
 
     private void handleNotice(CommandSender sender) {
-        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在获取公告..."));
+        sender.sendMessage(I18n.t("cli.notice.fetching"));
 
         plugin.getNoticeManager().fetchNoticeAsync().thenAccept(noticeData -> {
             if (noticeData == null || !noticeData.enabled) {
-                sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可显示的公告。"));
+                sender.sendMessage(I18n.t("cli.notice.empty"));
                 return;
             }
             
@@ -1545,35 +1546,35 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void handleLibCommand(CommandSender sender, String[] args) {
         // 检查发送者是否有OP权限
         if (!(sender instanceof Player) || !sender.isOp()) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c你需要OP权限来执行此命令。"));
+            sender.sendMessage(I18n.t("cli.lib.need.op"));
             return;
         }
 
         if (args.length < 2) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f用法: /fancy lib install <library>"));
+            sender.sendMessage(I18n.t("cli.lib.usage"));
             return;
         }
 
         String action = args[1].toLowerCase();
         if (!action.equals("install")) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f用法: /fancy lib install <library>"));
+            sender.sendMessage(I18n.t("cli.lib.usage"));
             return;
         }
 
         if (args.length < 3) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请指定要安装的库。"));
+            sender.sendMessage(I18n.t("cli.lib.need.library"));
             return;
         }
 
         String library = args[2].toLowerCase();
         if (!library.equals("protocolib")) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f目前仅支持安装 ProtocolLib。"));
+            sender.sendMessage(I18n.t("cli.lib.only.protocollib"));
             return;
         }
 
         // 检查是否已加载 ProtocolLib
         if (Bukkit.getPluginManager().getPlugin("ProtocolLib") != null) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §cProtocolLib 已加载, 无需重新安装。"));
+            sender.sendMessage(I18n.t("cli.lib.already"));
             return;
         }
 
@@ -1593,12 +1594,12 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         if (protocolLibExists) {
-            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c插件目录已存在 ProtocolLib 文件, 请重启服务器以加载。"));
+            sender.sendMessage(I18n.t("cli.lib.exists"));
             return;
         }
 
         // 开始下载并安装 ProtocolLib
-        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在下载并安装 ProtocolLib..."));
+        sender.sendMessage(I18n.t("cli.lib.downloading"));
 
         // 异步执行下载操作
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -1629,19 +1630,19 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
                     // 下载完成, 提示用户
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §aProtocolLib 下载完成！"));
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请重启服务器以加载 ProtocolLib。"));
+                        sender.sendMessage(I18n.t("cli.lib.done"));
+                        sender.sendMessage(I18n.t("cli.lib.restart"));
                     });
                 } else {
                     // 下载失败
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c下载失败, HTTP 响应码: " + responseCode));
+                        sender.sendMessage(I18n.t("cli.lib.http.fail", responseCode));
                     });
                 }
             } catch (Exception e) {
                 // 处理异常
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c安装失败: " + e.getMessage()));
+                    sender.sendMessage(I18n.t("cli.lib.fail", e.getMessage()));
                 });
                 e.printStackTrace();
             }
@@ -1654,7 +1655,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      */
     private void handlePermissionCommand(CommandSender sender, String[] args) {
         if (sender instanceof Player) {
-            sender.sendMessage(ChatColor.RED + "该命令仅限控制台使用。");
+            sender.sendMessage(I18n.t("cli.only.console"));
             return;
         }
 

@@ -12,6 +12,8 @@ import org.YanPl.model.DialogueSession;
 import org.YanPl.model.SessionRecord;
 import org.YanPl.model.Skill;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
+import org.YanPl.util.PlayerListFileUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -80,19 +82,19 @@ public class CLIManager {
     };
     // 进入CLI时的随机提示语
     private static final String[] ENTER_TIPS = {
-        "在 CLI 对话中直接输入 stop 即可中断 AI 生成，输入 exit 即可退出 CLI 模式",
-        "在 CLI 对话中直接输入 y（确认）或 n（取消）即可响应 AI 的确认请求，无需输入完整命令",
-        "/cli retry 可以在 AI 调用失败后一键重新发起上一次请求",
-        "/cli skill list 查看所有可用技能，/cli skill load <id> 加载技能到当前对话",
-        "/cli settings 打开偏好设置面板，/cli tools 管理 ls/read/edit 文件工具权限",
-        "/cli compact 让 AI 压缩旧对话为摘要，释放 token 空间以继续长对话",
-        "/cli exempt_anti_loop 可临时豁免反循环检测，允许 AI 连续调用同类工具",
-        "/cli streaming 切换流式输出开关，控制 AI 回复是逐字显示还是一次性完整显示",
-        "/cli display 切换状态指示器位置：ActionBar（快捷栏上方）或 Subtitle（屏幕中央）",
-        "/cli plan 进入规划模式，AI 只制定计划不执行，确认后用 /cli plan_start normal|smart|yolo 切换执行",
-        "/cli memory add <内容> 添加持久化记忆，AI 每次对话都会记住；/cli memory 查看全部",
-        "记忆支持分类标签，用 | 分隔：/cli memory add 偏好|我喜欢简约风格",
-        "/cli compact 压缩旧对话为摘要，释放上下文"
+        I18n.t("clim.tips.0"),
+        I18n.t("clim.tips.1"),
+        I18n.t("clim.tips.2"),
+        I18n.t("clim.tips.3"),
+        I18n.t("clim.tips.4"),
+        I18n.t("clim.tips.5"),
+        I18n.t("clim.tips.6"),
+        I18n.t("clim.tips.7"),
+        I18n.t("clim.tips.8"),
+        I18n.t("clim.tips.9"),
+        I18n.t("clim.tips.10"),
+        I18n.t("clim.tips.11"),
+        I18n.t("clim.tips.12")
     };
     private static final net.md_5.bungee.api.ChatColor WORD_COLOR_BUNGEE = net.md_5.bungee.api.ChatColor.of("#FF5F00");
     private static final net.md_5.bungee.api.ChatColor STATS_COLOR = net.md_5.bungee.api.ChatColor.GRAY;
@@ -153,11 +155,20 @@ public class CLIManager {
         this.ai = new LLMClient(plugin);
         this.promptManager = new PromptManager(plugin);
         this.toolExecutor = new ToolExecutor(plugin, this);
-        this.agreedPlayersFile = new File(plugin.getDataFolder(), "agreed_players.txt");
-        this.yoloAgreedPlayersFile = new File(plugin.getDataFolder(), "yolo_agreed_players.txt");
-        this.yoloModePlayersFile = new File(plugin.getDataFolder(), "yolo_mode_players.txt");
-        this.smartModePlayersFile = new File(plugin.getDataFolder(), "smart_mode_players.txt");
-        this.planModePlayersFile = new File(plugin.getDataFolder(), "plan_mode_players.txt");
+        File runtimeDir = new File(plugin.getDataFolder(), "runtime");
+        if (!runtimeDir.exists()) {
+            runtimeDir.mkdirs();
+        }
+        this.agreedPlayersFile = new File(runtimeDir, "agreed_players.json");
+        this.yoloAgreedPlayersFile = new File(runtimeDir, "yolo_agreed_players.json");
+        this.yoloModePlayersFile = new File(runtimeDir, "yolo_mode_players.json");
+        this.smartModePlayersFile = new File(runtimeDir, "smart_mode_players.json");
+        this.planModePlayersFile = new File(runtimeDir, "plan_mode_players.json");
+        // 旧版本（config.yml 版本 <= 4.1.1）自动迁移：txt -> runtime JSON
+        // 兜底：只要检测到旧版 txt 文件存在也执行迁移，避免配置版本已更新但文件未迁移的情况
+        if (plugin.getConfigManager().isLegacyPlayerListMigrationNeeded() || hasLegacyPlayerFiles()) {
+            migrateLegacyPlayerFiles();
+        }
         loadAgreedPlayers();
         loadYoloAgreedPlayers();
         loadYoloModePlayers();
@@ -171,14 +182,8 @@ public class CLIManager {
 
     public void loadAgreedPlayers() {
         agreedPlayers.clear();
-        if (!agreedPlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(agreedPlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    agreedPlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            agreedPlayers.addAll(PlayerListFileUtil.readJson(agreedPlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载已同意协议的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -187,14 +192,8 @@ public class CLIManager {
 
     public void loadYoloAgreedPlayers() {
         yoloAgreedPlayers.clear();
-        if (!yoloAgreedPlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(yoloAgreedPlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    yoloAgreedPlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            yoloAgreedPlayers.addAll(PlayerListFileUtil.readJson(yoloAgreedPlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载已同意 YOLO 协议的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -204,10 +203,7 @@ public class CLIManager {
     private void saveAgreedPlayer(UUID uuid) {
         agreedPlayers.add(uuid);
         try {
-            java.nio.file.Files.write(agreedPlayersFile.toPath(), 
-                (uuid.toString() + "\n").getBytes(), 
-                java.nio.file.StandardOpenOption.CREATE, 
-                java.nio.file.StandardOpenOption.APPEND);
+            PlayerListFileUtil.writeJson(agreedPlayersFile, agreedPlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存已同意协议的玩家: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -217,10 +213,7 @@ public class CLIManager {
     private void saveYoloAgreedPlayer(UUID uuid) {
         yoloAgreedPlayers.add(uuid);
         try {
-            java.nio.file.Files.write(yoloAgreedPlayersFile.toPath(), 
-                (uuid.toString() + "\n").getBytes(), 
-                java.nio.file.StandardOpenOption.CREATE, 
-                java.nio.file.StandardOpenOption.APPEND);
+            PlayerListFileUtil.writeJson(yoloAgreedPlayersFile, yoloAgreedPlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存已同意 YOLO 协议的玩家: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -229,14 +222,8 @@ public class CLIManager {
 
     public void loadYoloModePlayers() {
         yoloModePlayers.clear();
-        if (!yoloModePlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(yoloModePlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    yoloModePlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            yoloModePlayers.addAll(PlayerListFileUtil.readJson(yoloModePlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载处于 YOLO 模式的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -257,11 +244,7 @@ public class CLIManager {
 
     private void writeYoloModePlayers() {
         try {
-            List<String> lines = new ArrayList<>();
-            for (UUID uuid : yoloModePlayers) {
-                lines.add(uuid.toString());
-            }
-            java.nio.file.Files.write(yoloModePlayersFile.toPath(), lines);
+            PlayerListFileUtil.writeJson(yoloModePlayersFile, yoloModePlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 YOLO 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -270,14 +253,8 @@ public class CLIManager {
 
     public void loadSmartModePlayers() {
         smartModePlayers.clear();
-        if (!smartModePlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(smartModePlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    smartModePlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            smartModePlayers.addAll(PlayerListFileUtil.readJson(smartModePlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载处于 SMART 模式的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -298,13 +275,7 @@ public class CLIManager {
 
     private void writeSmartModePlayers() {
         try {
-            List<String> lines = new ArrayList<>();
-            for (UUID uuid : smartModePlayers) {
-                lines.add(uuid.toString());
-            }
-            java.nio.file.Files.write(smartModePlayersFile.toPath(), lines,
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            PlayerListFileUtil.writeJson(smartModePlayersFile, smartModePlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 SMART 模式玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -313,14 +284,8 @@ public class CLIManager {
 
     public void loadPlanModePlayers() {
         planModePlayers.clear();
-        if (!planModePlayersFile.exists()) return;
         try {
-            List<String> lines = java.nio.file.Files.readAllLines(planModePlayersFile.toPath());
-            for (String line : lines) {
-                try {
-                    planModePlayers.add(UUID.fromString(line.trim()));
-                } catch (IllegalArgumentException ignored) {}
-            }
+            planModePlayers.addAll(PlayerListFileUtil.readJson(planModePlayersFile));
         } catch (IOException e) {
             plugin.getLogger().warning("无法加载处于 Plan 模式的玩家列表: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
@@ -341,15 +306,48 @@ public class CLIManager {
 
     private void writePlanModePlayers() {
         try {
-            List<String> lines = new ArrayList<>();
-            for (UUID uuid : planModePlayers) {
-                lines.add(uuid.toString());
-            }
-            java.nio.file.Files.write(planModePlayersFile.toPath(), lines,
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            PlayerListFileUtil.writeJson(planModePlayersFile, planModePlayers);
         } catch (IOException e) {
             plugin.getLogger().warning("无法保存 Plan 模式玩家列表: " + e.getMessage());
+            plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    /**
+     * 是否仍存在旧版 txt 玩家列表文件
+     */
+    private boolean hasLegacyPlayerFiles() {
+        return new File(plugin.getDataFolder(), "agreed_players.txt").exists()
+                || new File(plugin.getDataFolder(), "yolo_agreed_players.txt").exists()
+                || new File(plugin.getDataFolder(), "yolo_mode_players.txt").exists()
+                || new File(plugin.getDataFolder(), "smart_mode_players.txt").exists()
+                || new File(plugin.getDataFolder(), "plan_mode_players.txt").exists();
+    }
+
+    /**
+     * 迁移旧版玩家列表文件（txt）到 runtime 目录 JSON 格式
+     */
+    private void migrateLegacyPlayerFiles() {
+        migrateLegacyFile(new File(plugin.getDataFolder(), "agreed_players.txt"), agreedPlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "yolo_agreed_players.txt"), yoloAgreedPlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "yolo_mode_players.txt"), yoloModePlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "smart_mode_players.txt"), smartModePlayersFile);
+        migrateLegacyFile(new File(plugin.getDataFolder(), "plan_mode_players.txt"), planModePlayersFile);
+    }
+
+    /**
+     * 迁移单个旧版玩家列表文件：读取 txt，写入 JSON，删除旧文件
+     */
+    private void migrateLegacyFile(File legacyFile, File jsonFile) {
+        if (!legacyFile.exists()) return;
+        try {
+            Set<UUID> uuids = PlayerListFileUtil.readLegacyTxt(legacyFile);
+            PlayerListFileUtil.writeJson(jsonFile, uuids);
+            Files.deleteIfExists(legacyFile.toPath());
+            plugin.getLogger().info("已迁移旧版玩家列表文件 " + legacyFile.getName() + " -> " + jsonFile.getName()
+                    + "（" + uuids.size() + " 名玩家）");
+        } catch (IOException e) {
+            plugin.getLogger().warning("迁移旧版玩家列表文件失败 " + legacyFile.getName() + ": " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
         }
     }
@@ -368,7 +366,7 @@ public class CLIManager {
                     if (session != null && (now - session.getLastActivityTime()) > timeoutMs) {
                         Player player = Bukkit.getPlayer(uuid);
                         if (player != null) {
-                            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f由于长时间未活动，已自动退出 FancyHelper。"));
+                            player.sendMessage(I18n.t("clim.timeout.exit"));
                             exitCLI(player);
                         } else {
                             activeCLIPayers.remove(uuid);
@@ -546,11 +544,11 @@ public class CLIManager {
                             sendStatusMessage(player, message);
                             break;
                         case WAITING_CONFIRM:
-                            message = ChatColor.YELLOW + "正在征求您的许可...";
+                            message = I18n.t("clim.status.ask.permission");
                             sendStatusMessage(player, message);
                             break;
                         case WAITING_CHOICE:
-                            message = ChatColor.AQUA + "正在征求您的意见...";
+                            message = I18n.t("clim.status.ask.opinion");
                             sendStatusMessage(player, message);
                             break;
                         case COMPLETED:
@@ -679,11 +677,11 @@ public class CLIManager {
 
         String statusCode = extractStatusCode(errorMessage);
         if (statusCode != null) {
-            msg.addExtra(new TextComponent("API请求出错（状态码 " + statusCode + "）"));
+            msg.addExtra(new TextComponent(I18n.t("clim.error.api.status", statusCode)));
         } else if (defaultContext != null) {
             msg.addExtra(new TextComponent(defaultContext));
         } else {
-            msg.addExtra(new TextComponent("API请求出错"));
+            msg.addExtra(new TextComponent(I18n.t("clim.error.api")));
         }
         return msg;
     }
@@ -1056,7 +1054,7 @@ public class CLIManager {
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             Player player = Bukkit.getPlayer(playerUUID);
                             if (player != null && player.isOnline()) {
-                                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §e当前配置的 AI 模型理解能力较弱，可能无法很好地完成复杂任务。建议在配置文件中更换为能力更强的模型。"));
+                                player.sendMessage(I18n.t("clim.weak.model"));
                             }
                         });
                     }
@@ -1132,7 +1130,7 @@ public class CLIManager {
             // 读取会话文件
             Path sessionFile = plugin.getDataFolder().toPath().resolve(SESSIONS_DIR).resolve(playerName).resolve(sessionUUID + ".json");
             if (!Files.exists(sessionFile)) {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c未找到指定的会话。"));
+                player.sendMessage(I18n.t("clim.resume.not.found"));
                 return;
             }
 
@@ -1141,7 +1139,7 @@ public class CLIManager {
             SessionRecord record = gson.fromJson(json, SessionRecord.class);
 
             if (record == null) {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c会话数据损坏。"));
+                player.sendMessage(I18n.t("clim.resume.corrupt"));
                 return;
             }
 
@@ -1191,7 +1189,7 @@ public class CLIManager {
             line.addExtra(divider);
 
             int msgCount = restoredSession.getHistory().size();
-            TextComponent status = new TextComponent(" 上下文已加载 (" + msgCount + "条消息)");
+            TextComponent status = new TextComponent(I18n.t("clim.resume.loaded", msgCount));
             status.setColor(net.md_5.bungee.api.ChatColor.GREEN);
             line.addExtra(status);
 
@@ -1206,7 +1204,7 @@ public class CLIManager {
                 plugin.getLogger().info("[CLI] 玩家 " + playerName + " 恢复了会话: " + sessionUUID);
             }
         } catch (Exception e) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c恢复会话失败: " + e.getMessage()));
+            player.sendMessage(I18n.t("clim.resume.failed", e.getMessage()));
             plugin.getLogger().warning("[CLI] 恢复会话失败: " + e.getMessage());
         }
     }
@@ -1251,16 +1249,16 @@ public class CLIManager {
     public void sendUnloadMessage(Player player) {
         // 创建主消息 - 使用自定义颜色
         net.md_5.bungee.api.chat.BaseComponent[] components = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
-            ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f与Fancy的会话已被挂起 ")
+            I18n.t("clim.unload.suspended")
         );
         TextComponent message = new TextComponent(components);
 
         // 创建了解更多按钮
-        TextComponent learnMoreBtn = new TextComponent("[了解更多]");
+        TextComponent learnMoreBtn = new TextComponent(I18n.t("clim.unload.learn.more"));
         learnMoreBtn.setColor(net.md_5.bungee.api.ChatColor.BLUE);
         learnMoreBtn.setUnderlined(true);
         learnMoreBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/whyusee1"));
-        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("为什么FancyHelper会话会被挂起")));
+        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.hover"))));
 
         message.addExtra(learnMoreBtn);
         player.spigot().sendMessage(message);
@@ -1346,7 +1344,7 @@ public class CLIManager {
 
         // 检查 EULA 文件状态
         if (!plugin.getEulaManager().isEulaValid()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"));
+            player.sendMessage(I18n.t("clim.eula.invalid"));
             plugin.getLogger().warning("[CLI] 由于 EULA 文件无效，拒绝了 " + player.getName() + " 的访问。");
             return;
         }
@@ -1435,7 +1433,7 @@ public class CLIManager {
                 plugin.getLogger().warning("[CLI] 创建日志文件失败: " + e.getMessage());
             }
             // 显示恢复提示
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"));
+            player.sendMessage(I18n.t("clim.resume.ready"));
         }
 
         activeCLIPayers.add(uuid);
@@ -1493,21 +1491,21 @@ public class CLIManager {
                 int hour = java.time.LocalDateTime.now().getHour();
                 String timeGreeting;
                 if (hour >= 5 && hour < 11) {
-                    timeGreeting = "早上好";
+                    timeGreeting = I18n.t("clim.greet.morning");
                 } else if (hour >= 11 && hour < 14) {
-                    timeGreeting = "中午好";
+                    timeGreeting = I18n.t("clim.greet.noon");
                 } else if (hour >= 14 && hour < 18) {
-                    timeGreeting = "下午好";
+                    timeGreeting = I18n.t("clim.greet.afternoon");
                 } else {
-                    timeGreeting = "晚上好";
+                    timeGreeting = I18n.t("clim.greet.evening");
                 }
 
                 // 2. 获取随机帮助短语
                 String[] helpPhrases = {
-                    "有什么需要我帮助的吗？",
-                    "需要我帮忙吗？",
-                    "有困难就告诉我吧！",
-                    "乐意为您效劳。"
+                    I18n.t("clim.greet.help.0"),
+                    I18n.t("clim.greet.help.1"),
+                    I18n.t("clim.greet.help.2"),
+                    I18n.t("clim.greet.help.3")
                 };
                 String randomHelp = helpPhrases[new Random().nextInt(helpPhrases.length)];
 
@@ -1550,7 +1548,7 @@ public class CLIManager {
         // 退出前自动取消待确认的工具调用
         if (pendingCommands.containsKey(uuid)) {
             pendingCommands.remove(uuid);
-            player.sendMessage(ChatColor.GRAY + "⇒ 已取消待处理的操作");
+            player.sendMessage(I18n.t("clim.cancel.pending"));
         }
 
         // 清空玩家的待办列表
@@ -1664,19 +1662,19 @@ public class CLIManager {
             saveYoloModeState(uuid, true);
             saveSmartModeState(uuid, false);
             player.sendMessage(ChatColor.GRAY + "------------------");
-            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 YOLO 模式。在该模式下，Fancy 执行命令将不再请求您的确认。");
+            player.sendMessage(I18n.t("clim.mode.yolo"));
         } else if (targetMode == DialogueSession.Mode.SMART) {
             session.setMode(DialogueSession.Mode.SMART);
             saveSmartModeState(uuid, true);
             saveYoloModeState(uuid, false);
             player.sendMessage(ChatColor.GRAY + "------------------");
-            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 SMART 模式。在该模式下，Fancy 会先评估操作风险，高风险操作需要您的确认。");
+            player.sendMessage(I18n.t("clim.mode.smart"));
         } else {
             session.setMode(DialogueSession.Mode.NORMAL);
             saveYoloModeState(uuid, false);
             saveSmartModeState(uuid, false);
             player.sendMessage(ChatColor.GRAY + "------------------");
-            player.sendMessage(ChatColor.WHITE + "⨀ 已切换至 Normal 模式。");
+            player.sendMessage(I18n.t("clim.mode.normal"));
         }
         sendEnterMessage(player);
     }
@@ -1684,17 +1682,14 @@ public class CLIManager {
     private void sendYoloWarning(Player player) {
         player.sendMessage(ChatColor.RED + "===============");
         player.sendMessage(ChatColor.DARK_RED + "WARNING: You only live once");
-        player.sendMessage(ChatColor.GRAY + "在此模式下，Fancy 将拥有自动执行服务器命令的权限。");
-        player.sendMessage(ChatColor.GRAY + "这意味着它可能会在未经您确认的情况下执行任何操作。");
-        player.sendMessage(ChatColor.GRAY + "请确保您信任 AI 的决定，并承担由此产生的风险。");
-
-        TextComponent message = new TextComponent(ChatColor.WHITE + "发送 ");
+        player.sendMessage(I18n.t("clim.yolo.warn1"));
+        player.sendMessage(I18n.t("clim.yolo.warn2"));
+        player.sendMessage(I18n.t("clim.yolo.warn3"));        TextComponent message = new TextComponent(I18n.t("clim.yolo.send"));
         TextComponent agreeBtn = new TextComponent(ChatColor.RED + "agree");
         agreeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli agree"));
-        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.RED + "点击确认并进入 YOLO 模式")));
-
+        agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.yolo.agree.hover"))));
         message.addExtra(agreeBtn);
-        message.addExtra(new TextComponent(ChatColor.WHITE + " 表示确认并进入 YOLO 模式。"));
+        message.addExtra(new TextComponent(I18n.t("clim.yolo.agree.suffix")));
 
         player.spigot().sendMessage(message);
         player.sendMessage(ChatColor.RED + "===============");
@@ -1709,7 +1704,7 @@ public class CLIManager {
 
         // 检查 EULA 文件状态
         if (!plugin.getEulaManager().isEulaValid()) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"));
+            player.sendMessage(I18n.t("clim.eula.invalid"));
             return;
         }
 
@@ -1774,7 +1769,7 @@ public class CLIManager {
 
         // 如果已经在 Plan Mode，无需重复进入
         if (session.getMode() == DialogueSession.Mode.PLAN) {
-            player.sendMessage(ChatColor.YELLOW + "已在 Plan Mode 中。");
+            player.sendMessage(I18n.t("clim.plan.already"));
             return;
         }
 
@@ -1784,17 +1779,17 @@ public class CLIManager {
         if (hasUserMessages) {
             pendingPlanContextClear.add(uuid);
             player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
-            player.sendMessage(ChatColor.WHITE + "进入 Plan Mode 前，是否清空上下文？");
+            player.sendMessage(I18n.t("clim.plan.clear.ask"));
 
-            TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔ 清空");
+            TextComponent yBtn = new TextComponent(I18n.t("clim.plan.clear.y"));
             yBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_clear_y"));
-            yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("清空对话历史后进入 Plan Mode")));
+            yBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.plan.clear.y.hover"))));
 
             TextComponent spacer = new TextComponent("  ");
 
-            TextComponent nBtn = new TextComponent(ChatColor.RED + "✘ 保留");
+            TextComponent nBtn = new TextComponent(I18n.t("clim.plan.clear.n"));
             nBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_clear_n"));
-            nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("保留对话历史并进入 Plan Mode")));
+            nBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.plan.clear.n.hover"))));
 
             TextComponent message = new TextComponent("");
             message.addExtra(yBtn);
@@ -1823,7 +1818,7 @@ public class CLIManager {
         saveSmartModeState(uuid, false);
 
         sendEnterMessage(player);
-        player.sendMessage(ChatColor.AQUA + "◈ 已进入 Plan Mode。在此模式下 Fancy 仅做规划，不执行任何操作。");
+        player.sendMessage(I18n.t("clim.plan.entered"));
 
         // 将进入 Plan Mode 的记录存入上下文，等待用户提问，不触发 API 调用
         session.addMessage("assistant", "[系统] 已进入 Plan Mode。等待用户提出问题后进行规划。");
@@ -1867,30 +1862,30 @@ public class CLIManager {
         setGenerating(uuid, false, GenerationStatus.WAITING_CHOICE);
 
         player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
-        player.sendMessage(ChatColor.GOLD + " ◆ 规划已完成！");
+        player.sendMessage(I18n.t("clim.plan.done"));
         player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
-        player.sendMessage(ChatColor.WHITE + " • 以何种方式开始任务？");
+        player.sendMessage(I18n.t("clim.plan.how"));
 
         // Normal 模式
         TextComponent normalBtn = new TextComponent(ChatColor.GREEN + " » Normal ");
         normalBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_start normal"));
-        normalBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "每次执行命令前都需要确认")));
+        normalBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.plan.mode.normal"))));
         player.spigot().sendMessage(normalBtn);
-        player.sendMessage(ChatColor.GRAY + "   每次执行命令前都需要确认");
+        player.sendMessage(I18n.t("clim.plan.mode.normal"));
 
         // Smart 模式
         TextComponent smartBtn = new TextComponent(ChatColor.BLUE + " » Smart ");
         smartBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_start smart"));
-        smartBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "AI 评估风险，高风险操作需要确认")));
+        smartBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.plan.mode.smart"))));
         player.spigot().sendMessage(smartBtn);
-        player.sendMessage(ChatColor.GRAY + "   AI 评估风险，高风险操作需要确认");
+        player.sendMessage(I18n.t("clim.plan.mode.smart"));
 
         // Yolo 模式
         TextComponent yoloBtn = new TextComponent(ChatColor.RED + " » Yolo ");
         yoloBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli plan_start yolo"));
-        yoloBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "自动执行大部分命令（风险命令仍需确认）")));
+        yoloBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.plan.mode.yolo"))));
         player.spigot().sendMessage(yoloBtn);
-        player.sendMessage(ChatColor.GRAY + "   自动执行大部分命令（风险命令仍需确认）");
+        player.sendMessage(I18n.t("clim.plan.mode.yolo"));
 
         player.sendMessage(ChatColor.DARK_GRAY + "─────────────────────────────");
     }
@@ -1911,7 +1906,7 @@ public class CLIManager {
                     sendYoloWarning(player);
                     pendingYoloAgreementPlayers.add(uuid);
                     // 保留 pendingPlanStartMode，等 YOLO 同意后由 handleChat 继续
-                    player.sendMessage(ChatColor.YELLOW + "请先同意 YOLO 模式协议后再继续。");
+                    player.sendMessage(I18n.t("clim.plan.yolo.agree"));
                     return;
                 }
                 targetMode = DialogueSession.Mode.YOLO;
@@ -1936,7 +1931,7 @@ public class CLIManager {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
 
-            player.sendMessage(ChatColor.GOLD + " ◆ 好的，我将以 " + finalDisplayName + " 执行此任务。");
+            player.sendMessage(I18n.t("clim.plan.start", finalDisplayName));
 
             DialogueSession session = sessions.get(uuid);
             if (session == null) return;
@@ -1969,7 +1964,7 @@ public class CLIManager {
         pendingSmartActions.put(uuid, new PendingSmartAction(actionType, actionContent, assessment));
         setGenerating(uuid, false, GenerationStatus.WAITING_CONFIRM);
         
-        player.sendMessage(ChatColor.WHITE + "⁕ " + ChatColor.GRAY + "检测到风险操作，是否继续？");
+        player.sendMessage(I18n.t("clim.smart.risk.ask"));
         
         ChatColor riskColor;
         if (assessment.level < 25) {
@@ -1981,14 +1976,14 @@ public class CLIManager {
         } else {
             riskColor = ChatColor.RED;
         }
-        player.sendMessage(ChatColor.WHITE + "  风险值: " + riskColor + assessment.level + "/100");
+        player.sendMessage(I18n.t("clim.smart.risk.level", riskColor.toString() + assessment.level));
         
         if ("run".equals(actionType)) {
-            player.sendMessage(ChatColor.WHITE + "  运行命令 " + ChatColor.YELLOW + actionContent);
+            player.sendMessage(I18n.t("clim.smart.run.cmd", actionContent));
         } else if ("edit".equals(actionType)) {
             String[] parts = actionContent.split("\\|", 3);
             String path = parts.length > 0 ? parts[0].trim() : "";
-            player.sendMessage(ChatColor.WHITE + "  修改文件 " + ChatColor.YELLOW + path);
+            player.sendMessage(I18n.t("clim.smart.edit.file", path));
             if (parts.length >= 3) {
                 player.sendMessage(ChatColor.WHITE + "  From " + ChatColor.GRAY + parts[1]);
                 player.sendMessage(ChatColor.WHITE + "  To " + ChatColor.GRAY + parts[2]);
@@ -1996,26 +1991,26 @@ public class CLIManager {
         }
         
         if (assessment.reason != null && !assessment.reason.isEmpty()) {
-            player.sendMessage(ChatColor.WHITE + "  原因 " + ChatColor.GRAY + assessment.reason);
+            player.sendMessage(I18n.t("clim.smart.reason", assessment.reason));
         }
         
         TextComponent message = new TextComponent("  ");
         
         TextComponent allowBtn = new TextComponent(ChatColor.GREEN + "[ ✓ ]");
         allowBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_allow"));
-        allowBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("允许本次操作")));
+        allowBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.smart.allow.hover"))));
         
         TextComponent spacer1 = new TextComponent(" ");
         
         TextComponent denyBtn = new TextComponent(ChatColor.RED + "[ ✕ ]");
         denyBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_deny"));
-        denyBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("拒绝此操作")));
+        denyBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.smart.deny.hover"))));
         
         TextComponent spacer2 = new TextComponent(" ");
         
-        TextComponent neverAskBtn = new TextComponent(ChatColor.GRAY + "[ 不再询问 ]");
+        TextComponent neverAskBtn = new TextComponent(I18n.t("clim.smart.never"));
         neverAskBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_never"));
-        neverAskBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("允许本次操作并不再询问")));
+        neverAskBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.smart.never.hover"))));
         
         message.addExtra(allowBtn);
         message.addExtra(spacer1);
@@ -2058,14 +2053,14 @@ public class CLIManager {
         // 检查是否被冻结
         long freezeRemaining = plugin.getVerificationManager().getPlayerFreezeRemaining(player);
         if (freezeRemaining > 0) {
-            player.sendMessage(ChatColor.RED + "验证已冻结，请在 " + freezeRemaining + " 秒后重试。");
+            player.sendMessage(I18n.t("clim.verify.frozen", freezeRemaining));
             return;
         }
 
         if (plugin.getConfigManager().isPlayerToolEnabled(player, toolName)) {
             toolExecutor.executeFileOperation(player, type, args);
         } else {
-            player.sendMessage(ChatColor.YELLOW + "首次使用 " + toolName + " 工具需要完成安全验证。");
+            player.sendMessage(I18n.t("clim.verify.first.use", toolName));
             plugin.getVerificationManager().startVerification(player, toolName, () -> {
                 plugin.getConfigManager().setPlayerToolEnabled(player, toolName, true);
                 toolExecutor.executeFileOperation(player, type, args);
@@ -2095,7 +2090,7 @@ public class CLIManager {
 
         if (pendingCommands.containsKey(uuid)) {
             pendingCommands.remove(uuid);
-            player.sendMessage(ChatColor.GRAY + "⇒ 命令已取消");
+            player.sendMessage(I18n.t("clim.cancel.cmd"));
             isGenerating.put(uuid, false);
             generationStates.put(uuid, GenerationStatus.CANCELLED);
             generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -2127,7 +2122,7 @@ public class CLIManager {
         }
         
         pendingSmartActions.remove(uuid);
-        player.sendMessage(ChatColor.GRAY + "⇒ 操作已拒绝");
+        player.sendMessage(I18n.t("clim.smart.denied"));
         isGenerating.put(uuid, false);
         generationStates.put(uuid, GenerationStatus.CANCELLED);
         generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -2160,7 +2155,7 @@ public class CLIManager {
         UUID uuid = player.getUniqueId();
         
         if ("run".equals(action.actionType)) {
-            player.sendMessage(ChatColor.GOLD + ">> SMART RUN " + ChatColor.WHITE + action.actionContent);
+            player.sendMessage(I18n.t("tool.run.smart", action.actionContent));
             setGenerating(uuid, false, GenerationStatus.EXECUTING_TOOL);
             toolExecutor.executeCommand(player, action.actionContent);
         } else if ("edit".equals(action.actionType)) {
@@ -2192,14 +2187,14 @@ public class CLIManager {
             if (message.equalsIgnoreCase("agree")) {
                 // 再次检查 EULA 状态
                 if (!plugin.getEulaManager().isEulaValid()) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f系统错误：EULA 文件状态异常，无法完成同意。"));
+                    player.sendMessage(I18n.t("clim.eula.system.error"));
                     return true;
                 }
                 pendingAgreementPlayers.remove(uuid);
                 saveAgreedPlayer(uuid);
                 enterCLI(player);
             } else {
-                player.sendMessage(ChatColor.RED + "请发送 agree 以同意协议，或发送 /cli 退出。");
+                player.sendMessage(I18n.t("clim.agree.prompt"));
             }
             return true;
         }
@@ -2221,10 +2216,10 @@ public class CLIManager {
                     // Plan 启动中的 YOLO 取消：重新显示模式选择 UI
                     handlePlanStart(player);
                 } else {
-                    player.sendMessage(ChatColor.GRAY + "⇒ 已取消进入 YOLO 模式。");
+                    player.sendMessage(I18n.t("clim.yolo.cancelled"));
                 }
             } else {
-                player.sendMessage(ChatColor.RED + "请发送 agree 以进入 YOLO 模式，或发送 stop 取消。");
+                player.sendMessage(I18n.t("clim.yolo.prompt"));
             }
             return true;
         }
@@ -2236,7 +2231,7 @@ public class CLIManager {
             } else if (message.equalsIgnoreCase("n")) {
                 handlePlanClearN(player);
             } else {
-                player.sendMessage(ChatColor.RED + "请选择 [Y] 清空上下文 或 [N] 保留上下文。");
+                player.sendMessage(I18n.t("clim.plan.clear.prompt"));
             }
             return true;
         }
@@ -2268,19 +2263,19 @@ public class CLIManager {
                     recordThinkingTime(uuid);
                     generationStates.put(uuid, GenerationStatus.CANCELLED);
                     generationStartTimes.put(uuid, System.currentTimeMillis());
-                    player.sendMessage(ChatColor.YELLOW + "✕" + ChatColor.WHITE + " 已打断 Fancy 生成");
+                    player.sendMessage(I18n.t("clim.stop.interrupted"));
                     interrupted = true;
                 }
                 if (pendingCommands.containsKey(uuid)) {
                     pendingCommands.remove(uuid);
-                    player.sendMessage(ChatColor.YELLOW + "✕" + ChatColor.WHITE + " 已取消当前待处理的操作");
+                    player.sendMessage(I18n.t("clim.stop.cancelled"));
                     isGenerating.put(uuid, false);
                     generationStates.put(uuid, GenerationStatus.CANCELLED);
                     generationStartTimes.put(uuid, System.currentTimeMillis());
                     interrupted = true;
                 }
                 if (!interrupted) {
-                    player.sendMessage(ChatColor.GRAY + "当前没有正在进行的操作。输入 exit 退出 CLI 模式。");
+                    player.sendMessage(I18n.t("clim.stop.nothing"));
                 }
                 return true;
             }
@@ -2289,12 +2284,12 @@ public class CLIManager {
                 DialogueSession session = sessions.get(uuid);
                 if (session != null) {
                     session.setAntiLoopExempted(true);
-                    player.sendMessage(ChatColor.WHITE + "✔ 已为本次对话开启豁免模式，Fancy 将不再被自动打断。");
+                    player.sendMessage(I18n.t("clim.exempt.enabled"));
 
                     // 恢复执行之前被打断的工具
                     String interruptedCall = interruptedToolCalls.get(uuid);
                     if (interruptedCall != null) {
-                        player.sendMessage(ChatColor.GRAY + "⇒ 正在恢复执行之前被打断的操作...");
+                        player.sendMessage(I18n.t("clim.exempt.restoring"));
                         isGenerating.put(uuid, true);
                         generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
                         generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -2314,7 +2309,7 @@ public class CLIManager {
                 String pending = pendingCommands.get(uuid);
                 if (pending.equals("CHOOSING")) {
                     pendingCommands.remove(uuid);
-                    player.sendMessage(ChatColor.GRAY + "◇ " + message);
+                    player.sendMessage(I18n.t("clim.ask.choice", message));
                     feedbackToAI(player, "#ask_result: " + message);
                     return true;
                 }
@@ -2324,16 +2319,16 @@ public class CLIManager {
                 } else if (message.equalsIgnoreCase("n") || message.equalsIgnoreCase("/fancyhelper cancel")) {
                     handleCancel(player);
                 } else {
-                    player.sendMessage(ChatColor.RED + "请确认命令 [Y/N]");
+                    player.sendMessage(I18n.t("clim.confirm.prompt"));
                 }
                 return true;
             }
             
             if (isGenerating.getOrDefault(uuid, false)) {
-                TextComponent warnMsg = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f请不要在 Fancy 生成内容时发送消息")));
-                TextComponent interruptBtn = new TextComponent(ChatColor.YELLOW + "[点击打断]");
+                TextComponent warnMsg = new TextComponent(TextComponent.fromLegacyText(I18n.t("clim.warn.no.send")));
+                TextComponent interruptBtn = new TextComponent(I18n.t("clim.warn.interrupt"));
                 interruptBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli stop"));
-                interruptBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打断生成")));
+                interruptBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.warn.interrupt.hover"))));
                 warnMsg.addExtra(interruptBtn);
                 player.spigot().sendMessage(warnMsg);
                 return true;
@@ -2364,11 +2359,11 @@ public class CLIManager {
         
         RetryInfo retryInfo = retryInfoMap.get(uuid);
         if (retryInfo == null) {
-            player.sendMessage(ChatColor.GRAY + "没有可重试的操作。");
+            player.sendMessage(I18n.t("clim.retry.nothing"));
             return;
         }
 
-        player.sendMessage(ChatColor.GRAY + "⇒ 正在重试 AI 调用...");
+        player.sendMessage(I18n.t("clim.retry.retrying"));
         isGenerating.put(uuid, true);
         generationStates.put(uuid, GenerationStatus.THINKING);
         generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -2486,7 +2481,7 @@ public class CLIManager {
 
                 TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought t:" + reservedMessageId));
-                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.thought.hover"))));
                 double sec = thinkingTimeMs / 1000.0;
                 TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", sec) + "s)");
                 thoughtBtn.addExtra(timeTag);
@@ -2672,7 +2667,7 @@ public class CLIManager {
                     TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                     String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
                     thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
-                    thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                    thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.thought.hover"))));
                     double lastSec = thoughtThinkingTimeMs / 1000.0;
                     TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
                     thoughtBtn.addExtra(timeTag);
@@ -2735,7 +2730,7 @@ public class CLIManager {
                     if (s != null) s.addOutputTokens(streamedOutErr);
                 }
                 retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
-                player.spigot().sendMessage(buildErrorText(error.getMessage(), "流式输出错误"));
+                player.spigot().sendMessage(buildErrorText(error.getMessage(), I18n.t("clim.error.streaming")));
                 isGenerating.put(uuid, false);
                 generationStates.put(uuid, GenerationStatus.ERROR);
                 generationStartTimes.remove(uuid);
@@ -2873,7 +2868,7 @@ public class CLIManager {
         streamedOutputTokens.remove(uuid);
         roundOutputTokens.put(uuid, 0L);
 
-        TextComponent playerMsg = new TextComponent(ChatColor.GRAY + "◇ " + message);
+        TextComponent playerMsg = new TextComponent(I18n.t("clim.ask.choice", message));
         player.spigot().sendMessage(playerMsg);
         playFeedbackSound(player, "user_input");
 
@@ -3248,7 +3243,7 @@ public class CLIManager {
             // 检查响应是否被截断
             if (aiResponse.isTruncated()) {
                 // 显示截断提示
-                player.sendMessage(ChatColor.YELLOW + "⨀ 响应被截断，正在继续生成...");
+                player.sendMessage(I18n.t("clim.truncated"));
                 // 自动继续生成（streamedOutputTokens 不清除，延续到下一轮）
                 continueGeneration(player, session);
             } else {
@@ -3449,7 +3444,7 @@ public class CLIManager {
         int remaining = maxTokens - estimatedTokens;
 
         if (remaining < plugin.getConfigManager().getContextWindowWarningThreshold()) {
-            player.sendMessage(ChatColor.YELLOW + "⨀ 剩余上下文长度不足 ，Fancy 可能会遗忘较早的对话内容来保证对话继续。");
+            player.sendMessage(I18n.t("clim.context.short"));
         }
     }
 
@@ -3460,14 +3455,14 @@ public class CLIManager {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f你没有活跃的 CLI 会话。"));
+            player.sendMessage(I18n.t("clim.no.active.session"));
             return;
         }
         if (session.getHistory().size() <= 12) {
-            player.sendMessage(ChatColor.GRAY + "当前对话消息较少，无需压缩。");
+            player.sendMessage(I18n.t("clim.compact.not.needed"));
             return;
         }
-        player.sendMessage(ChatColor.GRAY + "正在压缩上下文...");
+        player.sendMessage(I18n.t("clim.compacting"));
         autoCompressContext(player, session, true);
     }
 
@@ -3694,18 +3689,18 @@ public class CLIManager {
                     String toolName = toolCall.split(":", 2)[0];
                     String args = toolCall.contains(":") ? toolCall.split(":", 2)[1] : "";
                     if ("#webfetch".equals(toolName)) {
-                        player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + args.trim());
+                        player.sendMessage(I18n.t("clim.tool.call", args.trim()));
                     } else {
-                        player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
+                        player.sendMessage(I18n.t("clim.tool.call", toolName + (args.isEmpty() ? "" : " " + args)));
                     }
 
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到 Fancy 可能陷入了重复操作的死循环。"));
+                    player.sendMessage(I18n.t("clim.loop.detected"));
                     
                     // 显示“不再打断”按钮
-                    TextComponent exemptMsg = new TextComponent(ChatColor.YELLOW + "⇒ 已自动打断。如果您确认这是正常操作，点击 ");
-                    TextComponent btn = new TextComponent(ChatColor.GREEN + "[ 本次对话不再打断 ]");
+                    TextComponent exemptMsg = new TextComponent(I18n.t("clim.loop.interrupted"));
+                    TextComponent btn = new TextComponent(I18n.t("clim.loop.btn"));
                     btn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exempt_anti_loop"));
-                    btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击后本次会话将不再触发自动打断")));
+                    btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.loop.hover"))));
                     exemptMsg.addExtra(btn);
                     player.spigot().sendMessage(exemptMsg);
                     
@@ -3731,13 +3726,13 @@ public class CLIManager {
                     player.sendMessage(ChatColor.GOLD + "⇒ Fancy 尝试调用: " + ChatColor.WHITE + toolName + (args.isEmpty() ? "" : " " + args));
                 }
 
-                player.sendMessage(ChatColor.YELLOW + "⨀ 识别到Fancy重复调用" + maxChainCount + "次相似操作，请优化提示词。");
+                player.sendMessage(I18n.t("clim.chain.long", maxChainCount));
                 
                 // 显示“不再打断”按钮
-                TextComponent exemptMsg = new TextComponent(ChatColor.YELLOW + "⇒ 发送任意消息继续对话。如果你认为这是正常操作，点击 ");
-                TextComponent btn = new TextComponent(ChatColor.GREEN + "[本次对话不再打断]");
+                TextComponent exemptMsg = new TextComponent(I18n.t("clim.chain.continue"));
+                TextComponent btn = new TextComponent(I18n.t("clim.chain.btn"));
                 btn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli exempt_anti_loop"));
-                btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击后本次会话将不再触发自动打断")));
+                btn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.loop.hover"))));
                 exemptMsg.addExtra(btn);
                 player.spigot().sendMessage(exemptMsg);
                 
@@ -3856,7 +3851,7 @@ public class CLIManager {
 
                             TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                             thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli thought t:" + reservedMessageId));
-                            thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                            thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.thought.hover"))));
                             double sec = thinkingTimeMs / 1000.0;
                             TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", sec) + "s)");
                             thoughtBtn.addExtra(timeTag);
@@ -3953,7 +3948,7 @@ public class CLIManager {
                                 TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                                 String cmd = "/cli thought" + (fbThoughtMessageId != -1 ? " t:" + fbThoughtMessageId : "");
                                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
-                                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.thought.hover"))));
                                 double lastSec = fbThoughtThinkingTimeMs / 1000.0;
                                 TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
                                 thoughtBtn.addExtra(timeTag);
@@ -3985,7 +3980,7 @@ public class CLIManager {
                                 if (s2 != null) s2.addOutputTokens(streamedOutErr2);
                             }
                             retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
-                            player.spigot().sendMessage(buildErrorText(error.getMessage(), "流式输出错误"));
+                            player.spigot().sendMessage(buildErrorText(error.getMessage(), I18n.t("clim.error.streaming")));
                             isGenerating.put(uuid, false);
                             generationStates.put(uuid, GenerationStatus.ERROR);
                             generationStartTimes.remove(uuid);
@@ -4031,7 +4026,7 @@ public class CLIManager {
                                 TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                                 String cmd = "/cli thought" + (fbThoughtMessageId != -1 ? " t:" + fbThoughtMessageId : "");
                                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
-                                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.thought.hover"))));
                                 double lastSec = fbThoughtThinkingTimeMs / 1000.0;
                                 TextComponent timeTag = new TextComponent(ChatColor.DARK_GRAY + " (" + String.format("%.1f", lastSec) + "s)");
                                 thoughtBtn.addExtra(timeTag);
@@ -4165,7 +4160,7 @@ public class CLIManager {
                 // 传递 messageId 以便稳定地回放对应 Thought（避免历史裁剪导致索引漂移）
                 String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
                 thoughtBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
-                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "点击查看本次思考过程")));
+                thoughtBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.thought.hover"))));
                 
                 // 在 Thought 按钮右侧显示本次思考的时间
                 double lastSec = thoughtThinkingTimeMs / 1000.0;
@@ -4219,7 +4214,7 @@ public class CLIManager {
     public void handleThought(Player player, String[] args) {
         DialogueSession session = sessions.get(player.getUniqueId());
         if (session == null) {
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有活动的对话。"));
+            player.sendMessage(I18n.t("clim.no.active.dialogue"));
             return;
         }
 
@@ -4355,28 +4350,28 @@ public class CLIManager {
 
     private void sendAgreement(Player player) {
         player.sendMessage(ChatColor.GRAY + "=================");
-        player.sendMessage(ChatColor.WHITE + "FancyHelper 用户协议");
-        player.sendMessage(ChatColor.WHITE + "在进入 FancyHelper 之前，您需要阅读并同意用户协议。");
+        player.sendMessage(I18n.t("clim.agree.title"));
+        player.sendMessage(I18n.t("clim.agree.intro"));
         // player.sendMessage("");
-        TextComponent message = new TextComponent(ChatColor.WHITE + "请点击 ");
-        TextComponent bookBtn = new TextComponent(ChatColor.AQUA + "" + ChatColor.BOLD + "[阅读完整协议]");
+        TextComponent message = new TextComponent(I18n.t("clim.agree.click"));
+        TextComponent bookBtn = new TextComponent(I18n.t("clim.agree.read"));
         bookBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/fancyhelper-eula"));
         bookBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击在浏览器中打开 FancyHelper 最终用户许可协议")));
+            new Text(I18n.t("clim.agree.read.hover"))));
         
         message.addExtra(bookBtn);
-        message.addExtra(new TextComponent(ChatColor.WHITE + "，阅读完成后发送 "));
+        message.addExtra(new TextComponent(I18n.t("clim.agree.after")));
         
         TextComponent agreeBtn = new TextComponent(ChatColor.GREEN + "" + ChatColor.BOLD + "agree");
         agreeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli agree"));
         agreeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-            new Text(net.md_5.bungee.api.ChatColor.GREEN + "点击同意协议")));
+            new Text(I18n.t("clim.agree.agree.hover"))));
         
         message.addExtra(agreeBtn);
-        message.addExtra(new TextComponent(ChatColor.WHITE + " 表示同意。"));
+        message.addExtra(new TextComponent(I18n.t("clim.agree.suffix")));
         
         player.spigot().sendMessage(message);
-        player.sendMessage(ChatColor.RED + "发送 agree 即表示您确认已阅读、理解并接受本协议全部条款。");
+        player.sendMessage(I18n.t("clim.agree.footer"));
         player.sendMessage(ChatColor.GRAY + "==============================================");
     }
 
@@ -4384,10 +4379,10 @@ public class CLIManager {
      * 为玩家打开 EULA 网页链接。
      */
     public void openEulaUrl(Player player) {
-        TextComponent message = new TextComponent(ChatColor.AQUA + "" + ChatColor.BOLD + "[点击查看 FancyHelper 最终用户许可协议]");
+        TextComponent message = new TextComponent(I18n.t("clim.eula.open"));
         message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/fancyhelper-eula"));
         message.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-            new Text(net.md_5.bungee.api.ChatColor.AQUA + "点击在浏览器中打开协议页面")));
+            new Text(I18n.t("clim.eula.open.hover"))));
         player.spigot().sendMessage(message);
     }
 
@@ -4451,7 +4446,7 @@ public class CLIManager {
 
         TextComponent modeTag = new TextComponent("[" + modeName + "]");
         modeTag.setColor(modeColor);
-        modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击切换模式")));
+        modeTag.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.enter.mode.hover"))));
         modeTag.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli gui mode"));
         line1.addExtra(modeTag);
 
@@ -4460,7 +4455,7 @@ public class CLIManager {
 
         TextComponent settingsBtn = new TextComponent("[🔧]");
         settingsBtn.setColor(net.md_5.bungee.api.ChatColor.GRAY);
-        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击打开设置")));
+        settingsBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.enter.settings.hover"))));
         settingsBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
         line1.addExtra(settingsBtn);
 
@@ -4469,7 +4464,7 @@ public class CLIManager {
 
         TextComponent resumeBtn = new TextComponent("[⌚]");
         resumeBtn.setColor(net.md_5.bungee.api.ChatColor.GRAY);
-        resumeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("点击恢复历史对话")));
+        resumeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.enter.resume.hover"))));
         resumeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume"));
         line1.addExtra(resumeBtn);
 
@@ -4477,7 +4472,7 @@ public class CLIManager {
 
         // ▌💡 Tips整行悬停显示 "沉默的设计师"
         TextComponent tipLine = new TextComponent("§8▌ §e💡 §f" + getRandomTip());
-        tipLine.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("沉默的设计师")));
+        tipLine.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.enter.tips.hover"))));
         player.spigot().sendMessage(tipLine);
         player.sendMessage("");
         player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
@@ -4516,7 +4511,7 @@ public class CLIManager {
         divider.setStrikethrough(true);
         line1.addExtra(divider);
 
-        TextComponent exited = new TextComponent(" 已退出");
+        TextComponent exited = new TextComponent(I18n.t("clim.exit.exited"));
         exited.setColor(net.md_5.bungee.api.ChatColor.WHITE);
         line1.addExtra(exited);
 
@@ -4525,7 +4520,7 @@ public class CLIManager {
         // ▌⟐ tokens · time (思考 thinkTime)
         String stats = "⟐ " + totalTokens + " tokens · " + String.format("%.1f", durationSec) + "s";
         if (thinkingSec > 0) {
-            stats += " (思考 " + String.format("%.1f", thinkingSec) + "s)";
+            stats += I18n.t("clim.exit.thinking", String.format("%.1f", thinkingSec));
         }
         player.sendMessage(ColorUtil.translateCustomColors("§8▌ §7" + stats));
 

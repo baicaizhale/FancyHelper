@@ -7,9 +7,6 @@
 *.iml
 *.ipr
 *.iws
-AGENT.md
-CLAUDE.md
-AGENTS.md
 EULA.md
 .classpath
 worker/

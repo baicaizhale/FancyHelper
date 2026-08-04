@@ -3,6 +3,7 @@ package org.YanPl.manager;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.DialogueSession;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -20,8 +21,8 @@ import java.util.UUID;
 public class GuiManager implements Listener {
 
     private final FancyHelper plugin;
-    private final String SETTINGS_TITLE = ColorUtil.translateCustomColors("&zFancyHelper &8| &7Settings");
-    private final String MODE_SELECTION_TITLE = ColorUtil.translateCustomColors("&zFancyHelper &8| &7模式选择");
+    private final String SETTINGS_TITLE = I18n.t("gui.settings.title");
+    private final String MODE_SELECTION_TITLE = I18n.t("gui.mode.title");
 
     public GuiManager(FancyHelper plugin) {
         this.plugin = plugin;
@@ -40,42 +41,42 @@ public class GuiManager implements Listener {
         }
 
         // 1. Normal 模式
-        ItemStack normalItem = createItem(Material.LIME_DYE, ColorUtil.translateCustomColors("&a&lNormal 模式"),
+        ItemStack normalItem = createItem(Material.LIME_DYE, I18n.t("gui.mode.normal.name"),
                 ColorUtil.translateCustomColors("&8&m------------------------"),
-                ColorUtil.translateCustomColors("&7普通模式"),
-                ColorUtil.translateCustomColors("&7AI 执行敏感操作需手动确认"),
+                I18n.t("gui.mode.normal.desc"),
+                I18n.t("gui.mode.normal.detail"),
                 "",
-                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                I18n.t("gui.mode.click"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));
         inv.setItem(1, normalItem);
 
         // 2. SMART 模式
-        ItemStack smartItem = createItem(Material.BLUE_DYE, ColorUtil.translateCustomColors("&9&lSMART 模式"),
+        ItemStack smartItem = createItem(Material.BLUE_DYE, I18n.t("gui.mode.smart.name"),
                 ColorUtil.translateCustomColors("&8&m------------------------"),
-                ColorUtil.translateCustomColors("&7智能模式"),
-                ColorUtil.translateCustomColors("&7AI 会评估操作风险，高风险需确认"),
+                I18n.t("gui.mode.smart.desc"),
+                I18n.t("gui.mode.smart.detail"),
                 "",
-                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                I18n.t("gui.mode.click"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));
         inv.setItem(3, smartItem);
 
         // 3. Plan 模式
-        ItemStack planItem = createItem(Material.CYAN_DYE, ColorUtil.translateCustomColors("&b&lPlan 模式"),
+        ItemStack planItem = createItem(Material.CYAN_DYE, I18n.t("gui.mode.plan.name"),
                 ColorUtil.translateCustomColors("&8&m------------------------"),
-                ColorUtil.translateCustomColors("&7规划模式"),
-                ColorUtil.translateCustomColors("&7AI 只做搜索、规划，不执行命令"),
+                I18n.t("gui.mode.plan.desc"),
+                I18n.t("gui.mode.plan.detail"),
                 "",
-                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                I18n.t("gui.mode.click"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));
         inv.setItem(5, planItem);
 
         // 4. YOLO 模式
-        ItemStack yoloItem = createItem(Material.RED_DYE, ColorUtil.translateCustomColors("&c&lYOLO 模式"),
+        ItemStack yoloItem = createItem(Material.RED_DYE, I18n.t("gui.mode.yolo.name"),
                 ColorUtil.translateCustomColors("&8&m------------------------"),
-                ColorUtil.translateCustomColors("&7激进模式"),
-                ColorUtil.translateCustomColors("&7AI 将自动执行大部分命令"),
+                I18n.t("gui.mode.yolo.desc"),
+                I18n.t("gui.mode.yolo.detail"),
                 "",
-                ColorUtil.translateCustomColors("&e▸ 点击选择此模式"),
+                I18n.t("gui.mode.click"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));
         inv.setItem(7, yoloItem);
 
@@ -98,22 +99,22 @@ public class GuiManager implements Listener {
         updateModeItem(inv, player);
 
         // 2. 记忆管理
-        ItemStack memoryItem = createItem(Material.KNOWLEDGE_BOOK, ColorUtil.translateCustomColors("&b&l记忆管理"), 
+        ItemStack memoryItem = createItem(Material.KNOWLEDGE_BOOK, I18n.t("gui.settings.memory.name"), 
                 ColorUtil.translateCustomColors("&8&m------------------------"),
-                ColorUtil.translateCustomColors("&7查看和管理 AI 的长期记忆"),
+                I18n.t("gui.settings.memory.desc"),
                 "",
-                ColorUtil.translateCustomColors("&e▸ 左键点击: &f查看列表"),
-                ColorUtil.translateCustomColors("&c▸ 右键点击: &f清空记忆"),
+                I18n.t("gui.settings.memory.lclick"),
+                I18n.t("gui.settings.memory.rclick"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));
         inv.setItem(12, memoryItem); 
 
         // 3. 工具权限管理
-        ItemStack toolsItem = createItem(Material.CHEST, ColorUtil.translateCustomColors("&6&l工具权限"), 
+        ItemStack toolsItem = createItem(Material.CHEST, I18n.t("gui.settings.tools.name"), 
                 ColorUtil.translateCustomColors("&8&m------------------------"),
-                ColorUtil.translateCustomColors("&7管理文件操作相关权限"),
-                ColorUtil.translateCustomColors("&7包括: &fls, read, edit"),
+                I18n.t("gui.settings.tools.desc"),
+                I18n.t("gui.settings.tools.include"),
                 "",
-                ColorUtil.translateCustomColors("&e▸ 点击管理"),
+                I18n.t("gui.settings.tools.click"),
                 ColorUtil.translateCustomColors("&8&m------------------------"));
         inv.setItem(14, toolsItem); 
 
@@ -124,8 +125,8 @@ public class GuiManager implements Listener {
         updateSoundItem(inv, player);
 
         // 6. 关闭按钮
-        ItemStack closeItem = createItem(Material.BARRIER, ColorUtil.translateCustomColors("&c&l关闭菜单"), 
-                ColorUtil.translateCustomColors("&7点击关闭此菜单"));
+        ItemStack closeItem = createItem(Material.BARRIER, I18n.t("gui.settings.close.name"), 
+                I18n.t("gui.settings.close.desc"));
         inv.setItem(26, closeItem);
 
         player.openInventory(inv);
@@ -138,36 +139,36 @@ public class GuiManager implements Listener {
 
         ItemStack item;
         if (mode == DialogueSession.Mode.NORMAL) {
-            item = createItem(Material.LIME_DYE, ColorUtil.translateCustomColors("&a&l当前模式: Normal"),
+            item = createItem(Material.LIME_DYE, I18n.t("gui.settings.mode.current.normal"),
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前为 &a普通模式"),
-                    ColorUtil.translateCustomColors("&7AI 执行敏感操作需手动确认"),
+                    I18n.t("gui.settings.mode.desc.normal"),
+                    I18n.t("gui.mode.normal.detail"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击切换至 SMART 模式"),
+                    I18n.t("gui.settings.mode.to.smart"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         } else if (mode == DialogueSession.Mode.SMART) {
-            item = createItem(Material.BLUE_DYE, ColorUtil.translateCustomColors("&9&l当前模式: SMART"),
+            item = createItem(Material.BLUE_DYE, I18n.t("gui.settings.mode.current.smart"),
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前为 &9智能模式"),
-                    ColorUtil.translateCustomColors("&7AI 会评估操作风险，高风险需确认"),
+                    I18n.t("gui.settings.mode.desc.smart"),
+                    I18n.t("gui.mode.smart.detail"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击切换至 Plan 模式"),
+                    I18n.t("gui.settings.mode.to.plan"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         } else if (mode == DialogueSession.Mode.PLAN) {
-            item = createItem(Material.CYAN_DYE, ColorUtil.translateCustomColors("&b&l当前模式: Plan"),
+            item = createItem(Material.CYAN_DYE, I18n.t("gui.settings.mode.current.plan"),
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前为 &b规划模式"),
-                    ColorUtil.translateCustomColors("&7AI 只做搜索、规划，不执行命令"),
+                    I18n.t("gui.settings.mode.desc.plan"),
+                    I18n.t("gui.mode.plan.detail"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击切换至 YOLO 模式"),
+                    I18n.t("gui.settings.mode.to.yolo"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         } else {
-            item = createItem(Material.RED_DYE, ColorUtil.translateCustomColors("&c&l当前模式: YOLO"),
+            item = createItem(Material.RED_DYE, I18n.t("gui.settings.mode.current.yolo"),
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前为 &c激进模式"),
-                    ColorUtil.translateCustomColors("&7AI 将自动执行大部分命令"),
+                    I18n.t("gui.settings.mode.desc.yolo"),
+                    I18n.t("gui.mode.yolo.detail"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击切换至 Normal 模式"),
+                    I18n.t("gui.settings.mode.to.normal"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         }
         inv.setItem(10, item); 
@@ -179,18 +180,18 @@ public class GuiManager implements Listener {
         boolean isActionBar = "actionbar".equalsIgnoreCase(displayPos);
         
         if (isActionBar) {
-            item = createItem(Material.NAME_TAG, ColorUtil.translateCustomColors("&e&l显示位置: ActionBar"), 
+            item = createItem(Material.NAME_TAG, I18n.t("gui.settings.display.actionbar.name"), 
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前显示在: &f快捷栏上方"),
+                    I18n.t("gui.settings.display.actionbar.desc"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击切换至 Subtitle"),
+                    I18n.t("gui.settings.display.to.subtitle"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         } else {
-            item = createItem(Material.PAPER, ColorUtil.translateCustomColors("&e&l显示位置: Subtitle"), 
+            item = createItem(Material.PAPER, I18n.t("gui.settings.display.subtitle.name"), 
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前显示在: &f屏幕中央"),
+                    I18n.t("gui.settings.display.subtitle.desc"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击切换至 ActionBar"),
+                    I18n.t("gui.settings.display.to.actionbar"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         }
         inv.setItem(16, item);
@@ -200,18 +201,18 @@ public class GuiManager implements Listener {
         boolean disabled = plugin.getConfigManager().isPlayerSoundDisabled(player.getUniqueId());
         ItemStack item;
         if (disabled) {
-            item = createItem(Material.GRAY_DYE, ColorUtil.translateCustomColors("&7&l声音反馈: 关闭"),
+            item = createItem(Material.GRAY_DYE, I18n.t("gui.settings.sound.off.name"),
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前声音反馈已 &c关闭"),
+                    I18n.t("gui.settings.sound.off.desc"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击开启声音反馈"),
+                    I18n.t("gui.settings.sound.to.on"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         } else {
-            item = createItem(Material.LIME_DYE, ColorUtil.translateCustomColors("&a&l声音反馈: 开启"),
+            item = createItem(Material.LIME_DYE, I18n.t("gui.settings.sound.on.name"),
                     ColorUtil.translateCustomColors("&8&m------------------------"),
-                    ColorUtil.translateCustomColors("&7当前声音反馈已 &a开启"),
+                    I18n.t("gui.settings.sound.on.desc"),
                     "",
-                    ColorUtil.translateCustomColors("&e▸ 点击关闭声音反馈"),
+                    I18n.t("gui.settings.sound.to.off"),
                     ColorUtil.translateCustomColors("&8&m------------------------"));
         }
         inv.setItem(18, item);

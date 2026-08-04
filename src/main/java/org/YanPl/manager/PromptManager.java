@@ -2,6 +2,7 @@ package org.YanPl.manager;
 
 import org.YanPl.FancyHelper;
 import org.YanPl.model.Skill;
+import org.YanPl.util.I18n;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,7 +65,7 @@ public class PromptManager {
         }
 
         sb.append("[Language]\n");
-        sb.append("Default: Simplified Chinese. Follow player preferences if specified.\n\n");
+        sb.append(I18n.t("prompt.lang.default")).append("\n\n");
 
         // ==================== Basic Rules / 基础规则 ====================
         sb.append("[Basic Rules]\n");
@@ -303,7 +304,7 @@ public class PromptManager {
         }
 
         sb.append("[Language]\n");
-        sb.append("Default: Simplified Chinese.\n\n");
+        sb.append(I18n.t("prompt.lang.plan")).append("\n\n");
 
         // ==================== Basic Rules / 基础规则 ====================
         sb.append("[Basic Rules]\n");

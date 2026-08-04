@@ -4,8 +4,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.YanPl.FancyHelper;
 import org.YanPl.util.ColorUtil;
+import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -69,7 +69,7 @@ public class UpdateManager implements Listener {
 
                 if (!fetched) {
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败（GitHub/Worker 均不可用）。"));
+                        sender.sendMessage(I18n.t("upd.check.fail"));
                     }
                     return;
                 }
@@ -99,9 +99,9 @@ public class UpdateManager implements Listener {
                     }
 
                     if (sender != null) {
-                        sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: " + ChatColor.WHITE + "v" + latestVersion));
+                        sender.sendMessage(I18n.t("upd.new.version", "v" + latestVersion));
                         if (releaseOverview != null && !releaseOverview.isEmpty()) {
-                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
+                            sender.sendMessage(I18n.t("upd.changelog"));
                             for (String line : releaseOverview.split("\\r?\\n")) {
                                 String trimmedLine = line.trim();
                                 if (!trimmedLine.isEmpty()) {
@@ -111,14 +111,14 @@ public class UpdateManager implements Listener {
                             }
                         }
                         if (plugin.getConfigManager().isAutoUpgrade()) {
-                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f正在执行自动更新..."));
+                            sender.sendMessage(I18n.t("upd.upgrading"));
                         } else {
-                            sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 " + ChatColor.AQUA + "/fancy upgrade" + ChatColor.WHITE + " 自动下载并更新。"));
+                            sender.sendMessage(I18n.t("upd.use.upgrade"));
                         }
                     }
                 } else {
                     hasUpdate = false;
-                    String message = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前已是最新版本 (v" + currentVersion + ")");
+                    String message = I18n.t("upd.latest", currentVersion);
                     if (sender != null) {
                         sender.sendMessage(message);
                     } else {
@@ -129,7 +129,7 @@ public class UpdateManager implements Listener {
             } catch (Exception e) {
                 plugin.getLogger().warning("检查更新失败: " + e.getMessage());
                 if (sender != null) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检查更新失败: " + e.getMessage()));
+                    sender.sendMessage(I18n.t("upd.check.error", e.getMessage()));
                 }
             }
         });
@@ -250,13 +250,13 @@ public class UpdateManager implements Listener {
      */
     public void downloadAndInstall(Player sender, boolean autoReload, boolean alreadyAsync) {
         if (!hasUpdate || downloadUrl == null) {
-            String msg = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f当前没有可用的更新。");
+            String msg = I18n.t("upd.no.update");
             if (sender != null) sender.sendMessage(msg);
             plugin.getLogger().warning("无法下载更新：hasUpdate=" + hasUpdate + ", downloadUrl=" + downloadUrl);
             return;
         }
 
-        if (sender != null) sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f开始下载更新..."));
+        if (sender != null) sender.sendMessage(I18n.t("upd.downloading"));
 
         Runnable downloadTask = () -> {
             try {
@@ -286,8 +286,8 @@ public class UpdateManager implements Listener {
 
                 plugin.getLogger().info("文件下载完成，大小: " + newJarFile.length() + " 字节");
 
-                String successMsg = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载完成！");
-                String versionMsg = ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f新版本已就绪: " + newJarName);
+                String successMsg = I18n.t("upd.done");
+                String versionMsg = I18n.t("upd.ready", newJarName);
                 if (sender != null) {
                     sender.sendMessage(successMsg);
                     sender.sendMessage(versionMsg);
@@ -310,7 +310,7 @@ public class UpdateManager implements Listener {
             } catch (IOException e) {
                 plugin.getLogger().severe("更新下载失败: " + e.getMessage());
                 if (sender != null) {
-                    sender.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新下载失败: " + e.getMessage()));
+                    sender.sendMessage(I18n.t("upd.download.fail", e.getMessage()));
                 }
             }
         };
@@ -391,9 +391,9 @@ public class UpdateManager implements Listener {
         Player player = event.getPlayer();
         if (hasUpdate && player.isOp()) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f检测到新版本: §a" + latestVersion));
+                player.sendMessage(I18n.t("upd.join.new", latestVersion));
                 if (releaseOverview != null && !releaseOverview.isEmpty()) {
-                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f更新内容:"));
+                    player.sendMessage(I18n.t("upd.changelog"));
                     for (String line : releaseOverview.split("\\r?\\n")) {
                         String trimmedLine = line.trim();
                         if (!trimmedLine.isEmpty()) {
@@ -402,7 +402,7 @@ public class UpdateManager implements Listener {
                         }
                     }
                 }
-                player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f使用 §e/fancy upgrade §f自动下载并更新。"));
+                player.sendMessage(I18n.t("upd.use.upgrade"));
             }, 40L);
         }
     }
