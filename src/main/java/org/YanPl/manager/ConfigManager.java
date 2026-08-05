@@ -23,6 +23,8 @@ public class ConfigManager {
     private String configLoadError = "";
     private boolean legacyPlayerListMigrationNeeded = false;
 
+    private static final String FANCY_API_URL = "https://api.fancy.baicaizhale.top";
+
     private static final String SKILL_PRIMARY_MIRROR = "https://fancy-skill.baicaizhale.top/";
     private static final String SKILL_REPO_BASE = "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/";
     private static final String SKILL_UPDATE_MIRROR = "https://ghproxy.vip/";
@@ -46,7 +48,7 @@ public class ConfigManager {
      * 获取 FancyConsole API 地址
      */
     public String getFancyApiUrl() {
-        return config.getString("fancy.api_url", "http://api.fancy.baicaizhale.top");
+        return FANCY_API_URL;
     }
 
     /**

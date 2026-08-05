@@ -76,8 +76,6 @@ provider:
 
 # FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
 fancy:
-  # API 地址（可选，默认指向 http://api.fancy.baicaizhale.top）
-  api_url: https://api.fancy.baicaizhale.top
   # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表
   # 主模型名称
   model: default
