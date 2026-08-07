@@ -69,7 +69,11 @@ public class ServerMemoryManager {
 
     public ServerMemoryManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.memoryFile = new File(plugin.getDataFolder(), "servermemory.json");
+        File runtimeDir = new File(plugin.getDataFolder(), "runtime");
+        if (!runtimeDir.exists()) {
+            runtimeDir.mkdirs();
+        }
+        this.memoryFile = new File(runtimeDir, "server_memories.json");
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         this.cache = new CopyOnWriteArrayList<>();
         loadFromFile();

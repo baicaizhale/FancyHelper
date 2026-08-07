@@ -56,11 +56,11 @@ class ServerMemoryManagerTest {
     }
 
     @Test
-    @DisplayName("addMemory 应写盘到 servermemory.json")
+    @DisplayName("addMemory 应写盘到 runtime/server_memories.json")
     void testAddMemory_Success_SavesToFile() throws Exception {
         serverMemoryManager.addMemory("测试规则", "rule", "Admin");
 
-        Path file = tempDir.resolve("servermemory.json");
+        Path file = tempDir.resolve("runtime").resolve("server_memories.json");
         assertTrue(Files.exists(file));
         String json = new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(json.contains("测试规则"));
@@ -206,7 +206,7 @@ class ServerMemoryManagerTest {
 
         assertTrue(result.startsWith("success:"));
         assertTrue(serverMemoryManager.getMemories().isEmpty());
-        assertFalse(Files.exists(tempDir.resolve("servermemory.json")));
+        assertFalse(Files.exists(tempDir.resolve("runtime").resolve("server_memories.json")));
     }
 
     @Test
@@ -330,7 +330,7 @@ class ServerMemoryManagerTest {
 
         serverMemoryManager.shutdown();
 
-        assertTrue(Files.exists(tempDir.resolve("servermemory.json")));
+        assertTrue(Files.exists(tempDir.resolve("runtime").resolve("server_memories.json")));
         assertTrue(serverMemoryManager.getMemories().isEmpty());
     }
 }
