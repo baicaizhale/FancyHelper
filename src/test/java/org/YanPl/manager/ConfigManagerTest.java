@@ -423,7 +423,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("isServerMemoryEnabled 应返回配置值")
     void testIsServerMemoryEnabled_ReturnsConfigValue() {
-        when(config.getBoolean("memory.enabled", true)).thenReturn(false);
+        when(config.getBoolean("settings.memory.enabled", true)).thenReturn(false);
 
         boolean result = configManager.isServerMemoryEnabled();
 
@@ -433,7 +433,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getServerMemoryMaxEntries 应返回配置值")
     void testGetServerMemoryMaxEntries_ReturnsConfigValue() {
-        when(config.getInt("memory.max_entries", 100)).thenReturn(50);
+        when(config.getInt("settings.memory.max_entries", 100)).thenReturn(50);
 
         int result = configManager.getServerMemoryMaxEntries();
 
@@ -443,7 +443,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getServerMemoryInjectTopK 应返回配置值")
     void testGetServerMemoryInjectTopK_ReturnsConfigValue() {
-        when(config.getInt("memory.inject_top_k", 4)).thenReturn(6);
+        when(config.getInt("settings.memory.inject_top_k", 4)).thenReturn(6);
 
         int result = configManager.getServerMemoryInjectTopK();
 
@@ -453,7 +453,7 @@ class ConfigManagerTest {
     @Test
     @DisplayName("getServerMemoryMinRelevance 应返回配置值")
     void testGetServerMemoryMinRelevance_ReturnsConfigValue() {
-        when(config.getInt("memory.min_relevance", 1)).thenReturn(2);
+        when(config.getInt("settings.memory.min_relevance", 1)).thenReturn(2);
 
         int result = configManager.getServerMemoryMinRelevance();
 
