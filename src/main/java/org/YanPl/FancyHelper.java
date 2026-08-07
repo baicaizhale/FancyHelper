@@ -16,6 +16,7 @@ import org.YanPl.manager.TodoManager;
 import org.YanPl.manager.NoticeManager;
 import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.manager.InstructionManager;
+import org.YanPl.manager.ServerMemoryManager;
 import org.YanPl.manager.GuiManager;
 import org.YanPl.manager.SkillManager;
 import org.YanPl.manager.SkillUpdateManager;
