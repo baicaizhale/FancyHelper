@@ -15,6 +15,7 @@ node_modules/
 .claude/
 test-mcp
 view-fancy/
+.agents/
 
 # IntelliJ
 out/
