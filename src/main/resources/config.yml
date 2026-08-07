@@ -1,5 +1,16 @@
 # 配置版本，请勿修改
-version: 4.2.0
+version: 4.3.0
+
+# 服务器级记忆（Server Memory）：管理员写入的全局规则/事实，对所有玩家的 AI 会话生效
+memory:
+  # 是否启用服务器级记忆
+  enabled: true
+  # 服务器记忆总数上限，超出后自动淘汰最久未使用的条目
+  max_entries: 100
+  # 每轮 prompt 注入的最相关条数（Top-K），0 表示关闭注入
+  inject_top_k: 4
+  # 注入的最低相关分（关键词命中次数），低于此分的记忆不注入
+  min_relevance: 1
 
 # 插件设置
 settings:
