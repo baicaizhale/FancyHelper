@@ -362,6 +362,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "mem":
                 handleMemory(player, args);
                 return true;
+            case "servermemory":
+            case "smem":
+                handleServerMemory(player, args);
+                return true;
             case "compact":
                 plugin.getCliManager().compactContext(player);
                 return true;
@@ -1155,6 +1159,220 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     }
 
     /**
+     * 处理服务器级记忆子命令（仅管理员可写，所有玩家会话可见）
+     */
+    private void handleServerMemory(Player player, String[] args) {
+        if (!player.hasPermission("fancyhelper.admin")) {
+            player.sendMessage(I18n.t("cli.servermemory.no.permission"));
+            return;
+        }
+        if (args.length == 1) {
+            showServerMemoryList(player);
+        } else if (args.length >= 2) {
+            String action = args[1].toLowerCase();
+            switch (action) {
+                case "add":
+                case "new":
+                    if (args.length >= 3) {
+                        String content = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
+                        handleServerMemoryAdd(player, content);
+                    } else {
+                        player.sendMessage(I18n.t("cli.servermemory.add.usage"));
+                    }
+                    break;
+                case "del":
+                case "delete":
+                case "remove":
+                    if (args.length >= 3) {
+                        try {
+                            int index = Integer.parseInt(args[2]);
+                            handleServerMemoryDelete(player, index);
+                        } catch (NumberFormatException e) {
+                            player.sendMessage(I18n.t("cli.servermemory.invalid.index"));
+                        }
+                    } else {
+                        player.sendMessage(I18n.t("cli.servermemory.del.usage"));
+                    }
+                    break;
+                case "edit":
+                case "modify":
+                    if (args.length >= 4) {
+                        try {
+                            int index = Integer.parseInt(args[2]);
+                            String content = String.join(" ", Arrays.copyOfRange(args, 3, args.length));
+                            handleServerMemoryEdit(player, index, content);
+                        } catch (NumberFormatException e) {
+                            player.sendMessage(I18n.t("cli.servermemory.invalid.index"));
+                        }
+                    } else {
+                        player.sendMessage(I18n.t("cli.servermemory.edit.usage"));
+                    }
+                    break;
+                case "clear":
+                case "clearall":
+                    handleServerMemoryClear(player);
+                    break;
+                default:
+                    showServerMemoryList(player);
+                    break;
+            }
+        }
+    }
+
+    private void showServerMemoryList(Player player) {
+        java.util.List<ServerMemoryManager.ServerMemory> memories =
+            plugin.getServerMemoryManager().getMemories();
+
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+        player.sendMessage(ColorUtil.translateCustomColors("       &zFancyHelper &8| &7Server Memory"));
+        player.sendMessage("");
+
+        if (memories.isEmpty()) {
+            player.sendMessage(I18n.t("cli.servermemory.empty"));
+            player.sendMessage(I18n.t("cli.servermemory.empty.hint"));
+        } else {
+            for (int i = 0; i < memories.size(); i++) {
+                ServerMemoryManager.ServerMemory memory = memories.get(i);
+
+                // Memory Content Line
+                TextComponent line = new TextComponent(ColorUtil.translateCustomColors("&8  " + (i + 1) + ". "));
+
+                TextComponent category = new TextComponent(ColorUtil.translateCustomColors("&3" + memory.getCategory() + " &8| "));
+                line.addExtra(category);
+
+                TextComponent content = new TextComponent(ColorUtil.translateCustomColors("&7" + memory.getContent()));
+                line.addExtra(content);
+
+                player.spigot().sendMessage(line);
+
+                // Action Buttons Line
+                TextComponent actions = new TextComponent("     ");
+
+                TextComponent editBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &eEdit &8]"));
+                editBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli servermemory edit " + (i + 1) + " " + memory.getContent()));
+                editBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.servermemory.edit.hover"))));
+                actions.addExtra(editBtn);
+
+                actions.addExtra(" ");
+
+                TextComponent delBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cDel &8]"));
+                delBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli servermemory del " + (i + 1)));
+                delBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.servermemory.del.hover"))));
+                actions.addExtra(delBtn);
+
+                if (memory.getAuthor() != null && !memory.getAuthor().isEmpty()) {
+                    actions.addExtra(" ");
+                    TextComponent author = new TextComponent(ColorUtil.translateCustomColors("&8by &7" + memory.getAuthor()));
+                    actions.addExtra(author);
+                }
+
+                player.spigot().sendMessage(actions);
+                player.sendMessage(""); // Spacer
+            }
+        }
+
+        player.sendMessage("");
+
+        // Bottom Buttons
+        TextComponent bottomLine = new TextComponent("  ");
+
+        TextComponent addBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &aAdd Memory &8]"));
+        addBtn.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/cli servermemory add "));
+        addBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.servermemory.add.hover"))));
+        bottomLine.addExtra(addBtn);
+
+        if (!memories.isEmpty()) {
+            bottomLine.addExtra("     ");
+            TextComponent clearBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &cClear All &8]"));
+            clearBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli servermemory clear"));
+            clearBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.servermemory.clear.hover"))));
+            bottomLine.addExtra(clearBtn);
+        }
+
+        player.spigot().sendMessage(bottomLine);
+
+        player.sendMessage("");
+        TextComponent backBtn = new TextComponent(ColorUtil.translateCustomColors("&8[ &7<< Back &8]"));
+        backBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli settings"));
+        backBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.tools.back.hover"))));
+        player.spigot().sendMessage(backBtn);
+
+        player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+    }
+
+    private void handleServerMemoryAdd(Player player, String content) {
+        String category = "rule";
+        String memoryContent = content;
+
+        if (content.contains("|")) {
+            String[] parts = content.split("\\|", 2);
+            if (parts.length == 2) {
+                category = parts[0].trim();
+                memoryContent = parts[1].trim();
+            }
+        }
+
+        if (memoryContent.isEmpty()) {
+            player.sendMessage(I18n.t("cli.servermemory.empty.content"));
+            return;
+        }
+
+        String result = plugin.getServerMemoryManager().addMemory(memoryContent, category, player.getName());
+        if (result.startsWith("success")) {
+            player.sendMessage(I18n.t("cli.servermemory.added", memoryContent));
+        } else {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
+        }
+        showServerMemoryList(player);
+    }
+
+    private void handleServerMemoryDelete(Player player, int index) {
+        String result = plugin.getServerMemoryManager().removeMemory(index);
+        if (result.startsWith("success")) {
+            player.sendMessage(I18n.t("cli.servermemory.deleted", index));
+        } else {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
+        }
+        showServerMemoryList(player);
+    }
+
+    private void handleServerMemoryEdit(Player player, int index, String content) {
+        String category = "rule";
+        String memoryContent = content;
+
+        if (content.contains("|")) {
+            String[] parts = content.split("\\|", 2);
+            if (parts.length == 2) {
+                category = parts[0].trim();
+                memoryContent = parts[1].trim();
+            }
+        }
+
+        if (memoryContent.isEmpty()) {
+            player.sendMessage(I18n.t("cli.servermemory.empty.content"));
+            return;
+        }
+
+        String result = plugin.getServerMemoryManager().updateMemory(index, memoryContent, category);
+        if (result.startsWith("success")) {
+            player.sendMessage(I18n.t("cli.servermemory.edited", index));
+        } else {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
+        }
+        showServerMemoryList(player);
+    }
+
+    private void handleServerMemoryClear(Player player) {
+        String result = plugin.getServerMemoryManager().clearMemories();
+        if (result.startsWith("success")) {
+            player.sendMessage(I18n.t("cli.servermemory.cleared"));
+        } else {
+            player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c" + result));
+        }
+        showServerMemoryList(player);
+    }
+
+    /**
      * 处理 Skill 子命令
      */
     private boolean handleSkillCommand(CommandSender sender, String[] args) {
@@ -1700,7 +1918,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
-                "stop", "exit", "download", "help", "lib", "compact", "skill", "sound", "resume"
+                "stop", "exit", "download", "help", "lib", "compact", "skill", "sound", "resume",
+                "servermemory", "smem"
             ));
             subCommands.add("mcp");
             return subCommands.stream()
@@ -1719,6 +1938,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
         } else if (args.length == 2 && (args[0].equalsIgnoreCase("memory") || args[0].equalsIgnoreCase("mem"))) {
+            return Arrays.asList("add", "del", "edit", "clear").stream()
+                    .filter(s -> s.startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 2 && (args[0].equalsIgnoreCase("servermemory") || args[0].equalsIgnoreCase("smem"))) {
             return Arrays.asList("add", "del", "edit", "clear").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
