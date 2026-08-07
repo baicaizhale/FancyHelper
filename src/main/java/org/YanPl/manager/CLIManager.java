@@ -2739,7 +2739,7 @@ public class CLIManager {
         });
 
         // 估算本轮输入的 prompt tokens 并记入 session
-        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode());
+        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message);
         String modelName = plugin.getConfigManager().getCloudflareModel();
         int estimatedInput = DialogueSession.calculateTokens(systemPrompt, modelName)
             + session.getEstimatedTokens(modelName) + 3;
@@ -2817,7 +2817,7 @@ public class CLIManager {
     private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
         DialogueSession nsSession = sessions.get(player.getUniqueId());
         String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills,
-                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL);
+                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL, message);
         AIResponse response = ai.chat(sessions.get(player.getUniqueId()), systemPrompt);
 
         if (!plugin.isEnabled()) return;
@@ -3063,8 +3063,8 @@ public class CLIManager {
         String content = cleanResponse;
         String toolCall = "";
 
-        // 定义已知工具列表
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
+        // 定义已知工具列表（顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持）
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit_global", "#edit", "#write", "#todo", "#remember_global", "#remember", "#forget_global", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -3295,7 +3295,8 @@ public class CLIManager {
         cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
         cleanResponse = cleanResponse.trim();
         
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit", "#write", "#todo", "#remember", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
+        // 顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持
+        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit_global", "#edit", "#write", "#todo", "#remember_global", "#remember", "#forget_global", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
