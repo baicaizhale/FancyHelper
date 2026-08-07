@@ -11,17 +11,24 @@ description: Build commands, code style, and conventions for FancyHelper
 
 ## Project Overview
 
-- **Type**: Minecraft Bukkit/Spigot Plugin
+- **Type**: Minecraft Bukkit/Spigot Plugin（用自然语言生成指令管理服务器）
 - **JDK**: Microsoft JDK 17+
 - **Build Tool**: Maven
-- **Purpose**: Generate Minecraft commands from natural language using AI
+- 功能与用法以 README.md 为单一信息源，本文不重复功能清单
+- 玩家入口主命令为 `/fancyhelper`（别名 `/cli`、`/fancy`），本文一律用 `/fancyhelper`
 
 ## Build Commands
 
-编译项目请使用：
+日常编译（生成插件 jar，默认跳过测试）：
 
 ```bash
 mvn clean package
+```
+
+改动影响 `src/main` 核心逻辑时，交付前须跑完整单测：
+
+```bash
+mvn test -DskipTests=false
 ```
 
 
@@ -55,10 +62,10 @@ mvn clean package
 插件支持三语言：`zh-cn`（简体中文，基准表）、`en-us`（美式英文）、`lzh-cn`（文言文），通过 `config.yml` 的 `settings.language` 切换（`/cli reload` 即时生效）。语言表硬编码在 `src\main\java\org\YanPl\util\I18n.java`，**不需要也不应该**放入 `src\main\resources`。
 
 #### 多语言规则（重要）
-1. **玩家可见消息**（sendMessage、TextComponent、GUI 物品名/Lore、书本页等）**必须**通过 `I18n.t("key", args...)` 获取，禁止硬编码中文/英文文本。
+1. **玩家可见消息**（sendMessage、TextComponent、GUI 物品名/Lore、书本页等）一律通过 `I18n.t("key", args...)` 获取。
 2. 新增消息时，key 必须在 `I18n.java` 的**三张语言表**（ZH_CN / EN_US / LZH_CN）中都添加；key 缺失时回退中文，中文也缺失时原样返回 key。
-3. `I18n.t()` 返回前已自动调用 `ColorUtil.translateCustomColors(...)` 处理颜色码，**不要**再对返回值重复包裹 ColorUtil。
-4. **不翻译**的内容：控制台消息（`Bukkit.getConsoleSender()`）、`plugin.getLogger()` 调试日志、AI 提示词/协议串（如 `#error:`、`#run_result`）。这些可直接使用 `ColorUtil.translateCustomColors(...)` 或保持原样。
+3. `I18n.t()` 返回前已自动调用 `ColorUtil.translateCustomColors(...)` 处理颜色码，直接使用返回值即可，无需再包裹 ColorUtil。
+4. **无需翻译**的内容：控制台消息（`Bukkit.getConsoleSender()`）、`plugin.getLogger()` 调试日志、AI 提示词/协议串（如 `#error:`、`#run_result`）。这些可直接使用 `ColorUtil.translateCustomColors(...)` 或保持原样。
 5. 占位符使用 `{0}`、`{1}` 等格式，调用时按顺序传参。
 
 #### 统一前缀格式
@@ -67,31 +74,7 @@ mvn clean package
 ```
 整条消息**默认使用白色（§f）**，不允许整体使用其他颜色，仅允许在部分高亮处使用其他颜色（如 `§a` 成功、`§c` 错误）。
 
-#### 错误调用方式（必须避免）
-1. **玩家可见消息硬编码文本**：
-   ```java
-   // ✗ 错误：绕过 I18n，无法随语言切换
-   player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c操作失败"));
-   ```
-2. **直接使用 `ChatColor` 常量拼接**（绕过 ColorUtil/I18n）：
-   ```java
-   // ✗ 错误：直接使用 ChatColor.RED 等原生常量
-   player.sendMessage(ChatColor.RED + "操作失败");
-   ```
-3. **直接发送原始字符串**（绕过 ColorUtil）：
-   ```java
-   // ✗ 错误：发送包含 § 或 & 的字符串但不加 ColorUtil
-   player.sendMessage("§8▌ §e✦ §fFancyHelper");
-   ```
-4. **Bungee/Spigot 组件与 ActionBar/Title 未转换**：
-   ```java
-   // ✗ 错误：在构造 HoverEvent/TextComponent 时未经过 ColorUtil/I18n
-   TextComponent btn = new TextComponent(ChatColor.GRAY + "点击");
-   // ✗ 错误：ActionBar 和 Title 传入原始字符串
-   player.sendTitle("", rawSubtitle, 0, 20, 0);
-   ```
-
-#### ✅ 正确调用范式
+#### ✅ 正确调用范式（优先）
 1. **纯文本发送（sendMessage）**：
    ```java
    // ✓ 正确：玩家可见消息走 I18n.t（内部已处理 ColorUtil）
@@ -118,8 +101,33 @@ mvn clean package
 5. **自定义 Helper 方法封装**：
    在使用类似 `msg(String)` 等快捷消息辅助方法时，需确保该方法最终返回值经过了 `ColorUtil.translateCustomColors(...)` / `I18n.t(...)` 统一处理。
 
-## After Making Changes
+#### 反例对照（同一场景的错误写法，用于自查）
+1. **玩家可见消息硬编码文本**：
+   ```java
+   // ✗ 绕过 I18n，无法随语言切换
+   player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §c操作失败"));
+   ```
+2. **直接使用 `ChatColor` 常量拼接**（绕过 ColorUtil/I18n）：
+   ```java
+   // ✗ 直接使用 ChatColor.RED 等原生常量
+   player.sendMessage(ChatColor.RED + "操作失败");
+   ```
+3. **直接发送原始字符串**（绕过 ColorUtil）：
+   ```java
+   // ✗ 发送包含 § 或 & 的字符串但不加 ColorUtil
+   player.sendMessage("§8▌ §e✦ §fFancyHelper");
+   ```
+4. **Bungee/Spigot 组件与 ActionBar/Title 未转换**：
+   ```java
+   // ✗ 在构造 HoverEvent/TextComponent 时未经过 ColorUtil/I18n
+   TextComponent btn = new TextComponent(ChatColor.GRAY + "点击");
+   // ✗ ActionBar 和 Title 传入原始字符串
+   player.sendTitle("", rawSubtitle, 0, 20, 0);
+   ```
 
-1. Run `mvn clean package` to verify build and tests
-3. Check for any new warnings in output
-4. Ensure no changes to AI model configuration
+## After Making Changes（完成判据：以下全满足才算完成）
+
+1. 编译通过：`mvn clean package` 成功，无新增编译错误
+2. 改动影响 `src/main` 核心逻辑的，单测全绿：`mvn test -DskipTests=false`
+3. 构建输出无新增 `[WARN]` / `[ERROR]`（IDE 红线除外）
+4. 未改动 `provider.ai` 及 FancyConsole 端点硬编码（见 `FancyConsoleManager.DEFAULT_CONSOLE_URL`）
