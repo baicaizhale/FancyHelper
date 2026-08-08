@@ -1274,7 +1274,7 @@ public class CLIManager {
     }
 
     /**
-     * 发送插件卸载提示
+     * 发送插件卸载提示（插件重载/重启时调用）：会话已保存并退出，提示玩家用 /cli resume 手动恢复。
      * @param player 玩家
      */
     public void sendUnloadMessage(Player player) {
@@ -1284,14 +1284,13 @@ public class CLIManager {
         );
         TextComponent message = new TextComponent(components);
 
-        // 创建了解更多按钮
-        TextComponent learnMoreBtn = new TextComponent(I18n.t("clim.unload.learn.more"));
-        learnMoreBtn.setColor(net.md_5.bungee.api.ChatColor.BLUE);
-        learnMoreBtn.setUnderlined(true);
-        learnMoreBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/whyusee1"));
-        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.hover"))));
+        // 创建恢复按钮（点击执行 /cli resume）
+        TextComponent resumeBtn = new TextComponent(I18n.t("clim.unload.resume"));
+        resumeBtn.setColor(net.md_5.bungee.api.ChatColor.GREEN);
+        resumeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume"));
+        resumeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.resume.hover"))));
 
-        message.addExtra(learnMoreBtn);
+        message.addExtra(resumeBtn);
         player.spigot().sendMessage(message);
     }
 

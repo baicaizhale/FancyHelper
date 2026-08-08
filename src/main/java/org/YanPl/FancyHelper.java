@@ -200,8 +200,8 @@ public final class FancyHelper extends JavaPlugin {
             // 尝试同步命令，修复热重载后的 Brigadier 缓存问题
             syncCommands();
 
-            // 检查在线玩家是否有预加载的会话，如果有则自动进入CLI模式
-            checkOnlinePlayersForPreloadedSessions();
+            // 已禁用：插件重载/重启后不再自动恢复会话，改为玩家手动 /cli resume。
+            // checkOnlinePlayersForPreloadedSessions();
         } catch (Throwable e) {
             getLogger().severe("FancyHelper 启动失败: " + e.getMessage());
             e.printStackTrace();
