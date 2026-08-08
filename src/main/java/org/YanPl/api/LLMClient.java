@@ -323,15 +323,23 @@ public class LLMClient {
             return;
         }
         bodyJson.add("tools", org.YanPl.manager.ToolRegistry.buildToolsArray(plugin, player, session, responsesFormat));
+        // OpenAI chat/completions 格式：显式声明并行调用与自动选择。
+        // Cloudflare Workers AI（gemma 等）缺少 parallel_tool_calls 时会退化到单调用，
+        // 导致"请同时给我苹果和木头"只返回一个工具调用。Responses API 无此字段。
+        if (!responsesFormat) {
+            bodyJson.addProperty("parallel_tool_calls", true);
+            bodyJson.addProperty("tool_choice", "auto");
+        }
     }
 
     /**
      * 400/422 硬拒回退：克隆请求体并去掉 tools 字段，重试走文本协议。
+     * tool_choice/parallel_tool_calls 与 tools 配对，一并移除，避免无 tools 时残留触发部分 provider 报错。
      */
     private JsonObject stripTools(JsonObject bodyJson) {
         JsonObject clone = new JsonObject();
         for (String key : bodyJson.keySet()) {
-            if (!"tools".equals(key)) {
+            if (!"tools".equals(key) && !"tool_choice".equals(key) && !"parallel_tool_calls".equals(key)) {
                 clone.add(key, bodyJson.get(key));
             }
         }
