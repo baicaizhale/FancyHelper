@@ -105,8 +105,15 @@ public class PromptManager {
         // ==================== Core Constraints / 核心约束 ====================
         sb.append("[Core Constraints] (Violations cause parsing failures — follow strictly)\n\n");
 
-        sb.append("1. [Single Tool Call] Each response may contain ONLY ONE tool call.\n");
-        sb.append("   - For multiple operations: complete the first call, wait for result, then proceed.\n\n");
+        if (nativeTools) {
+            // 原生函数调用：支持一次返回多个 tool_calls，服务端串行执行后一次性回灌结果
+            sb.append("1. [Multiple Tool Calls] You may return MULTIPLE independent function calls in ONE response.\n");
+            sb.append("   - They execute in order; results feed back together. Parallelize independent operations.\n");
+            sb.append("   - Dependent operations still require the previous result first.\n\n");
+        } else {
+            sb.append("1. [Single Tool Call] Each response may contain ONLY ONE tool call.\n");
+            sb.append("   - For multiple operations: complete the first call, wait for result, then proceed.\n\n");
+        }
 
         sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
 
@@ -119,11 +126,14 @@ public class PromptManager {
         sb.append("Example:\n");
         sb.append("  Correct: #run: give @p apple\n");
         sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands)\n");
-        sb.append("  Wrong:   #todo: [...]\\n#run: say hello     (multiple tools in one response)\n\n");
+        if (!nativeTools) {
+            sb.append("  Wrong:   #todo: [...]\\n#run: say hello     (multiple tools in one response)\n");
+        }
+        sb.append("\n");
 
         // ==================== Tool List / 工具列表 ====================
         if (nativeTools) {
-            sb.append("[Tools] Format: #tool_name: argument (native function calling is enabled — prefer calling functions directly; the #tool text form remains as a fallback if native calls are unavailable)\n\n");
+            sb.append("[Tools] Use NATIVE function calling (the tools API). Call multiple tools in one response when they are independent. The #tool text form is ONLY a fallback if native calls are unavailable — do not output it when native works.\n\n");
 
             sb.append("[Query]\n");
             sb.append("  #search: <args> | #skill: <id> [list|read <file>] | #unloadskill: <id> | #ask: <json> | #webfetch: <url>\n");
@@ -145,7 +155,7 @@ public class PromptManager {
                 sb.append("[MCP External Tools]\n");
                 sb.append("  #mcp_tools | #mcp: serverName.toolName|jsonArgs\n");
             }
-            sb.append("Note: 若原生函数调用可用，优先直接调用函数；仅在无法调用时按上述 #tool 文本格式输出。\n\n");
+            sb.append("Note: Call functions through the tools API. Independent calls may share one response; #tool 文本仅在原生调用不可用时兜底。\n\n");
         } else {
             sb.append("[Tools] Format: #tool_name: argument\n\n");
 
@@ -219,7 +229,11 @@ public class PromptManager {
         sb.append("1. Skill usage: Only call #skill when you need knowledge to complete a specific task. ");
         sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
         sb.append("3. Complex tasks (3+ steps): Use #todo first to show progress, then execute step by step.\n");
-        sb.append("   - After #todo: do NOT call any other tool in the same response.\n");
+        if (nativeTools) {
+            sb.append("   - You may issue multiple tools (including #todo) in one response when independent.\n");
+        } else {
+            sb.append("   - After #todo: do NOT call any other tool in the same response.\n");
+        }
         sb.append("   - Update task status to completed after each step.\n\n");
 
         // ====================================================================
