@@ -555,7 +555,7 @@ public class CLIManager {
                             sendStatusMessage(player, message);
                             // 串行批量超时兜底：批次某工具异步异常无反馈时强制终结，避免永久卡住
                             DialogueSession batchSession = sessions.get(uuid);
-                            if (batchSession != null && batchSession.hasPendingNativeTools()) {
+                            if (batchSession != null && batchSession.isBatchInProgress()) {
                                 Long batchStart = generationStartTimes.get(uuid);
                                 if (batchStart != null && now - batchStart > BATCH_TIMEOUT_MS) {
                                     plugin.getLogger().warning("[CLI] 批次工具执行超时 (" + BATCH_TIMEOUT_MS + "ms)，强制终结批次: " + player.getName());
@@ -2074,6 +2074,9 @@ public class CLIManager {
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
                 generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
+                // 重置超时起点：批次中确认的 run 可能在按钮上停留很久，避免 EXECUTING_TOOL
+                // 异步执行窗口内被批次超时兜底误杀
+                generationStartTimes.put(uuid, System.currentTimeMillis());
                 int colonIdx = cmd.indexOf(':');
                 String prefix = colonIdx > 0 ? cmd.substring(0, colonIdx).toUpperCase() : "";
                 if (FILE_OP_TYPES.contains(prefix)) {
@@ -2130,6 +2133,13 @@ public class CLIManager {
         if (pendingCommands.containsKey(uuid)) {
             pendingCommands.remove(uuid);
             player.sendMessage(I18n.t("clim.cancel.cmd"));
+            // 若处于串行批次中，把取消作为该工具的结果回灌，推进到下一工具（否则屏障永久卡死）
+            DialogueSession s = sessions.get(uuid);
+            if (s != null && s.isBatchInProgress()) {
+                s.addPendingToolResult("#error: 用户取消了该命令。");
+                executeNativeBatch(player, s);
+                return;
+            }
             isGenerating.put(uuid, false);
             generationStates.put(uuid, GenerationStatus.CANCELLED);
             generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -2162,10 +2172,17 @@ public class CLIManager {
         
         pendingSmartActions.remove(uuid);
         player.sendMessage(I18n.t("clim.smart.denied"));
+        // 若处于串行批次中，把拒绝作为该工具的结果回灌，推进到下一工具（否则屏障永久卡死）
+        DialogueSession s = sessions.get(uuid);
+        if (s != null && s.isBatchInProgress()) {
+            s.addPendingToolResult("#error: 用户拒绝了此操作。");
+            executeNativeBatch(player, s);
+            return;
+        }
         isGenerating.put(uuid, false);
         generationStates.put(uuid, GenerationStatus.CANCELLED);
         generationStartTimes.put(uuid, System.currentTimeMillis());
-        
+
         feedbackToAI(player, "#error: 用户拒绝了此操作。");
     }
 
@@ -3885,7 +3902,7 @@ public class CLIManager {
         if (session == null) return;
 
         // === 串行批量拦截：不重入模型，累计结果并推进下一工具 ===
-        if (session.hasPendingNativeTools()) {
+        if (session.isBatchInProgress()) {
             session.addPendingToolResult(feedback);
             executeNativeBatch(player, session);
             return;
@@ -4233,7 +4250,8 @@ public class CLIManager {
 
     /**
      * 该工具是否可安全进入串行批量（保证恰好一次异步 feedbackToAI，不会死锁批次屏障）。
-     * run 仅 YOLO 模式可批（非风险命令）；NORMAL/SMART 会渲染确认按钮，不能批。
+     * run 在任何模式都可批：NORMAL/SMART 的 run 会渲染确认按钮，玩家确认/取消后都能
+     * 经 feedbackToAI 推进批次（确认→执行→反馈拦截→下一工具；取消→#error 结果→下一工具）。
      */
     static boolean isBatchSafeTool(String toolName, DialogueSession.Mode mode) {
         String name = toolName == null ? "" : toolName.toLowerCase();
@@ -4246,9 +4264,8 @@ public class CLIManager {
             case "todo":
             case "list":
             case "read":
-                return true;
             case "run":
-                return mode == DialogueSession.Mode.YOLO;
+                return true;
             default:
                 return false;
         }
@@ -4300,13 +4317,19 @@ public class CLIManager {
             diag.append(c.name()).append(":").append(c.argumentsJson());
         }
         plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
-        if (calls.size() > 1 && allBatchSafe(calls, session) && !containsRiskyRun(calls, session)) {
-            session.clearBatchState();
-            for (NativeToolCall call : calls) {
-                session.pushPendingNativeTool(ToolRegistry.bridgeToText(call));
+        if (calls.size() > 1 && allBatchSafe(calls, session)) {
+            // YOLO 模式若批次含风险命令（会渲染确认按钮卡住屏障），则不进批量
+            if (session != null && session.getMode() == DialogueSession.Mode.YOLO && containsRiskyRun(calls, session)) {
+                plugin.getLogger().warning("[CLI] 批次含 YOLO 风险命令，仅执行第一个，丢弃其余: " + player.getName());
+            } else {
+                session.clearBatchState();
+                session.setBatchInProgress(true);
+                for (NativeToolCall call : calls) {
+                    session.pushPendingNativeTool(ToolRegistry.bridgeToText(call));
+                }
+                executeNativeBatch(player, session);
+                return;
             }
-            executeNativeBatch(player, session);
-            return;
         }
         // 单工具路径（字节级一致）
         if (calls.size() > 1) {
@@ -4352,6 +4375,7 @@ public class CLIManager {
         }
 
         // 2) 队列耗尽 → 合并全部结果，一次真实模型重入
+        session.setBatchInProgress(false);
         session.clearPendingNativeTools();
         List<String> results = session.drainPendingToolResults();
         String joined = results.isEmpty()
@@ -4374,6 +4398,7 @@ public class CLIManager {
         if (session == null) {
             return;
         }
+        session.setBatchInProgress(false);
         session.clearPendingNativeTools();
         List<String> results = session.drainPendingToolResults();
         String joined = (results.isEmpty()

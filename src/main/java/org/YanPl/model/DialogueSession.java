@@ -39,6 +39,9 @@ public class DialogueSession {
     // 串行批量工具执行状态：非空表示处于批次中（一次响应返回多个原生 tool_calls）
     private final java.util.Deque<String> pendingNativeTools = new java.util.ArrayDeque<>();
     private final List<String> pendingToolResults = new ArrayList<>();
+    // 整个批次生命周期标记：从批启动到最后一项结果回灌前为 true。
+    // 与 pendingNativeTools 非空不同，队列耗尽后仍为 true，使最后一项的异步反馈也能被批次屏障拦截合并。
+    private boolean batchInProgress = false;
     private long lastActivityTime;
     private long startTime;
     private int toolSuccessCount = 0;
@@ -702,6 +705,14 @@ public class DialogueSession {
         return !pendingNativeTools.isEmpty();
     }
 
+    public boolean isBatchInProgress() {
+        return batchInProgress;
+    }
+
+    public void setBatchInProgress(boolean inProgress) {
+        this.batchInProgress = inProgress;
+    }
+
     public void clearPendingNativeTools() {
         pendingNativeTools.clear();
     }
@@ -719,6 +730,7 @@ public class DialogueSession {
     public void clearBatchState() {
         pendingNativeTools.clear();
         pendingToolResults.clear();
+        batchInProgress = false;
     }
 
     public static class Message {

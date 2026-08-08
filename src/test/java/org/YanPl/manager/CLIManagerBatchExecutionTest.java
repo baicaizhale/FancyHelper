@@ -30,12 +30,12 @@ class CLIManagerBatchExecutionTest {
     }
 
     @Test
-    @DisplayName("run 仅 YOLO 模式可批")
-    void testRunOnlyYolo() {
+    @DisplayName("run 在所有模式均可批（确认/取消都能推进批次）")
+    void testRunBatchableAllModes() {
         assertTrue(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.YOLO));
-        assertFalse(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.NORMAL));
-        assertFalse(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.SMART));
-        assertFalse(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.PLAN));
+        assertTrue(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.NORMAL));
+        assertTrue(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.SMART));
+        assertTrue(CLIManager.isBatchSafeTool("run", DialogueSession.Mode.PLAN));
     }
 
     @Test
@@ -60,7 +60,7 @@ class CLIManagerBatchExecutionTest {
     void testCaseInsensitive() {
         assertTrue(CLIManager.isBatchSafeTool("SEARCH", DialogueSession.Mode.NORMAL));
         assertTrue(CLIManager.isBatchSafeTool("Run", DialogueSession.Mode.YOLO));
-        assertFalse(CLIManager.isBatchSafeTool("Run", DialogueSession.Mode.NORMAL));
+        assertTrue(CLIManager.isBatchSafeTool("Run", DialogueSession.Mode.NORMAL));
     }
 
     // ======================== containsRiskyRun ========================
@@ -92,6 +92,7 @@ class CLIManagerBatchExecutionTest {
     void testBatchStateFields() {
         DialogueSession s = new DialogueSession();
         assertFalse(s.hasPendingNativeTools());
+        assertFalse(s.isBatchInProgress());
 
         s.pushPendingNativeTool("#search: a");
         s.pushPendingNativeTool("#webfetch: b");
@@ -99,6 +100,24 @@ class CLIManagerBatchExecutionTest {
         assertEquals("#search: a", s.pollPendingNativeTool());
         assertEquals("#webfetch: b", s.pollPendingNativeTool());
         assertFalse(s.hasPendingNativeTools());
+    }
+
+    @Test
+    @DisplayName("batchInProgress 独立于队列非空，队列耗尽仍为 true")
+    void testBatchInProgressLifetime() {
+        DialogueSession s = new DialogueSession();
+        assertFalse(s.isBatchInProgress());
+
+        // 批启动：置位；队列耗尽后（最后一项已 poll）仍为 true，等待最后结果回灌
+        s.setBatchInProgress(true);
+        s.pushPendingNativeTool("#search: a");
+        s.pollPendingNativeTool();
+        assertFalse(s.hasPendingNativeTools(), "队列已耗尽");
+        assertTrue(s.isBatchInProgress(), "批次仍进行中，等待最后一项反馈");
+
+        // 合并终结后清复位
+        s.clearBatchState();
+        assertFalse(s.isBatchInProgress());
     }
 
     @Test
