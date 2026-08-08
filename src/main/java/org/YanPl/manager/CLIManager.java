@@ -742,24 +742,35 @@ public class CLIManager {
             long now = System.currentTimeMillis();
             long thirtyMinutesMs = 30 * 60 * 1000;
 
+            // 只取最新的会话文件，与 loadLatestPlayerSession 判定一致：
+            // 若最新文件是显式退出的（退出 CLI 后重载），则不应自动恢复。
+            Path latestFile = null;
+            long latestTime = 0;
+
             try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(playerDir, "*.json")) {
                 for (Path file : stream) {
-                    if (now - Files.getLastModifiedTime(file).toMillis() <= thirtyMinutesMs) {
-                        // 检查是否显式退出的会话
-                        try {
-                            Gson gson = new Gson();
-                            String json = Files.readString(file, StandardCharsets.UTF_8);
-                            JsonObject obj = gson.fromJson(json, JsonObject.class);
-                            if (obj != null && obj.has("explicitExit") && obj.get("explicitExit").getAsBoolean()) {
-                                continue;
-                            }
-                        } catch (Exception e) {
-                            // 解析失败就当正常文件处理
-                        }
-                        return true;
+                    long lastMod = Files.getLastModifiedTime(file).toMillis();
+                    if (now - lastMod <= thirtyMinutesMs && lastMod > latestTime) {
+                        latestTime = lastMod;
+                        latestFile = file;
                     }
                 }
             }
+
+            if (latestFile == null) return false;
+
+            // 检查最新会话是否显式退出
+            try {
+                Gson gson = new Gson();
+                String json = Files.readString(latestFile, StandardCharsets.UTF_8);
+                JsonObject obj = gson.fromJson(json, JsonObject.class);
+                if (obj != null && obj.has("explicitExit") && obj.get("explicitExit").getAsBoolean()) {
+                    return false;
+                }
+            } catch (Exception e) {
+                // 解析失败就当正常文件处理
+            }
+            return true;
         } catch (IOException e) {
             // 忽略
         }
