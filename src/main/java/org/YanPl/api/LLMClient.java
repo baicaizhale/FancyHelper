@@ -225,8 +225,7 @@ public class LLMClient {
     /**
      * 构建消息数组（OpenAI 和 CloudFlare API 通用）
      */
-    private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {
-        JsonArray messagesArray = new JsonArray();
+    private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {        JsonArray messagesArray = new JsonArray();
 
         String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
         safeSystemPrompt = safeSystemPrompt.trim();
@@ -307,6 +306,70 @@ public class LLMClient {
         return messagesArray;
     }
 
+    /**
+     * 原生函数调用门控：开关开启 && 模型支持 && 会话未降级时，把 tools 数组挂到请求体。
+     * @param responsesFormat true 输出 Responses API 格式（gpt-oss），false 输出 OpenAI chat/completions 格式
+     */
+    private void attachNativeTools(JsonObject bodyJson, org.bukkit.entity.Player player,
+                                   DialogueSession session, String model, boolean responsesFormat) {
+        // chatSimple 等一次性调用无玩家，不挂 tools
+        if (player == null) {
+            return;
+        }
+        boolean nativeActive = plugin.getConfigManager().isNativeToolCallingEnabled()
+                && session != null && !session.isNativeToolsDegraded()
+                && org.YanPl.manager.ToolRegistry.isNativeActiveForModel(true, model);
+        if (!nativeActive) {
+            return;
+        }
+        bodyJson.add("tools", org.YanPl.manager.ToolRegistry.buildToolsArray(plugin, player, session, responsesFormat));
+    }
+
+    /**
+     * 400/422 硬拒回退：克隆请求体并去掉 tools 字段，重试走文本协议。
+     */
+    private JsonObject stripTools(JsonObject bodyJson) {
+        JsonObject clone = new JsonObject();
+        for (String key : bodyJson.keySet()) {
+            if (!"tools".equals(key)) {
+                clone.add(key, bodyJson.get(key));
+            }
+        }
+        return clone;
+    }
+
+    /**
+     * 原生函数调用被 provider 拒绝后的通用回退：去 tools 重试同一条请求。
+     * 标记会话降级（后续不再发 tools），返回重试结果；重试仍失败则返回 null（由调用方按原错误处理）。
+     */
+    private AIResponse retryWithoutTools(String apiUrl, String apiKey, String requestBody, String failedBody,
+                                         DialogueSession session) {
+        try {
+            plugin.getLogger().warning("[AI] provider 拒绝原生函数调用（400/422），降级为文本协议重试...");
+            JsonObject bodyJson = gson.fromJson(requestBody, JsonObject.class);
+            JsonObject noTools = stripTools(bodyJson);
+            session.setNativeToolsDegraded(true);
+            String retryBody = gson.toJson(noTools);
+            HttpRequest retry = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                    .POST(HttpRequest.BodyPublishers.ofString(retryBody, StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<String> resp = sendWithRetry(retry);
+            if (resp.statusCode() == 200) {
+                logInteraction(session, retryBody, resp.body());
+                JsonObject resultJson = gson.fromJson(resp.body(), JsonObject.class);
+                return responseParser.parseResponse(resultJson);
+            }
+            plugin.getLogger().warning("[AI] 降级重试仍失败: " + resp.statusCode() + " " + resp.body());
+        } catch (Exception e) {
+            plugin.getLogger().warning("[AI] 降级重试异常: " + e.getMessage());
+        }
+        return null;
+    }
+
     private String fetchAccountId() throws IOException {
         // 从 Cloudflare API 获取 Account ID 并缓存，依赖配置中的 cf_key
         if (cachedAccountId != null) return cachedAccountId;
@@ -363,25 +426,25 @@ public class LLMClient {
         return String.format("https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/%s", accountId, endpoint);
     }
 
-    public AIResponse chat(DialogueSession session, String systemPrompt) throws IOException {
+    public AIResponse chat(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
         checkConfigLoaded();
 
         // 检测是否启用 FancyConsole 模式
         if (plugin.getConfigManager().isFancyConsoleAi()) {
-            return chatWithFancyConsole(session, systemPrompt);
+            return chatWithFancyConsole(player, session, systemPrompt);
         }
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAI(session, systemPrompt);
+            return chatWithOpenAI(player, session, systemPrompt);
         }
         // 否则使用 CloudFlare Workers AI
-        return chatWithCloudFlare(session, systemPrompt);
+        return chatWithCloudFlare(player, session, systemPrompt);
     }
 
     /**
      * 使用 FancyConsole 进行对话（OpenAI 兼容格式）
      */
-    private AIResponse chatWithFancyConsole(DialogueSession session, String systemPrompt) throws IOException {
+    private AIResponse chatWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
         String apiUrl = plugin.getConfigManager().getFancyApiUrl();
         String apiKey = plugin.getFancyConsoleManager().getApiKey();
         String model = plugin.getConfigManager().getFancyModel();
@@ -404,6 +467,7 @@ public class LLMClient {
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 10000);
+        attachNativeTools(bodyJson, player, session, model, false);
 
         String requestBody = gson.toJson(bodyJson);
 
@@ -434,6 +498,13 @@ public class LLMClient {
         String responseBody = response.body();
         if (response.statusCode() != 200) {
             plugin.getLogger().warning("[FancyConsole] API 错误: " + response.statusCode() + " " + responseBody);
+            // 原生函数调用被 provider 拒绝（400/422）：去掉 tools 重试，走文本协议
+            if (requestBody.contains("\"tools\"") && (response.statusCode() == 400 || response.statusCode() == 422)) {
+                AIResponse degraded = retryWithoutTools(apiUrl, apiKey, requestBody, responseBody, session);
+                if (degraded != null) {
+                    return degraded;
+                }
+            }
             logInteraction(session, requestBody, responseBody);
             throw new IOException("§zFancyHelper§b§r §7> §cAPI 请求失败 (" + response.statusCode() + ")");
         }
@@ -447,7 +518,7 @@ public class LLMClient {
     /**
      * 使用 OpenAI 兼容 API 进行对话
      */
-    private AIResponse chatWithOpenAI(DialogueSession session, String systemPrompt) throws IOException {
+    private AIResponse chatWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
         String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
         String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getOpenAiModel();
@@ -496,6 +567,7 @@ public class LLMClient {
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 10000);
+        attachNativeTools(bodyJson, player, session, model, false);
 
         // 对于支持推理参数的模型（如 deepseek-reasoner、o1、qwen-max 等），添加推理参数
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
@@ -581,6 +653,14 @@ public class LLMClient {
                 if (statusCode == 400 && responseBody != null && responseBody.contains("Content Exists Risk")) {
                     plugin.getLogger().warning("[AI 错误] 对话内容触发了内容风控 (Content Exists Risk)");
                     throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
+                }
+
+                // 原生函数调用被 provider 拒绝（400/422）：去掉 tools 重试，走文本协议
+                if ((statusCode == 400 || statusCode == 422) && bodyString.contains("\"tools\"")) {
+                    AIResponse degraded = retryWithoutTools(apiUrl, apiKey, bodyString, responseBody, session);
+                    if (degraded != null) {
+                        return degraded;
+                    }
                 }
 
                 // Cloudflare 429 Neurons 耗尽
@@ -758,7 +838,7 @@ public class LLMClient {
     /**
      * 使用 CloudFlare Workers AI 进行对话
      */
-    private AIResponse chatWithCloudFlare(DialogueSession session, String systemPrompt) throws IOException {
+    private AIResponse chatWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
         // 将会话历史与 systemPrompt 打包为 CloudFlare Responses API 所需的 JSON，发起 HTTP 请求并解析返回
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
@@ -799,8 +879,11 @@ public class LLMClient {
             reasoning.addProperty("effort", "medium");
             reasoning.addProperty("summary", "detailed");
             bodyJson.add("reasoning", reasoning);
+            // Responses API 格式的 tools（gpt-oss 原生支持函数调用）
+            attachNativeTools(bodyJson, player, session, model, true);
         } else {
             bodyJson.add("messages", messagesArray);
+            attachNativeTools(bodyJson, player, session, model, false);
             if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
             }
         }
@@ -854,6 +937,10 @@ public class LLMClient {
                 // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
                 if ((response.statusCode() == 400 || response.statusCode() == 500) && responseBody != null) {
                     plugin.getLogger().warning("[AI] 检测到 CF API 错误 " + response.statusCode() + "，正在尝试使用简化载荷重试...");
+                    // 400 且带 tools 时标记会话降级，后续轮次不再发 tools
+                    if (response.statusCode() == 400 && bodyString.contains("\"tools\"")) {
+                        session.setNativeToolsDegraded(true);
+                    }
                     return retryWithSimplifiedPayload(session, model, useResponsesApi, url, cfKey);
                 }
 
@@ -987,7 +1074,14 @@ public class LLMClient {
 
         DialogueSession tempSession = new DialogueSession();
         tempSession.addMessage("user", prompt);
-        return chat(tempSession, "你是一个得力的助手。");
+        // chatSimple 用于风险评估等一次性调用：不带玩家（无工具门控），直接走当前 provider
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return chatWithFancyConsole(null, tempSession, "你是一个得力的助手。");
+        }
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatWithOpenAI(null, tempSession, "你是一个得力的助手。");
+        }
+        return chatWithCloudFlare(null, tempSession, "你是一个得力的助手。");
     }
 
     /**
@@ -1878,22 +1972,22 @@ public class LLMClient {
      * @param streamingHandler 流式处理器
      * @return 完整的响应文本
      */
-    public String chatStreaming(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    public String chatStreaming(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         checkConfigLoaded();
 
         if (plugin.getConfigManager().isFancyConsoleAi()) {
-            return chatStreamingWithFancyConsole(session, systemPrompt, streamingHandler);
+            return chatStreamingWithFancyConsole(player, session, systemPrompt, streamingHandler);
         }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatStreamingWithOpenAI(session, systemPrompt, streamingHandler);
+            return chatStreamingWithOpenAI(player, session, systemPrompt, streamingHandler);
         }
-        return chatStreamingWithCloudFlare(session, systemPrompt, streamingHandler);
+        return chatStreamingWithCloudFlare(player, session, systemPrompt, streamingHandler);
     }
 
     /**
      * 使用 FancyConsole 进行流式对话（OpenAI 兼容格式）
      */
-    private String chatStreamingWithFancyConsole(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         String apiUrl = plugin.getConfigManager().getFancyApiUrl();
         String apiKey = plugin.getFancyConsoleManager().getApiKey();
         String model = plugin.getConfigManager().getFancyModel();
@@ -1923,6 +2017,7 @@ public class LLMClient {
         maxTokens = Math.min(maxTokens, 65536);
         bodyJson.addProperty("max_tokens", maxTokens);
         bodyJson.addProperty("stream", true);
+        attachNativeTools(bodyJson, player, session, model, false);
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[FancyConsole Streaming] 请求: " + apiUrl + " 模型: " + model);
@@ -1959,7 +2054,7 @@ public class LLMClient {
     /**
      * 使用 OpenAI 兼容 API 进行流式对话
      */
-    private String chatStreamingWithOpenAI(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
         String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getOpenAiModel();
@@ -1987,6 +2082,7 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 10000);
         bodyJson.addProperty("stream", true);
+        attachNativeTools(bodyJson, player, session, model, false);
 
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
         }
@@ -2028,7 +2124,7 @@ public class LLMClient {
     /**
      * 使用 CloudFlare Workers AI 进行流式对话
      */
-    private String chatStreamingWithCloudFlare(DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
 
@@ -2064,9 +2160,12 @@ public class LLMClient {
             reasoning.addProperty("effort", "medium");
             reasoning.addProperty("summary", "detailed");
             bodyJson.add("reasoning", reasoning);
+            // Responses 格式 tools（gpt-oss 走非流式，非流式响应天然带完整 function_call）
+            attachNativeTools(bodyJson, player, session, model, true);
         } else {
             bodyJson.addProperty("stream", true);
             bodyJson.add("messages", messagesArray);
+            attachNativeTools(bodyJson, player, session, model, false);
             if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
             }
         }

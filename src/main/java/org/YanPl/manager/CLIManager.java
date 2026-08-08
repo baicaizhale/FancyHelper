@@ -9,6 +9,7 @@ import org.YanPl.api.LLMClient;
 import org.YanPl.api.StreamingHandler;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.NativeToolCall;
 import org.YanPl.model.SessionRecord;
 import org.YanPl.model.Skill;
 import org.YanPl.util.ColorUtil;
@@ -68,10 +69,20 @@ public class CLIManager {
     private final Map<UUID, Long> roundOutputTokens = new ConcurrentHashMap<>();
 
     // 思考状态的随机神经病词列表
-    private static final String[] THINKING_WORDS = {
-        "Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Bamboozling", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Burrowing", "Calculating", "Canoodling", "Caramelizing", "Cascading", "Catapulting", "Catalyzing", "Cerebrating", "Channeling", "Channelling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Colloquializing", "Combobulating", "Composing", "Computing", "Concocting", "Congealing", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Decomposing", "Deliberating", "Determining", "Diffusing", "Dilly-dallying", "Discombobulating", "Dissolving", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Enchanting", "Envisioning", "Extrapolating", "Fermenting", "Festering", "Finagling", "Flambeing", "Flibbertigibbeting", "Flummoxing", "Forging", "Forming", "Frosting", "Frolicking", "Furnishing", "Gallivanting", "Galloping", "Garnishing", "Gelatinizing", "Generating", "Germinating", "Hatching", "Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring", "Ionizing", "Iridescent", "Jiving", "Jostling", "Julienning", "Kneading", "Leavening", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Moseying", "Moonwalking", "Mulling", "Mustering", "Musing", "Navigating", "Nebulating", "Noodling", "Osmosing", "Percolating", "Perusing", "Philosophising", "Polymerizing", "Pontificating", "Pondering", "Processing", "Proofing", "Puttering", "Puzzling", "Radiating", "Razzle-dazzling", "Reticulating", "Reverberating", "Ricocheting", "Rippling", "Ruminating", "Sauteing", "Scampering", "Scheming", "Schlepping", "Scurrying", "Seasoning", "Shimmying", "Shenaniganing", "Simmering", "Smooshing", "Soldering", "Spelunking", "Spinning", "Spiraling", "Synthesizing", "Synergizing", "Tempering", "Tinkering", "Thinking", "Tomfoolering", "Topsy-turvying", "Transmuting", "Trickling", "Ubiquitizing", "Undulating", "Unfurling", "Unravelling", "Untangling", "Vibing", "Vexing", "Waddling", "Wandering", "Waxing", "Whatchamacalliting", "Whirring", "Whisking", "Wibbling", "Wizarding", "Working", "Wrangling", "Zigzagging", "Zesting"
+    private static final String[] THINKING_WORDS = {        "Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Bamboozling", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Burrowing", "Calculating", "Canoodling", "Caramelizing", "Cascading", "Catapulting", "Catalyzing", "Cerebrating", "Channeling", "Channelling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Colloquializing", "Combobulating", "Composing", "Computing", "Concocting", "Congealing", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Decomposing", "Deliberating", "Determining", "Diffusing", "Dilly-dallying", "Discombobulating", "Dissolving", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Enchanting", "Envisioning", "Extrapolating", "Fermenting", "Festering", "Finagling", "Flambeing", "Flibbertigibbeting", "Flummoxing", "Forging", "Forming", "Frosting", "Frolicking", "Furnishing", "Gallivanting", "Galloping", "Garnishing", "Gelatinizing", "Generating", "Germinating", "Hatching", "Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring", "Ionizing", "Iridescent", "Jiving", "Jostling", "Julienning", "Kneading", "Leavening", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Moseying", "Moonwalking", "Mulling", "Mustering", "Musing", "Navigating", "Nebulating", "Noodling", "Osmosing", "Percolating", "Perusing", "Philosophising", "Polymerizing", "Pontificating", "Pondering", "Processing", "Proofing", "Puttering", "Puzzling", "Radiating", "Razzle-dazzling", "Reticulating", "Reverberating", "Ricocheting", "Rippling", "Ruminating", "Sauteing", "Scampering", "Scheming", "Schlepping", "Scurrying", "Seasoning", "Shimmying", "Shenaniganing", "Simmering", "Smooshing", "Soldering", "Spelunking", "Spinning", "Spiraling", "Synthesizing", "Synergizing", "Tempering", "Tinkering", "Thinking", "Tomfoolering", "Topsy-turvying", "Transmuting", "Trickling", "Ubiquitizing", "Undulating", "Unfurling", "Unravelling", "Untangling", "Vibing", "Vexing", "Waddling", "Wandering", "Waxing", "Whatchamacalliting", "Whirring", "Whisking", "Wibbling", "Wizarding", "Working", "Wrangling", "Zigzagging", "Zesting"
     };
-    
+
+    // 已知工具列表（顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持）
+    // #edit_memory 必须排在 #edit 之前，否则 #edit_memory: ... 会被 #edit 劫持
+    private static final List<String> KNOWN_TOOLS = List.of(
+        "#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill",
+        "#list", "#read", "#edit_global", "#edit_memory", "#edit", "#write", "#todo",
+        "#remember_global", "#remember", "#forget_global", "#forget",
+        "#webfetch", "#mcp_tools", "#mcp");
+
+    // 串行批量工具执行超时（毫秒）：批次中某工具异步异常长时间无反馈时强制终结
+    private static final long BATCH_TIMEOUT_MS = 60_000;
+
     // 状态栏呼吸动画
     private static final long[] BREATHING_PHASE_ENDS = { 500, 800, 1000, 1100, 1300, 1600 };
     private static final String[] BREATHING_HEX = {
@@ -542,6 +553,15 @@ public class CLIManager {
                         case EXECUTING_TOOL:
                             message = ChatColor.GRAY + "....";
                             sendStatusMessage(player, message);
+                            // 串行批量超时兜底：批次某工具异步异常无反馈时强制终结，避免永久卡住
+                            DialogueSession batchSession = sessions.get(uuid);
+                            if (batchSession != null && batchSession.hasPendingNativeTools()) {
+                                Long batchStart = generationStartTimes.get(uuid);
+                                if (batchStart != null && now - batchStart > BATCH_TIMEOUT_MS) {
+                                    plugin.getLogger().warning("[CLI] 批次工具执行超时 (" + BATCH_TIMEOUT_MS + "ms)，强制终结批次: " + player.getName());
+                                    forceFinalizeBatch(player, batchSession);
+                                }
+                            }
                             break;
                         case WAITING_CONFIRM:
                             message = I18n.t("clim.status.ask.permission");
@@ -2398,7 +2418,7 @@ public class CLIManager {
 
                 // 重试时使用存储的 matchedSkills 重新构建系统提示
                 String retrySystemPrompt = promptManager.getBaseSystemPrompt(player, retryInfo.matchedSkills);
-                AIResponse response = ai.chat(retryInfo.session, retrySystemPrompt);
+                AIResponse response = ai.chat(player, retryInfo.session, retrySystemPrompt);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -2645,7 +2665,13 @@ public class CLIManager {
                     }
                 }
 
-                session.addMessage("assistant", response, finalThought);
+                // 原生函数调用：流式响应中解析出的结构化 tool_calls（在 assistant 消息中渲染回文本）
+                List<NativeToolCall> nativeCalls = streamingHandler.getNativeToolCalls();
+                if (nativeCalls != null && !nativeCalls.isEmpty()) {
+                    session.addMessage("assistant", ToolRegistry.renderForHistory(response, nativeCalls), finalThought);
+                } else {
+                    session.addMessage("assistant", response, finalThought);
+                }
                 session.logAIResponse(response + "\n\n[Streaming] Finish Reason: stop\n");
 
                 if (!thoughtContent.isEmpty()) {
@@ -2678,12 +2704,8 @@ public class CLIManager {
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
 
-                String toolCall = extractToolCall(response);
-                // 模型可能把 #run 放在 reasoning_content 而非 content 里
-                if (toolCall.isEmpty() && !thoughtContent.isEmpty()) {
-                    toolCall = extractToolCall(thoughtContent);
-                }
-                if (!toolCall.isEmpty()) {
+                boolean hasNative = nativeCalls != null && !nativeCalls.isEmpty();
+                if (hasNative) {
                     // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
                     Long streamedThisCycle = streamedOutputTokens.get(uuid);
                     if (streamedThisCycle != null && streamedThisCycle > 0) {
@@ -2691,18 +2713,34 @@ public class CLIManager {
                         roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
                     }
                     streamedOutputTokens.remove(uuid);
-                    executeTool(player, toolCall);
+                    dispatchNativeCalls(player, session, nativeCalls);
                 } else {
-                    // 本轮输出完全结束 → 累积 token 写回 session
-                    Long streamedTotal = streamedOutputTokens.get(uuid);
-                    if (streamedTotal != null && streamedTotal > 0) {
-                        session.addOutputTokens(streamedTotal);
-                        roundOutputTokens.merge(uuid, streamedTotal, (a, b) -> a + b);
+                    String toolCall = extractToolCall(response);
+                    // 模型可能把 #run 放在 reasoning_content 而非 content 里（仅文本协议时兜底）
+                    if (toolCall.isEmpty() && !thoughtContent.isEmpty()) {
+                        toolCall = extractToolCall(thoughtContent);
                     }
-                    streamedOutputTokens.remove(uuid);
-                    checkTokenWarning(player, session);
-                    autoCompressContext(player, session);
-                    playFeedbackSound(player, "ai_complete");
+                    if (!toolCall.isEmpty()) {
+                        // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
+                        Long streamedThisCycle = streamedOutputTokens.get(uuid);
+                        if (streamedThisCycle != null && streamedThisCycle > 0) {
+                            session.addOutputTokens(streamedThisCycle);
+                            roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
+                        }
+                        streamedOutputTokens.remove(uuid);
+                        executeTool(player, toolCall);
+                    } else {
+                        // 本轮输出完全结束 → 累积 token 写回 session
+                        Long streamedTotal = streamedOutputTokens.get(uuid);
+                        if (streamedTotal != null && streamedTotal > 0) {
+                            session.addOutputTokens(streamedTotal);
+                            roundOutputTokens.merge(uuid, streamedTotal, (a, b) -> a + b);
+                        }
+                        streamedOutputTokens.remove(uuid);
+                        checkTokenWarning(player, session);
+                        autoCompressContext(player, session);
+                        playFeedbackSound(player, "ai_complete");
+                    }
                 }
 
                 // 每次 AI 回复后保存会话到磁盘
@@ -2739,13 +2777,14 @@ public class CLIManager {
         });
 
         // 估算本轮输入的 prompt tokens 并记入 session
-        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message);
+        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message,
+                isNativeActiveForPrompt(player, session));
         String modelName = plugin.getConfigManager().getCloudflareModel();
         int estimatedInput = DialogueSession.calculateTokens(systemPrompt, modelName)
             + session.getEstimatedTokens(modelName) + 3;
         session.addInputTokens(estimatedInput);
 
-        String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
+        String completeText = ai.chatStreaming(player, session, systemPrompt, streamingHandler);
         
         if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
             responseHandled[0] = true;
@@ -2797,12 +2836,18 @@ public class CLIManager {
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
                 
-                String toolCall = extractToolCall(finalResponse);
-                if (!toolCall.isEmpty()) {
-                    executeTool(player, toolCall);
+                // 原生函数调用优先；否则走文本协议提取
+                List<NativeToolCall> nativeCalls = streamingHandler.getNativeToolCalls();
+                if (nativeCalls != null && !nativeCalls.isEmpty()) {
+                    dispatchNativeCalls(player, session, nativeCalls);
                 } else {
-                    checkTokenWarning(player, session);
-                    autoCompressContext(player, session);
+                    String toolCall = extractToolCall(finalResponse);
+                    if (!toolCall.isEmpty()) {
+                        executeTool(player, toolCall);
+                    } else {
+                        checkTokenWarning(player, session);
+                        autoCompressContext(player, session);
+                    }
                 }
                 playFeedbackSound(player, "ai_complete");
 
@@ -2817,8 +2862,9 @@ public class CLIManager {
     private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
         DialogueSession nsSession = sessions.get(player.getUniqueId());
         String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills,
-                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL, message);
-        AIResponse response = ai.chat(sessions.get(player.getUniqueId()), systemPrompt);
+                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL, message,
+                isNativeActiveForPrompt(player, nsSession));
+        AIResponse response = ai.chat(player, sessions.get(player.getUniqueId()), systemPrompt);
 
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -3049,7 +3095,13 @@ public class CLIManager {
         session.setLastThought(finalThought);
 
         // 将 AI 的回复加入历史记录，并关联当前的思考内容
-        session.addMessage("assistant", cleanResponse, finalThought);
+        // 原生函数调用：把结构化 tool_calls 渲染回 #tool 文本，保证历史始终是 {role, content}
+        List<NativeToolCall> nativeCalls = aiResponse.getToolCalls();
+        if (nativeCalls != null && !nativeCalls.isEmpty()) {
+            session.addMessage("assistant", ToolRegistry.renderForHistory(cleanResponse, nativeCalls), finalThought);
+        } else {
+            session.addMessage("assistant", cleanResponse, finalThought);
+        }
         
         // 计算思考内容的 Token
         if (!thoughtContent.isEmpty()) {
@@ -3064,7 +3116,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表（顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持）
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit_global", "#edit", "#write", "#todo", "#remember_global", "#remember", "#forget_global", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
+        List<String> knownTools = KNOWN_TOOLS;
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -3229,7 +3281,20 @@ public class CLIManager {
             }
         }
 
-        // 处理工具调用
+        // 处理工具调用（原生函数调用优先；否则走文本协议提取）
+        boolean hasNative = nativeCalls != null && !nativeCalls.isEmpty();
+        if (hasNative) {
+            // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
+            Long streamedThisCycle = streamedOutputTokens.get(uuid);
+            if (streamedThisCycle != null && streamedThisCycle > 0) {
+                session.addOutputTokens(streamedThisCycle);
+                roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
+            }
+            streamedOutputTokens.remove(uuid);
+            dispatchNativeCalls(player, session, nativeCalls);
+            return;
+        }
+
         if (!toolCall.isEmpty()) {
             // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
             Long streamedThisCycle = streamedOutputTokens.get(uuid);
@@ -3296,7 +3361,7 @@ public class CLIManager {
         cleanResponse = cleanResponse.trim();
         
         // 顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit_global", "#edit", "#write", "#todo", "#remember_global", "#remember", "#forget_global", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
+        List<String> knownTools = KNOWN_TOOLS;
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
@@ -3415,7 +3480,8 @@ public class CLIManager {
             
             try {
                 // continueGeneration 不需要匹配新 Skills，使用空列表
-                AIResponse response = ai.chat(session, promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode()));
+                AIResponse response = ai.chat(player, session, promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode(),
+                        "", isNativeActiveForPrompt(player, session)));
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -3656,6 +3722,29 @@ public class CLIManager {
         return systemPromptTokens + historyTokens + replyPrimerTokens;
     }
 
+    /**
+     * 获取当前生效的主模型名（镜像 LLMClient.chat 的分发逻辑）。
+     * 用于判断该模型是否启用原生函数调用（决定提示词是否用精简工具列表）。
+     */
+    private String getEffectiveModel() {
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return plugin.getConfigManager().getFancyModel();
+        }
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return plugin.getConfigManager().getOpenAiModel();
+        }
+        return plugin.getConfigManager().getCloudflareModel();
+    }
+
+    /** 当前会话是否处于原生函数调用模式（开关开启 && 模型支持 && 未降级）。 */
+    private boolean isNativeActiveForPrompt(Player player, DialogueSession session) {
+        if (session == null || session.isNativeToolsDegraded()) {
+            return false;
+        }
+        return ToolRegistry.isNativeActiveForModel(
+                plugin.getConfigManager().isNativeToolCallingEnabled(), getEffectiveModel());
+    }
+
     private void executeTool(Player player, String toolCall) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
@@ -3770,8 +3859,25 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
+        // === 串行批量拦截：不重入模型，累计结果并推进下一工具 ===
+        if (session.hasPendingNativeTools()) {
+            session.addPendingToolResult(feedback);
+            executeNativeBatch(player, session);
+            return;
+        }
+
+        invokeModelAfterFeedback(player, session, feedback);
+    }
+
+    /**
+     * 工具反馈后触发一次真实的模型重入（单工具路径与批次终结共用）。
+     * 顺序与原 feedbackToAI 单路径完全一致：addMessage → token 估算日志 → 状态翻转 → 异步重入。
+     */
+    private void invokeModelAfterFeedback(Player player, DialogueSession session, String feedback) {
+        UUID uuid = player.getUniqueId();
+
         session.addMessage("user", feedback);
-        
+
         // 记录反馈后的 Token 估算
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
         if (plugin.getConfigManager().isDebug()) {
@@ -3791,7 +3897,8 @@ public class CLIManager {
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             // feedbackToAI 不需要匹配新 Skills，使用空列表
-            final String systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode());
+            final String systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode(),
+                    "", isNativeActiveForPrompt(player, session));
             
             // 设置重试回调，向玩家显示重试提示
             ai.setRetryCallback((statusCode, retryMessage) -> {
@@ -3958,7 +4065,8 @@ public class CLIManager {
 
                             session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                             AIResponse response = new AIResponse(completeText,
-                                (thought != null && !thought.isEmpty()) ? thought : null);
+                                (thought != null && !thought.isEmpty()) ? thought : null,
+                                0, 0, false, streamingHandler.getNativeToolCalls());
                             handleAIResponse(player, response, true);
                             playFeedbackSound(player, "ai_complete");
                         });
@@ -3996,7 +4104,7 @@ public class CLIManager {
                         + session.getEstimatedTokens(modelName) + 3;
                     session.addInputTokens(estimatedInput2);
 
-                    String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
+                    String completeText = ai.chatStreaming(player, session, systemPrompt, streamingHandler);
 
                     // 回退：流式未产生任何 chunk（如文本一次到达）
                     if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
@@ -4038,7 +4146,7 @@ public class CLIManager {
                         });
                     }
                 } else {
-                    AIResponse response = ai.chat(session, systemPrompt);
+                    AIResponse response = ai.chat(player, session, systemPrompt);
 
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
@@ -4093,6 +4201,142 @@ public class CLIManager {
                 ai.clearRetryCallback();
             }
         });
+    }
+
+    /**
+     * 该工具是否可安全进入串行批量（保证恰好一次异步 feedbackToAI，不会死锁批次屏障）。
+     * run 仅 YOLO 模式可批（非风险命令）；NORMAL/SMART 会渲染确认按钮，不能批。
+     */
+    static boolean isBatchSafeTool(String toolName, DialogueSession.Mode mode) {
+        String name = toolName == null ? "" : toolName.toLowerCase();
+        switch (name) {
+            case "search":
+            case "webfetch":
+            case "skill":
+            case "unloadskill":
+            case "mcp_tools":
+            case "todo":
+            case "list":
+            case "read":
+                return true;
+            case "run":
+                return mode == DialogueSession.Mode.YOLO;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean allBatchSafe(List<NativeToolCall> calls, DialogueSession session) {
+        DialogueSession.Mode mode = session != null ? session.getMode() : DialogueSession.Mode.NORMAL;
+        for (NativeToolCall c : calls) {
+            if (c.name() == null || !isBatchSafeTool(c.name().toLowerCase(), mode)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * YOLO 模式下若批次含风险命令（会渲染确认按钮卡住屏障），则不进批量。
+     */
+    private boolean containsRiskyRun(List<NativeToolCall> calls, DialogueSession session) {
+        if (session == null || session.getMode() != DialogueSession.Mode.YOLO) {
+            return false;
+        }
+        List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
+        return containsRiskyRun(calls, risky);
+    }
+
+    static boolean containsRiskyRun(List<NativeToolCall> calls, List<String> riskyCommands) {
+        for (NativeToolCall c : calls) {
+            if ("run".equalsIgnoreCase(c.name())) {
+                ToolExecutor.ToolParseResult p = ToolExecutor.parseToolCall(ToolRegistry.bridgeToText(c));
+                if (ToolExecutor.isRiskyCommandPublic(p.args, riskyCommands)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 统一分发原生函数调用：全部批次安全且 >1 时进入串行批量，否则走单工具路径（与今日一致）。
+     */
+    private void dispatchNativeCalls(Player player, DialogueSession session, List<NativeToolCall> calls) {
+        if (calls == null || calls.isEmpty()) {
+            return;
+        }
+        if (calls.size() > 1 && allBatchSafe(calls, session) && !containsRiskyRun(calls, session)) {
+            session.clearBatchState();
+            for (NativeToolCall call : calls) {
+                session.pushPendingNativeTool(ToolRegistry.bridgeToText(call));
+            }
+            executeNativeBatch(player, session);
+            return;
+        }
+        // 单工具路径（字节级一致）
+        String toolCall = ToolRegistry.bridgeToText(calls.get(0));
+        if (!toolCall.isEmpty()) {
+            executeTool(player, toolCall);
+        }
+    }
+
+    /**
+     * 串行批量执行器（批次屏障）：
+     * 1. 队列非空 → 串行执行下一个工具（不重入模型）。
+     * 2. 队列耗尽 → 合并全部结果，一次真实模型重入。
+     */
+    private void executeNativeBatch(Player player, DialogueSession session) {
+        UUID uuid = player.getUniqueId();
+        if (!Bukkit.isPrimaryThread() || !plugin.isEnabled()) {
+            return;
+        }
+
+        // 1) 队列还有工具 → 串行执行下一个
+        String next = session.pollPendingNativeTool();
+        if (next != null) {
+            setGenerating(uuid, true, GenerationStatus.EXECUTING_TOOL);
+            try {
+                executeTool(player, next);
+            } catch (Throwable t) {
+                // 同步抛出的兜底：记录错误并继续批次
+                plugin.getCloudErrorReport().report(t);
+                session.addPendingToolResult("#error: 工具执行异常 - " + t.getMessage());
+                executeNativeBatch(player, session);
+            }
+            return;
+        }
+
+        // 2) 队列耗尽 → 合并全部结果，一次真实模型重入
+        session.clearPendingNativeTools();
+        List<String> results = session.drainPendingToolResults();
+        String joined = results.isEmpty()
+                ? "#error: 批量工具执行未返回任何结果。"
+                : String.join("\n", results);
+        for (String r : results) {
+            if (r.contains("_error") || r.startsWith("#error")) {
+                session.incrementToolFailure();
+            } else {
+                session.incrementToolSuccess();
+            }
+        }
+        invokeModelAfterFeedback(player, session, joined);
+    }
+
+    /**
+     * 批次安全超时兜底：批次某工具异步异常导致长时间无反馈时，强制终结批次并把部分结果回灌模型。
+     */
+    private void forceFinalizeBatch(Player player, DialogueSession session) {
+        if (session == null) {
+            return;
+        }
+        session.clearPendingNativeTools();
+        List<String> results = session.drainPendingToolResults();
+        String joined = (results.isEmpty()
+                ? java.util.List.of("#error: 批量工具执行超时，未能获取全部结果。")
+                : results).stream()
+                .collect(java.util.stream.Collectors.joining("\n"));
+        invokeModelAfterFeedback(player, session, joined);
     }
 
     /**

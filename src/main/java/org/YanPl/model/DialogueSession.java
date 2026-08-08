@@ -36,6 +36,9 @@ public class DialogueSession {
      */
     private final List<Message> history = new ArrayList<>();
     private final List<String> toolCallHistory = new ArrayList<>();
+    // 串行批量工具执行状态：非空表示处于批次中（一次响应返回多个原生 tool_calls）
+    private final java.util.Deque<String> pendingNativeTools = new java.util.ArrayDeque<>();
+    private final List<String> pendingToolResults = new ArrayList<>();
     private long lastActivityTime;
     private long startTime;
     private int toolSuccessCount = 0;
@@ -671,6 +674,51 @@ public class DialogueSession {
      */
     public void setSessionUUID(String sessionUUID) {
         this.sessionUUID = sessionUUID;
+    }
+
+    private volatile boolean nativeToolsDegraded = false;
+
+    /** 原生函数调用是否已降级（provider 拒绝 tools 后置位，该会话后续不再发 tools）。 */
+    public boolean isNativeToolsDegraded() {
+        return nativeToolsDegraded;
+    }
+
+    /** 标记该会话的原生函数调用已降级。 */
+    public void setNativeToolsDegraded(boolean degraded) {
+        this.nativeToolsDegraded = degraded;
+    }
+
+    // ==================== 串行批量工具执行状态 ====================
+
+    public void pushPendingNativeTool(String toolText) {
+        pendingNativeTools.addLast(toolText);
+    }
+
+    public String pollPendingNativeTool() {
+        return pendingNativeTools.pollFirst();
+    }
+
+    public boolean hasPendingNativeTools() {
+        return !pendingNativeTools.isEmpty();
+    }
+
+    public void clearPendingNativeTools() {
+        pendingNativeTools.clear();
+    }
+
+    public void addPendingToolResult(String result) {
+        pendingToolResults.add(result);
+    }
+
+    public List<String> drainPendingToolResults() {
+        List<String> out = new ArrayList<>(pendingToolResults);
+        pendingToolResults.clear();
+        return out;
+    }
+
+    public void clearBatchState() {
+        pendingNativeTools.clear();
+        pendingToolResults.clear();
     }
 
     public static class Message {

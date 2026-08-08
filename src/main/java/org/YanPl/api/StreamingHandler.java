@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
+import org.YanPl.model.NativeToolCall;
 import org.bukkit.entity.Player;
 
 import java.io.BufferedReader;
@@ -13,6 +14,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
@@ -50,6 +55,15 @@ public class StreamingHandler {
     private long pendingUsageInput = 0;    // 流中最后一次出现的 usage 输入 token（累计值）
     private long pendingUsageOutput = 0;   // 流中最后一次出现的 usage 输出 token（累计值）
     private boolean usageSeen = false;     // 本次流是否出现过非零 usage
+
+    // 原生函数调用（Native Function Calling）累加器
+    // 流式 tool_calls 跨多个 SSE delta 分片到达：id+name 在首个 delta，arguments 是后续 delta 的 JSON 片段
+    private final Map<Integer, ToolCallAccum> nativeToolAccum = new LinkedHashMap<>();
+    private List<NativeToolCall> nativeToolCalls = List.of();
+
+    /** 流式 tool_call 的跨 delta 累加单元。 */
+    public record ToolCallAccum(int index, String id, String name, StringBuilder arguments) {
+    }
     
     /**
      * 创建流式输出处理器
@@ -125,6 +139,15 @@ public class StreamingHandler {
     }
 
     /**
+     * 获取本次流式响应中解析出的原生函数调用列表（跨 delta 累加完成后的最终结果）。
+     * 注意：仅当流结束、finalizeNativeToolCalls() 已调用后才完整；流中途调用可能为空。
+     * @return 不可变的 NativeToolCall 列表
+     */
+    public List<NativeToolCall> getNativeToolCalls() {
+        return nativeToolCalls;
+    }
+
+    /**
      * 思考结束回调是否已触发
      */
     public boolean hasReasoningCompleteFired() {
@@ -151,7 +174,9 @@ public class StreamingHandler {
             reasoningJustCompleted = false;
             reasoningCompleteFired = false;
             toolCallDetected = false;
-            
+            nativeToolAccum.clear();
+            nativeToolCalls = List.of();
+
             logger.info("[Stream] 流式输出已取消并清理资源");
         } catch (Exception e) {
             logger.warning("[Stream] 取消流式输出时出错: " + e.getMessage());
@@ -180,6 +205,8 @@ public class StreamingHandler {
      * @return 完整的响应文本
      */
     public String processStream(HttpResponse<InputStream> response) throws IOException {
+        nativeToolAccum.clear();
+        nativeToolCalls = List.of();
         StringBuilder fullText = new StringBuilder();
         StringBuilder nonSseFallback = new StringBuilder();  // 非SSE回退缓冲
 
@@ -303,6 +330,9 @@ public class StreamingHandler {
             }
             
             flushRemainingBuffer();
+
+            // 流结束时固化为原生函数调用列表（onComplete 回调前）
+            finalizeNativeToolCalls();
 
             // 流结束时统一触发一次 token 用量回调（最后一次 usage 的累计值）
             if (usageSeen && onUsageTokens != null && !isCancelled.get()) {
@@ -435,6 +465,8 @@ public class StreamingHandler {
                     var choice = choices.get(0).getAsJsonObject();
                     if (choice.has("delta") && choice.get("delta").isJsonObject()) {
                         var delta = choice.getAsJsonObject("delta");
+                        // 原生函数调用：tool_calls 与 content 可能同框出现，必须在 return 前处理
+                        handleDeltaToolCalls(delta);
                         if (delta.has("content") && !delta.get("content").isJsonNull()) {
                             // 首次从 reasoning 切换到 content，标记思考结束
                             if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
@@ -527,6 +559,38 @@ public class StreamingHandler {
                             return innerData.get("text").getAsString();
                         }
                     }
+                }
+                // 原生函数调用（防御性）：gpt-oss 当前走非流式，此分支为未来流式 Responses 预留
+                if ("response.output_item.added".equals(type)) {
+                    if (json.has("data") && json.get("data").isJsonObject()) {
+                        JsonObject innerData = json.getAsJsonObject("data");
+                        JsonObject item = innerData.has("item") && innerData.get("item").isJsonObject()
+                                ? innerData.getAsJsonObject("item") : null;
+                        if (item != null && item.has("type") && "function_call".equals(item.get("type").getAsString())) {
+                            String name = item.has("name") && !item.get("name").isJsonNull() ? item.get("name").getAsString() : null;
+                            String callId = item.has("call_id") && !item.get("call_id").isJsonNull() ? item.get("call_id").getAsString() : null;
+                            String args = item.has("arguments") && !item.get("arguments").isJsonNull() ? item.get("arguments").getAsString() : "";
+                            int idx = nativeToolAccum.size();
+                            nativeToolAccum.put(idx, new ToolCallAccum(idx, callId, name, new StringBuilder(args)));
+                        }
+                    }
+                    return null;
+                }
+                if ("response.function_call_arguments.delta".equals(type)) {
+                    if (json.has("data") && json.get("data").isJsonObject()) {
+                        JsonObject innerData = json.getAsJsonObject("data");
+                        if (innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
+                            String frag = innerData.get("delta").getAsString();
+                            // 按 output_index 归并到对应 call（通常只有一个并行 call）
+                            int outIdx = innerData.has("output_index") ? innerData.get("output_index").getAsInt() : 0;
+                            if (nativeToolAccum.containsKey(outIdx)) {
+                                nativeToolAccum.get(outIdx).arguments().append(frag);
+                            } else {
+                                nativeToolAccum.put(outIdx, new ToolCallAccum(outIdx, null, null, new StringBuilder(frag)));
+                            }
+                        }
+                    }
+                    return null;
                 }
             }
 
@@ -648,7 +712,54 @@ public class StreamingHandler {
 
         return null;
     }
-    
+
+    /**
+     * 解析 OpenAI 流式 delta 中的 tool_calls 数组，按 index 归并累加。
+     * 首个 delta 携带 id+name，后续 delta 追加 arguments 片段；绝不在流中途解析 JSON。
+     */
+    private void handleDeltaToolCalls(JsonObject delta) {
+        if (!delta.has("tool_calls") || !delta.get("tool_calls").isJsonArray()) {
+            return;
+        }
+        JsonArray toolCalls = delta.getAsJsonArray("tool_calls");
+        for (int i = 0; i < toolCalls.size(); i++) {
+            JsonElement el = toolCalls.get(i);
+            if (!el.isJsonObject()) continue;
+            JsonObject tc = el.getAsJsonObject();
+            int index = tc.has("index") ? tc.get("index").getAsInt() : nativeToolAccum.size();
+            ToolCallAccum acc = nativeToolAccum.computeIfAbsent(index, idx -> new ToolCallAccum(idx, null, null, new StringBuilder()));
+            if (tc.has("id") && !tc.get("id").isJsonNull()) {
+                acc = new ToolCallAccum(acc.index(), tc.get("id").getAsString(), acc.name(), acc.arguments());
+                nativeToolAccum.put(index, acc);
+            }
+            if (tc.has("function") && tc.get("function").isJsonObject()) {
+                JsonObject fn = tc.getAsJsonObject("function");
+                if (fn.has("name") && !fn.get("name").isJsonNull() && acc.name() == null) {
+                    acc = new ToolCallAccum(acc.index(), acc.id(), fn.get("name").getAsString(), acc.arguments());
+                    nativeToolAccum.put(index, acc);
+                }
+                if (fn.has("arguments") && !fn.get("arguments").isJsonNull()) {
+                    acc.arguments().append(fn.get("arguments").getAsString());
+                }
+            }
+        }
+    }
+
+    /**
+     * 流结束时把累加器固化为 NativeToolCall 列表。
+     * arguments 片段若解析失败（无效 JSON）保留原始片段，字符串型工具能容忍。
+     */
+    private void finalizeNativeToolCalls() {
+        List<NativeToolCall> calls = new ArrayList<>();
+        for (ToolCallAccum acc : nativeToolAccum.values()) {
+            if (acc.name() == null || acc.name().isEmpty()) {
+                continue;
+            }
+            calls.add(new NativeToolCall(acc.id(), acc.name(), acc.arguments().toString()));
+        }
+        nativeToolCalls = List.copyOf(calls);
+    }
+
     /**
      * 计算文本在Minecraft聊天框中的视觉宽度
      * 中文字符/全角字符权重为 1.7，ASCII/半角字符权重为 1.1

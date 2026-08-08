@@ -820,6 +820,15 @@ public class ConfigManager {
     }
 
     /**
+     * 是否启用原生函数调用（Native Tool Calling）。
+     * 开启后 AI 通过 API 结构化工具调用触发工具，而非"#工具名"文本。
+     * 默认关闭，保持原有文本标记协议不变。
+     */
+    public boolean isNativeToolCallingEnabled() {
+        return config.getBoolean("settings.native_tool_calling", false);
+    }
+
+    /**
      * 获取服务器记忆总数上限，超出后自动淘汰最久未使用的条目
      */
     public int getServerMemoryMaxEntries() {

@@ -4,6 +4,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.YanPl.model.AIResponse;
+import org.YanPl.model.NativeToolCall;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * AI API 响应解析器
@@ -21,6 +25,7 @@ public class ResponseParser {
     public AIResponse parseResponse(JsonObject responseJson) {
         String textContent = null;
         String thoughtContent = null;
+        List<NativeToolCall> toolCalls = null;
         long promptTokens = 0;
         long completionTokens = 0;
 
@@ -45,6 +50,9 @@ public class ResponseParser {
         if (openAiContent != null) {
             textContent = openAiContent.text;
             thoughtContent = openAiContent.thought;
+            if (openAiContent.toolCalls != null) {
+                toolCalls = openAiContent.toolCalls;
+            }
         }
 
         // 2. 尝试解析 Cloudflare 原生 output 格式
@@ -52,6 +60,9 @@ public class ResponseParser {
         if (cfOutputContent != null) {
             if (textContent == null) textContent = cfOutputContent.text;
             if (thoughtContent == null) thoughtContent = cfOutputContent.thought;
+            if (toolCalls == null && cfOutputContent.toolCalls != null) {
+                toolCalls = cfOutputContent.toolCalls;
+            }
         }
 
         // 3. 尝试解析 Cloudflare 原生 result 格式
@@ -59,6 +70,9 @@ public class ResponseParser {
         if (cfResultContent != null) {
             if (textContent == null) textContent = cfResultContent.text;
             if (thoughtContent == null) thoughtContent = cfResultContent.thought;
+            if (toolCalls == null && cfResultContent.toolCalls != null) {
+                toolCalls = cfResultContent.toolCalls;
+            }
         }
 
         // 检查 finish_reason 字段
@@ -68,19 +82,23 @@ public class ResponseParser {
         // 处理 finish_reason 为 stop 但 content 为空的情况（可能是模型错误或内容过滤）
         if ("stop".equals(finishReason) && textContent == null) {
             // API 返回了 stop 但没有内容，返回空字符串而不是 null
-            return new AIResponse("", thoughtContent, promptTokens, completionTokens, false);
+            return new AIResponse("", thoughtContent, promptTokens, completionTokens, false, toolCalls);
         }
 
         if (isTruncated && textContent == null) {
             // 当 finish_reason 为 length 且 content 为 null 时，返回空内容但标记为截断
-            return new AIResponse("", thoughtContent, promptTokens, completionTokens, true);
+            return new AIResponse("", thoughtContent, promptTokens, completionTokens, true, toolCalls);
         } else if (isTruncated && textContent != null) {
             // 当 finish_reason 为 length 但有内容时，标记为截断
-            return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens, true);
+            return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens, true, toolCalls);
         }
 
         if (textContent != null) {
-            return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens);
+            return new AIResponse(textContent, thoughtContent, promptTokens, completionTokens, false, toolCalls);
+        }
+        // 只有原生函数调用、无正文内容（纯工具调用响应）也返回非 null，携带 toolCalls
+        if (toolCalls != null && !toolCalls.isEmpty()) {
+            return new AIResponse("", thoughtContent, promptTokens, completionTokens, false, toolCalls);
         }
         return null;
     }
@@ -150,6 +168,28 @@ public class ResponseParser {
             }
         }
 
+        // 解析原生函数调用（OpenAI 格式 message.tool_calls）
+        if (message.has("tool_calls") && message.get("tool_calls").isJsonArray()) {
+            JsonArray toolCalls = message.getAsJsonArray("tool_calls");
+            List<NativeToolCall> calls = new ArrayList<>();
+            for (int i = 0; i < toolCalls.size(); i++) {
+                JsonElement el = toolCalls.get(i);
+                if (!el.isJsonObject()) continue;
+                JsonObject tc = el.getAsJsonObject();
+                String id = tc.has("id") && !tc.get("id").isJsonNull() ? tc.get("id").getAsString() : null;
+                if (!tc.has("function") || !tc.get("function").isJsonObject()) continue;
+                JsonObject fn = tc.getAsJsonObject("function");
+                String name = fn.has("name") && !fn.get("name").isJsonNull() ? fn.get("name").getAsString() : null;
+                String args = fn.has("arguments") && !fn.get("arguments").isJsonNull() ? fn.get("arguments").getAsString() : null;
+                if (name != null) {
+                    calls.add(new NativeToolCall(id, name, args == null ? "" : args));
+                }
+            }
+            if (!calls.isEmpty()) {
+                content.toolCalls = calls;
+            }
+        }
+
         return content;
     }
 
@@ -198,6 +238,20 @@ public class ResponseParser {
             } else if (("thought".equals(type) || "reasoning".equals(type)) && content.thought == null) {
                 if (!contentObj.get("text").isJsonNull()) {
                     content.thought = contentObj.get("text").getAsString();
+                }
+            } else if ("function_call".equals(type)) {
+                // Cloudflare Responses API 的原生函数调用项
+                String name = contentObj.has("name") && !contentObj.get("name").isJsonNull()
+                        ? contentObj.get("name").getAsString() : null;
+                String args = contentObj.has("arguments") && !contentObj.get("arguments").isJsonNull()
+                        ? contentObj.get("arguments").getAsString() : null;
+                String callId = contentObj.has("call_id") && !contentObj.get("call_id").isJsonNull()
+                        ? contentObj.get("call_id").getAsString() : null;
+                if (name != null) {
+                    if (content.toolCalls == null) {
+                        content.toolCalls = new ArrayList<>();
+                    }
+                    content.toolCalls.add(new NativeToolCall(callId, name, args == null ? "" : args));
                 }
             }
         }
@@ -293,5 +347,6 @@ public class ResponseParser {
     private static class ParsedContent {
         String text;
         String thought;
+        List<NativeToolCall> toolCalls;
     }
 }

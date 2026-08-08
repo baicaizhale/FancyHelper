@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 4.3.0
+version: 4.3.1
 
 # 插件设置
 settings:
@@ -41,6 +41,11 @@ settings:
     inject_top_k: 4
     # 相关到什么程度才算“相关”，建议保持 1（只要沾边就算）
     min_relevance: 1
+  # 是否启用原生函数调用（Native Tool Calling）。
+  # 开启后 AI 会通过 API 的结构化工具调用机制触发工具，而不是靠"#工具名"文本。
+  # 需要模型本身支持函数调用；不支持的模型会自动回退到文本方式（无需额外配置）。
+  # 默认关闭，保持原有行为不变。
+  native_tool_calling: false
   # 防循环
   anti_loop:
     # 连续多少次相似调用触发中断

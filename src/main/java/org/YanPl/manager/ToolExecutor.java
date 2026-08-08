@@ -337,6 +337,17 @@ public class ToolExecutor {
      * 检查是否为风险命令
      */
     private boolean isRiskyCommand(String cmd) {
+        return isRiskyCommand(cmd, plugin.getConfigManager().getYoloRiskCommands());
+    }
+
+    /**
+     * 检查是否为风险命令（静态版，供 CLIManager 批量预筛使用）。
+     */
+    static boolean isRiskyCommandPublic(String cmd, List<String> riskyCommands) {
+        return isRiskyCommand(cmd, riskyCommands);
+    }
+
+    private static boolean isRiskyCommand(String cmd, List<String> risky) {
         String cleanCmd = cmd.trim();
         // 注释化后命令可能带前导 /，此处单独去掉，保证风险检测仍然生效
         if (cleanCmd.startsWith("/")) {
@@ -345,26 +356,25 @@ public class ToolExecutor {
         if (cleanCmd.toLowerCase().startsWith("minecraft:")) {
             cleanCmd = cleanCmd.substring(10).trim();
         }
-        
+
         // 处理 execute 命令的递归检查
         if (cleanCmd.toLowerCase().startsWith("execute")) {
             String lower = cleanCmd.toLowerCase();
             int runIndex = lower.indexOf(" run ");
             if (runIndex != -1) {
                 String subCmd = cleanCmd.substring(runIndex + 5).trim();
-                return isRiskyCommand(subCmd);
+                return isRiskyCommand(subCmd, risky);
             }
         }
 
-        List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
         if (risky == null || risky.isEmpty()) return false;
-        
+
         String lc = cleanCmd.toLowerCase();
         for (String r : risky) {
             if (r == null) continue;
             String rr = r.trim().toLowerCase();
             if (rr.isEmpty()) continue;
-            
+
             // 精确匹配命令名或带参数的命令
             if (lc.equals(rr)) return true;
             if (lc.startsWith(rr + " ")) return true;
