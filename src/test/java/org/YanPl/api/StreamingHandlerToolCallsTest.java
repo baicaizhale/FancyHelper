@@ -1,6 +1,5 @@
 package org.YanPl.api;
 
-import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.NativeToolCall;
 import org.bukkit.entity.Player;
@@ -114,9 +113,5 @@ class StreamingHandlerToolCallsTest {
         assertEquals(1, calls.size());
         assertEquals("webfetch", calls.get(0).name());
         assertEquals("fc_9", calls.get(0).id());
-    }
-
-    private JsonObject obj(String json) {
-        return new com.google.gson.Gson().fromJson(json, JsonObject.class);
     }
 }

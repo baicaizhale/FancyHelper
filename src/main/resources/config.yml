@@ -44,7 +44,7 @@ settings:
   # 是否启用原生函数调用（Native Tool Calling）。
   # 开启后 AI 会通过 API 的结构化工具调用机制触发工具，而不是靠"#工具名"文本。
   # 需要模型本身支持函数调用；不支持的模型会自动回退到文本方式（无需额外配置）。
-  native_tool_calling: false
+  native_tool_calling: true
   # 防循环
   anti_loop:
     # 连续多少次相似调用触发中断

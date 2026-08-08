@@ -149,7 +149,6 @@ public class PromptManager {
                 sb.append("[MCP External Tools]\n");
                 sb.append("  #mcp_tools | #mcp: serverName.toolName|jsonArgs\n");
             }
-            sb.append("Note: Call functions through the tools API. Independent calls may share one response; #tool 文本仅在原生调用不可用时兜底。\n\n");
         } else {
             sb.append("[Tools] Format: #tool_name: argument\n\n");
 

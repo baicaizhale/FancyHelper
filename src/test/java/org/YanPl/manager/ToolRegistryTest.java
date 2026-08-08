@@ -1,6 +1,5 @@
 package org.YanPl.manager;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
@@ -19,8 +18,6 @@ import static org.mockito.Mockito.when;
 
 @DisplayName("ToolRegistry 单元测试")
 class ToolRegistryTest {
-
-    private final Gson gson = new Gson();
 
     private FancyHelper mockPlugin() {
         FancyHelper plugin = Mockito.mock(FancyHelper.class);
