@@ -146,6 +146,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "exit":
             case "memory":
             case "mem":
+            case "servermemory":
+            case "smem":
             case "smart_allow":
             case "smart_deny":
             case "smart_never":
