@@ -4275,6 +4275,12 @@ public class CLIManager {
         if (calls == null || calls.isEmpty()) {
             return;
         }
+        StringBuilder diag = new StringBuilder();
+        for (NativeToolCall c : calls) {
+            if (diag.length() > 0) diag.append(", ");
+            diag.append(c.name()).append(":").append(c.argumentsJson());
+        }
+        plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
         if (calls.size() > 1 && allBatchSafe(calls, session) && !containsRiskyRun(calls, session)) {
             session.clearBatchState();
             for (NativeToolCall call : calls) {
@@ -4284,6 +4290,15 @@ public class CLIManager {
             return;
         }
         // 单工具路径（字节级一致）
+        if (calls.size() > 1) {
+            // 混合/含风险命令 → 不批，仅执行第一个。记录被丢弃的调用便于诊断。
+            StringBuilder dropped = new StringBuilder();
+            for (int i = 1; i < calls.size(); i++) {
+                if (dropped.length() > 0) dropped.append(", ");
+                dropped.append(calls.get(i).name());
+            }
+            plugin.getLogger().warning("[CLI] 批次不可行（含交互/确认/风险工具），仅执行第一个，丢弃: " + dropped + "（" + player.getName() + "）");
+        }
         String toolCall = ToolRegistry.bridgeToText(calls.get(0));
         if (!toolCall.isEmpty()) {
             executeTool(player, toolCall);
@@ -4304,6 +4319,7 @@ public class CLIManager {
         // 1) 队列还有工具 → 串行执行下一个
         String next = session.pollPendingNativeTool();
         if (next != null) {
+            plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
             setGenerating(uuid, true, GenerationStatus.EXECUTING_TOOL);
             try {
                 executeTool(player, next);

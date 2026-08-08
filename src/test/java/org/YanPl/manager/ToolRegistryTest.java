@@ -141,6 +141,29 @@ class ToolRegistryTest {
     }
 
     @Test
+    @DisplayName("数组参数 schema 合法：type 为字符串，含 items")
+    void testArrayParamSchemaIsValidJsonSchema() {
+        FancyHelper plugin = mockPlugin();
+        Player player = Mockito.mock(Player.class);
+        ConfigManager cfg = mockConfig(false, false, false);
+        when(plugin.getConfigManager()).thenReturn(cfg);
+
+        JsonArray tools = ToolRegistry.buildToolsArray(plugin, player, new DialogueSession(), false);
+
+        JsonObject askOptions = findTool(tools, "ask").getAsJsonObject("function")
+                .getAsJsonObject("parameters").getAsJsonObject("properties")
+                .getAsJsonObject("options");
+        assertEquals("array", askOptions.get("type").getAsString(), "options.type 必须是字符串 'array'");
+        assertTrue(askOptions.has("items"), "options 应含 items");
+
+        JsonObject todoTodos = findTool(tools, "todo").getAsJsonObject("function")
+                .getAsJsonObject("parameters").getAsJsonObject("properties")
+                .getAsJsonObject("todos");
+        assertEquals("array", todoTodos.get("type").getAsString(), "todos.type 必须是字符串 'array'");
+        assertTrue(todoTodos.has("items"), "todos 应含 items");
+    }
+
+    @Test
     @DisplayName("bridgeToText run 工具")
     void testBridgeRun() {
         NativeToolCall call = new NativeToolCall("c1", "run", "{\"command\":\"give @p apple\"}");

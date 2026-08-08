@@ -81,9 +81,7 @@ public final class ToolRegistry {
         addTool(tools, "ask", responsesFormat, "向玩家展示选项让其选择。一次只问一个问题。参数为 JSON：question(必填)、header(≤12字符)、options(2-4 项，每项 label+description)、otherLabel(可选自由输入)。",
                 obj("question", str("string", "问题内容，必填"),
                         "header", str("string", "标题，≤12 字符"),
-                        "options", obj("type", str("string", "array"),
-                                "description", str("string", "选项数组，2-4 项，每项含 label 与 description"),
-                                "items", obj("type", str("string", "object"))),
+                        "options", arr("选项数组，2-4 项，每项含 label 与 description", "object"),
                         "otherLabel", str("string", "可选自由输入标签")));
         addTool(tools, "webfetch", responsesFormat, "抓取并解析网页内容。",
                 obj("url", str("string", "要抓取的 URL")));
@@ -134,9 +132,7 @@ public final class ToolRegistry {
                         "category", str("string", "分类，默认 rule")));
 
         addTool(tools, "todo", responsesFormat, "创建/更新任务列表（整体替换）。todos 为数组，每项含 id(必填)、task(必填)、status、description、priority。同一时间只有一个 in_progress。",
-                obj("todos", obj("type", str("string", "array"),
-                        "description", str("string", "任务数组"),
-                        "items", obj("type", str("string", "object")))));
+                obj("todos", arr("任务数组", "object")));
 
         if (mcpEnabled) {
             addTool(tools, "mcp_tools", responsesFormat, "列出所有 MCP 外部工具及其启用状态。", new JsonObject());
@@ -146,7 +142,6 @@ public final class ToolRegistry {
                             "arguments", obj("type", str("string", "object"),
                                     "description", str("string", "工具参数 JSON 对象"))));
         }
-
         return tools;
     }
 
@@ -209,6 +204,17 @@ public final class ToolRegistry {
         JsonObject o = new JsonObject();
         o.addProperty("type", type);
         o.addProperty("description", description);
+        return o;
+    }
+
+    /** 数组类型 schema：{"type":"array","description":"...","items":{"type":"..."}} */
+    private static JsonElement arr(String description, String itemsType) {
+        JsonObject o = new JsonObject();
+        o.addProperty("type", "array");
+        o.addProperty("description", description);
+        JsonObject items = new JsonObject();
+        items.addProperty("type", itemsType);
+        o.add("items", items);
         return o;
     }
 
