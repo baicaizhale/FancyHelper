@@ -2426,6 +2426,7 @@ public class CLIManager {
             } catch (IOException e) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(e);
+                plugin.getLogger().warning("[CLI] AI 请求失败 (重试) - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 再次失败，重新移除最后一条消息并保存重试信息
@@ -2447,6 +2448,7 @@ public class CLIManager {
             } catch (Throwable t) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] AI 请求异常 (重试) - " + player.getName() + ": " + t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 再次失败，重新移除最后一条消息并保存重试信息
@@ -2761,6 +2763,7 @@ public class CLIManager {
                 roundOutputTokens.merge(uuid, streamedOutErr, (a, b) -> a + b);
             }
             plugin.getCloudErrorReport().report(error);
+            plugin.getLogger().warning("[CLI] 流式输出错误 - " + player.getName() + ": " + error);
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (streamedOutErr > 0) {
@@ -2962,6 +2965,7 @@ public class CLIManager {
             } catch (IOException e) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(e);
+                plugin.getLogger().warning("[CLI] AI 请求失败 - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息（存储 matchedSkills，重试时重新构建系统提示）
@@ -2984,6 +2988,7 @@ public class CLIManager {
             } catch (Throwable t) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] AI 请求异常 - " + player.getName() + ": " + t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
@@ -3488,6 +3493,7 @@ public class CLIManager {
                 });
             } catch (IOException e) {
                 plugin.getCloudErrorReport().report(e);
+                plugin.getLogger().warning("[CLI] 继续生成失败 - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     TextComponent fullMsg = buildErrorText(e.getMessage(), "继续生成失败");
@@ -4082,6 +4088,7 @@ public class CLIManager {
                             roundOutputTokens.merge(uuid, streamedOutErr2, (a, b) -> a + b);
                         }
                         plugin.getCloudErrorReport().report(error);
+                        plugin.getLogger().warning("[CLI] 反馈流式输出错误 - " + player.getName() + ": " + error);
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (streamedOutErr2 > 0) {
@@ -4155,6 +4162,7 @@ public class CLIManager {
                     });
                 }
             } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 工具反馈后 AI 请求失败 - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息（feedbackToAI 不需要 Skills）
@@ -4176,6 +4184,7 @@ public class CLIManager {
                 });
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] 工具反馈后 AI 请求异常 - " + player.getName() + ": " + t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
