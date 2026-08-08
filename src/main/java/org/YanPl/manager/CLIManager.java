@@ -1291,7 +1291,7 @@ public class CLIManager {
 
         // 创建恢复命令（下划线，可点击执行）
         TextComponent resumeCmd = new TextComponent(label);
-        resumeCmd.setColor(net.md_5.bungee.api.ChatColor.BLUE);
+        resumeCmd.setColor(net.md_5.bungee.api.ChatColor.WHITE);
         resumeCmd.setUnderlined(true);
         resumeCmd.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
         resumeCmd.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.resume.hover", cmd))));
