@@ -1274,23 +1274,30 @@ public class CLIManager {
     }
 
     /**
-     * 发送插件卸载提示（插件重载/重启时调用）：会话已保存并退出，提示玩家用 /cli resume 手动恢复。
+     * 发送插件卸载提示（插件重载/重启时调用）：会话已保存并退出，
+     * 提示玩家用 /cli resume <sessionUUID> 手动恢复（整条命令可点击执行）。
      * @param player 玩家
+     * @param sessionUUID 当前会话 UUID，用于构造恢复命令；为 null 时退化为通用 /cli resume
      */
-    public void sendUnloadMessage(Player player) {
+    public void sendUnloadMessage(Player player, String sessionUUID) {
         // 创建主消息 - 使用自定义颜色
         net.md_5.bungee.api.chat.BaseComponent[] components = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
             I18n.t("clim.unload.suspended")
         );
         TextComponent message = new TextComponent(components);
 
-        // 创建恢复按钮（点击执行 /cli resume）
-        TextComponent resumeBtn = new TextComponent(I18n.t("clim.unload.resume"));
-        resumeBtn.setColor(net.md_5.bungee.api.ChatColor.GREEN);
-        resumeBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli resume"));
-        resumeBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.resume.hover"))));
+        String cmd = (sessionUUID != null) ? "/cli resume " + sessionUUID : "/cli resume";
+        String label = (sessionUUID != null) ? I18n.t("clim.unload.resume", sessionUUID) : I18n.t("clim.unload.resume.short");
 
-        message.addExtra(resumeBtn);
+        // 创建恢复命令（下划线，可点击执行）
+        TextComponent resumeCmd = new TextComponent(label);
+        resumeCmd.setColor(net.md_5.bungee.api.ChatColor.BLUE);
+        resumeCmd.setUnderlined(true);
+        resumeCmd.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
+        resumeCmd.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.resume.hover", cmd))));
+
+        message.addExtra(resumeCmd);
+        message.addExtra(new TextComponent(I18n.t("clim.unload.resume.suffix")));
         player.spigot().sendMessage(message);
     }
 
@@ -1314,7 +1321,8 @@ public class CLIManager {
         for (UUID uuid : new ArrayList<>(activeCLIPayers)) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
-                sendUnloadMessage(player);
+                DialogueSession currentSession = sessions.get(uuid);
+                sendUnloadMessage(player, currentSession != null ? currentSession.getSessionUUID() : null);
             }
             DialogueSession session = sessions.get(uuid);
             if (session != null && session.getHistory().size() > 0) {
