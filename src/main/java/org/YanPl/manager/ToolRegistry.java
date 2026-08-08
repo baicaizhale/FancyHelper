@@ -155,7 +155,12 @@ public final class ToolRegistry {
         JsonObject fn = new JsonObject();
         fn.addProperty("name", name);
         fn.addProperty("description", description);
-        fn.add("parameters", parameters);
+        // OpenAI function-calling 要求 parameters 是 JSON Schema，最外层必须为 object 类型。
+        // 调用处传入的 parameters 是 properties 内容，这里统一包一层 {"type":"object","properties":{...}}。
+        JsonObject schema = new JsonObject();
+        schema.addProperty("type", "object");
+        schema.add("properties", parameters == null ? new JsonObject() : parameters);
+        fn.add("parameters", schema);
         JsonObject tool = new JsonObject();
         tool.addProperty("type", "function");
         if (responsesFormat) {

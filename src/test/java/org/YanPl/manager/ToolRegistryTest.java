@@ -118,6 +118,29 @@ class ToolRegistryTest {
     }
 
     @Test
+    @DisplayName("parameters 是 JSON Schema：最外层 type=object + properties")
+    void testParametersAreJsonSchema() {
+        FancyHelper plugin = mockPlugin();
+        Player player = Mockito.mock(Player.class);
+        ConfigManager cfg = mockConfig(false, false, false);
+        when(plugin.getConfigManager()).thenReturn(cfg);
+
+        JsonArray tools = ToolRegistry.buildToolsArray(plugin, player, new DialogueSession(), false);
+        JsonObject fn = findTool(tools, "run").getAsJsonObject("function");
+        JsonObject params = fn.getAsJsonObject("parameters");
+
+        assertNotNull(params, "parameters 应存在");
+        assertEquals("object", params.get("type").getAsString(), "parameters 最外层 type 必须为 object");
+        assertTrue(params.has("properties"), "parameters 应包含 properties");
+        assertTrue(params.getAsJsonObject("properties").has("command"), "run 工具应含 command 属性");
+
+        // 无参工具（exit）也应有合法 object schema
+        JsonObject exitParams = findTool(tools, "exit").getAsJsonObject("function").getAsJsonObject("parameters");
+        assertEquals("object", exitParams.get("type").getAsString());
+        assertTrue(exitParams.has("properties"));
+    }
+
+    @Test
     @DisplayName("bridgeToText run 工具")
     void testBridgeRun() {
         NativeToolCall call = new NativeToolCall("c1", "run", "{\"command\":\"give @p apple\"}");
