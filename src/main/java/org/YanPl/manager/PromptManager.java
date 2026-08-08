@@ -11,12 +11,6 @@ import java.util.stream.Collectors;
  * Prompt 管理器
  * 构建发给 AI 的基础系统提示，包含玩家与索引信息
  * 支持 Skills 自动注入
- *
- * ═══ 缓存优化说明 ═══
- * System prompt 的静态前缀（Role → Usage Guide）对所有玩家/会话恒定，
- * 确保 prompt cache 有稳定的长前缀。所有动态内容（Last Error、Skills、
- * Environment 等）追加在末尾，不影响缓存命中。
- * ═══════════════════════
  */
 public class PromptManager {
 

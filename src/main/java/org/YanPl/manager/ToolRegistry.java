@@ -70,77 +70,77 @@ public final class ToolRegistry {
         boolean mcpEnabled = cfg.isMcpClientEnabled();
         boolean planMode = session != null && session.getMode() == DialogueSession.Mode.PLAN;
 
-        addTool(tools, "search", responsesFormat, "全网搜索（Wiki 优先）。查询里加 widely 强制全网搜索。",
-                obj("query", str("string", "搜索关键词")));
-        addTool(tools, "skill", responsesFormat, "加载/管理 Skill 知识模块。先看 Available Skills 列表再调用。",
+        addTool(tools, "search", responsesFormat, "Web search (Wiki first). Add 'widely' to force a broad web search.",
+                obj("query", str("string", "Search keyword")));
+        addTool(tools, "skill", responsesFormat, "Load/manage Skill knowledge modules. Check the Available Skills list before calling.",
                 obj("id", str("string", "Skill ID"),
-                        "action", str("string", "子命令：load 加载 / list 查看文件列表 / read 读取文件，默认 load"),
-                        "file", str("string", "read 子命令时读取的文件名")));
-        addTool(tools, "unloadskill", responsesFormat, "卸载已加载的 Skill 以释放上下文空间。",
+                        "action", str("string", "Subcommand: load / list / read, default load"),
+                        "file", str("string", "File name to read with the read subcommand")));
+        addTool(tools, "unloadskill", responsesFormat, "Unload a loaded Skill to free up context space.",
                 obj("id", str("string", "Skill ID")));
-        addTool(tools, "ask", responsesFormat, "向玩家展示选项让其选择。一次只问一个问题。参数为 JSON：question(必填)、header(≤12字符)、options(2-4 项，每项 label+description)、otherLabel(可选自由输入)。",
-                obj("question", str("string", "问题内容，必填"),
-                        "header", str("string", "标题，≤12 字符"),
-                        "options", arr("选项数组，2-4 项，每项含 label 与 description", "object"),
-                        "otherLabel", str("string", "可选自由输入标签")));
-        addTool(tools, "webfetch", responsesFormat, "抓取并解析网页内容。",
-                obj("url", str("string", "要抓取的 URL")));
+        addTool(tools, "ask", responsesFormat, "Show the player options to choose from. Ask only one question at a time. Parameters are JSON: question (required), header (<=12 chars), options (2-4 items, each with label and description), otherLabel (optional free-text input).",
+                obj("question", str("string", "Question text, required"),
+                        "header", str("string", "Header, <=12 chars"),
+                        "options", arr("Options array, 2-4 items, each with label and description", "object"),
+                        "otherLabel", str("string", "Optional free-text input label")));
+        addTool(tools, "webfetch", responsesFormat, "Fetch and parse web page content.",
+                obj("url", str("string", "URL to fetch")));
 
-        addTool(tools, "run", responsesFormat, "执行一条 Minecraft 游戏内命令。禁止用 && 或 ; 拼接多条命令。参数中不要包含 | 字符。",
-                obj("command", str("string", "要执行的单条命令")));
-        addTool(tools, "exit", responsesFormat, "玩家要求退出 FancyHelper 时调用。", new JsonObject());
+        addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
+                obj("command", str("string", "The single command to execute")));
+        addTool(tools, "exit", responsesFormat, "Call when the player asks to exit FancyHelper.", new JsonObject());
         if (planMode) {
-            addTool(tools, "start", responsesFormat, "结束 Plan Mode，选择执行模式开始执行。", new JsonObject());
+            addTool(tools, "start", responsesFormat, "End Plan Mode and choose an execution mode to start.", new JsonObject());
         }
 
         if (readEnabled) {
-            addTool(tools, "list", responsesFormat, "列出目录内容。结果玩家不可见。",
-                    obj("path", str("string", "目录路径")));
-            addTool(tools, "read", responsesFormat, "读取文件（带行号）。行号用于后续 #edit 精确定位。结果玩家不可见。",
-                    obj("path", str("string", "文件路径"),
-                            "range", str("string", "行范围，如 1-50；省略则读全文")));
+            addTool(tools, "list", responsesFormat, "List directory contents. Result is not visible to the player.",
+                    obj("path", str("string", "Directory path")));
+            addTool(tools, "read", responsesFormat, "Read a file (with line numbers). Line numbers are used to precisely locate #edit later. Result is not visible to the player.",
+                    obj("path", str("string", "File path"),
+                            "range", str("string", "Line range, e.g. 1-50; omit to read the whole file")));
         }
         if (writeEnabled) {
-            addTool(tools, "edit", responsesFormat, "按原文匹配编辑文件。先 #read 再 #edit。格式 path|range|original|replacement。参数中不要包含 | 字符。",
-                    obj("path", str("string", "文件路径"),
-                            "range", str("string", "行范围 10-10 或 auto"),
-                            "original", str("string", "要匹配的原文"),
-                            "replacement", str("string", "替换后的内容")));
-            addTool(tools, "write", responsesFormat, "整体覆盖写入文件。换行用 \\n，字面 \\n 用 \\\\n。参数中不要包含 | 字符。",
-                    obj("path", str("string", "文件路径"),
-                            "content", str("string", "文件新内容，换行用 \\n")));
+            addTool(tools, "edit", responsesFormat, "Edit a file by matching original text. #read first, then #edit. Format: path|range|original|replacement. Do not include | characters in the parameter.",
+                    obj("path", str("string", "File path"),
+                            "range", str("string", "Line range 10-10 or auto"),
+                            "original", str("string", "Original text to match"),
+                            "replacement", str("string", "Replacement text")));
+            addTool(tools, "write", responsesFormat, "Overwrite a file completely. Use \\n for newlines and \\\\n for a literal backslash-n. Do not include | characters in the parameter.",
+                    obj("path", str("string", "File path"),
+                            "content", str("string", "New file content, use \\n for newlines")));
         }
 
-        addTool(tools, "remember", responsesFormat, "保存玩家永久偏好（≤50 字，不要用 我/你/请）。分类|内容。参数中不要包含 | 字符。",
-                obj("content", str("string", "记忆内容"),
-                        "category", str("string", "分类，默认 general")));
-        addTool(tools, "forget", responsesFormat, "删除一条或全部玩家记忆。",
-                obj("index", str("string", "序号数字或 all")));
-        addTool(tools, "edit_memory", responsesFormat, "更新一条玩家记忆。序号|分类|新内容。参数中不要包含 | 字符。",
-                obj("index", str("number", "记忆序号"),
-                        "content", str("string", "新内容"),
-                        "category", str("string", "分类，默认 general")));
+        addTool(tools, "remember", responsesFormat, "Save a permanent player preference (<=50 chars, avoid first/second-person wording like I/you/please). Format: category|content. Do not include | characters in the parameter.",
+                obj("content", str("string", "Memory content"),
+                        "category", str("string", "Category, default general")));
+        addTool(tools, "forget", responsesFormat, "Delete one or all player memories.",
+                obj("index", str("string", "Index number or all")));
+        addTool(tools, "edit_memory", responsesFormat, "Update one player memory. Format: index|category|content. Do not include | characters in the parameter.",
+                obj("index", str("number", "Memory index"),
+                        "content", str("string", "New content"),
+                        "category", str("string", "Category, default general")));
 
-        addTool(tools, "remember_global", responsesFormat, "保存服务器级规则/事实（仅管理员，影响所有玩家，≤100 字）。参数中不要包含 | 字符。",
-                obj("content", str("string", "记忆内容"),
-                        "category", str("string", "分类，默认 rule")));
-        addTool(tools, "forget_global", responsesFormat, "删除一条或全部服务器记忆（仅管理员）。",
-                obj("index", str("string", "序号数字或 all")));
-        addTool(tools, "edit_global", responsesFormat, "更新一条服务器记忆（仅管理员）。序号|分类|新内容。参数中不要包含 | 字符。",
-                obj("index", str("number", "记忆序号"),
-                        "content", str("string", "新内容"),
-                        "category", str("string", "分类，默认 rule")));
+        addTool(tools, "remember_global", responsesFormat, "Save a server-level rule/fact (admin only, affects all players, <=100 chars). Do not include | characters in the parameter.",
+                obj("content", str("string", "Memory content"),
+                        "category", str("string", "Category, default rule")));
+        addTool(tools, "forget_global", responsesFormat, "Delete one or all server memories (admin only).",
+                obj("index", str("string", "Index number or all")));
+        addTool(tools, "edit_global", responsesFormat, "Update one server memory (admin only). Format: index|category|content. Do not include | characters in the parameter.",
+                obj("index", str("number", "Memory index"),
+                        "content", str("string", "New content"),
+                        "category", str("string", "Category, default rule")));
 
-        addTool(tools, "todo", responsesFormat, "创建/更新任务列表（整体替换）。todos 为数组，每项含 id(必填)、task(必填)、status、description、priority。同一时间只有一个 in_progress。",
-                obj("todos", arr("任务数组", "object")));
+        addTool(tools, "todo", responsesFormat, "Create/update the task list (full replacement). todos is an array; each item has id (required), task (required), status, description, priority. Only one item can be in_progress at a time.",
+                obj("todos", arr("Task array", "object")));
 
         if (mcpEnabled) {
-            addTool(tools, "mcp_tools", responsesFormat, "列出所有 MCP 外部工具及其启用状态。", new JsonObject());
-            addTool(tools, "mcp", responsesFormat, "调用外部 MCP 工具。格式 server.tool|jsonArgs。先调用 mcp_tools 查看可用工具。",
-                    obj("server", str("string", "MCP 服务器名"),
-                            "tool", str("string", "MCP 工具名"),
+            addTool(tools, "mcp_tools", responsesFormat, "List all MCP external tools and their enabled status.", new JsonObject());
+            addTool(tools, "mcp", responsesFormat, "Call an external MCP tool. Format: server.tool|jsonArgs. Call mcp_tools first to see available tools.",
+                    obj("server", str("string", "MCP server name"),
+                            "tool", str("string", "MCP tool name"),
                             "arguments", obj("type", str("string", "object"),
-                                    "description", str("string", "工具参数 JSON 对象"))));
+                                    "description", str("string", "Tool arguments JSON object"))));
         }
         return tools;
     }
