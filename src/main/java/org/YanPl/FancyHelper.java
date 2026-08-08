@@ -16,6 +16,7 @@ import org.YanPl.manager.TodoManager;
 import org.YanPl.manager.NoticeManager;
 import org.YanPl.manager.FileWatcherManager;
 import org.YanPl.manager.InstructionManager;
+import org.YanPl.manager.ServerMemoryManager;
 import org.YanPl.manager.GuiManager;
 import org.YanPl.manager.SkillManager;
 import org.YanPl.manager.SkillUpdateManager;
@@ -57,6 +58,7 @@ public final class FancyHelper extends JavaPlugin {
     private MetasoAPI metasoAPI;
     private ErrorHandler errorHandler;
     private InstructionManager instructionManager;
+    private ServerMemoryManager serverMemoryManager;
     private GuiManager guiManager;
     private SkillManager skillManager;
     private SkillUpdateManager skillUpdateManager;
@@ -123,6 +125,9 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化偏好记忆管理器
             instructionManager = new InstructionManager(this);
+
+            // 初始化服务器级记忆管理器（管理员写入的全局规则/事实）
+            serverMemoryManager = new ServerMemoryManager(this);
 
             // 初始化 GUI 管理器
             guiManager = new GuiManager(this);
@@ -484,6 +489,11 @@ public final class FancyHelper extends JavaPlugin {
             instructionManager.shutdown();
         }
 
+        // 关闭服务器级记忆管理器（落盘 + 清缓存）
+        if (serverMemoryManager != null) {
+            serverMemoryManager.shutdown();
+        }
+
         // 关闭 MCP 管理器
         if (mcpManager != null) {
             mcpManager.shutdown();
@@ -562,6 +572,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public InstructionManager getInstructionManager() {
         return instructionManager;
+    }
+
+    public ServerMemoryManager getServerMemoryManager() {
+        return serverMemoryManager;
     }
 
     public GuiManager getGuiManager() {

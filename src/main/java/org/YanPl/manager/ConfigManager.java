@@ -808,6 +808,38 @@ public class ConfigManager {
         return config.getBoolean("sounds.enabled", true);
     }
 
+    // ============================================================
+    // 服务器级记忆（Server Memory）配置
+    // ============================================================
+
+    /**
+     * 是否启用服务器级记忆
+     */
+    public boolean isServerMemoryEnabled() {
+        return config.getBoolean("settings.memory.enabled", true);
+    }
+
+    /**
+     * 获取服务器记忆总数上限，超出后自动淘汰最久未使用的条目
+     */
+    public int getServerMemoryMaxEntries() {
+        return config.getInt("settings.memory.max_entries", 100);
+    }
+
+    /**
+     * 获取每轮 prompt 注入的最相关条数（Top-K），0 表示关闭注入
+     */
+    public int getServerMemoryInjectTopK() {
+        return config.getInt("settings.memory.inject_top_k", 4);
+    }
+
+    /**
+     * 获取注入的最低相关分（关键词命中次数），低于此分的记忆不注入
+     */
+    public int getServerMemoryMinRelevance() {
+        return config.getInt("settings.memory.min_relevance", 1);
+    }
+
     public String getSoundAiComplete() {
         return config.getString("sounds.ai_complete", "block.note_block.hat");
     }

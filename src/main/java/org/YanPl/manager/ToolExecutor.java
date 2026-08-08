@@ -148,7 +148,18 @@ public class ToolExecutor {
             case "#edit_memory":
                 handleEditmemTool(player, args);
                 break;
-            
+
+            // 服务器级记忆工具（仅管理员，影响所有玩家会话）
+            case "#remember_global":
+                handleRememberGlobalTool(player, args);
+                break;
+            case "#forget_global":
+                handleForgetGlobalTool(player, args);
+                break;
+            case "#edit_global":
+                handleEditGlobalTool(player, args);
+                break;
+
             // 网页阅读工具
             case "#webfetch":
                 handleWebFetchTool(player, args, session);
@@ -237,6 +248,15 @@ public class ToolExecutor {
             manageBtn.setColor(net.md_5.bungee.api.ChatColor.of(ColorUtil.getColorZ()));
             manageBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli memory"));
             manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.memory.manage.hover"))));
+            message.addExtra(manageBtn);
+            player.spigot().sendMessage(message);
+        } else if (lowerToolName.equals("#remember_global") || lowerToolName.equals("#forget_global") ||
+            lowerToolName.equals("#edit_global")) {
+            TextComponent message = new TextComponent(TextComponent.fromLegacyText(I18n.t("tool.memory.server.remembering")));
+            TextComponent manageBtn = new TextComponent(TextComponent.fromLegacyText(I18n.t("tool.memory.server.manage")));
+            manageBtn.setColor(net.md_5.bungee.api.ChatColor.of(ColorUtil.getColorZ()));
+            manageBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli servermemory"));
+            manageBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("tool.memory.server.manage.hover"))));
             message.addExtra(manageBtn);
             player.spigot().sendMessage(message);
         } else if (lowerToolName.equals("#exit")) {
@@ -2170,6 +2190,135 @@ public class ToolExecutor {
         } catch (NumberFormatException e) {
             cliManager.feedbackToAI(player, "#editmem_result: error - 无效的序号: " + parts[0].trim());
         }
+    }
+
+    /**
+     * 处理 #remember_global 工具 - 保存服务器级记忆（仅管理员）
+     * 格式: #remember_global: 内容 或 #remember_global: 分类|内容
+     */
+    private void handleRememberGlobalTool(Player player, String args) {
+        if (!checkAdminPermission(player, "#remember_global_result")) {
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        if (args == null || args.trim().isEmpty()) {
+            cliManager.feedbackToAI(player, "#remember_global_result: error - 需要提供要记住的内容，格式: #remember_global: 内容 或 #remember_global: 分类|内容");
+            return;
+        }
+
+        String content = args.trim();
+        String category = "rule";
+
+        if (content.contains("|")) {
+            String[] parts = content.split("\\|", 2);
+            if (parts.length == 2) {
+                category = parts[0].trim();
+                content = parts[1].trim();
+            }
+        }
+
+        if (content.isEmpty()) {
+            cliManager.feedbackToAI(player, "#remember_global_result: error - 服务器记忆内容不能为空");
+            return;
+        }
+
+        String result = plugin.getServerMemoryManager().addMemory(content, category, player.getName());
+        cliManager.feedbackToAI(player, "#remember_global_result: " + result);
+    }
+
+    /**
+     * 处理 #forget_global 工具 - 删除服务器级记忆（仅管理员）
+     * 格式: #forget_global: 序号 或 #forget_global: all
+     */
+    private void handleForgetGlobalTool(Player player, String args) {
+        if (!checkAdminPermission(player, "#forget_global_result")) {
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        if (args == null || args.trim().isEmpty()) {
+            cliManager.feedbackToAI(player, "#forget_global_result: error - 需要提供序号或 'all'，格式: #forget_global: 序号 或 #forget_global: all");
+            return;
+        }
+
+        String arg = args.trim();
+
+        if (arg.equalsIgnoreCase("all")) {
+            String result = plugin.getServerMemoryManager().clearMemories();
+            cliManager.feedbackToAI(player, "#forget_global_result: " + result);
+            return;
+        }
+
+        try {
+            int index = Integer.parseInt(arg);
+            String result = plugin.getServerMemoryManager().removeMemory(index);
+            cliManager.feedbackToAI(player, "#forget_global_result: " + result);
+        } catch (NumberFormatException e) {
+            cliManager.feedbackToAI(player, "#forget_global_result: error - 无效的序号: " + arg);
+        }
+    }
+
+    /**
+     * 处理 #edit_global 工具 - 修改服务器级记忆（仅管理员）
+     * 格式: #edit_global: 序号|新内容 或 #edit_global: 序号|分类|新内容
+     */
+    private void handleEditGlobalTool(Player player, String args) {
+        if (!checkAdminPermission(player, "#edit_global_result")) {
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        if (args == null || args.trim().isEmpty()) {
+            cliManager.feedbackToAI(player, "#edit_global_result: error - 格式错误，正确格式: #edit_global: 序号|新内容 或 #edit_global: 序号|分类|新内容");
+            return;
+        }
+
+        String[] parts = args.trim().split("\\|", 3);
+
+        if (parts.length < 2) {
+            cliManager.feedbackToAI(player, "#edit_global_result: error - 格式错误，正确格式: #edit_global: 序号|新内容 或 #edit_global: 序号|分类|新内容");
+            return;
+        }
+
+        try {
+            int index = Integer.parseInt(parts[0].trim());
+            String content;
+            String category;
+
+            if (parts.length == 2) {
+                category = "rule";
+                content = parts[1].trim();
+            } else {
+                category = parts[1].trim();
+                content = parts[2].trim();
+            }
+
+            if (content.isEmpty()) {
+                cliManager.feedbackToAI(player, "#edit_global_result: error - 服务器记忆内容不能为空");
+                return;
+            }
+
+            String result = plugin.getServerMemoryManager().updateMemory(index, content, category);
+            cliManager.feedbackToAI(player, "#edit_global_result: " + result);
+        } catch (NumberFormatException e) {
+            cliManager.feedbackToAI(player, "#edit_global_result: error - 无效的序号: " + parts[0].trim());
+        }
+    }
+
+    /**
+     * 检查玩家是否拥有 fancyhelper.admin 权限，无权限时回喂 AI 并返回 false
+     */
+    private boolean checkAdminPermission(Player player, String feedbackPrefix) {
+        if (!player.hasPermission("fancyhelper.admin")) {
+            String error = "#error: 无权限（需要 fancyhelper.admin），仅管理员可修改服务器级记忆。普通偏好请用 #remember。";
+            cliManager.feedbackToAI(player, feedbackPrefix + ": " + error);
+            return false;
+        }
+        return true;
     }
 
     /**

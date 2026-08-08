@@ -50,6 +50,18 @@ public class PromptManager {
      * ═══════════════
      */
     public String getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills) {
+        return getBaseSystemPrompt(player, loadedSkills, "");
+    }
+
+    /**
+     * 获取基础系统提示（包含动态加载的 Skills 与服务器级记忆）
+     *
+     * @param player 玩家
+     * @param loadedSkills 已匹配的 Skill 列表（最多 MAX_LOADED_SKILLS 个）
+     * @param currentMessage 当前玩家消息（用于服务器记忆相关性筛选，可为空串）
+     * @return 完整的系统提示
+     */
+    public String getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills, String currentMessage) {
         StringBuilder sb = new StringBuilder();
 
         // ====================================================================
@@ -145,7 +157,12 @@ public class PromptManager {
         sb.append("    Example: #remember: style|concise\n");
         sb.append("    Only for permanent facts/prefs. Never for ongoing tasks (use #todo instead).\n");
         sb.append("  #forget: <index|all>         - Delete one or all memories.\n");
-        sb.append("  #edit_memory: <index>|<new>  - Update existing memory.\n\n");
+        sb.append("  #edit_memory: <index>|<new>  - Update existing memory.\n");
+        sb.append("  #remember_global: category|content  - Save SERVER rule/fact (admin only, affects ALL players). Max 100 chars.\n");
+        sb.append("    Example: #remember_global: rule|周五晚高峰20点提醒玩家注意\n");
+        sb.append("    Only admins (fancyhelper.admin). Non-admin will get an error — then use #remember instead.\n");
+        sb.append("  #forget_global: <index|all>  - Delete one/all server memories (admin only).\n");
+        sb.append("  #edit_global: <index>|<new>  - Update a server memory (admin only).\n\n");
 
         sb.append("[Task Management]\n");
         sb.append("  #todo: <json>  - Create/update task list. Replaces existing list entirely.\n");
@@ -194,6 +211,9 @@ public class PromptManager {
             sb.append("[Player Preferences]\n");
             sb.append(instructions).append("\n\n");
         }
+
+        // ==================== Server Memory / 服务器级记忆 ====================
+        appendServerMemory(sb, player, loadedSkills, currentMessage);
 
         // ==================== Loaded Skills / 已加载的 Skills ====================
         if (loadedSkills != null && !loadedSkills.isEmpty()) {
@@ -273,14 +293,59 @@ public class PromptManager {
     }
 
     /**
+     * 追加服务器级记忆（[Server Memory]）段：按当前消息 + 已加载 Skill 关键词做 Top-K 筛选。
+     * 仅当 memory.enabled 且筛选结果非空时输出。动态尾部区域，保持 prompt cache 前缀稳定。
+     */
+    private void appendServerMemory(StringBuilder sb, org.bukkit.entity.Player player,
+                                    List<Skill> loadedSkills, String currentMessage) {
+        if (!plugin.getConfigManager().isServerMemoryEnabled()) {
+            return;
+        }
+        StringBuilder query = new StringBuilder();
+        if (currentMessage != null) {
+            query.append(currentMessage);
+        }
+        if (loadedSkills != null) {
+            for (Skill skill : loadedSkills) {
+                query.append(' ').append(skill.getMetadata().getName());
+                query.append(' ').append(String.join(" ", skill.getMetadata().getTriggers()));
+            }
+        }
+
+        List<ServerMemoryManager.ServerMemory> hits = plugin.getServerMemoryManager()
+                .getMemoriesForPrompt(query.toString(),
+                        plugin.getConfigManager().getServerMemoryInjectTopK(),
+                        plugin.getConfigManager().getServerMemoryMinRelevance());
+        if (hits.isEmpty()) {
+            return;
+        }
+
+        sb.append("[Server Memory]\n");
+        sb.append("以下是管理员写入的服务器规则/事实，与当前对话相关，对所有玩家生效，优先级高于玩家个人偏好。\n");
+        sb.append("注意：若与其他记忆冲突，以较新的为准；服务器规则优先于 [Player Preferences]。\n");
+        for (ServerMemoryManager.ServerMemory memory : hits) {
+            sb.append("- [").append(memory.getCategory()).append("] ").append(memory.getContent()).append("\n");
+        }
+        sb.append("\n");
+    }
+
+    /**
      * 根据会话模式获取对应的系统提示词
      */
     public String getSystemPromptForSession(org.bukkit.entity.Player player, List<Skill> loadedSkills,
                                              org.YanPl.model.DialogueSession.Mode mode) {
+        return getSystemPromptForSession(player, loadedSkills, mode, "");
+    }
+
+    /**
+     * 根据会话模式获取对应的系统提示词（带当前玩家消息，用于服务器记忆相关性筛选）
+     */
+    public String getSystemPromptForSession(org.bukkit.entity.Player player, List<Skill> loadedSkills,
+                                             org.YanPl.model.DialogueSession.Mode mode, String currentMessage) {
         if (mode == org.YanPl.model.DialogueSession.Mode.PLAN) {
             return getPlanModeSystemPrompt(player);
         }
-        return getBaseSystemPrompt(player, loadedSkills);
+        return getBaseSystemPrompt(player, loadedSkills, currentMessage);
     }
 
     /**
