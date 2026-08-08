@@ -36,6 +36,15 @@ public class ToolExecutor {
     private final CLIManager cliManager;
     private final RiskAssessmentManager riskAssessmentManager;
 
+    // 命令输出捕获的静默窗口：有输出后持续无新输出达该时长即收尾（捕获缓冲长度增长判定）
+    private static final long CAPTURE_QUIET_MS = 2000L;
+    // 命令从未产生任何输出时的首次输出宽限（有输出的命令不受此限，安静即可收尾）
+    private static final long CAPTURE_NO_OUTPUT_MS = 5000L;
+    // 命令输出的绝对等待上限（防止命令持续吐输出时无限等待）
+    private static final long CAPTURE_MAX_WAIT_MS = 15_000L;
+    // 静默窗口轮询间隔
+    private static final long CAPTURE_POLL_TICKS = 10L; // 0.5 秒
+
     public ToolExecutor(FancyHelper plugin, CLIManager cliManager) {
         this.plugin = plugin;
         this.cliManager = cliManager;
@@ -1265,45 +1274,83 @@ public class ToolExecutor {
 
             if (!plugin.isEnabled()) return;
 
-            // 延迟 1 秒 (20 ticks) 检查反馈（通过 PacketCapture 捕获玩家实际看到的输出）
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                String currentPacketOutput = "";
-                boolean hasOutput = false;
+            // 命令执行失败时立即收尾，不进入静默等待
+            if (!finalSuccess) {
+                String errorPacket = (plugin.getPacketCaptureManager() != null)
+                        ? plugin.getPacketCaptureManager().stopCapture(player) : "";
+                finalizeRun(player, executedCommand, finalSuccess, finalCommandError, errorPacket, "");
+                return;
+            }
 
-                if (plugin.getPacketCaptureManager() != null) {
-                    currentPacketOutput = plugin.getPacketCaptureManager().peekCapture(player);
-                    if (!currentPacketOutput.isEmpty()) hasOutput = true;
-                }
+            // 静默驱动窗口：捕获缓冲长度增长即"有输出"，重置静默计时；连续无新输出超过
+            // CAPTURE_QUIET_MS 即认为命令输出已完整，停止捕获并把结果反馈给 AI。
+            // 相比固定 1s/5s 延迟，既能吃满 spark 这类持续输出的命令，又不会让秒回命令白等。
+            final long[] lastLen = {0L};
+            final boolean[] hasOutput = {false};
+            final long[] quietSince = {System.currentTimeMillis()};
+            final long captureStart = System.currentTimeMillis();
+            final org.bukkit.scheduler.BukkitTask[] taskHolder = new org.bukkit.scheduler.BukkitTask[1];
 
-                // 如果有输出，或者命令执行失败，则立即结束
-                if (hasOutput || !finalSuccess) {
-                    String finalPacketOutput = "";
-                    if (plugin.getPacketCaptureManager() != null) {
-                        finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
-                    }
-                    String finalResult = buildCommandResult(executedCommand, finalPacketOutput, finalSuccess, finalCommandError, "");
-                    cliManager.feedbackToAI(player, "#run_result: " + finalResult);
-                    return;
-                }
-
-                // 如果没有输出，延长等待 5 秒 (100 ticks)
-                player.sendMessage(I18n.t("tool.run.no.feedback"));
-
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    String delayedPacketOutput = "";
-                    if (plugin.getPacketCaptureManager() != null) {
-                        delayedPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
+            org.bukkit.scheduler.BukkitTask timer = Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+                @Override
+                public void run() {
+                    if (!plugin.isEnabled() || !player.isOnline()) {
+                        stop();
+                        return;
                     }
 
-                    // 兜底：数据包仍无输出时，尝试从控制台日志抓取命令反馈
-                    String consoleFeedback = (finalSuccess && delayedPacketOutput.isEmpty())
-                            ? getConsoleFeedback(player, executedCommand) : "";
-                    String finalResult = buildCommandResult(executedCommand, delayedPacketOutput, finalSuccess, finalCommandError, consoleFeedback);
-                    cliManager.feedbackToAI(player, "#run_result: " + finalResult);
-                }, 100L);
+                    long len = 0;
+                    if (plugin.getPacketCaptureManager() != null) {
+                        len = plugin.getPacketCaptureManager().captureLength(player);
+                    }
+                    long now = System.currentTimeMillis();
+                    boolean quietLongEnough;
+                    if (len > lastLen[0]) {
+                        // 有新输出：记录已产生输出并重置静默计时
+                        lastLen[0] = len;
+                        hasOutput[0] = true;
+                        quietSince[0] = now;
+                        return;
+                    }
+                    if (hasOutput[0]) {
+                        // 有输出后安静 2s → 输出已完整
+                        quietLongEnough = now - quietSince[0] >= CAPTURE_QUIET_MS;
+                    } else {
+                        // 从未有输出：等待首次输出宽限 5s
+                        quietLongEnough = now - captureStart >= CAPTURE_NO_OUTPUT_MS;
+                    }
+                    boolean timedOut = now - captureStart >= CAPTURE_MAX_WAIT_MS;
+                    if (quietLongEnough || timedOut) {
+                        stop();
+                        if (timedOut && !quietLongEnough) {
+                            player.sendMessage(I18n.t("tool.run.no.feedback"));
+                        }
+                        String packetOutput = (plugin.getPacketCaptureManager() != null)
+                                ? plugin.getPacketCaptureManager().stopCapture(player) : "";
+                        // 兜底：数据包仍无输出时，尝试从控制台日志抓取命令反馈
+                        String consoleFeedback = packetOutput.isEmpty()
+                                ? getConsoleFeedback(player, executedCommand) : "";
+                        finalizeRun(player, executedCommand, finalSuccess, finalCommandError, packetOutput, consoleFeedback);
+                    }
+                }
 
-            }, 20L);
+                private void stop() {
+                    org.bukkit.scheduler.BukkitTask self = taskHolder[0];
+                    if (self != null) {
+                        self.cancel();
+                    }
+                }
+            }, 0L, CAPTURE_POLL_TICKS);
+            taskHolder[0] = timer;
         });
+    }
+
+    /**
+     * 收尾命令执行：构建结果并反馈给 AI（单工具路径与静默窗口共用）。
+     */
+    private void finalizeRun(Player player, String executedCommand, boolean success, String serverError, String packetOutput, String consoleFeedback) {
+        String result = buildCommandResult(executedCommand, packetOutput, success, serverError, consoleFeedback);
+        cliManager.feedbackToAI(player, "#run_result: " + result);
     }
 
     /**
