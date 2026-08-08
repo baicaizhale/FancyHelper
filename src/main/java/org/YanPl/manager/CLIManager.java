@@ -1286,8 +1286,9 @@ public class CLIManager {
         );
         TextComponent message = new TextComponent(components);
 
-        String cmd = (sessionUUID != null) ? "/cli resume " + sessionUUID : "/cli resume";
+        // 显示 /cli resume <uuid>，点击实际执行 /cli resume_confirm <uuid>（直接恢复该会话）
         String label = (sessionUUID != null) ? I18n.t("clim.unload.resume", sessionUUID) : I18n.t("clim.unload.resume.short");
+        String cmd = (sessionUUID != null) ? "/cli resume_confirm " + sessionUUID : "/cli resume";
 
         // 创建恢复命令（下划线，可点击执行）
         TextComponent resumeCmd = new TextComponent(label);
