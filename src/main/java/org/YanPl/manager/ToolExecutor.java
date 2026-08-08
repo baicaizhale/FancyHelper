@@ -2130,7 +2130,8 @@ public class ToolExecutor {
         String result = plugin.getTodoManager().updateTodos(uuid, todoJson);
 
         if (result.startsWith("错误")) {
-            player.sendMessage(ChatColor.RED + "⨀ " + result);
+            // 工具调用失败（多为模型格式问题）是内部细节，不展示给玩家，
+            // 仅回灌 AI 让它自行修正，控制台已由 TodoManager 记录 warning。
             cliManager.feedbackToAI(player, "#todo_result: " + result);
         } else {
             net.md_5.bungee.api.chat.TextComponent todoDisplay = plugin.getTodoManager().getTodoDisplayComponent(player);
