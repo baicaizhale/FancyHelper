@@ -2753,12 +2753,12 @@ public class CLIManager {
                     streamedOutputTokens.remove(uuid);
                     dispatchNativeCalls(player, session, nativeCalls);
                 } else {
-                    String toolCall = extractToolCall(response);
-                    // 模型可能把 #run 放在 reasoning_content 而非 content 里（仅文本协议时兜底）
-                    if (toolCall.isEmpty() && !thoughtContent.isEmpty()) {
-                        toolCall = extractToolCall(thoughtContent);
+                    List<String> textTools = extractToolCalls(response);
+                    // 模型可能把 #tool 放在 reasoning_content 而非 content 里（仅文本协议时兜底）
+                    if (textTools.isEmpty() && thoughtContent != null && !thoughtContent.isEmpty()) {
+                        textTools = extractToolCalls(thoughtContent);
                     }
-                    if (!toolCall.isEmpty()) {
+                    if (!textTools.isEmpty()) {
                         // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
                         Long streamedThisCycle = streamedOutputTokens.get(uuid);
                         if (streamedThisCycle != null && streamedThisCycle > 0) {
@@ -2766,7 +2766,7 @@ public class CLIManager {
                             roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
                         }
                         streamedOutputTokens.remove(uuid);
-                        executeTool(player, toolCall);
+                        dispatchTextTools(player, session, textTools);
                     } else {
                         // 本轮输出完全结束 → 累积 token 写回 session
                         Long streamedTotal = streamedOutputTokens.get(uuid);
@@ -2880,9 +2880,9 @@ public class CLIManager {
                 if (nativeCalls != null && !nativeCalls.isEmpty()) {
                     dispatchNativeCalls(player, session, nativeCalls);
                 } else {
-                    String toolCall = extractToolCall(finalResponse);
-                    if (!toolCall.isEmpty()) {
-                        executeTool(player, toolCall);
+                    List<String> textTools = extractToolCalls(finalResponse);
+                    if (!textTools.isEmpty()) {
+                        dispatchTextTools(player, session, textTools);
                     } else {
                         checkTokenWarning(player, session);
                         autoCompressContext(player, session);
@@ -3375,33 +3375,43 @@ public class CLIManager {
     }
 
     /**
-     * 从AI响应中提取工具调用
-     * @param response AI响应文本
-     * @return 工具调用字符串，如果没有则返回空字符串
+     * 剥离 AI 响应中的思考块（<thought>/<think>/```thought``` / Thought: 前缀），返回纯正文。
      */
-    private String extractToolCall(String response) {
-        String cleanResponse = response;
-        
-        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(cleanResponse);
+    private static String stripThoughtContent(String response) {
+        if (response == null || response.isEmpty()) {
+            return response;
+        }
+        String clean = response;
+        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(clean);
         if (thoughtMatcher.find()) {
-            cleanResponse = cleanResponse.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
+            clean = clean.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
         } else {
-            java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(cleanResponse);
+            java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(clean);
             if (thinkTagMatcher.find()) {
-                cleanResponse = cleanResponse.replaceAll("(?s)<think>.*?</think>", "");
+                clean = clean.replaceAll("(?s)<think>.*?</think>", "");
             } else {
-                java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(cleanResponse);
+                java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(clean);
                 if (mdThoughtMatcher.find()) {
-                    cleanResponse = cleanResponse.replaceAll("(?s)```thought\n?.*?\n?```", "");
+                    clean = clean.replaceAll("(?s)```thought\n?.*?\n?```", "");
                 }
             }
         }
-        
-        cleanResponse = cleanResponse.replaceAll("(?i)^Thought:.*?\n", "");
-        cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
-        cleanResponse = cleanResponse.trim();
-        
-        // 顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持
+        clean = clean.replaceAll("(?i)^Thought:.*?\n", "");
+        clean = clean.replaceAll("(?i)^思考过程:.*?\n", "");
+        return clean.trim();
+    }
+
+    /**
+     * 从AI响应中提取全部工具调用（文本协议多工具支持）。
+     * 与 extractToolCall 的解析规则一致，但收集所有合法 #tool 而非遇到第一个就返回。
+     * @return 工具调用列表，可能为空
+     */
+    private static List<String> extractToolCalls(String response) {
+        String cleanResponse = stripThoughtContent(response);
+        List<String> calls = new java.util.ArrayList<>();
+        if (cleanResponse == null || cleanResponse.isEmpty()) {
+            return calls;
+        }
         List<String> knownTools = KNOWN_TOOLS;
 
         int currentPos = 0;
@@ -3418,6 +3428,7 @@ public class CLIManager {
 
             if (isValidStart) {
                 String potentialToolPart = cleanResponse.substring(hashIndex).trim();
+                boolean matched = false;
                 for (String tool : knownTools) {
                     if (potentialToolPart.toLowerCase().startsWith(tool)) {
                         String remainingAfterTool = potentialToolPart.substring(tool.length()).trim();
@@ -3442,13 +3453,22 @@ public class CLIManager {
                                     }
                                 }
                                 if (endIndex != -1) {
-                                    return tool + ":" + remainingAfterTool.substring(0, endIndex);
+                                    calls.add(tool + ":" + remainingAfterTool.substring(0, endIndex));
+                                    currentPos = hashIndex + tool.length() + endIndex;
+                                    matched = true;
+                                    break;
                                 } else {
                                     int lineEnd = remainingAfterTool.indexOf('\n');
                                     if (lineEnd != -1) {
-                                        return tool + ":" + remainingAfterTool.substring(0, lineEnd);
+                                        calls.add(tool + ":" + remainingAfterTool.substring(0, lineEnd));
+                                        currentPos = hashIndex + tool.length() + lineEnd;
+                                        matched = true;
+                                        break;
                                     } else {
-                                        return potentialToolPart;
+                                        calls.add(tool + ":" + remainingAfterTool.trim());
+                                        currentPos = hashIndex + tool.length() + remainingAfterTool.length();
+                                        matched = true;
+                                        break;
                                     }
                                 }
                             } else {
@@ -3467,21 +3487,81 @@ public class CLIManager {
                                 }
 
                                 if (paramEnd != -1) {
-                                    return tool + ":" + remainingAfterTool.substring(0, paramEnd).trim();
+                                    calls.add(tool + ":" + remainingAfterTool.substring(0, paramEnd).trim());
+                                    currentPos = hashIndex + tool.length() + paramEnd;
                                 } else {
-                                    return potentialToolPart;
+                                    // 最后一行（无换行、无后续工具）：规范化去掉冒号后空格，与其它分支一致
+                                    calls.add(tool + ":" + remainingAfterTool.trim());
+                                    currentPos = hashIndex + tool.length() + remainingAfterTool.length();
                                 }
+                                matched = true;
+                                break;
                             }
                         } else {
-                            return tool;
+                            calls.add(tool);
+                            currentPos = hashIndex + tool.length();
+                            matched = true;
+                            break;
                         }
                     }
                 }
+                if (!matched) {
+                    currentPos = hashIndex + 1;
+                }
+            } else {
+                currentPos = hashIndex + 1;
             }
-            currentPos = hashIndex + 1;
         }
-        
-        return "";
+        return calls;
+    }
+
+    /**
+     * 文本协议多工具分发：多个 #tool 走串行批次（复用原生 FC 批次屏障），单个保持原路径。
+     * 批次中的每个工具反馈由 feedbackToAI 拦截推进；批次终结时合并结果一次重入模型。
+     */
+    private void dispatchTextTools(Player player, DialogueSession session, List<String> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return;
+        }
+        if (toolCalls.size() == 1) {
+            executeTool(player, toolCalls.get(0));
+            return;
+        }
+        // YOLO 模式若批次含风险命令（会渲染确认按钮卡住屏障），则不进批次，只执行第一个
+        if (session != null && session.getMode() == DialogueSession.Mode.YOLO
+                && containsRiskyRunText(toolCalls, session)) {
+            plugin.getLogger().warning("[CLI] YOLO 文本批次含风险命令，仅执行第一个，丢弃其余: " + player.getName());
+            executeTool(player, toolCalls.get(0));
+            return;
+        }
+        session.clearBatchState();
+        session.setBatchInProgress(true);
+        for (String tc : toolCalls) {
+            session.pushPendingNativeTool(tc);
+        }
+        executeNativeBatch(player, session);
+    }
+
+    /**
+     * YOLO 模式下文本工具批次是否含风险 #run 命令。
+     */
+    private boolean containsRiskyRunText(List<String> toolCalls, DialogueSession session) {
+        if (session == null || session.getMode() != DialogueSession.Mode.YOLO) {
+            return false;
+        }
+        List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
+        for (String tc : toolCalls) {
+            if (tc == null) continue;
+            String lower = tc.toLowerCase();
+            if (lower.startsWith("#run")) {
+                int colon = tc.indexOf(':');
+                String cmd = (colon != -1 ? tc.substring(colon + 1) : "").trim();
+                if (ToolExecutor.isRiskyCommandPublic(cmd, risky)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
