@@ -88,6 +88,7 @@ public final class ToolRegistry {
 
         addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
                 obj("command", str("string", "The single command to execute")));
+        addTool(tools, "end", responsesFormat, "Mark the task as complete. Call only after replying to the player with a summary. Never call alone.", new JsonObject());
         addTool(tools, "exit", responsesFormat, "Call when the player asks to exit FancyHelper.", new JsonObject());
         if (planMode) {
             addTool(tools, "start", responsesFormat, "End Plan Mode and choose an execution mode to start.", new JsonObject());
@@ -315,6 +316,8 @@ public final class ToolRegistry {
                 String content = str(args, "content", "");
                 return "#edit_global: " + index + "|" + category + "|" + content;
             }
+            case "end":
+                return "#end";
             case "exit":
                 return "#exit";
             case "start":

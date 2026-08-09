@@ -96,6 +96,21 @@ class ToolRegistryTest {
     }
 
     @Test
+    @DisplayName("end 工具已注册（native 删除 #tool 列表后 #end 靠原生调用兜底）")
+    void testEndToolRegistered() {
+        FancyHelper plugin = mockPlugin();
+        Player player = Mockito.mock(Player.class);
+        ConfigManager cfg = mockConfig(false, false, false);
+        when(plugin.getConfigManager()).thenReturn(cfg);
+
+        JsonArray chatTools = ToolRegistry.buildToolsArray(plugin, player, new DialogueSession(), false);
+        assertTrue(hasTool(chatTools, "end"));
+
+        JsonArray respTools = ToolRegistry.buildToolsArray(plugin, player, new DialogueSession(), true);
+        assertTrue(hasTool(respTools, "end"));
+    }
+
+    @Test
     @DisplayName("Responses 格式 tools 无 function 包裹层")
     void testResponsesFormatShape() {
         FancyHelper plugin = mockPlugin();
@@ -165,6 +180,13 @@ class ToolRegistryTest {
     void testBridgeRun() {
         NativeToolCall call = new NativeToolCall("c1", "run", "{\"command\":\"give @p apple\"}");
         assertEquals("#run: give @p apple", ToolRegistry.bridgeToText(call));
+    }
+
+    @Test
+    @DisplayName("bridgeToText end/exit 无参工具")
+    void testBridgeEndExit() {
+        assertEquals("#end", ToolRegistry.bridgeToText(new NativeToolCall("c1", "end", "{}")));
+        assertEquals("#exit", ToolRegistry.bridgeToText(new NativeToolCall("c1", "exit", "{}")));
     }
 
     @Test

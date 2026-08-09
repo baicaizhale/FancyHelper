@@ -109,46 +109,28 @@ public class PromptManager {
             sb.append("   - For multiple operations: complete the first call, wait for result, then proceed.\n\n");
         }
 
-        sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
-
-        sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
-
-        sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
-
-        sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
-
-        sb.append("Example:\n");
-        sb.append("  Correct: #run: give @p apple\n");
-        sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands)\n");
-        if (!nativeTools) {
-            sb.append("  Wrong:   #todo: [...]\\n#run: say hello     (multiple tools in one response)\n");
+        if (nativeTools) {
+            sb.append("2. [Single Command] The run function executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
+            sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
+            sb.append("4. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
+        } else {
+            sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
+            sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
+            sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
+            sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
         }
-        sb.append("\n");
+
+        if (!nativeTools) {
+            sb.append("Example:\n");
+            sb.append("  Correct: #run: give @p apple\n");
+            sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands)\n");
+            sb.append("  Wrong:   #todo: [...]\\n#run: say hello     (multiple tools in one response)\n");
+            sb.append("\n");
+        }
 
         // ==================== Tool List / 工具列表 ====================
         if (nativeTools) {
-            sb.append("[Tools] Use NATIVE function calling (the tools API). Call multiple tools in one response when they are independent. The #tool text form is ONLY a fallback if native calls are unavailable — do not output it when native works.\n\n");
-
-            sb.append("[Query]\n");
-            sb.append("  #search: <args> | #skill: <id> [list|read <file>] | #unloadskill: <id> | #ask: <json> | #webfetch: <url>\n");
-            sb.append("[Execution]\n");
-            sb.append("  #run: <command> | #end | #exit\n");
-            sb.append("[File Tools]\n");
-            if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
-                sb.append("  #list: <path> | #read: <path> [start-end]\n");
-            }
-            if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
-                sb.append("  #edit: <path>|<range>|<original>|<replacement> | #write: <path>|<content>\n");
-            }
-            sb.append("[Memory]\n");
-            sb.append("  #remember: [category|]content | #forget: <index|all> | #edit_memory: <index>|content\n");
-            sb.append("  #remember_global: [category|]content | #forget_global: <index|all> | #edit_global: <index>|content (admin only)\n");
-            sb.append("[Task Management]\n");
-            sb.append("  #todo: <json>\n");
-            if (plugin.getConfigManager().isMcpClientEnabled()) {
-                sb.append("[MCP External Tools]\n");
-                sb.append("  #mcp_tools | #mcp: serverName.toolName|jsonArgs\n");
-            }
+            sb.append("[Tools] Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Every tool (search, run, todo, edit, memory, mcp, exit, etc.) is provided to you as a function. Call multiple functions in one response when they are independent.\n\n");
         } else {
             sb.append("[Tools] Format: #tool_name: argument\n\n");
 
@@ -219,8 +201,12 @@ public class PromptManager {
 
         // ==================== Usage Guide / 使用指南 ====================
         sb.append("[Usage Guide]\n");
-        sb.append("1. Skill usage: Only call #skill when you need knowledge to complete a specific task. ");
-        sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
+        sb.append("1. Skill usage: Only call the skill function when you need knowledge to complete a specific task. ");
+        if (nativeTools) {
+            sb.append("2. If a command is unknown, try running <pluginname> help first to discover its usage.\n");
+        } else {
+            sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
+        }
         sb.append("3. Complex tasks (3+ steps): Use #todo first to show progress, then execute step by step.\n");
         if (nativeTools) {
             sb.append("   - You may issue multiple tools (including #todo) in one response when independent.\n");
@@ -450,16 +436,8 @@ public class PromptManager {
         sb.append("Format: #tool_name: argument\n\n");
 
         if (nativeTools) {
-            sb.append("  #search: <args> | #skill: <id> | #unloadskill: <id> | #webfetch: <url> | #ask: <json>\n");
-            if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
-                sb.append("  #list: <path> | #read: <path> [start-end]\n");
-            }
-            sb.append("  #todo: <json>\n");
-            if (plugin.getConfigManager().isMcpClientEnabled()) {
-                sb.append("  #mcp_tools\n");
-            }
-            sb.append("  #start  - FINISH planning. Call when your plan is complete.\n");
-            sb.append("Note: 若原生函数调用可用，优先直接调用函数；仅在无法调用时按 #tool 文本格式输出。\n\n");
+            sb.append("Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Available functions: search, skill, unloadskill, webfetch, ask, todo, mcp_tools, and read-only file tools (list/read). Do NOT call run/edit/write/exit — blocked in plan mode.\n");
+            sb.append("When your plan is complete, call the start function.\n\n");
         } else {
             sb.append("[Query]\n");
             sb.append("  #search: <args>      - Internet/Wiki search.\n");
