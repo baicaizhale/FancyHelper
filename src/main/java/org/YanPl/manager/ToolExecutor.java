@@ -56,9 +56,10 @@ public class ToolExecutor {
      * @param player 玩家
      * @param toolCall 工具调用字符串
      * @param session 对话会话
+     * @param force 是否跳过命令存在性校验（原生 run 调用的 force 键）
      * @return 是否成功执行
      */
-    public boolean executeTool(Player player, String toolCall, DialogueSession session) {
+    public boolean executeTool(Player player, String toolCall, DialogueSession session, boolean force) {
         UUID uuid = player.getUniqueId();
 
         // 记录工具调用日志
@@ -109,7 +110,7 @@ public class ToolExecutor {
             
             // 执行工具
             case "#run":
-                success = handleRunTool(player, args, session);
+                success = handleRunTool(player, args, session, force);
                 break;
             
             // 文件工具
@@ -281,7 +282,7 @@ public class ToolExecutor {
     /**
      * 处理 #run 工具
      */
-    private boolean handleRunTool(Player player, String command, DialogueSession session) {
+    private boolean handleRunTool(Player player, String command, DialogueSession session, boolean force) {
         if (command.isEmpty()) {
             player.sendMessage(I18n.t("tool.run.need.args"));
             String error = "#error: #run 工具需要提供命令参数，例如 #run: say hello";
@@ -296,6 +297,15 @@ public class ToolExecutor {
         // 注释化：不再删除前导 /，命令保留原样执行（服务器端 dispatchCommand 会自行处理 /）
         String cleanCommand = command;
         // String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
+
+        // 命令存在性校验：首词与命令表比对，疑似斜杠错误时拦截教育模型。
+        // force=true（原生 run 调用 JSON 键）跳过此校验。
+        if (!force) {
+            CommandCheckResult check = checkCommandExists(cleanCommand);
+            if (check.blocked) {
+                return handleBlockedCommand(player, session, cleanCommand, check);
+            }
+        }
 
         // SMART 模式下评估风险
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
@@ -340,6 +350,98 @@ public class ToolExecutor {
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.WAITING_CONFIRM);
         sendConfirmButtons(player, cleanCommand);
         return true;
+    }
+
+    /**
+     * 命令存在性校验结果。
+     * @param blocked    是否拦截（首词不在命令表，但存在斜杠变体，疑似斜杠错误）
+     * @param suggestion 建议的正确命令（如 "give"），blocked 为 true 时有效
+     */
+    record CommandCheckResult(boolean blocked, String suggestion) {
+    }
+
+    /**
+     * 命令存在性校验：提取 #run 参数首词，与命令表完全比对。
+     * <p>
+     * 首词不命中时尝试斜杠变体（0/1/2 个前导斜杠）：
+     * <ul>
+     *   <li>存在变体命中 → 疑似斜杠错误，拦截并给出建议命令</li>
+     *   <li>无变体命中或命令表为空 → 放行（懒注册/未知命令不误杀）</li>
+     * </ul>
+     * 校验只查命令表，绝不执行命令。
+     */
+    CommandCheckResult checkCommandExists(String command) {
+        List<String> indexed = plugin.getWorkspaceIndexer().getIndexedCommands();
+        return checkCommand(command, indexed);
+    }
+
+    /**
+     * 命令存在性校验纯逻辑：提取首词，与命令表完全比对。
+     * <p>
+     * 首词不命中时尝试斜杠变体（0/1/2 个前导斜杠）：
+     * <ul>
+     *   <li>存在变体命中 → 疑似斜杠错误，拦截并给出建议命令</li>
+     *   <li>无变体命中或命令表为空 → 放行（懒注册/未知命令不误杀）</li>
+     * </ul>
+     * 校验只查命令表，绝不执行命令。
+     *
+     * @param command         待校验命令（含参数）
+     * @param indexedCommands 命令表；null 或空视为无法校验
+     */
+    static CommandCheckResult checkCommand(String command, List<String> indexedCommands) {
+        String trimmed = command == null ? "" : command.trim();
+        if (trimmed.isEmpty()) {
+            return new CommandCheckResult(false, null);
+        }
+        if (indexedCommands == null || indexedCommands.isEmpty()) {
+            // 命令表为空（未索引/懒注册），无法校验，放行避免误杀
+            return new CommandCheckResult(false, null);
+        }
+        java.util.Set<String> table = new java.util.HashSet<>(indexedCommands);
+
+        // 提取首词：空格或制表符分割的第一个 token
+        int sp = trimmed.indexOf(' ');
+        int tab = trimmed.indexOf('\t');
+        int cut = (sp == -1) ? tab : (tab == -1 ? sp : Math.min(sp, tab));
+        String firstToken = (cut == -1) ? trimmed : trimmed.substring(0, cut);
+
+        if (firstToken.isEmpty()) {
+            return new CommandCheckResult(false, null);
+        }
+        if (table.contains(firstToken)) {
+            return new CommandCheckResult(false, null);
+        }
+
+        // 尝试斜杠变体：base（去掉全部前导 /）、/base、//base
+        String base = firstToken.replaceAll("^/+", "");
+        if (base.isEmpty()) {
+            return new CommandCheckResult(false, null);
+        }
+        String[] variants = { base, "/" + base, "//" + base };
+        for (String v : variants) {
+            if (!v.equals(firstToken) && table.contains(v)) {
+                return new CommandCheckResult(true, v);
+            }
+        }
+        return new CommandCheckResult(false, null);
+    }
+
+    /**
+     * 拦截疑似斜杠错误的命令：不展示给玩家，feedback 教育模型 + 警告进上下文。
+     */
+    private boolean handleBlockedCommand(Player player, DialogueSession session, String command, CommandCheckResult check) {
+        String suggestion = check.suggestion() == null ? "" : check.suggestion();
+        String warning = "Warning: \"" + command + "\" was not executed. Unrecognized command. "
+                + (suggestion.isEmpty() ? "" : "Did you mean \"" + suggestion + "\"? ")
+                + "If you are certain, set \"force\": true in your run call, e.g. "
+                + "{\"command\": \"/give @p tnt\", \"force\": true}.";
+        plugin.getLogger().warning("[CLI] 命令存在性校验拦截 " + player.getName() + ": " + command
+                + (suggestion.isEmpty() ? "" : " → 建议 " + suggestion));
+        if (session != null) {
+            session.setLastError(warning);
+        }
+        cliManager.feedbackToAI(player, warning);
+        return false;
     }
 
     /**

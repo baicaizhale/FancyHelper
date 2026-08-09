@@ -3868,6 +3868,10 @@ public class CLIManager {
     }
 
     private void executeTool(Player player, String toolCall) {
+        executeTool(player, toolCall, false);
+    }
+
+    private void executeTool(Player player, String toolCall, boolean force) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
@@ -3965,7 +3969,7 @@ public class CLIManager {
         interruptedToolCalls.remove(uuid);
 
         // 委托给 ToolExecutor 执行
-        boolean toolSuccess = toolExecutor.executeTool(player, toolCall, session);
+        boolean toolSuccess = toolExecutor.executeTool(player, toolCall, session, force);
 
         if (session != null) {
             if (toolSuccess) {
@@ -4405,7 +4409,7 @@ public class CLIManager {
                 session.clearBatchState();
                 session.setBatchInProgress(true);
                 for (NativeToolCall call : calls) {
-                    session.pushPendingNativeTool(ToolRegistry.bridgeToText(call));
+                    session.pushPendingNativeTool(ToolRegistry.bridgeToText(call), ToolRegistry.isForceCall(call));
                 }
                 executeNativeBatch(player, session);
                 return;
@@ -4423,7 +4427,7 @@ public class CLIManager {
         }
         String toolCall = ToolRegistry.bridgeToText(calls.get(0));
         if (!toolCall.isEmpty()) {
-            executeTool(player, toolCall);
+            executeTool(player, toolCall, ToolRegistry.isForceCall(calls.get(0)));
         }
     }
 
@@ -4440,11 +4444,12 @@ public class CLIManager {
 
         // 1) 队列还有工具 → 串行执行下一个
         String next = session.pollPendingNativeTool();
+        boolean force = session.pollPendingNativeToolForce();
         if (next != null) {
             plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
             setGenerating(uuid, true, GenerationStatus.EXECUTING_TOOL);
             try {
-                executeTool(player, next);
+                executeTool(player, next, force);
             } catch (Throwable t) {
                 // 同步抛出的兜底：记录错误并继续批次
                 plugin.getCloudErrorReport().report(t);

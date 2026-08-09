@@ -364,6 +364,19 @@ public final class ToolRegistry {
         return new JsonObject();
     }
 
+    /**
+     * 提取原生 run 调用的 force 键：{"command": "...", "force": true}。
+     * 缺省视为 false（force 不注入提示词，只在 feedback 文案中示例）。
+     */
+    public static boolean isForceCall(NativeToolCall call) {
+        if (call == null) {
+            return false;
+        }
+        JsonObject args = parseArgsObject(call.argumentsJson());
+        return args.has("force") && !args.get("force").isJsonNull()
+                && args.get("force").getAsBoolean();
+    }
+
     private static String str(JsonObject obj, String key, String fallback) {
         if (obj != null && obj.has(key) && !obj.get(key).isJsonNull()) {
             JsonElement el = obj.get(key);

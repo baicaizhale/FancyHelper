@@ -38,6 +38,7 @@ public class DialogueSession {
     private final List<String> toolCallHistory = new ArrayList<>();
     // 串行批量工具执行状态：非空表示处于批次中（一次响应返回多个原生 tool_calls）
     private final java.util.Deque<String> pendingNativeTools = new java.util.ArrayDeque<>();
+    private final java.util.Deque<Boolean> pendingNativeToolForces = new java.util.ArrayDeque<>();
     private final List<String> pendingToolResults = new ArrayList<>();
     // 整个批次生命周期标记：从批启动到最后一项结果回灌前为 true。
     // 与 pendingNativeTools 非空不同，队列耗尽后仍为 true，使最后一项的异步反馈也能被批次屏障拦截合并。
@@ -694,11 +695,20 @@ public class DialogueSession {
     // ==================== 串行批量工具执行状态 ====================
 
     public void pushPendingNativeTool(String toolText) {
+        pushPendingNativeTool(toolText, false);
+    }
+
+    public void pushPendingNativeTool(String toolText, boolean force) {
         pendingNativeTools.addLast(toolText);
+        pendingNativeToolForces.addLast(force);
     }
 
     public String pollPendingNativeTool() {
         return pendingNativeTools.pollFirst();
+    }
+
+    public boolean pollPendingNativeToolForce() {
+        return pendingNativeToolForces.isEmpty() ? false : pendingNativeToolForces.pollFirst();
     }
 
     public boolean hasPendingNativeTools() {
@@ -715,6 +725,7 @@ public class DialogueSession {
 
     public void clearPendingNativeTools() {
         pendingNativeTools.clear();
+        pendingNativeToolForces.clear();
     }
 
     public void addPendingToolResult(String result) {
@@ -729,6 +740,7 @@ public class DialogueSession {
 
     public void clearBatchState() {
         pendingNativeTools.clear();
+        pendingNativeToolForces.clear();
         pendingToolResults.clear();
         batchInProgress = false;
     }
