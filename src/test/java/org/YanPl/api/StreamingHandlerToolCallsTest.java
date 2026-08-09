@@ -114,4 +114,24 @@ class StreamingHandlerToolCallsTest {
         assertEquals("webfetch", calls.get(0).name());
         assertEquals("fc_9", calls.get(0).id());
     }
+
+    @Test
+    @DisplayName("CF gemma 并行 tool_calls 共享同一 index，参数分片不带 id，仍正确分离")
+    void testCloudflareGemmaParallelSharedIndex() throws Exception {
+        // 真实 CF gemma 流：两个 run 调用 index 都是 5，各带独立 id
+        feed("{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":5,\"id\":\"call_d8dc04\",\"type\":\"function\",\"function\":{\"name\":\"run\",\"arguments\":\"\"}}]}}]}");
+        feed("{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":5,\"id\":null,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"/give baicaizhale apple 1\\\"}\"}}]}}]}");
+        // 第二个调用，同样 index=5，独立 id
+        feed("{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":5,\"id\":\"call_394af0\",\"type\":\"function\",\"function\":{\"name\":\"run\",\"arguments\":\"\"}}]}}]}");
+        feed("{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":5,\"id\":null,\"function\":{\"arguments\":\"{\\\"command\\\": \\\"/give baicaizhale stick 1\\\"}\"}}]}}]}");
+        finalizeCalls();
+        List<NativeToolCall> calls = handler.getNativeToolCalls();
+        assertEquals(2, calls.size(), "两个并行调用应被分离而非合并");
+        assertEquals("run", calls.get(0).name());
+        assertTrue(calls.get(0).argumentsJson().contains("apple"), "第一个调用参数应含 apple: " + calls.get(0).argumentsJson());
+        assertFalse(calls.get(0).argumentsJson().contains("stick"), "第一个调用不应混入 stick");
+        assertEquals("run", calls.get(1).name());
+        assertTrue(calls.get(1).argumentsJson().contains("stick"), "第二个调用参数应含 stick: " + calls.get(1).argumentsJson());
+        assertFalse(calls.get(1).argumentsJson().contains("apple"), "第二个调用不应混入 apple");
+    }
 }

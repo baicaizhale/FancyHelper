@@ -58,8 +58,11 @@ public class StreamingHandler {
 
     // 原生函数调用（Native Function Calling）累加器
     // 流式 tool_calls 跨多个 SSE delta 分片到达：id+name 在首个 delta，arguments 是后续 delta 的 JSON 片段
-    private final Map<Integer, ToolCallAccum> nativeToolAccum = new LinkedHashMap<>();
+    // 按 tool_call id 归并（CF gemma 流式并行调用共享同一 index，按 index 会导致合并丢失）
+    private final Map<String, ToolCallAccum> nativeToolAccum = new LinkedHashMap<>();
     private List<NativeToolCall> nativeToolCalls = List.of();
+    // 当前活跃 tool_call 的 key：CF gemma 的参数分片不带 id/index 归属，顺序路由到它
+    private String currentToolCallKey;
 
     /** 流式 tool_call 的跨 delta 累加单元。 */
     public record ToolCallAccum(int index, String id, String name, StringBuilder arguments) {
@@ -571,7 +574,7 @@ public class StreamingHandler {
                             String callId = item.has("call_id") && !item.get("call_id").isJsonNull() ? item.get("call_id").getAsString() : null;
                             String args = item.has("arguments") && !item.get("arguments").isJsonNull() ? item.get("arguments").getAsString() : "";
                             int idx = nativeToolAccum.size();
-                            nativeToolAccum.put(idx, new ToolCallAccum(idx, callId, name, new StringBuilder(args)));
+                            nativeToolAccum.put("idx_" + idx, new ToolCallAccum(idx, callId, name, new StringBuilder(args)));
                         }
                     }
                     return null;
@@ -581,12 +584,14 @@ public class StreamingHandler {
                         JsonObject innerData = json.getAsJsonObject("data");
                         if (innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
                             String frag = innerData.get("delta").getAsString();
-                            // 按 output_index 归并到对应 call（通常只有一个并行 call）
-                            int outIdx = innerData.has("output_index") ? innerData.get("output_index").getAsInt() : 0;
-                            if (nativeToolAccum.containsKey(outIdx)) {
-                                nativeToolAccum.get(outIdx).arguments().append(frag);
+                            // 按 output_index 归并到对应 call（通常只有一个并行 call），key 与 added 分支一致
+                            int outIdx = innerData.has("output_index") && !innerData.get("output_index").isJsonNull()
+                                    ? innerData.get("output_index").getAsInt() : 0;
+                            String key = "idx_" + outIdx;
+                            if (nativeToolAccum.containsKey(key)) {
+                                nativeToolAccum.get(key).arguments().append(frag);
                             } else {
-                                nativeToolAccum.put(outIdx, new ToolCallAccum(outIdx, null, null, new StringBuilder(frag)));
+                                nativeToolAccum.put(key, new ToolCallAccum(outIdx, null, null, new StringBuilder(frag)));
                             }
                         }
                     }
@@ -714,8 +719,11 @@ public class StreamingHandler {
     }
 
     /**
-     * 解析 OpenAI 流式 delta 中的 tool_calls 数组，按 index 归并累加。
-     * 首个 delta 携带 id+name，后续 delta 追加 arguments 片段；绝不在流中途解析 JSON。
+     * 解析 OpenAI 流式 delta 中的 tool_calls 数组，按 id 归并累加。
+     * CF gemma 并行调用共享同一 index 且参数分片不带 id，因此不能按 index 归并。
+     * 规则：带 id 的 delta 按 id 归并并设为当前活跃调用；无 id 的参数分片
+     * 顺序路由到当前活跃调用（CF 按序生成调用，一个流完才流下一个）。
+     * 无 id 且带 name 的 delta（测试/非标准流）退化为按 index 归并。
      */
     private void handleDeltaToolCalls(JsonObject delta) {
         if (!delta.has("tool_calls") || !delta.get("tool_calls").isJsonArray()) {
@@ -726,20 +734,55 @@ public class StreamingHandler {
             JsonElement el = toolCalls.get(i);
             if (!el.isJsonObject()) continue;
             JsonObject tc = el.getAsJsonObject();
-            int index = tc.has("index") ? tc.get("index").getAsInt() : nativeToolAccum.size();
-            ToolCallAccum acc = nativeToolAccum.computeIfAbsent(index, idx -> new ToolCallAccum(idx, null, null, new StringBuilder()));
-            if (tc.has("id") && !tc.get("id").isJsonNull()) {
-                acc = new ToolCallAccum(acc.index(), tc.get("id").getAsString(), acc.name(), acc.arguments());
-                nativeToolAccum.put(index, acc);
-            }
+            String id = tc.has("id") && !tc.get("id").isJsonNull() ? tc.get("id").getAsString() : null;
+            int index = tc.has("index") ? tc.get("index").getAsInt() : 0;
+            String name = null;
+            String arguments = null;
             if (tc.has("function") && tc.get("function").isJsonObject()) {
                 JsonObject fn = tc.getAsJsonObject("function");
-                if (fn.has("name") && !fn.get("name").isJsonNull() && acc.name() == null) {
-                    acc = new ToolCallAccum(acc.index(), acc.id(), fn.get("name").getAsString(), acc.arguments());
-                    nativeToolAccum.put(index, acc);
+                if (fn.has("name") && !fn.get("name").isJsonNull()) {
+                    name = fn.get("name").getAsString();
                 }
                 if (fn.has("arguments") && !fn.get("arguments").isJsonNull()) {
-                    acc.arguments().append(fn.get("arguments").getAsString());
+                    arguments = fn.get("arguments").getAsString();
+                }
+            }
+
+            if (id != null) {
+                // 标准流：按 id 归并，并设为当前活跃调用（CF 后续无 id 分片路由到这里）
+                ToolCallAccum acc = nativeToolAccum.computeIfAbsent(id,
+                        k -> new ToolCallAccum(index, id, null, new StringBuilder()));
+                if (name != null && acc.name() == null) {
+                    acc = new ToolCallAccum(index, id, name, acc.arguments());
+                    nativeToolAccum.put(id, acc);
+                }
+                if (arguments != null) {
+                    acc.arguments().append(arguments);
+                }
+                currentToolCallKey = id;
+            } else if (name != null) {
+                // 无 id 但带 name：退化为按 index 归并（测试/非标准流）
+                String key = "sse_" + index;
+                ToolCallAccum acc = nativeToolAccum.computeIfAbsent(key,
+                        k -> new ToolCallAccum(index, null, null, new StringBuilder()));
+                if (acc.name() == null) {
+                    acc = new ToolCallAccum(index, null, name, acc.arguments());
+                    nativeToolAccum.put(key, acc);
+                }
+                if (arguments != null) {
+                    acc.arguments().append(arguments);
+                }
+                currentToolCallKey = key;
+            } else if (arguments != null) {
+                // 无 id 无 name：CF 参数分片，顺序路由到当前活跃调用
+                if (currentToolCallKey != null && nativeToolAccum.containsKey(currentToolCallKey)) {
+                    nativeToolAccum.get(currentToolCallKey).arguments().append(arguments);
+                } else {
+                    String key = "sse_" + index;
+                    ToolCallAccum acc = nativeToolAccum.computeIfAbsent(key,
+                            k -> new ToolCallAccum(index, null, null, new StringBuilder()));
+                    acc.arguments().append(arguments);
+                    currentToolCallKey = key;
                 }
             }
         }
