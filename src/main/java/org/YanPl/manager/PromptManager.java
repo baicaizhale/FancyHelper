@@ -101,7 +101,8 @@ public class PromptManager {
 
         if (nativeTools) {
             // 原生函数调用：支持一次返回多个 tool_calls，服务端串行执行后一次性回灌结果
-            sb.append("1. [Multiple Tool Calls] You may return MULTIPLE independent function calls in ONE response.\n");
+            sb.append("1. [Native Only] Tool use MUST go through the NATIVE function-calling API. NEVER output text commands like #run, #search, #todo — they are not parsed and will fail. Your ONLY way to act is by calling a provided function.\n");
+            sb.append("2. [Multiple Tool Calls] You may return MULTIPLE independent function calls in ONE response.\n");
             sb.append("   - They execute in order; results feed back together. Parallelize independent operations.\n");
             sb.append("   - Dependent operations still require the previous result first.\n\n");
         } else {
@@ -110,9 +111,9 @@ public class PromptManager {
         }
 
         if (nativeTools) {
-            sb.append("2. [Single Command] The run function executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
-            sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
-            sb.append("4. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
+            sb.append("3. [Single Command] The run function executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
+            sb.append("4. [Tool Position] Function calls stand alone. Never embed a call inside body text.\n\n");
+            sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
         } else {
             sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
             sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
@@ -130,6 +131,7 @@ public class PromptManager {
 
         // ==================== Tool List / 工具列表 ====================
         if (nativeTools) {
+            // 原生函数调用：tools 数组已随请求下发完整函数定义，这里不重复列签名。
             sb.append("[Tools] Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Every tool (search, run, todo, edit, memory, mcp, exit, etc.) is provided to you as a function. Call multiple functions in one response when they are independent.\n\n");
         } else {
             sb.append("[Tools] Format: #tool_name: argument\n\n");
@@ -207,9 +209,9 @@ public class PromptManager {
         } else {
             sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
         }
-        sb.append("3. Complex tasks (3+ steps): Use #todo first to show progress, then execute step by step.\n");
+        sb.append("3. Complex tasks (3+ steps): Use the todo function first to show progress, then execute step by step.\n");
         if (nativeTools) {
-            sb.append("   - You may issue multiple tools (including #todo) in one response when independent.\n");
+            sb.append("   - You may issue multiple function calls (including todo) in one response when independent.\n");
         } else {
             sb.append("   - After #todo: do NOT call any other tool in the same response.\n");
         }
