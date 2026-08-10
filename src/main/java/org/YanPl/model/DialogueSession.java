@@ -45,9 +45,6 @@ public class DialogueSession {
     private boolean batchInProgress = false;
     // 混合批次中被剔除（不可批）的工具调用说明：随下一次反馈回灌模型，绝不静默丢弃
     private String pendingBatchDropNote = null;
-    // 批次超时基准：批次启动时间；首个 feedback 到来前以此为基准，之后以 batchLastFeedbackTime 为基准。
-    // 超时语义为"批次中没有任何工具反馈推进超过 BATCH_TIMEOUT_MS"，而非复用 generationStartTimes。
-    private long batchStartTime = 0;
     // 批次中最后一次 feedback 到达的时间戳（addPendingToolResult 时更新）。
     private long batchLastFeedbackTime = 0;
     private long lastActivityTime;
@@ -730,7 +727,6 @@ public class DialogueSession {
         this.batchInProgress = inProgress;
         if (inProgress) {
             long now = System.currentTimeMillis();
-            this.batchStartTime = now;
             this.batchLastFeedbackTime = now;
         }
     }
@@ -757,7 +753,6 @@ public class DialogueSession {
         pendingToolResults.clear();
         batchInProgress = false;
         pendingBatchDropNote = null;
-        batchStartTime = 0;
         batchLastFeedbackTime = 0;
     }
 
