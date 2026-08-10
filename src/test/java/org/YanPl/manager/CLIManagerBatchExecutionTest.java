@@ -23,9 +23,26 @@ class CLIManagerBatchExecutionTest {
             assertTrue(CLIManager.isBatchSafeTool("skill", mode));
             assertTrue(CLIManager.isBatchSafeTool("unloadskill", mode));
             assertTrue(CLIManager.isBatchSafeTool("mcp_tools", mode));
+            assertTrue(CLIManager.isBatchSafeTool("mcp", mode));
             assertTrue(CLIManager.isBatchSafeTool("todo", mode));
             assertTrue(CLIManager.isBatchSafeTool("list", mode));
             assertTrue(CLIManager.isBatchSafeTool("read", mode));
+        }
+    }
+
+    @Test
+    @DisplayName("交互/确认工具可批（结果均经 feedbackToAI 回灌，批次屏障可推进）")
+    void testInteractiveToolsNowBatchable() {
+        for (DialogueSession.Mode mode : DialogueSession.Mode.values()) {
+            assertTrue(CLIManager.isBatchSafeTool("ask", mode));
+            assertTrue(CLIManager.isBatchSafeTool("edit", mode));
+            assertTrue(CLIManager.isBatchSafeTool("edit_memory", mode));
+            assertTrue(CLIManager.isBatchSafeTool("write", mode));
+            assertTrue(CLIManager.isBatchSafeTool("remember", mode));
+            assertTrue(CLIManager.isBatchSafeTool("forget", mode));
+            assertTrue(CLIManager.isBatchSafeTool("remember_global", mode));
+            assertTrue(CLIManager.isBatchSafeTool("forget_global", mode));
+            assertTrue(CLIManager.isBatchSafeTool("edit_global", mode));
         }
     }
 
@@ -39,16 +56,10 @@ class CLIManagerBatchExecutionTest {
     }
 
     @Test
-    @DisplayName("交互/确认工具不可批")
-    void testInteractiveToolsNotBatchable() {
+    @DisplayName("控制类/未知工具仍不可批（无 feedbackToAI 回灌，会卡死批次屏障）")
+    void testControlToolsNotBatchable() {
         for (DialogueSession.Mode mode : DialogueSession.Mode.values()) {
-            assertFalse(CLIManager.isBatchSafeTool("ask", mode));
-            assertFalse(CLIManager.isBatchSafeTool("edit", mode));
-            assertFalse(CLIManager.isBatchSafeTool("write", mode));
-            assertFalse(CLIManager.isBatchSafeTool("mcp", mode));
-            assertFalse(CLIManager.isBatchSafeTool("remember", mode));
-            assertFalse(CLIManager.isBatchSafeTool("forget", mode));
-            assertFalse(CLIManager.isBatchSafeTool("remember_global", mode));
+            assertFalse(CLIManager.isBatchSafeTool("end", mode));
             assertFalse(CLIManager.isBatchSafeTool("exit", mode));
             assertFalse(CLIManager.isBatchSafeTool("start", mode));
             assertFalse(CLIManager.isBatchSafeTool("unknown", mode));
@@ -61,28 +72,23 @@ class CLIManagerBatchExecutionTest {
         assertTrue(CLIManager.isBatchSafeTool("SEARCH", DialogueSession.Mode.NORMAL));
         assertTrue(CLIManager.isBatchSafeTool("Run", DialogueSession.Mode.YOLO));
         assertTrue(CLIManager.isBatchSafeTool("Run", DialogueSession.Mode.NORMAL));
+        assertTrue(CLIManager.isBatchSafeTool("Edit", DialogueSession.Mode.NORMAL));
     }
 
-    // ======================== containsRiskyRun ========================
+    // ======================== isRiskyRunCall ========================
 
     @Test
-    @DisplayName("YOLO 风险 run 命令命中名单")
-    void testContainsRiskyRun() {
+    @DisplayName("isRiskyRunCall 命中风险名单")
+    void testIsRiskyRunCall() {
         List<String> risky = List.of("op", "deop", "stop", "ban");
         NativeToolCall safe = new NativeToolCall("c1", "run", "{\"command\":\"give @p apple\"}");
         NativeToolCall riskyCmd = new NativeToolCall("c2", "run", "{\"command\":\"ban test 作弊\"}");
+        NativeToolCall search = new NativeToolCall("c3", "search", "{\"query\":\"op 命令\"}");
 
-        assertFalse(CLIManager.containsRiskyRun(List.of(safe), risky));
-        assertTrue(CLIManager.containsRiskyRun(List.of(riskyCmd), risky));
-        assertTrue(CLIManager.containsRiskyRun(List.of(safe, riskyCmd), risky));
-    }
-
-    @Test
-    @DisplayName("非 run 调用不会触发风险检查")
-    void testContainsRiskyRunIgnoresNonRun() {
-        List<String> risky = List.of("op");
-        NativeToolCall search = new NativeToolCall("c1", "search", "{\"query\":\"op 命令\"}");
-        assertFalse(CLIManager.containsRiskyRun(List.of(search), risky));
+        assertFalse(CLIManager.isRiskyRunCall(safe, risky));
+        assertTrue(CLIManager.isRiskyRunCall(riskyCmd, risky));
+        assertFalse(CLIManager.isRiskyRunCall(search, risky));
+        assertFalse(CLIManager.isRiskyRunCall(null, risky));
     }
 
     // ======================== 批次队列语义 ========================
@@ -153,5 +159,46 @@ class CLIManagerBatchExecutionTest {
         s.incrementToolSuccess();
         s.incrementToolFailure();
         assertTrue(true); // 编译期验证访问器存在即可，计数逻辑由 DialogueSession 测试覆盖
+    }
+
+    // ======================== 未执行项回灌说明 ========================
+
+    @Test
+    @DisplayName("buildNativeDroppedNote 生成未执行项说明")
+    void testBuildNativeDroppedNote() {
+        NativeToolCall end = new NativeToolCall("c1", "end", "{}");
+        NativeToolCall exit = new NativeToolCall("c2", "exit", "{}");
+
+        String note = CLIManager.buildNativeDroppedNote(List.of(end, exit));
+        assertNotNull(note);
+        assertTrue(note.contains("end"));
+        assertTrue(note.contains("exit"));
+
+        assertNull(CLIManager.buildNativeDroppedNote(List.of()));
+        assertNull(CLIManager.buildNativeDroppedNote(null));
+    }
+
+    @Test
+    @DisplayName("extractTextToolName 提取 #tool 名称")
+    void testExtractTextToolName() {
+        assertEquals("run", CLIManager.extractTextToolName("#run: say hello"));
+        assertEquals("edit_memory", CLIManager.extractTextToolName("#edit_memory: 1|a"));
+        assertEquals("mcp_tools", CLIManager.extractTextToolName("#mcp_tools"));
+        assertNull(CLIManager.extractTextToolName("say hello"));
+        assertNull(CLIManager.extractTextToolName(null));
+        assertNull(CLIManager.extractTextToolName("#"));
+    }
+
+    @Test
+    @DisplayName("pendingBatchDropNote 写入/清空")
+    void testPendingBatchDropNote() {
+        DialogueSession s = new DialogueSession();
+        assertNull(s.getPendingBatchDropNote());
+
+        s.setPendingBatchDropNote("#error: 未执行");
+        assertEquals("#error: 未执行", s.getPendingBatchDropNote());
+
+        s.clearBatchState();
+        assertNull(s.getPendingBatchDropNote());
     }
 }
