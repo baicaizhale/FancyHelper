@@ -1579,6 +1579,11 @@ public class CLIManager {
         UUID uuid = player.getUniqueId();
         
         if (!activeCLIPayers.contains(uuid)) {
+            // 待同意协议的玩家也允许退出：clim.agree.prompt 文案宣称"发送 /cli 退出"，
+            // 若不清除待同意状态，玩家将被困在协议提示循环且 /cli 无效。
+            if (pendingAgreementPlayers.remove(uuid)) {
+                sendExitMessage(player);
+            }
             return;
         }
         
