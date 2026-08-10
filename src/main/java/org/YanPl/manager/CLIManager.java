@@ -4043,8 +4043,17 @@ public class CLIManager {
         // 如果该工具之前被中断过且现在继续执行，清除记录
         interruptedToolCalls.remove(uuid);
 
-        // 委托给 ToolExecutor 执行
-        boolean toolSuccess = toolExecutor.executeTool(player, toolCall, session, force);
+        // 委托给 ToolExecutor 执行。同步异常在此兜底（executeNativeBatch 的 catch 是双保险）：
+        // 避免单工具路径（processAIMessage 等）工具崩溃后无反馈，对话卡在 EXECUTING_TOOL。
+        boolean toolSuccess;
+        Throwable failure = null;
+        try {
+            toolSuccess = toolExecutor.executeTool(player, toolCall, session, force);
+        } catch (Throwable t) {
+            plugin.getCloudErrorReport().report(t);
+            toolSuccess = false;
+            failure = t;
+        }
 
         if (session != null) {
             if (toolSuccess) {
@@ -4052,6 +4061,14 @@ public class CLIManager {
             } else {
                 session.incrementToolFailure();
             }
+        }
+
+        // 异常兜底反馈：告知 AI 执行失败（批次路径被批次屏障拦截合并，单路径直接触发模型重入）
+        if (failure != null) {
+            if (session != null) {
+                session.setLastError("工具执行异常: " + failure.getMessage());
+            }
+            feedbackToAI(player, "#error: 工具执行异常 - " + failure.getMessage());
         }
     }
 
@@ -4629,13 +4646,8 @@ public class CLIManager {
         String joined = results.isEmpty()
                 ? "#error: 批量工具执行未返回任何结果。"
                 : String.join("\n", results);
-        for (String r : results) {
-            if (r.contains("_error") || r.startsWith("#error")) {
-                session.incrementToolFailure();
-            } else {
-                session.incrementToolSuccess();
-            }
-        }
+        // 成功/失败计数已由 executeTool 按执行结果布尔完成（每个工具执行时都经过），
+        // 此处不再按结果文本启发式重复计数——文本含 "_error" 字样（如搜索结果）会被误判失败。
         invokeModelAfterFeedback(player, session, joined);
     }
 

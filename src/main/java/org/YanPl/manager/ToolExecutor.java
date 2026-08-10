@@ -224,6 +224,9 @@ public class ToolExecutor {
     public static ToolParseResult parseToolCall(String toolCall) {
         String toolName;
         String args = "";
+        if (toolCall == null) {
+            return new ToolParseResult("", "");
+        }
 
         // 查找第一个冒号的位置
         int colonIndex = toolCall.indexOf(":");
@@ -280,7 +283,20 @@ public class ToolExecutor {
     }
 
     /**
-     * 处理 #run 工具
+     * 处理 #run 工具。
+     *
+     * <p>命令拦截共三层防线，force 只跳第一层，玩家确认始终保留：
+     * <ol>
+     *   <li><b>命令存在性校验</b>（{@link #checkCommandExists}）：首词不在命令表但斜杠变体命中 → 疑似斜杠写错，拦截并教育。
+     *       <code>force=true</code> 跳过本层（模型确信命令真实存在，如命令表未索引的懒注册命令，避免被技术性误拦）。</li>
+     *   <li><b>SMART 风险评估</b>：评分超阈值弹确认按钮。force 不生效。</li>
+     *   <li><b>YOLO 风险词检查</b>（{@link #isRiskyCommand}）：op/ban 等风险词要求确认，递归检查 execute 子命令。force 不生效。</li>
+     * </ol>
+     * NORMAL/PLAN 模式所有命令一律弹确认按钮，force 同样不生效。
+     *
+     * <p>force 来源：原生 run 调用 JSON 键 {@code {"command":"...","force":true}}，
+     * 经 {@link org.YanPl.manager.ToolRegistry#isForceCall} 提取，被拦截后模型按
+     * {@link #handleBlockedCommand} 反馈文案二次尝试时带上；刻意不进 run 的 schema，见 ToolRegistry 处注释。
      */
     private boolean handleRunTool(Player player, String command, DialogueSession session, boolean force) {
         if (command.isEmpty()) {
@@ -2028,9 +2044,13 @@ public class ToolExecutor {
                 handleJsonAskTool(player, request);
             } else {
                 player.sendMessage(I18n.t("tool.ask.missing.question"));
+                // 反馈 AI 知晓失败：否则 AI 无感知地干等（批次中屏障 60s 超时兜底，单路径永久挂起）
+                cliManager.feedbackToAI(player, "#ask_error: 提问缺少 question 字段，请检查格式后重试");
             }
         } catch (Exception e) {
             player.sendMessage(I18n.t("tool.ask.parse.fail", e.getMessage()));
+            // 同上：解析失败必须反馈 AI，避免对话卡在 EXECUTING_TOOL
+            cliManager.feedbackToAI(player, "#ask_error: 提问参数解析失败 - " + e.getMessage());
         }
     }
 
@@ -2112,10 +2132,16 @@ public class ToolExecutor {
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             String result;
-            if (query.toLowerCase().contains("widely")) {
-                result = performWideSearch(query);
-            } else {
-                result = performWikiSearch(query, player);
+            try {
+                if (query.toLowerCase().contains("widely")) {
+                    result = performWideSearch(query);
+                } else {
+                    result = performWikiSearch(query, player);
+                }
+            } catch (Exception e) {
+                // 异步异常兜底：必须反馈 AI，否则对话卡在 EXECUTING_TOOL（批次中 60s 超时兜底）
+                plugin.getCloudErrorReport().report(e);
+                result = "搜索执行异常: " + e.getMessage();
             }
 
             final String finalResult = result;
@@ -2855,7 +2881,18 @@ public class ToolExecutor {
         final com.google.gson.JsonObject fArguments = arguments;
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            McpTypes.McpToolCallResult result = plugin.getMcpManager().callExternalTool(fServerName, fToolName, fArguments);
+            McpTypes.McpToolCallResult result;
+            try {
+                result = plugin.getMcpManager().callExternalTool(fServerName, fToolName, fArguments);
+            } catch (Exception e) {
+                // 异步异常兜底：MCP 客户端连接/协议错误等必须反馈 AI，否则对话卡在 EXECUTING_TOOL
+                plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    cliManager.feedbackToAI(player, "#mcp_error: 调用异常 - " + e.getMessage());
+                });
+                return;
+            }
 
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {

@@ -86,6 +86,8 @@ public final class ToolRegistry {
         addTool(tools, "webfetch", responsesFormat, "Fetch and parse web page content.",
                 obj("url", str("string", "URL to fetch")));
 
+        // 注意：force 键刻意不进 schema。它是命令被拦截（NORMAL/SMART 风险确认）后的二次尝试逃生通道，
+        // 若声明为常规参数，模型可能随意带上 force 绕过全部确认；故仅在拦截反馈文案中示例引导，见 ToolExecutor.handleBlockedCommand。
         addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
                 obj("command", str("string", "The single command to execute")));
         addTool(tools, "end", responsesFormat, "Mark the task as complete. Call only after replying to the player with a summary. Never call alone.", new JsonObject());
@@ -366,7 +368,11 @@ public final class ToolRegistry {
 
     /**
      * 提取原生 run 调用的 force 键：{"command": "...", "force": true}。
-     * 缺省视为 false（force 不注入提示词，只在 feedback 文案中示例）。
+     * 缺省视为 false。
+     *
+     * 设计意图：force 是逃生通道而非常规参数——刻意不进 run 的 schema（见 addTool "run" 处的注释），
+     * 避免模型将其当作普通参数滥用而绕过 NORMAL/SMART 模式的风险确认；
+     * 仅在被拦截后的反馈文案中示例引导模型在二次尝试时自发带上（{"command":"...","force":true}）。
      */
     public static boolean isForceCall(NativeToolCall call) {
         if (call == null) {
