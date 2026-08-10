@@ -553,12 +553,14 @@ public class CLIManager {
                         case EXECUTING_TOOL:
                             message = ChatColor.GRAY + "....";
                             sendStatusMessage(player, message);
-                            // 串行批量超时兜底：批次某工具异步异常无反馈时强制终结，避免永久卡住
+                            // 串行批量超时兜底：批次中没有任何工具反馈推进超过 BATCH_TIMEOUT_MS 时强制终结。
+                            // 基准为 session.batchLastFeedbackTime（setBatchInProgress 启动 / addPendingToolResult 推进），
+                            // 而非 generationStartTimes，避免单工具异步慢（webfetch/mcp 网络延迟）被误杀。
                             DialogueSession batchSession = sessions.get(uuid);
                             if (batchSession != null && batchSession.isBatchInProgress()) {
-                                Long batchStart = generationStartTimes.get(uuid);
-                                if (batchStart != null && now - batchStart > BATCH_TIMEOUT_MS) {
-                                    plugin.getLogger().warning("[CLI] 批次工具执行超时 (" + BATCH_TIMEOUT_MS + "ms)，强制终结批次: " + player.getName());
+                                long batchIdle = System.currentTimeMillis() - batchSession.getBatchLastFeedbackTime();
+                                if (batchIdle > BATCH_TIMEOUT_MS) {
+                                    plugin.getLogger().warning("[CLI] 批次工具执行超时 (" + BATCH_TIMEOUT_MS + "ms 无反馈)，强制终结批次: " + player.getName());
                                     forceFinalizeBatch(player, batchSession);
                                 }
                             }
@@ -2330,6 +2332,12 @@ public class CLIManager {
                     generationStartTimes.put(uuid, System.currentTimeMillis());
                     interrupted = true;
                 }
+                // 清理批次状态：玩家主动 stop 时批次不再有效，避免后续 feedbackToAI
+                // 命中已死批次的 isBatchInProgress() 拦截器，导致工具反馈被吞入幽灵队列。
+                DialogueSession stopSession = sessions.get(uuid);
+                if (stopSession != null && stopSession.isBatchInProgress()) {
+                    stopSession.clearBatchState();
+                }
                 if (!interrupted) {
                     player.sendMessage(I18n.t("clim.stop.nothing"));
                 }
@@ -3518,50 +3526,117 @@ public class CLIManager {
     /**
      * 文本协议多工具分发：多个 #tool 走串行批次（复用原生 FC 批次屏障），单个保持原路径。
      * 批次中的每个工具反馈由 feedbackToAI 拦截推进；批次终结时合并结果一次重入模型。
+     * 不可批工具（end/exit/start/未知工具/YOLO 风险 run）回灌模型告知，绝不静默丢弃。
      */
     private void dispatchTextTools(Player player, DialogueSession session, List<String> toolCalls) {
         if (toolCalls == null || toolCalls.isEmpty()) {
             return;
         }
         if (toolCalls.size() == 1) {
+            if (session != null) {
+                session.setPendingBatchDropNote(null);
+            }
             executeTool(player, toolCalls.get(0));
             return;
         }
-        // YOLO 模式若批次含风险命令（会渲染确认按钮卡住屏障），则不进批次，只执行第一个
-        if (session != null && session.getMode() == DialogueSession.Mode.YOLO
-                && containsRiskyRunText(toolCalls, session)) {
-            plugin.getLogger().warning("[CLI] YOLO 文本批次含风险命令，仅执行第一个，丢弃其余: " + player.getName());
+        if (session == null) {
             executeTool(player, toolCalls.get(0));
             return;
         }
-        session.clearBatchState();
-        session.setBatchInProgress(true);
+
+        // 划分可批 / 不可批（YOLO 风险 run 渲染确认按钮等待玩家，不入批）
+        List<String> batchable = new ArrayList<>();
+        List<String> excluded = new ArrayList<>();
         for (String tc : toolCalls) {
+            if (isTextToolBatchable(tc, session)) {
+                batchable.add(tc);
+            } else {
+                excluded.add(tc);
+            }
+        }
+        String droppedNote = buildTextDroppedNote(excluded);
+
+        if (batchable.isEmpty()) {
+            // 全部不可批 → 不执行任何工具，直接回灌模型告知未执行
+            plugin.getLogger().warning("[CLI] 文本批次全部不可批，回灌模型未执行项: " + player.getName());
+            session.setPendingBatchDropNote(null);
+            invokeModelAfterFeedback(player, session, droppedNote);
+            return;
+        }
+
+        // 重置批次状态后写入本次未执行项（clearBatchState 会清掉历史遗留 note）
+        session.clearBatchState();
+        noteDroppedCalls(session, droppedNote);
+
+        if (batchable.size() == 1) {
+            executeTool(player, batchable.get(0));
+            return;
+        }
+
+        session.setBatchInProgress(true);
+        for (String tc : batchable) {
             session.pushPendingNativeTool(tc);
         }
         executeNativeBatch(player, session);
     }
 
     /**
-     * YOLO 模式下文本工具批次是否含风险 #run 命令。
+     * 文本工具是否可进入串行批次：批次安全集内，且非 YOLO 风险 run。
      */
-    private boolean containsRiskyRunText(List<String> toolCalls, DialogueSession session) {
-        if (session == null || session.getMode() != DialogueSession.Mode.YOLO) {
+    private boolean isTextToolBatchable(String tc, DialogueSession session) {
+        if (tc == null || session == null) {
             return false;
         }
-        List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
-        for (String tc : toolCalls) {
-            if (tc == null) continue;
-            String lower = tc.toLowerCase();
-            if (lower.startsWith("#run")) {
-                int colon = tc.indexOf(':');
-                String cmd = (colon != -1 ? tc.substring(colon + 1) : "").trim();
-                if (ToolExecutor.isRiskyCommandPublic(cmd, risky)) {
-                    return true;
-                }
+        String tool = extractTextToolName(tc);
+        if (tool == null || !isBatchSafeTool(tool, session.getMode())) {
+            return false;
+        }
+        if (session.getMode() == DialogueSession.Mode.YOLO && "run".equals(tool)) {
+            int colon = tc.indexOf(':');
+            String cmd = (colon != -1 ? tc.substring(colon + 1) : "").trim();
+            if (ToolExecutor.isRiskyCommandPublic(cmd, plugin.getConfigManager().getYoloRiskCommands())) {
+                return false;
             }
         }
-        return false;
+        return true;
+    }
+
+    /**
+     * 从 #tool: 文本中提取工具名（无 # 前缀）；非法格式返回 null。
+     */
+    static String extractTextToolName(String tc) {
+        if (tc == null) {
+            return null;
+        }
+        String trimmed = tc.trim();
+        if (!trimmed.startsWith("#")) {
+            return null;
+        }
+        int colon = trimmed.indexOf(':');
+        String name = (colon > 0 ? trimmed.substring(0, colon) : trimmed);
+        if (name.length() <= 1) {
+            return null;
+        }
+        return name.substring(1).toLowerCase();
+    }
+
+    /**
+     * 构建文本协议批次中未执行调用的回灌说明（无未执行项返回 null）。
+     */
+    private static String buildTextDroppedNote(List<String> excluded) {
+        if (excluded == null || excluded.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("#error: 混合批次无法串行执行，以下工具调用未执行，请重新发起：");
+        for (int i = 0; i < excluded.size(); i++) {
+            if (i > 0) {
+                sb.append("、");
+            }
+            String name = extractTextToolName(excluded.get(i));
+            sb.append(name != null ? name : excluded.get(i));
+        }
+        return sb.toString();
     }
 
     /**
@@ -4002,7 +4077,18 @@ public class CLIManager {
     private void invokeModelAfterFeedback(Player player, DialogueSession session, String feedback) {
         UUID uuid = player.getUniqueId();
 
-        session.addMessage("user", feedback);
+        // 混合批次中被剔除的调用：随本次反馈一并回灌模型，绝不静默丢弃
+        String dropNote = session != null ? session.getPendingBatchDropNote() : null;
+        final String effectiveFeedback;
+        if (dropNote != null && !dropNote.isEmpty()) {
+            effectiveFeedback = (feedback == null || feedback.isEmpty())
+                    ? dropNote : feedback + "\n" + dropNote;
+            session.setPendingBatchDropNote(null);
+        } else {
+            effectiveFeedback = feedback;
+        }
+
+        session.addMessage("user", effectiveFeedback);
 
         // 记录反馈后的 Token 估算
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
@@ -4016,7 +4102,7 @@ public class CLIManager {
 
         // 工具返回信息不显示给玩家，仅在日志记录并触发 AI 思考
         if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + feedback);
+            plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + effectiveFeedback);
         }
 
         // 异步调用 AI，不显示 "Thought..." 提示，因为这是后台自动反馈
@@ -4215,7 +4301,7 @@ public class CLIManager {
                                 DialogueSession s2 = sessions.get(uuid);
                                 if (s2 != null) s2.addOutputTokens(streamedOutErr2);
                             }
-                            retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                            retryInfoMap.put(uuid, new RetryInfo(session, effectiveFeedback, false, Collections.emptyList()));
                             player.spigot().sendMessage(buildErrorText(error.getMessage(), I18n.t("clim.error.streaming")));
                             isGenerating.put(uuid, false);
                             generationStates.put(uuid, GenerationStatus.ERROR);
@@ -4286,7 +4372,7 @@ public class CLIManager {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息（feedbackToAI 不需要 Skills）
-                    retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, effectiveFeedback, false, Collections.emptyList()));
 
                     TextComponent fullMsg = buildErrorText(e.getMessage(), "AI请求出错");
                     fullMsg.addExtra(buildRetryButton(e.getMessage()));
@@ -4308,7 +4394,7 @@ public class CLIManager {
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, effectiveFeedback, false, Collections.emptyList()));
 
                     TextComponent fullMsg = buildErrorText(t.getMessage(), "系统内部错误");
                     fullMsg.addExtra(buildRetryButton(t.getMessage()));
@@ -4334,8 +4420,9 @@ public class CLIManager {
 
     /**
      * 该工具是否可安全进入串行批量（保证恰好一次异步 feedbackToAI，不会死锁批次屏障）。
-     * run 在任何模式都可批：NORMAL/SMART 的 run 会渲染确认按钮，玩家确认/取消后都能
-     * 经 feedbackToAI 推进批次（确认→执行→反馈拦截→下一工具；取消→#error 结果→下一工具）。
+     * 交互/确认类工具（ask/edit/write/记忆类/mcp）的结果均经 feedbackToAI 或
+     * 批次感知的确认/取消/拒绝处理回灌，批次屏障可推进，因此均可批。
+     * 控制类工具（start/end/exit）与未知工具无反馈回灌，混入批次会卡死屏障，不可批。
      */
     static boolean isBatchSafeTool(String toolName, DialogueSession.Mode mode) {
         String name = toolName == null ? "" : toolName.toLowerCase();
@@ -4345,51 +4432,93 @@ public class CLIManager {
             case "skill":
             case "unloadskill":
             case "mcp_tools":
+            case "mcp":
             case "todo":
             case "list":
             case "read":
             case "run":
+            case "ask":
+            case "edit":
+            case "edit_memory":
+            case "write":
+            case "remember":
+            case "forget":
+            case "remember_global":
+            case "forget_global":
+            case "edit_global":
                 return true;
             default:
                 return false;
         }
     }
 
-    private static boolean allBatchSafe(List<NativeToolCall> calls, DialogueSession session) {
-        DialogueSession.Mode mode = session != null ? session.getMode() : DialogueSession.Mode.NORMAL;
-        for (NativeToolCall c : calls) {
-            if (c.name() == null || !isBatchSafeTool(c.name().toLowerCase(), mode)) {
-                return false;
-            }
+    /**
+     * YOLO 模式下该 run 调用是否含风险命令（会渲染确认按钮等待玩家，不入批）。
+     */
+    static boolean isRiskyRunCall(NativeToolCall c, List<String> riskyCommands) {
+        if (c == null || !"run".equalsIgnoreCase(c.name())) {
+            return false;
+        }
+        ToolExecutor.ToolParseResult p = ToolExecutor.parseToolCall(ToolRegistry.bridgeToText(c));
+        return ToolExecutor.isRiskyCommandPublic(p.args, riskyCommands);
+    }
+
+    /**
+     * 该调用是否可进入串行批次：
+     * 1. 工具名属于批次安全集（结果必定经 feedbackToAI 恰好一次回灌，批次屏障可推进）；
+     * 2. YOLO 模式下 #run 含风险命令（会渲染确认按钮等待玩家）除外，与既有语义一致。
+     */
+    private boolean isBatchableCall(NativeToolCall c, DialogueSession session) {
+        if (c == null || c.name() == null) {
+            return false;
+        }
+        String name = c.name().toLowerCase();
+        if (!isBatchSafeTool(name, session != null ? session.getMode() : DialogueSession.Mode.NORMAL)) {
+            return false;
+        }
+        if (session != null && session.getMode() == DialogueSession.Mode.YOLO
+                && isRiskyRunCall(c, plugin.getConfigManager().getYoloRiskCommands())) {
+            return false;
         }
         return true;
     }
 
     /**
-     * YOLO 模式下若批次含风险命令（会渲染确认按钮卡住屏障），则不进批量。
+     * 构建混合批次中未执行调用的回灌说明（无未执行项返回 null）。
      */
-    private boolean containsRiskyRun(List<NativeToolCall> calls, DialogueSession session) {
-        if (session == null || session.getMode() != DialogueSession.Mode.YOLO) {
-            return false;
+    static String buildNativeDroppedNote(List<NativeToolCall> excluded) {
+        if (excluded == null || excluded.isEmpty()) {
+            return null;
         }
-        List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
-        return containsRiskyRun(calls, risky);
-    }
-
-    static boolean containsRiskyRun(List<NativeToolCall> calls, List<String> riskyCommands) {
-        for (NativeToolCall c : calls) {
-            if ("run".equalsIgnoreCase(c.name())) {
-                ToolExecutor.ToolParseResult p = ToolExecutor.parseToolCall(ToolRegistry.bridgeToText(c));
-                if (ToolExecutor.isRiskyCommandPublic(p.args, riskyCommands)) {
-                    return true;
-                }
+        StringBuilder sb = new StringBuilder();
+        sb.append("#error: 混合批次无法串行执行，以下工具调用未执行，请重新发起：");
+        for (int i = 0; i < excluded.size(); i++) {
+            if (i > 0) {
+                sb.append("、");
             }
+            NativeToolCall c = excluded.get(i);
+            sb.append(c.name() != null ? c.name() : "unknown");
         }
-        return false;
+        return sb.toString();
     }
 
     /**
-     * 统一分发原生函数调用：全部批次安全且 >1 时进入串行批量，否则走单工具路径（与今日一致）。
+     * 把未执行项说明暂存到会话，随下一次工具反馈一并回灌模型。
+     */
+    private void noteDroppedCalls(DialogueSession session, String note) {
+        if (session == null || note == null || note.isEmpty()) {
+            return;
+        }
+        String existing = session.getPendingBatchDropNote();
+        session.setPendingBatchDropNote(existing == null || existing.isEmpty() ? note : existing + "\n" + note);
+    }
+
+    /**
+     * 统一分发原生函数调用：
+     * 1. 全部可批且 >1 → 串行批量（结果合并一次回灌模型）。
+     * 2. 混合批次（含 start/end/exit/未知工具或 YOLO 风险 run）→ 可批者走批量/单工具，
+     *    不可批者回灌模型告知未执行，绝不静默丢弃。
+     * 3. 全部不可批 → 不执行任何工具，直接回灌模型告知。
      */
     private void dispatchNativeCalls(Player player, DialogueSession session, List<NativeToolCall> calls) {
         if (calls == null || calls.isEmpty()) {
@@ -4401,33 +4530,67 @@ public class CLIManager {
             diag.append(c.name()).append(":").append(c.argumentsJson());
         }
         plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
-        if (calls.size() > 1 && allBatchSafe(calls, session)) {
-            // YOLO 模式若批次含风险命令（会渲染确认按钮卡住屏障），则不进批量
-            if (session != null && session.getMode() == DialogueSession.Mode.YOLO && containsRiskyRun(calls, session)) {
-                plugin.getLogger().warning("[CLI] 批次含 YOLO 风险命令，仅执行第一个，丢弃其余: " + player.getName());
+
+        // 单个调用直接执行（与旧版一致）；不可批/回灌逻辑只作用于多调用批次，
+        // 避免 end/exit/start 等控制类工具单独出现时被回灌成"未执行"而陷入重发循环。
+        if (calls.size() == 1) {
+            if (session != null) {
+                session.setPendingBatchDropNote(null);
+            }
+            String toolCall = ToolRegistry.bridgeToText(calls.get(0));
+            if (!toolCall.isEmpty()) {
+                executeTool(player, toolCall, ToolRegistry.isForceCall(calls.get(0)));
+            }
+            return;
+        }
+
+        List<NativeToolCall> batchable = new ArrayList<>();
+        List<NativeToolCall> excluded = new ArrayList<>();
+        for (NativeToolCall c : calls) {
+            if (isBatchableCall(c, session)) {
+                batchable.add(c);
             } else {
-                session.clearBatchState();
-                session.setBatchInProgress(true);
-                for (NativeToolCall call : calls) {
-                    session.pushPendingNativeTool(ToolRegistry.bridgeToText(call), ToolRegistry.isForceCall(call));
-                }
-                executeNativeBatch(player, session);
-                return;
+                excluded.add(c);
             }
         }
-        // 单工具路径（字节级一致）
-        if (calls.size() > 1) {
-            // 混合/含风险命令 → 不批，仅执行第一个。记录被丢弃的调用便于诊断。
-            StringBuilder dropped = new StringBuilder();
-            for (int i = 1; i < calls.size(); i++) {
-                if (dropped.length() > 0) dropped.append(", ");
-                dropped.append(calls.get(i).name());
+        String droppedNote = buildNativeDroppedNote(excluded);
+
+        if (batchable.isEmpty()) {
+            // 全部不可批（如 end/exit 混批）→ 不执行任何工具，直接回灌模型告知未执行
+            plugin.getLogger().warning("[CLI] 批次全部不可批，回灌模型未执行项: " + player.getName());
+            if (session != null) {
+                session.setPendingBatchDropNote(null);
             }
-            plugin.getLogger().warning("[CLI] 批次不可行（含交互/确认/风险工具），仅执行第一个，丢弃: " + dropped + "（" + player.getName() + "）");
+            invokeModelAfterFeedback(player, session, droppedNote);
+            return;
         }
-        String toolCall = ToolRegistry.bridgeToText(calls.get(0));
+
+        if (session == null) {
+            // 无会话兜底：退化为单工具路径
+            String toolCall = ToolRegistry.bridgeToText(batchable.get(0));
+            if (!toolCall.isEmpty()) {
+                executeTool(player, toolCall, ToolRegistry.isForceCall(batchable.get(0)));
+            }
+            return;
+        }
+
+        // 重置批次状态后写入本次未执行项（clearBatchState 会清掉历史遗留 note）
+        session.clearBatchState();
+        noteDroppedCalls(session, droppedNote);
+
+        if (batchable.size() > 1) {
+            session.setBatchInProgress(true);
+            for (NativeToolCall call : batchable) {
+                session.pushPendingNativeTool(ToolRegistry.bridgeToText(call), ToolRegistry.isForceCall(call));
+            }
+            executeNativeBatch(player, session);
+            return;
+        }
+
+        // 单个可批工具走单工具路径
+        String toolCall = ToolRegistry.bridgeToText(batchable.get(0));
         if (!toolCall.isEmpty()) {
-            executeTool(player, toolCall, ToolRegistry.isForceCall(calls.get(0)));
+            executeTool(player, toolCall, ToolRegistry.isForceCall(batchable.get(0)));
         }
     }
 
