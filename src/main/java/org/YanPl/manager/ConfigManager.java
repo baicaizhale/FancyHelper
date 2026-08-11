@@ -65,6 +65,18 @@ public class ConfigManager {
         return config.getString("fancy.co-model", "default_co");
     }
 
+    /**
+     * 获取主对话采样温度。
+     * 返回 null 表示未配置（不发送 temperature 字段，跟随模型默认）；
+     * 返回 0 表示真正传入 temperature=0（完全确定性输出）。
+     */
+    public Double getFancyTemperature() {
+        if (!config.contains("fancy.temperature")) {
+            return null;
+        }
+        return config.getDouble("fancy.temperature");
+    }
+
     // ============================================================
     // 提供商配置
     // ============================================================

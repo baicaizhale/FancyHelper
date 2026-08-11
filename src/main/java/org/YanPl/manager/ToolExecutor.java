@@ -563,7 +563,7 @@ public class ToolExecutor {
 
         // #write 的 read-before-write 检查
         if ("write".equals(type)) {
-            String writePath = pathArg.contains("|") ? pathArg.substring(0, pathArg.indexOf("|")).trim() : pathArg.trim();
+            String writePath = extractFilePathFromArgs(pathArg);
             if (!writePath.isEmpty()) {
                 File root = Bukkit.getWorldContainer();
                 File targetFile = new File(root, writePath);
@@ -603,8 +603,7 @@ public class ToolExecutor {
         File root = Bukkit.getWorldContainer();
         pushPreviewLinkAsync(player, root, type, args);
 
-        String[] parts = pathArg.split("\\|", "edit".equals(type) ? 4 : 2);
-        String filePath = parts.length > 0 ? parts[0].trim() : "";
+        String filePath = extractFilePathFromArgs(pathArg);
         String label = "edit".equals(type) ? I18n.t("tool.edit.modifying", filePath) : I18n.t("tool.edit.overwriting", filePath);
         TextComponent msg = new TextComponent(label);
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔");
@@ -728,14 +727,28 @@ public class ToolExecutor {
     }
 
     private String submitToViewFancy(String args) {
-        int pipeIdx = args.indexOf("|");
-        if (pipeIdx == -1) return null;
-        String path = args.substring(0, pipeIdx).trim();
-        String content = args.substring(pipeIdx + 1);
-        // AI 用 \n 表示换行，\\n 表示字面 \n
-        content = content.replace("\\\\n", "");
-        content = content.replace("\\n", "\n");
-        content = content.replace("", "\\n");
+        if (args == null) return null;
+        String trimmed = args.trim();
+        String path;
+        String content;
+        if (trimmed.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmed).getAsJsonObject();
+                path = json.has("path") ? json.get("path").getAsString() : "";
+                content = json.has("content") ? json.get("content").getAsString() : "";
+            } catch (Exception e) {
+                return null;
+            }
+        } else {
+            int pipeIdx = args.indexOf("|");
+            if (pipeIdx == -1) return null;
+            path = args.substring(0, pipeIdx).trim();
+            content = args.substring(pipeIdx + 1);
+            // AI 用 \n 表示换行，\\n 表示字面 \n
+            content = content.replace("\\\\n", "\u0001");
+            content = content.replace("\\n", "\n");
+            content = content.replace("\u0001", "\\n");
+        }
 
         final String baseUrl = "https://view.fancy.baicaizhale.top";
 
@@ -959,38 +972,59 @@ public class ToolExecutor {
      */
     private EditPreview computeEdit(File root, String pathArg, boolean writeToDisk) throws IOException {
         EditPreview out = new EditPreview();
-        String[] editParts = pathArg.split("\\|", 4);
+        String trimmedArg = pathArg.trim();
 
-        // 支持3种格式：
-        // 1. path|range|original|replacement (4部分，带行号)
-        // 2. path|original|replacement (3部分，自动搜索)
-        // 3. path|auto|original|replacement (4部分，但range是auto)
-
+        // 支持两种格式：
+        // 1. JSON 行（推荐，标准 JSON 转义，无 | 分隔符冲突）：
+        //    #edit: {"path":"...","range":"10-10","original":"...","replacement":"..."}  range 可省略(默认 auto)
+        // 2. 旧格式（兼容保留）：path|range|original|replacement 或 path|original|replacement
         String path;
         String rangeStr;
         String original;
         String replacement;
         boolean autoSearch = false;
 
-        if (editParts.length < 3) {
-            out.result = "错误: #edit 至少需要3个参数，格式：#edit: path|original|replacement 或 #edit: path|range|original|replacement";
-            return out;
-        } else if (editParts.length == 3) {
-            // 3部分格式：path|original|replacement
-            path = editParts[0].trim();
-            rangeStr = "auto";
-            original = editParts[1];
-            replacement = editParts[2];
-            autoSearch = true;
+        if (trimmedArg.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmedArg).getAsJsonObject();
+                path = json.has("path") ? json.get("path").getAsString() : "";
+                rangeStr = json.has("range") ? json.get("range").getAsString() : "auto";
+                original = json.has("original") ? json.get("original").getAsString() : "";
+                replacement = json.has("replacement") ? json.get("replacement").getAsString() : "";
+                if (path.isEmpty() || original.isEmpty()) {
+                    out.result = "错误: #edit JSON 缺少 path 或 original 字段";
+                    return out;
+                }
+                if (rangeStr.isEmpty() || "auto".equalsIgnoreCase(rangeStr)) {
+                    autoSearch = true;
+                }
+            } catch (Exception e) {
+                out.result = "错误: #edit JSON 解析失败: " + e.getMessage();
+                return out;
+            }
         } else {
-            // 4部分格式
-            path = editParts[0].trim();
-            rangeStr = editParts[1].trim();
-            original = editParts[2];
-            replacement = editParts[3];
-            // 如果 range 是 auto 或空，使用自动搜索
-            if (rangeStr.equalsIgnoreCase("auto") || rangeStr.isEmpty()) {
+            String[] editParts = pathArg.split("\\|", 4);
+
+            if (editParts.length < 3) {
+                out.result = "错误: #edit 至少需要3个参数，格式：#edit: path|original|replacement、#edit: path|range|original|replacement 或 #edit: {\"path\":\"...\",\"original\":\"...\",\"replacement\":\"...\"}";
+                return out;
+            } else if (editParts.length == 3) {
+                // 3部分格式：path|original|replacement
+                path = editParts[0].trim();
+                rangeStr = "auto";
+                original = editParts[1];
+                replacement = editParts[2];
                 autoSearch = true;
+            } else {
+                // 4部分格式
+                path = editParts[0].trim();
+                rangeStr = editParts[1].trim();
+                original = editParts[2];
+                replacement = editParts[3];
+                // 如果 range 是 auto 或空，使用自动搜索
+                if (rangeStr.equalsIgnoreCase("auto") || rangeStr.isEmpty()) {
+                    autoSearch = true;
+                }
             }
         }
 
@@ -1208,18 +1242,55 @@ public class ToolExecutor {
     }
 
     /**
-     * 执行 write 操作 — 完全覆写文件内容
-     * 格式：#write: <path>|<content>
-     * 对于已存在的文件，必须先 #read 才能 #write
+     * 从 #write / #edit 参数中提取文件路径（用于 read-before-write 检查、确认按钮展示、view-fancy 预览）。
+     * 兼容 JSON 行格式（{"path":"..."}）和旧 | 分隔格式（path|...）。
      */
-    private String executeWriteOperation(File root, String pathArg) throws IOException {
-        int pipeIndex = pathArg.indexOf("|");
-        if (pipeIndex == -1) {
-            return "错误: #write 格式不正确，正确格式：#write: path|content";
+    private String extractFilePathFromArgs(String pathArg) {
+        if (pathArg == null) return "";
+        String trimmed = pathArg.trim();
+        if (trimmed.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmed).getAsJsonObject();
+                if (json.has("path")) return json.get("path").getAsString();
+                return "";
+            } catch (Exception ignored) {
+                return "";
+            }
         }
+        int pipeIdx = pathArg.indexOf("|");
+        return pipeIdx == -1 ? trimmed : pathArg.substring(0, pipeIdx).trim();
+    }
 
-        String path = pathArg.substring(0, pipeIndex).trim();
-        String content = pathArg.substring(pipeIndex + 1);
+    private String executeWriteOperation(File root, String pathArg) throws IOException {
+        // 支持两种格式：
+        // 1. JSON 行（推荐）：#write: {"path":"...","content":"..."}  标准 JSON 转义，\n 表示真实换行、\\n 表示字面 \n
+        // 2. 旧格式（兼容保留）：#write: <path>|<content>
+        String path;
+        String content;
+        String trimmedArg = pathArg.trim();
+        if (trimmedArg.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmedArg).getAsJsonObject();
+                path = json.has("path") ? json.get("path").getAsString() : "";
+                content = json.has("content") ? json.get("content").getAsString() : "";
+                if (path.isEmpty()) {
+                    return "错误: #write JSON 缺少 path 字段";
+                }
+            } catch (Exception e) {
+                return "错误: #write JSON 解析失败: " + e.getMessage();
+            }
+        } else {
+            int pipeIndex = pathArg.indexOf("|");
+            if (pipeIndex == -1) {
+                return "错误: #write 格式不正确，正确格式：#write: path|content 或 #write: {\"path\":\"...\",\"content\":\"...\"}";
+            }
+            path = pathArg.substring(0, pipeIndex).trim();
+            content = pathArg.substring(pipeIndex + 1);
+            // \\n → 字面 \n, \n → 真实换行（仅旧格式需要转义，JSON 格式由解析器处理）
+            content = content.replace("\\\\n", "\u0001");
+            content = content.replace("\\n", "\n");
+            content = content.replace("\u0001", "\\n");
+        }
 
         if (path.isEmpty()) {
             return "错误: 文件路径不能为空";
@@ -1242,10 +1313,6 @@ public class ToolExecutor {
             parentDir.mkdirs();
         }
 
-        // \\n → 字面 \n, \n → 真实换行
-        content = content.replace("\\\\n", "");
-        content = content.replace("\\n", "\n");
-        content = content.replace("", "\\n");
         Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
         return "成功写入文件: " + path + " (" + content.length() + " 字符)";

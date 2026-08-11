@@ -159,18 +159,18 @@ public class PromptManager {
                 sb.append("    Line numbers in output are used to target #edit precisely.\n");
             }
             if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
-                sb.append("  #edit: <path>|<range>|<original>|<replacement>  - Edit file by matching original text.\n");
+                sb.append("  #edit: <json>  - Edit file by matching original text. JSON line format (no delimiter escaping needed).\n");
                 sb.append("    Workflow: #read first → note line numbers → #edit with exact range.\n");
                 sb.append("    Indentation and comments are auto-preserved.\n");
-                sb.append("    Formats: path|10-10|old|new  OR  path|auto|old|new\n");
-                sb.append("    Example: #edit: config.yml|10-10|enabled: true|enabled: false\n");
+                sb.append("    Fields: path (required), original (required), replacement (required), range (optional: 10-10 or auto).\n");
+                sb.append("    Example: #edit: {\"path\":\"config.yml\",\"range\":\"10-10\",\"original\":\"enabled: true\",\"replacement\":\"enabled: false\"}\n");
                 sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
             }
             if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
-                sb.append("  #write: <path>|<content>  - Completely overwrite a file with new content.\n");
+                sb.append("  #write: <json>  - Completely overwrite a file with new content. JSON line format.\n");
                 sb.append("    For existing files: you MUST #read the file first in the same session.\n");
-                sb.append("    Use \\n for newlines, \\\\n for literal \\n.\n");
-                sb.append("    Example: #write: config.yml|enabled: true\\nsetting: value\n");
+                sb.append("    Fields: path (required), content (required). In JSON, \\n is a newline, \\\\n is a literal backslash-n.\n");
+                sb.append("    Example: #write: {\"path\":\"config.yml\",\"content\":\"enabled: true\\nsetting: value\"}\n");
                 sb.append("    Constraint: #write must be the last part of response. No #end after it.\n");
             }
             sb.append("  Note: Use #skill for Skill modules, NOT #read.\n\n");

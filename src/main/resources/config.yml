@@ -95,6 +95,9 @@ fancy:
   model: default
   # 副模型（用于压缩、标题生成等轻量级任务）
   co-model: default_co
+  # 主对话采样温度（0.0-2.0，越小越确定，越大越有创造性）
+  # 工具调用/命令执行任务建议 0.3-0.7；纯聊天可调高。删除此行则不发送该字段（跟随模型默认）
+  temperature: 0.4
 
 # CloudFlare Workers AI 配置
 cloudflare:

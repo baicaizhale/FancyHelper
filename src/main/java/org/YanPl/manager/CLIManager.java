@@ -934,9 +934,9 @@ public class CLIManager {
                 newRecord.setTitle(generatedTitle);
             }
 
-            // 写入文件
+            // 写入文件（原子写：先写临时文件再替换，避免中断留下半截 JSON 导致后续扫描报错）
             String json = gson.toJson(newRecord);
-            Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            atomicWriteSessionFile(sessionFile, json);
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 已保存会话到历史: " + playerName + "/" + sessionUUID + ".json");
@@ -944,6 +944,28 @@ public class CLIManager {
         } catch (Exception e) {
             plugin.getLogger().warning("[CLI] 保存会话历史失败: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    /**
+     * 原子写入会话文件：先写同目录临时文件再原子替换。
+     * 避免写入中途（进程被杀/插件重载/崩溃）留下半截 JSON——损坏文件会让每次
+     * /cli resume 扫描列表时报"读取会话文件失败"，且因解析失败无法从列表删除（隐身坏文件）。
+     * 同目录临时文件保证同文件系统，ATOMIC_MOVE 可行；失败时回退普通替换。
+     */
+    private void atomicWriteSessionFile(Path sessionFile, String json) {
+        try {
+            Files.createDirectories(sessionFile.getParent());
+            Path tmp = sessionFile.resolveSibling(sessionFile.getFileName() + ".tmp");
+            Files.write(tmp, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            try {
+                Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("[CLI] 会话文件原子写入失败: " + e.getMessage());
         }
     }
 
@@ -1140,11 +1162,11 @@ public class CLIManager {
                 return;
             }
 
-            // 写回文件（使用美化输出）
+            // 写回文件（使用美化输出，原子写）
             Gson prettyGson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
             String json = prettyGson.toJson(record);
             Files.createDirectories(playerDir);
-            Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            atomicWriteSessionFile(sessionFile, json);
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 已更新会话标题: " + title);

@@ -190,27 +190,27 @@ class ToolRegistryTest {
     }
 
     @Test
-    @DisplayName("bridgeToText edit 四段 join")
+    @DisplayName("bridgeToText edit 输出 JSON 行")
     void testBridgeEdit() {
         NativeToolCall call = new NativeToolCall("c1", "edit",
                 "{\"path\":\"config.yml\",\"range\":\"10-10\",\"original\":\"enabled: true\",\"replacement\":\"enabled: false\"}");
-        assertEquals("#edit: config.yml|10-10|enabled: true|enabled: false", ToolRegistry.bridgeToText(call));
+        assertEquals("#edit: {\"path\":\"config.yml\",\"range\":\"10-10\",\"original\":\"enabled: true\",\"replacement\":\"enabled: false\"}", ToolRegistry.bridgeToText(call));
     }
 
     @Test
-    @DisplayName("bridgeToText edit 无 range 用 auto")
+    @DisplayName("bridgeToText edit 无 range 省略字段")
     void testBridgeEditAutoRange() {
         NativeToolCall call = new NativeToolCall("c1", "edit",
                 "{\"path\":\"config.yml\",\"original\":\"a\",\"replacement\":\"b\"}");
-        assertEquals("#edit: config.yml|auto|a|b", ToolRegistry.bridgeToText(call));
+        assertEquals("#edit: {\"path\":\"config.yml\",\"original\":\"a\",\"replacement\":\"b\"}", ToolRegistry.bridgeToText(call));
     }
 
     @Test
-    @DisplayName("bridgeToText write 换行转义")
+    @DisplayName("bridgeToText write 输出 JSON 行（标准转义）")
     void testBridgeWrite() {
         NativeToolCall call = new NativeToolCall("c1", "write",
                 "{\"path\":\"config.yml\",\"content\":\"enabled: true\\nsetting: value\"}");
-        assertEquals("#write: config.yml|enabled: true\nsetting: value", ToolRegistry.bridgeToText(call));
+        assertEquals("#write: {\"path\":\"config.yml\",\"content\":\"enabled: true\\nsetting: value\"}", ToolRegistry.bridgeToText(call));
     }
 
     @Test

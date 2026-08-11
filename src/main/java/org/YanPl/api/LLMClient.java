@@ -349,6 +349,18 @@ public class LLMClient {
     }
 
     /**
+     * 附加主对话采样温度（fancy.temperature 配置）。
+     * 配置为 null（未配置）时不发送字段，跟随模型默认；
+     * 配置为 0 时发送 temperature=0（完全确定性输出）。
+     */
+    private void attachTemperature(JsonObject bodyJson) {
+        Double temperature = plugin.getConfigManager().getFancyTemperature();
+        if (temperature != null) {
+            bodyJson.addProperty("temperature", temperature);
+        }
+    }
+
+    /**
      * 400/422 硬拒回退：克隆请求体并去掉 tools 字段，重试走文本协议。
      * tool_choice/parallel_tool_calls 与 tools 配对，一并移除，避免无 tools 时残留触发部分 provider 报错。
      */
@@ -491,6 +503,7 @@ public class LLMClient {
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 10000);
+        attachTemperature(bodyJson);
         attachNativeTools(bodyJson, player, session, model, false);
 
         String requestBody = gson.toJson(bodyJson);
@@ -591,6 +604,7 @@ public class LLMClient {
         bodyJson.addProperty("model", model);
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 10000);
+        attachTemperature(bodyJson);
         attachNativeTools(bodyJson, player, session, model, false);
 
         // 对于支持推理参数的模型（如 deepseek-reasoner、o1、qwen-max 等），添加推理参数
@@ -896,6 +910,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.addProperty("max_tokens", 10000);
+        attachTemperature(bodyJson);
 
         if (useResponsesApi) {
             bodyJson.add("input", messagesArray);
@@ -2041,6 +2056,7 @@ public class LLMClient {
         maxTokens = Math.min(maxTokens, 65536);
         bodyJson.addProperty("max_tokens", maxTokens);
         bodyJson.addProperty("stream", true);
+        attachTemperature(bodyJson);
         attachNativeTools(bodyJson, player, session, model, false);
 
         if (plugin.getConfigManager().isDebug()) {
@@ -2106,6 +2122,7 @@ public class LLMClient {
         bodyJson.add("messages", messagesArray);
         bodyJson.addProperty("max_tokens", 10000);
         bodyJson.addProperty("stream", true);
+        attachTemperature(bodyJson);
         attachNativeTools(bodyJson, player, session, model, false);
 
         if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
@@ -2176,6 +2193,7 @@ public class LLMClient {
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
         bodyJson.addProperty("max_tokens", 10000);
+        attachTemperature(bodyJson);
 
         if (useResponsesApi) {
             // gpt-oss 模型通过 Responses API 不支持流式，走非流式请求

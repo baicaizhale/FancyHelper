@@ -104,12 +104,12 @@ public final class ToolRegistry {
                             "range", str("string", "Line range, e.g. 1-50; omit to read the whole file")));
         }
         if (writeEnabled) {
-            addTool(tools, "edit", responsesFormat, "Edit a file by matching original text. #read first, then #edit. Format: path|range|original|replacement. Do not include | characters in the parameter.",
+            addTool(tools, "edit", responsesFormat, "Edit a file by matching original text. #read first, then #edit. Parameters are sent as structured JSON, no delimiter escaping needed. Format: path + original + replacement, optional range (10-10 or auto).",
                     obj("path", str("string", "File path"),
-                            "range", str("string", "Line range 10-10 or auto"),
+                            "range", str("string", "Line range 10-10 or auto; omit to auto-search"),
                             "original", str("string", "Original text to match"),
                             "replacement", str("string", "Replacement text")));
-            addTool(tools, "write", responsesFormat, "Overwrite a file completely. Use \\n for newlines and \\\\n for a literal backslash-n. Do not include | characters in the parameter.",
+            addTool(tools, "write", responsesFormat, "Overwrite a file completely. Parameters are sent as structured JSON, use \\n for newlines. For existing files, #read the file first in the same session.",
                     obj("path", str("string", "File path"),
                             "content", str("string", "New file content, use \\n for newlines")));
         }
@@ -223,7 +223,7 @@ public final class ToolRegistry {
 
     /**
      * 把结构化的原生 tool_call 桥接回现有 `#tool: args` 文本，复用 ToolExecutor 的 handler。
-     * 参数中可能包含 | 字符时已在描述里提示模型避免，与文本协议同限制。
+     * #write / #edit 输出 JSON 行格式（标准 JSON 转义），其余文本协议字段用 | 分隔，已在描述里提示模型避免。
      */
     public static String bridgeToText(NativeToolCall call) {
         String name = call.name() == null ? "" : call.name().toLowerCase();
@@ -261,19 +261,26 @@ public final class ToolRegistry {
             case "write": {
                 String path = str(args, "path", "");
                 String content = str(args, "content", "");
-                // AI 用 \n 表示换行，\\n 表示字面 \n（与 executeFileOperation 的转义约定一致）
-                content = content.replace("\\n", "\n");
-                return "#write: " + path + "|" + content;
+                // 输出 JSON 行格式（标准 JSON 转义，无 | 分隔符冲突、无 \n 三层转义约定）
+                JsonObject json = new JsonObject();
+                json.addProperty("path", path);
+                json.addProperty("content", content);
+                return "#write: " + GSON.toJson(json);
             }
             case "edit": {
                 String path = str(args, "path", "");
                 String range = str(args, "range", "");
                 String original = str(args, "original", "");
                 String replacement = str(args, "replacement", "");
-                if (range.isEmpty()) {
-                    range = "auto";
+                // 输出 JSON 行格式；range 空则省略（解析端默认 auto）
+                JsonObject json = new JsonObject();
+                json.addProperty("path", path);
+                if (!range.isEmpty()) {
+                    json.addProperty("range", range);
                 }
-                return "#edit: " + path + "|" + range + "|" + original + "|" + replacement;
+                json.addProperty("original", original);
+                json.addProperty("replacement", replacement);
+                return "#edit: " + GSON.toJson(json);
             }
             case "ask":
             case "todo":
