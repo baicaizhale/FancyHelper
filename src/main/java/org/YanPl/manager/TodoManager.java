@@ -46,12 +46,25 @@ public class TodoManager {
             }
             JsonElement jsonElement = gson.fromJson(todoJson, JsonElement.class);
 
-            if (jsonElement == null || !jsonElement.isJsonArray()) {
+            if (jsonElement == null || !jsonElement.isJsonObject() && !jsonElement.isJsonArray()) {
                 plugin.getLogger().warning("[TODO] JSON 解析结果不是数组: " + jsonElement);
                 return "错误: TODO 数据必须是数组格式，格式如 [{\"id\":\"1\",\"task\":\"描述\"}]";
             }
 
-            JsonArray jsonArray = jsonElement.getAsJsonArray();
+            // 兼容两种形状：native 模式下模型返回 {"todos":[...]}，文本协议下直接是裸数组 [...]。
+            // 若为对象且含 todos 数组则取其值，否则按裸数组处理。
+            JsonArray jsonArray;
+            if (jsonElement.isJsonObject()) {
+                JsonElement todos = jsonElement.getAsJsonObject().get("todos");
+                if (todos == null || !todos.isJsonArray()) {
+                    plugin.getLogger().warning("[TODO] JSON 对象缺少 todos 数组: " + jsonElement);
+                    return "错误: TODO 对象必须包含 todos 数组，格式如 {\"todos\":[{\"id\":\"1\",\"task\":\"描述\"}]}";
+                }
+                jsonArray = todos.getAsJsonArray();
+            } else {
+                jsonArray = jsonElement.getAsJsonArray();
+            }
+
             List<TodoItem> newTodos = new ArrayList<>();
 
             // 验证并解析每个 待办项

@@ -36,6 +36,15 @@ public class ToolExecutor {
     private final CLIManager cliManager;
     private final RiskAssessmentManager riskAssessmentManager;
 
+    // 命令输出捕获的静默窗口：有输出后持续无新输出达该时长即收尾（捕获缓冲长度增长判定）
+    private static final long CAPTURE_QUIET_MS = 2000L;
+    // 命令从未产生任何输出时的首次输出宽限（有输出的命令不受此限，安静即可收尾）
+    private static final long CAPTURE_NO_OUTPUT_MS = 5000L;
+    // 命令输出的绝对等待上限（防止命令持续吐输出时无限等待）
+    private static final long CAPTURE_MAX_WAIT_MS = 15_000L;
+    // 静默窗口轮询间隔
+    private static final long CAPTURE_POLL_TICKS = 10L; // 0.5 秒
+
     public ToolExecutor(FancyHelper plugin, CLIManager cliManager) {
         this.plugin = plugin;
         this.cliManager = cliManager;
@@ -47,9 +56,10 @@ public class ToolExecutor {
      * @param player 玩家
      * @param toolCall 工具调用字符串
      * @param session 对话会话
+     * @param force 是否跳过命令存在性校验（原生 run 调用的 force 键）
      * @return 是否成功执行
      */
-    public boolean executeTool(Player player, String toolCall, DialogueSession session) {
+    public boolean executeTool(Player player, String toolCall, DialogueSession session, boolean force) {
         UUID uuid = player.getUniqueId();
 
         // 记录工具调用日志
@@ -100,7 +110,7 @@ public class ToolExecutor {
             
             // 执行工具
             case "#run":
-                success = handleRunTool(player, args, session);
+                success = handleRunTool(player, args, session, force);
                 break;
             
             // 文件工具
@@ -214,6 +224,9 @@ public class ToolExecutor {
     public static ToolParseResult parseToolCall(String toolCall) {
         String toolName;
         String args = "";
+        if (toolCall == null) {
+            return new ToolParseResult("", "");
+        }
 
         // 查找第一个冒号的位置
         int colonIndex = toolCall.indexOf(":");
@@ -270,9 +283,22 @@ public class ToolExecutor {
     }
 
     /**
-     * 处理 #run 工具
+     * 处理 #run 工具。
+     *
+     * <p>命令拦截共三层防线，force 只跳第一层，玩家确认始终保留：
+     * <ol>
+     *   <li><b>命令存在性校验</b>（{@link #checkCommandExists}）：首词不在命令表但斜杠变体命中 → 疑似斜杠写错，拦截并教育。
+     *       <code>force=true</code> 跳过本层（模型确信命令真实存在，如命令表未索引的懒注册命令，避免被技术性误拦）。</li>
+     *   <li><b>SMART 风险评估</b>：评分超阈值弹确认按钮。force 不生效。</li>
+     *   <li><b>YOLO 风险词检查</b>（{@link #isRiskyCommand}）：op/ban 等风险词要求确认，递归检查 execute 子命令。force 不生效。</li>
+     * </ol>
+     * NORMAL/PLAN 模式所有命令一律弹确认按钮，force 同样不生效。
+     *
+     * <p>force 来源：原生 run 调用 JSON 键 {@code {"command":"...","force":true}}，
+     * 经 {@link org.YanPl.manager.ToolRegistry#isForceCall} 提取，被拦截后模型按
+     * {@link #handleBlockedCommand} 反馈文案二次尝试时带上；刻意不进 run 的 schema，见 ToolRegistry 处注释。
      */
-    private boolean handleRunTool(Player player, String command, DialogueSession session) {
+    private boolean handleRunTool(Player player, String command, DialogueSession session, boolean force) {
         if (command.isEmpty()) {
             player.sendMessage(I18n.t("tool.run.need.args"));
             String error = "#error: #run 工具需要提供命令参数，例如 #run: say hello";
@@ -287,6 +313,15 @@ public class ToolExecutor {
         // 注释化：不再删除前导 /，命令保留原样执行（服务器端 dispatchCommand 会自行处理 /）
         String cleanCommand = command;
         // String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
+
+        // 命令存在性校验：首词与命令表比对，疑似斜杠错误时拦截教育模型。
+        // force=true（原生 run 调用 JSON 键）跳过此校验。
+        if (!force) {
+            CommandCheckResult check = checkCommandExists(cleanCommand);
+            if (check.blocked) {
+                return handleBlockedCommand(player, session, cleanCommand, check);
+            }
+        }
 
         // SMART 模式下评估风险
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
@@ -334,9 +369,112 @@ public class ToolExecutor {
     }
 
     /**
+     * 命令存在性校验结果。
+     * @param blocked    是否拦截（首词不在命令表，但存在斜杠变体，疑似斜杠错误）
+     * @param suggestion 建议的正确命令（如 "give"），blocked 为 true 时有效
+     */
+    record CommandCheckResult(boolean blocked, String suggestion) {
+    }
+
+    /**
+     * 命令存在性校验：提取 #run 参数首词，与命令表完全比对。
+     * <p>
+     * 首词不命中时尝试斜杠变体（0/1/2 个前导斜杠）：
+     * <ul>
+     *   <li>存在变体命中 → 疑似斜杠错误，拦截并给出建议命令</li>
+     *   <li>无变体命中或命令表为空 → 放行（懒注册/未知命令不误杀）</li>
+     * </ul>
+     * 校验只查命令表，绝不执行命令。
+     */
+    CommandCheckResult checkCommandExists(String command) {
+        List<String> indexed = plugin.getWorkspaceIndexer().getIndexedCommands();
+        return checkCommand(command, indexed);
+    }
+
+    /**
+     * 命令存在性校验纯逻辑：提取首词，与命令表完全比对。
+     * <p>
+     * 首词不命中时尝试斜杠变体（0/1/2 个前导斜杠）：
+     * <ul>
+     *   <li>存在变体命中 → 疑似斜杠错误，拦截并给出建议命令</li>
+     *   <li>无变体命中或命令表为空 → 放行（懒注册/未知命令不误杀）</li>
+     * </ul>
+     * 校验只查命令表，绝不执行命令。
+     *
+     * @param command         待校验命令（含参数）
+     * @param indexedCommands 命令表；null 或空视为无法校验
+     */
+    static CommandCheckResult checkCommand(String command, List<String> indexedCommands) {
+        String trimmed = command == null ? "" : command.trim();
+        if (trimmed.isEmpty()) {
+            return new CommandCheckResult(false, null);
+        }
+        if (indexedCommands == null || indexedCommands.isEmpty()) {
+            // 命令表为空（未索引/懒注册），无法校验，放行避免误杀
+            return new CommandCheckResult(false, null);
+        }
+        java.util.Set<String> table = new java.util.HashSet<>(indexedCommands);
+
+        // 提取首词：空格或制表符分割的第一个 token
+        int sp = trimmed.indexOf(' ');
+        int tab = trimmed.indexOf('\t');
+        int cut = (sp == -1) ? tab : (tab == -1 ? sp : Math.min(sp, tab));
+        String firstToken = (cut == -1) ? trimmed : trimmed.substring(0, cut);
+
+        if (firstToken.isEmpty()) {
+            return new CommandCheckResult(false, null);
+        }
+        if (table.contains(firstToken)) {
+            return new CommandCheckResult(false, null);
+        }
+
+        // 尝试斜杠变体：base（去掉全部前导 /）、/base、//base
+        String base = firstToken.replaceAll("^/+", "");
+        if (base.isEmpty()) {
+            return new CommandCheckResult(false, null);
+        }
+        String[] variants = { base, "/" + base, "//" + base };
+        for (String v : variants) {
+            if (!v.equals(firstToken) && table.contains(v)) {
+                return new CommandCheckResult(true, v);
+            }
+        }
+        return new CommandCheckResult(false, null);
+    }
+
+    /**
+     * 拦截疑似斜杠错误的命令：不展示给玩家，feedback 教育模型 + 警告进上下文。
+     */
+    private boolean handleBlockedCommand(Player player, DialogueSession session, String command, CommandCheckResult check) {
+        String suggestion = check.suggestion() == null ? "" : check.suggestion();
+        String warning = "Warning: \"" + command + "\" was not executed. Unrecognized command. "
+                + (suggestion.isEmpty() ? "" : "Did you mean \"" + suggestion + "\"? ")
+                + "If you are certain, set \"force\": true in your run call, e.g. "
+                + "{\"command\": \"/give @p tnt\", \"force\": true}.";
+        plugin.getLogger().warning("[CLI] 命令存在性校验拦截 " + player.getName() + ": " + command
+                + (suggestion.isEmpty() ? "" : " → 建议 " + suggestion));
+        if (session != null) {
+            session.setLastError(warning);
+        }
+        cliManager.feedbackToAI(player, warning);
+        return false;
+    }
+
+    /**
      * 检查是否为风险命令
      */
     private boolean isRiskyCommand(String cmd) {
+        return isRiskyCommand(cmd, plugin.getConfigManager().getYoloRiskCommands());
+    }
+
+    /**
+     * 检查是否为风险命令（静态版，供 CLIManager 批量预筛使用）。
+     */
+    static boolean isRiskyCommandPublic(String cmd, List<String> riskyCommands) {
+        return isRiskyCommand(cmd, riskyCommands);
+    }
+
+    private static boolean isRiskyCommand(String cmd, List<String> risky) {
         String cleanCmd = cmd.trim();
         // 注释化后命令可能带前导 /，此处单独去掉，保证风险检测仍然生效
         if (cleanCmd.startsWith("/")) {
@@ -345,26 +483,25 @@ public class ToolExecutor {
         if (cleanCmd.toLowerCase().startsWith("minecraft:")) {
             cleanCmd = cleanCmd.substring(10).trim();
         }
-        
+
         // 处理 execute 命令的递归检查
         if (cleanCmd.toLowerCase().startsWith("execute")) {
             String lower = cleanCmd.toLowerCase();
             int runIndex = lower.indexOf(" run ");
             if (runIndex != -1) {
                 String subCmd = cleanCmd.substring(runIndex + 5).trim();
-                return isRiskyCommand(subCmd);
+                return isRiskyCommand(subCmd, risky);
             }
         }
 
-        List<String> risky = plugin.getConfigManager().getYoloRiskCommands();
         if (risky == null || risky.isEmpty()) return false;
-        
+
         String lc = cleanCmd.toLowerCase();
         for (String r : risky) {
             if (r == null) continue;
             String rr = r.trim().toLowerCase();
             if (rr.isEmpty()) continue;
-            
+
             // 精确匹配命令名或带参数的命令
             if (lc.equals(rr)) return true;
             if (lc.startsWith(rr + " ")) return true;
@@ -426,7 +563,7 @@ public class ToolExecutor {
 
         // #write 的 read-before-write 检查
         if ("write".equals(type)) {
-            String writePath = pathArg.contains("|") ? pathArg.substring(0, pathArg.indexOf("|")).trim() : pathArg.trim();
+            String writePath = extractFilePathFromArgs(pathArg);
             if (!writePath.isEmpty()) {
                 File root = Bukkit.getWorldContainer();
                 File targetFile = new File(root, writePath);
@@ -450,8 +587,8 @@ public class ToolExecutor {
 
         // #edit 和 #write 需要确认（YOLO模式除外，SMART模式也不特殊处理，与NORMAL一致）
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            String pendingStr = type.toUpperCase() + ":" + args;
-            cliManager.setPendingCommand(uuid, pendingStr);
+            // YOLO 免确认：不设置 pendingCommand（否则执行后残留，后续玩家消息全被
+            // "请确认 [Y/N]" 拦截吞掉），直接执行。
             cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
             executeFileOperation(player, type, args);
             return;
@@ -466,8 +603,7 @@ public class ToolExecutor {
         File root = Bukkit.getWorldContainer();
         pushPreviewLinkAsync(player, root, type, args);
 
-        String[] parts = pathArg.split("\\|", "edit".equals(type) ? 4 : 2);
-        String filePath = parts.length > 0 ? parts[0].trim() : "";
+        String filePath = extractFilePathFromArgs(pathArg);
         String label = "edit".equals(type) ? I18n.t("tool.edit.modifying", filePath) : I18n.t("tool.edit.overwriting", filePath);
         TextComponent msg = new TextComponent(label);
         TextComponent yBtn = new TextComponent(ChatColor.GREEN + "✔");
@@ -591,14 +727,28 @@ public class ToolExecutor {
     }
 
     private String submitToViewFancy(String args) {
-        int pipeIdx = args.indexOf("|");
-        if (pipeIdx == -1) return null;
-        String path = args.substring(0, pipeIdx).trim();
-        String content = args.substring(pipeIdx + 1);
-        // AI 用 \n 表示换行，\\n 表示字面 \n
-        content = content.replace("\\\\n", "");
-        content = content.replace("\\n", "\n");
-        content = content.replace("", "\\n");
+        if (args == null) return null;
+        String trimmed = args.trim();
+        String path;
+        String content;
+        if (trimmed.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmed).getAsJsonObject();
+                path = json.has("path") ? json.get("path").getAsString() : "";
+                content = json.has("content") ? json.get("content").getAsString() : "";
+            } catch (Exception e) {
+                return null;
+            }
+        } else {
+            int pipeIdx = args.indexOf("|");
+            if (pipeIdx == -1) return null;
+            path = args.substring(0, pipeIdx).trim();
+            content = args.substring(pipeIdx + 1);
+            // AI 用 \n 表示换行，\\n 表示字面 \n
+            content = content.replace("\\\\n", "\u0001");
+            content = content.replace("\\n", "\n");
+            content = content.replace("\u0001", "\\n");
+        }
 
         final String baseUrl = "https://view.fancy.baicaizhale.top";
 
@@ -822,38 +972,59 @@ public class ToolExecutor {
      */
     private EditPreview computeEdit(File root, String pathArg, boolean writeToDisk) throws IOException {
         EditPreview out = new EditPreview();
-        String[] editParts = pathArg.split("\\|", 4);
+        String trimmedArg = pathArg.trim();
 
-        // 支持3种格式：
-        // 1. path|range|original|replacement (4部分，带行号)
-        // 2. path|original|replacement (3部分，自动搜索)
-        // 3. path|auto|original|replacement (4部分，但range是auto)
-
+        // 支持两种格式：
+        // 1. JSON 行（推荐，标准 JSON 转义，无 | 分隔符冲突）：
+        //    #edit: {"path":"...","range":"10-10","original":"...","replacement":"..."}  range 可省略(默认 auto)
+        // 2. 旧格式（兼容保留）：path|range|original|replacement 或 path|original|replacement
         String path;
         String rangeStr;
         String original;
         String replacement;
         boolean autoSearch = false;
 
-        if (editParts.length < 3) {
-            out.result = "错误: #edit 至少需要3个参数，格式：#edit: path|original|replacement 或 #edit: path|range|original|replacement";
-            return out;
-        } else if (editParts.length == 3) {
-            // 3部分格式：path|original|replacement
-            path = editParts[0].trim();
-            rangeStr = "auto";
-            original = editParts[1];
-            replacement = editParts[2];
-            autoSearch = true;
+        if (trimmedArg.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmedArg).getAsJsonObject();
+                path = json.has("path") ? json.get("path").getAsString() : "";
+                rangeStr = json.has("range") ? json.get("range").getAsString() : "auto";
+                original = json.has("original") ? json.get("original").getAsString() : "";
+                replacement = json.has("replacement") ? json.get("replacement").getAsString() : "";
+                if (path.isEmpty() || original.isEmpty()) {
+                    out.result = "错误: #edit JSON 缺少 path 或 original 字段";
+                    return out;
+                }
+                if (rangeStr.isEmpty() || "auto".equalsIgnoreCase(rangeStr)) {
+                    autoSearch = true;
+                }
+            } catch (Exception e) {
+                out.result = "错误: #edit JSON 解析失败: " + e.getMessage();
+                return out;
+            }
         } else {
-            // 4部分格式
-            path = editParts[0].trim();
-            rangeStr = editParts[1].trim();
-            original = editParts[2];
-            replacement = editParts[3];
-            // 如果 range 是 auto 或空，使用自动搜索
-            if (rangeStr.equalsIgnoreCase("auto") || rangeStr.isEmpty()) {
+            String[] editParts = pathArg.split("\\|", 4);
+
+            if (editParts.length < 3) {
+                out.result = "错误: #edit 至少需要3个参数，格式：#edit: path|original|replacement、#edit: path|range|original|replacement 或 #edit: {\"path\":\"...\",\"original\":\"...\",\"replacement\":\"...\"}";
+                return out;
+            } else if (editParts.length == 3) {
+                // 3部分格式：path|original|replacement
+                path = editParts[0].trim();
+                rangeStr = "auto";
+                original = editParts[1];
+                replacement = editParts[2];
                 autoSearch = true;
+            } else {
+                // 4部分格式
+                path = editParts[0].trim();
+                rangeStr = editParts[1].trim();
+                original = editParts[2];
+                replacement = editParts[3];
+                // 如果 range 是 auto 或空，使用自动搜索
+                if (rangeStr.equalsIgnoreCase("auto") || rangeStr.isEmpty()) {
+                    autoSearch = true;
+                }
             }
         }
 
@@ -1071,18 +1242,55 @@ public class ToolExecutor {
     }
 
     /**
-     * 执行 write 操作 — 完全覆写文件内容
-     * 格式：#write: <path>|<content>
-     * 对于已存在的文件，必须先 #read 才能 #write
+     * 从 #write / #edit 参数中提取文件路径（用于 read-before-write 检查、确认按钮展示、view-fancy 预览）。
+     * 兼容 JSON 行格式（{"path":"..."}）和旧 | 分隔格式（path|...）。
      */
-    private String executeWriteOperation(File root, String pathArg) throws IOException {
-        int pipeIndex = pathArg.indexOf("|");
-        if (pipeIndex == -1) {
-            return "错误: #write 格式不正确，正确格式：#write: path|content";
+    private String extractFilePathFromArgs(String pathArg) {
+        if (pathArg == null) return "";
+        String trimmed = pathArg.trim();
+        if (trimmed.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmed).getAsJsonObject();
+                if (json.has("path")) return json.get("path").getAsString();
+                return "";
+            } catch (Exception ignored) {
+                return "";
+            }
         }
+        int pipeIdx = pathArg.indexOf("|");
+        return pipeIdx == -1 ? trimmed : pathArg.substring(0, pipeIdx).trim();
+    }
 
-        String path = pathArg.substring(0, pipeIndex).trim();
-        String content = pathArg.substring(pipeIndex + 1);
+    private String executeWriteOperation(File root, String pathArg) throws IOException {
+        // 支持两种格式：
+        // 1. JSON 行（推荐）：#write: {"path":"...","content":"..."}  标准 JSON 转义，\n 表示真实换行、\\n 表示字面 \n
+        // 2. 旧格式（兼容保留）：#write: <path>|<content>
+        String path;
+        String content;
+        String trimmedArg = pathArg.trim();
+        if (trimmedArg.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmedArg).getAsJsonObject();
+                path = json.has("path") ? json.get("path").getAsString() : "";
+                content = json.has("content") ? json.get("content").getAsString() : "";
+                if (path.isEmpty()) {
+                    return "错误: #write JSON 缺少 path 字段";
+                }
+            } catch (Exception e) {
+                return "错误: #write JSON 解析失败: " + e.getMessage();
+            }
+        } else {
+            int pipeIndex = pathArg.indexOf("|");
+            if (pipeIndex == -1) {
+                return "错误: #write 格式不正确，正确格式：#write: path|content 或 #write: {\"path\":\"...\",\"content\":\"...\"}";
+            }
+            path = pathArg.substring(0, pipeIndex).trim();
+            content = pathArg.substring(pipeIndex + 1);
+            // \\n → 字面 \n, \n → 真实换行（仅旧格式需要转义，JSON 格式由解析器处理）
+            content = content.replace("\\\\n", "\u0001");
+            content = content.replace("\\n", "\n");
+            content = content.replace("\u0001", "\\n");
+        }
 
         if (path.isEmpty()) {
             return "错误: 文件路径不能为空";
@@ -1105,10 +1313,6 @@ public class ToolExecutor {
             parentDir.mkdirs();
         }
 
-        // \\n → 字面 \n, \n → 真实换行
-        content = content.replace("\\\\n", "");
-        content = content.replace("\\n", "\n");
-        content = content.replace("", "\\n");
         Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
         return "成功写入文件: " + path + " (" + content.length() + " 字符)";
@@ -1255,45 +1459,83 @@ public class ToolExecutor {
 
             if (!plugin.isEnabled()) return;
 
-            // 延迟 1 秒 (20 ticks) 检查反馈（通过 PacketCapture 捕获玩家实际看到的输出）
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                String currentPacketOutput = "";
-                boolean hasOutput = false;
+            // 命令执行失败时立即收尾，不进入静默等待
+            if (!finalSuccess) {
+                String errorPacket = (plugin.getPacketCaptureManager() != null)
+                        ? plugin.getPacketCaptureManager().stopCapture(player) : "";
+                finalizeRun(player, executedCommand, finalSuccess, finalCommandError, errorPacket, "");
+                return;
+            }
 
-                if (plugin.getPacketCaptureManager() != null) {
-                    currentPacketOutput = plugin.getPacketCaptureManager().peekCapture(player);
-                    if (!currentPacketOutput.isEmpty()) hasOutput = true;
-                }
+            // 静默驱动窗口：捕获缓冲长度增长即"有输出"，重置静默计时；连续无新输出超过
+            // CAPTURE_QUIET_MS 即认为命令输出已完整，停止捕获并把结果反馈给 AI。
+            // 相比固定 1s/5s 延迟，既能吃满 spark 这类持续输出的命令，又不会让秒回命令白等。
+            final long[] lastLen = {0L};
+            final boolean[] hasOutput = {false};
+            final long[] quietSince = {System.currentTimeMillis()};
+            final long captureStart = System.currentTimeMillis();
+            final org.bukkit.scheduler.BukkitTask[] taskHolder = new org.bukkit.scheduler.BukkitTask[1];
 
-                // 如果有输出，或者命令执行失败，则立即结束
-                if (hasOutput || !finalSuccess) {
-                    String finalPacketOutput = "";
-                    if (plugin.getPacketCaptureManager() != null) {
-                        finalPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
-                    }
-                    String finalResult = buildCommandResult(executedCommand, finalPacketOutput, finalSuccess, finalCommandError, "");
-                    cliManager.feedbackToAI(player, "#run_result: " + finalResult);
-                    return;
-                }
-
-                // 如果没有输出，延长等待 5 秒 (100 ticks)
-                player.sendMessage(I18n.t("tool.run.no.feedback"));
-
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    String delayedPacketOutput = "";
-                    if (plugin.getPacketCaptureManager() != null) {
-                        delayedPacketOutput = plugin.getPacketCaptureManager().stopCapture(player);
+            org.bukkit.scheduler.BukkitTask timer = Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+                @Override
+                public void run() {
+                    if (!plugin.isEnabled() || !player.isOnline()) {
+                        stop();
+                        return;
                     }
 
-                    // 兜底：数据包仍无输出时，尝试从控制台日志抓取命令反馈
-                    String consoleFeedback = (finalSuccess && delayedPacketOutput.isEmpty())
-                            ? getConsoleFeedback(player, executedCommand) : "";
-                    String finalResult = buildCommandResult(executedCommand, delayedPacketOutput, finalSuccess, finalCommandError, consoleFeedback);
-                    cliManager.feedbackToAI(player, "#run_result: " + finalResult);
-                }, 100L);
+                    long len = 0;
+                    if (plugin.getPacketCaptureManager() != null) {
+                        len = plugin.getPacketCaptureManager().captureLength(player);
+                    }
+                    long now = System.currentTimeMillis();
+                    boolean quietLongEnough;
+                    if (len > lastLen[0]) {
+                        // 有新输出：记录已产生输出并重置静默计时
+                        lastLen[0] = len;
+                        hasOutput[0] = true;
+                        quietSince[0] = now;
+                        return;
+                    }
+                    if (hasOutput[0]) {
+                        // 有输出后安静 2s → 输出已完整
+                        quietLongEnough = now - quietSince[0] >= CAPTURE_QUIET_MS;
+                    } else {
+                        // 从未有输出：等待首次输出宽限 5s
+                        quietLongEnough = now - captureStart >= CAPTURE_NO_OUTPUT_MS;
+                    }
+                    boolean timedOut = now - captureStart >= CAPTURE_MAX_WAIT_MS;
+                    if (quietLongEnough || timedOut) {
+                        stop();
+                        if (timedOut && !quietLongEnough) {
+                            player.sendMessage(I18n.t("tool.run.no.feedback"));
+                        }
+                        String packetOutput = (plugin.getPacketCaptureManager() != null)
+                                ? plugin.getPacketCaptureManager().stopCapture(player) : "";
+                        // 兜底：数据包仍无输出时，尝试从控制台日志抓取命令反馈
+                        String consoleFeedback = packetOutput.isEmpty()
+                                ? getConsoleFeedback(player, executedCommand) : "";
+                        finalizeRun(player, executedCommand, finalSuccess, finalCommandError, packetOutput, consoleFeedback);
+                    }
+                }
 
-            }, 20L);
+                private void stop() {
+                    org.bukkit.scheduler.BukkitTask self = taskHolder[0];
+                    if (self != null) {
+                        self.cancel();
+                    }
+                }
+            }, 0L, CAPTURE_POLL_TICKS);
+            taskHolder[0] = timer;
         });
+    }
+
+    /**
+     * 收尾命令执行：构建结果并反馈给 AI（单工具路径与静默窗口共用）。
+     */
+    private void finalizeRun(Player player, String executedCommand, boolean success, String serverError, String packetOutput, String consoleFeedback) {
+        String result = buildCommandResult(executedCommand, packetOutput, success, serverError, consoleFeedback);
+        cliManager.feedbackToAI(player, "#run_result: " + result);
     }
 
     /**
@@ -1869,9 +2111,13 @@ public class ToolExecutor {
                 handleJsonAskTool(player, request);
             } else {
                 player.sendMessage(I18n.t("tool.ask.missing.question"));
+                // 反馈 AI 知晓失败：否则 AI 无感知地干等（批次中屏障 60s 超时兜底，单路径永久挂起）
+                cliManager.feedbackToAI(player, "#ask_error: 提问缺少 question 字段，请检查格式后重试");
             }
         } catch (Exception e) {
             player.sendMessage(I18n.t("tool.ask.parse.fail", e.getMessage()));
+            // 同上：解析失败必须反馈 AI，避免对话卡在 EXECUTING_TOOL
+            cliManager.feedbackToAI(player, "#ask_error: 提问参数解析失败 - " + e.getMessage());
         }
     }
 
@@ -1953,10 +2199,16 @@ public class ToolExecutor {
         
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             String result;
-            if (query.toLowerCase().contains("widely")) {
-                result = performWideSearch(query);
-            } else {
-                result = performWikiSearch(query, player);
+            try {
+                if (query.toLowerCase().contains("widely")) {
+                    result = performWideSearch(query);
+                } else {
+                    result = performWikiSearch(query, player);
+                }
+            } catch (Exception e) {
+                // 异步异常兜底：必须反馈 AI，否则对话卡在 EXECUTING_TOOL（批次中 60s 超时兜底）
+                plugin.getCloudErrorReport().report(e);
+                result = "搜索执行异常: " + e.getMessage();
             }
 
             final String finalResult = result;
@@ -2073,7 +2325,8 @@ public class ToolExecutor {
         String result = plugin.getTodoManager().updateTodos(uuid, todoJson);
 
         if (result.startsWith("错误")) {
-            player.sendMessage(ChatColor.RED + "⨀ " + result);
+            // 工具调用失败（多为模型格式问题）是内部细节，不展示给玩家，
+            // 仅回灌 AI 让它自行修正，控制台已由 TodoManager 记录 warning。
             cliManager.feedbackToAI(player, "#todo_result: " + result);
         } else {
             net.md_5.bungee.api.chat.TextComponent todoDisplay = plugin.getTodoManager().getTodoDisplayComponent(player);
@@ -2695,7 +2948,18 @@ public class ToolExecutor {
         final com.google.gson.JsonObject fArguments = arguments;
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            McpTypes.McpToolCallResult result = plugin.getMcpManager().callExternalTool(fServerName, fToolName, fArguments);
+            McpTypes.McpToolCallResult result;
+            try {
+                result = plugin.getMcpManager().callExternalTool(fServerName, fToolName, fArguments);
+            } catch (Exception e) {
+                // 异步异常兜底：MCP 客户端连接/协议错误等必须反馈 AI，否则对话卡在 EXECUTING_TOOL
+                plugin.getCloudErrorReport().report(e);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    cliManager.feedbackToAI(player, "#mcp_error: 调用异常 - " + e.getMessage());
+                });
+                return;
+            }
 
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {

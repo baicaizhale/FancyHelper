@@ -170,23 +170,24 @@ public class PacketCaptureManager {
      */
     public String stopCapture(Player player) {
         if (!enabled) return "";
-        StringBuilder sb = captureBuffers.remove(player.getUniqueId());
-        return sb != null ? sb.toString() : "";
+        UUID uuid = player.getUniqueId();
+        StringBuilder sb = captureBuffers.remove(uuid);
+        if (sb == null) return "";
+        synchronized (sb) {
+            return sb.toString();
+        }
     }
 
     /**
-     * 检查是否正在为该玩家捕获数据包
+     * 当前捕获缓冲长度（用于静默窗口判定：长度增加即出现新输出）。
+     * 与监听器的追加共用同一把锁，保证主线程能读到 netty 线程的最新写入。
      */
-    public boolean isCapturing(Player player) {
-        return captureBuffers.containsKey(player.getUniqueId());
-    }
-
-    /**
-     * 获取当前捕获的内容（不清除）
-     */
-    public String peekCapture(Player player) {
-        if (!enabled) return "";
+    public int captureLength(Player player) {
+        if (!enabled) return 0;
         StringBuilder sb = captureBuffers.get(player.getUniqueId());
-        return sb != null ? sb.toString() : "";
+        if (sb == null) return 0;
+        synchronized (sb) {
+            return sb.length();
+        }
     }
 }

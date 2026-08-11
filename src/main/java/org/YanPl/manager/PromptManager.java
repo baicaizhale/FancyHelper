@@ -11,12 +11,6 @@ import java.util.stream.Collectors;
  * Prompt 管理器
  * 构建发给 AI 的基础系统提示，包含玩家与索引信息
  * 支持 Skills 自动注入
- *
- * ═══ 缓存优化说明 ═══
- * System prompt 的静态前缀（Role → Usage Guide）对所有玩家/会话恒定，
- * 确保 prompt cache 有稳定的长前缀。所有动态内容（Last Error、Skills、
- * Environment 等）追加在末尾，不影响缓存命中。
- * ═══════════════════════
  */
 public class PromptManager {
 
@@ -62,6 +56,15 @@ public class PromptManager {
      * @return 完整的系统提示
      */
     public String getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills, String currentMessage) {
+        return getBaseSystemPrompt(player, loadedSkills, currentMessage, false);
+    }
+
+    /**
+     * 获取基础系统提示（原生函数调用模式）
+     * @param nativeTools true 时 [Tools] 段使用精简列表（原生调用为主，文本 #tool 兜底）
+     */
+    public String getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills, String currentMessage,
+                                      boolean nativeTools) {
         StringBuilder sb = new StringBuilder();
 
         // ====================================================================
@@ -96,95 +99,124 @@ public class PromptManager {
         // ==================== Core Constraints / 核心约束 ====================
         sb.append("[Core Constraints] (Violations cause parsing failures — follow strictly)\n\n");
 
-        sb.append("1. [Single Tool Call] Each response may contain ONLY ONE tool call.\n");
-        sb.append("   - For multiple operations: complete the first call, wait for result, then proceed.\n\n");
+        if (nativeTools) {
+            // 原生函数调用：支持一次返回多个 tool_calls，服务端串行执行后一次性回灌结果
+            sb.append("1. [Native Only] Tool use MUST go through the NATIVE function-calling API. NEVER output text commands like #run, #search, #todo — they are not parsed and will fail. Your ONLY way to act is by calling a provided function.\n");
+            sb.append("2. [Multiple Tool Calls] You may return MULTIPLE independent function calls in ONE response.\n");
+            sb.append("   - They execute in order; results feed back together. Parallelize independent operations.\n");
+            sb.append("   - Dependent operations still require the previous result first.\n\n");
+        } else {
+            sb.append("1. [Multiple Tool Calls] You may output MULTIPLE independent #tool calls in ONE response, one per line.\n");
+            sb.append("   - They execute in order; results feed back together. Cover ALL requested operations — never silently drop part of the user's request.\n");
+            sb.append("   - Dependent operations still require the previous result first.\n\n");
+        }
 
-        sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
+        if (nativeTools) {
+            sb.append("3. [Single Command] The run function executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
+            sb.append("4. [Tool Position] Function calls stand alone. Never embed a call inside body text.\n\n");
+            sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
+        } else {
+            sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n");
+            sb.append("   - Multiple independent commands: output multiple #run calls, one per line.\n\n");
+            sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
+            sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
+            sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
+        }
 
-        sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
-
-        sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
-
-        sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
-
-        sb.append("Example:\n");
-        sb.append("  Correct: #run: give @p apple\n");
-        sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands)\n");
-        sb.append("  Wrong:   #todo: [...]\\n#run: say hello     (multiple tools in one response)\n\n");
+        if (!nativeTools) {
+            sb.append("Example:\n");
+            sb.append("  Correct: #run: give @p apple\n");
+            sb.append("  Correct: #run: give @p apple\\n#run: give @p oak_planks 2  (multiple independent tools in one response are fine)\n");
+            sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands with && are forbidden)\n");
+            sb.append("\n");
+        }
 
         // ==================== Tool List / 工具列表 ====================
-        sb.append("[Tools] Format: #tool_name: argument\n\n");
+        if (nativeTools) {
+            // 原生函数调用：tools 数组已随请求下发完整函数定义，这里不重复列签名。
+            sb.append("[Tools] Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Every tool (search, run, todo, edit, memory, mcp, exit, etc.) is provided to you as a function. Call multiple functions in one response when they are independent.\n\n");
+        } else {
+            sb.append("[Tools] Format: #tool_name: argument\n\n");
 
-        sb.append("[Query]\n");
-        sb.append("  #search: <args>      - Internet search (Wiki priority). Add 'widely' to force general web search.\n");
-        sb.append("  #skill: <id>         - Load Skill knowledge module. Always check Available Skills list first.\n");
-        sb.append("  #unloadskill: <id>   - Unload a loaded Skill to free context space.\n");
-        sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
-        sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
-        sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
-        sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n\n");
+            sb.append("[Query]\n");
+            sb.append("  #search: <args>      - Internet search (Wiki priority). Add 'widely' to force general web search.\n");
+            sb.append("  #skill: <id>         - Load Skill knowledge module. Always check Available Skills list first.\n");
+            sb.append("  #unloadskill: <id>   - Unload a loaded Skill to free context space.\n");
+            sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
+            sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
+            sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
+            sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n\n");
 
-        sb.append("[Execution]\n");
-        sb.append("  #run: <command>  - Execute ONE Minecraft in-game command. Never use for system/shell commands.\n");
-        sb.append("  #end             - Mark task complete. Must follow a summary to the player. Never call alone.\n");
-        sb.append("  #exit            - Call when player wants to exit FancyHelper.\n\n");
+            sb.append("[Execution]\n");
+            sb.append("  #run: <command>  - Execute ONE Minecraft in-game command. Never use for system/shell commands.\n");
+            sb.append("  #end             - Mark task complete. Must follow a summary to the player. Never call alone.\n");
+            sb.append("  #exit            - Call when player wants to exit FancyHelper.\n\n");
 
-        sb.append("[File Tools] (Results not visible to players)\n");
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
-            sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
-            sb.append("  #read: <path> [start-end]  - Read file with line numbers. Example: #read: config.yml 1-50\n");
-            sb.append("    Line numbers in output are used to target #edit precisely.\n");
-        }
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
-            sb.append("  #edit: <path>|<range>|<original>|<replacement>  - Edit file by matching original text.\n");
-            sb.append("    Workflow: #read first → note line numbers → #edit with exact range.\n");
-            sb.append("    Indentation and comments are auto-preserved.\n");
-            sb.append("    Formats: path|10-10|old|new  OR  path|auto|old|new\n");
-            sb.append("    Example: #edit: config.yml|10-10|enabled: true|enabled: false\n");
-            sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
-        }
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
-            sb.append("  #write: <path>|<content>  - Completely overwrite a file with new content.\n");
-            sb.append("    For existing files: you MUST #read the file first in the same session.\n");
-            sb.append("    Use \\n for newlines, \\\\n for literal \\n.\n");
-            sb.append("    Example: #write: config.yml|enabled: true\\nsetting: value\n");
-            sb.append("    Constraint: #write must be the last part of response. No #end after it.\n");
-        }
-        sb.append("  Note: Use #skill for Skill modules, NOT #read.\n\n");
+            sb.append("[File Tools] (Results not visible to players)\n");
+            if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+                sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
+                sb.append("  #read: <path> [start-end]  - Read file with line numbers. Example: #read: config.yml 1-50\n");
+                sb.append("    Line numbers in output are used to target #edit precisely.\n");
+            }
+            if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
+                sb.append("  #edit: <json>  - Edit file by matching original text. JSON line format (no delimiter escaping needed).\n");
+                sb.append("    Workflow: #read first → note line numbers → #edit with exact range.\n");
+                sb.append("    Indentation and comments are auto-preserved.\n");
+                sb.append("    Fields: path (required), original (required), replacement (required), range (optional: 10-10 or auto).\n");
+                sb.append("    Example: #edit: {\"path\":\"config.yml\",\"range\":\"10-10\",\"original\":\"enabled: true\",\"replacement\":\"enabled: false\"}\n");
+                sb.append("    Constraint: #edit must be the last part of response. No #end after it.\n");
+            }
+            if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
+                sb.append("  #write: <json>  - Completely overwrite a file with new content. JSON line format.\n");
+                sb.append("    For existing files: you MUST #read the file first in the same session.\n");
+                sb.append("    Fields: path (required), content (required). In JSON, \\n is a newline, \\\\n is a literal backslash-n.\n");
+                sb.append("    Example: #write: {\"path\":\"config.yml\",\"content\":\"enabled: true\\nsetting: value\"}\n");
+                sb.append("    Constraint: #write must be the last part of response. No #end after it.\n");
+            }
+            sb.append("  Note: Use #skill for Skill modules, NOT #read.\n\n");
 
-        sb.append("[Memory]\n");
-        sb.append("  #remember: category|content  - Save permanent preference (max 50 chars, no 'I/You/Please').\n");
-        sb.append("    Example: #remember: style|concise\n");
-        sb.append("    Only for permanent facts/prefs. Never for ongoing tasks (use #todo instead).\n");
-        sb.append("  #forget: <index|all>         - Delete one or all memories.\n");
-        sb.append("  #edit_memory: <index>|<new>  - Update existing memory.\n");
-        sb.append("  #remember_global: category|content  - Save SERVER rule/fact (admin only, affects ALL players). Max 100 chars.\n");
-        sb.append("    Example: #remember_global: rule|周五晚高峰20点提醒玩家注意\n");
-        sb.append("    Only admins (fancyhelper.admin). Non-admin will get an error — then use #remember instead.\n");
-        sb.append("  #forget_global: <index|all>  - Delete one/all server memories (admin only).\n");
-        sb.append("  #edit_global: <index>|<new>  - Update a server memory (admin only).\n\n");
+            sb.append("[Memory]\n");
+            sb.append("  #remember: category|content  - Save permanent preference (max 50 chars, no 'I/You/Please').\n");
+            sb.append("    Example: #remember: style|concise\n");
+            sb.append("    Only for permanent facts/prefs. Never for ongoing tasks (use #todo instead).\n");
+            sb.append("  #forget: <index|all>         - Delete one or all memories.\n");
+            sb.append("  #edit_memory: <index>|<new>  - Update existing memory.\n");
+            sb.append("  #remember_global: category|content  - Save SERVER rule/fact (admin only, affects ALL players). Max 100 chars.\n");
+            sb.append("    Example: #remember_global: rule|周五晚高峰20点提醒玩家注意\n");
+            sb.append("    Only admins (fancyhelper.admin). Non-admin will get an error — then use #remember instead.\n");
+            sb.append("  #forget_global: <index|all>  - Delete one/all server memories (admin only).\n");
+            sb.append("  #edit_global: <index>|<new>  - Update a server memory (admin only).\n\n");
 
-        sb.append("[Task Management]\n");
-        sb.append("  #todo: <json>  - Create/update task list. Replaces existing list entirely.\n");
-        sb.append("    Required: id, task. Optional: status (pending/in_progress/completed/cancelled), description, priority.\n");
-        sb.append("    Only ONE task may be in_progress at a time.\n");
-        sb.append("    After #todo: end the response immediately. No other tools in the same response.\n");
-        sb.append("    Example: #todo: [{\"id\":\"1\",\"task\":\"Create config\",\"status\":\"in_progress\"}]\n\n");
+            sb.append("[Task Management]\n");
+            sb.append("  #todo: <json>  - Create/update task list. Replaces existing list entirely.\n");
+            sb.append("    Required: id, task. Optional: status (pending/in_progress/completed/cancelled), description, priority.\n");
+            sb.append("    Only ONE task may be in_progress at a time.\n");
+            sb.append("    After #todo: end the response immediately. No other tools in the same response.\n");
+            sb.append("    Example: #todo: [{\"id\":\"1\",\"task\":\"Create config\",\"status\":\"in_progress\"}]\n\n");
 
-        if (plugin.getConfigManager().isMcpClientEnabled()) {
-            sb.append("[MCP External Tools]\n");
-            sb.append("  #mcp_tools                         - List all MCP external tools and their enable/disable status.\n");
-            sb.append("  #mcp: serverName.toolName|jsonArgs - Call an external MCP tool.\n");
-            sb.append("    Format: #mcp: server.tool|{\"arg1\":\"value1\"}\n");
-            sb.append("    Always use #mcp_tools first to check available tools and their status.\n\n");
+            if (plugin.getConfigManager().isMcpClientEnabled()) {
+                sb.append("[MCP External Tools]\n");
+                sb.append("  #mcp_tools                         - List all MCP external tools and their enable/disable status.\n");
+                sb.append("  #mcp: serverName.toolName|jsonArgs - Call an external MCP tool.\n");
+                sb.append("    Format: #mcp: server.tool|{\"arg1\":\"value1\"}\n");
+                sb.append("    Always use #mcp_tools first to check available tools and their status.\n\n");
+            }
         }
 
         // ==================== Usage Guide / 使用指南 ====================
         sb.append("[Usage Guide]\n");
-        sb.append("1. Skill usage: Only call #skill when you need knowledge to complete a specific task. ");
-        sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
-        sb.append("3. Complex tasks (3+ steps): Use #todo first to show progress, then execute step by step.\n");
-        sb.append("   - After #todo: do NOT call any other tool in the same response.\n");
+        sb.append("1. Skill usage: Only call the skill function when you need knowledge to complete a specific task. ");
+        if (nativeTools) {
+            sb.append("2. If a command is unknown, try running <pluginname> help first to discover its usage.\n");
+        } else {
+            sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
+        }
+        sb.append("3. Complex tasks (3+ steps): Use the todo function first to show progress, then execute step by step.\n");
+        if (nativeTools) {
+            sb.append("   - You may issue multiple function calls (including todo) in one response when independent.\n");
+        } else {
+            sb.append("   - After #todo: do NOT call any other tool in the same response.\n");
+        }
         sb.append("   - Update task status to completed after each step.\n\n");
 
         // ====================================================================
@@ -342,10 +374,20 @@ public class PromptManager {
      */
     public String getSystemPromptForSession(org.bukkit.entity.Player player, List<Skill> loadedSkills,
                                              org.YanPl.model.DialogueSession.Mode mode, String currentMessage) {
+        return getSystemPromptForSession(player, loadedSkills, mode, currentMessage, false);
+    }
+
+    /**
+     * 根据会话模式获取对应的系统提示词（原生函数调用模式：精简 [Tools] 文本段）
+     * @param nativeTools 是否启用原生函数调用（true 时 [Tools] 段用精简列表，避免模型误输出 #tool 文本）
+     */
+    public String getSystemPromptForSession(org.bukkit.entity.Player player, List<Skill> loadedSkills,
+                                             org.YanPl.model.DialogueSession.Mode mode, String currentMessage,
+                                             boolean nativeTools) {
         if (mode == org.YanPl.model.DialogueSession.Mode.PLAN) {
-            return getPlanModeSystemPrompt(player);
+            return getPlanModeSystemPrompt(player, nativeTools);
         }
-        return getBaseSystemPrompt(player, loadedSkills, currentMessage);
+        return getBaseSystemPrompt(player, loadedSkills, currentMessage, nativeTools);
     }
 
     /**
@@ -353,6 +395,13 @@ public class PromptManager {
      * Plan Mode 下 AI 只能做规划（搜索、阅读、设计），不能执行命令或修改文件
      */
     public String getPlanModeSystemPrompt(org.bukkit.entity.Player player) {
+        return getPlanModeSystemPrompt(player, false);
+    }
+
+    /**
+     * 获取 Plan Mode 的系统提示词（原生函数调用模式：精简工具列表）
+     */
+    public String getPlanModeSystemPrompt(org.bukkit.entity.Player player, boolean nativeTools) {
         StringBuilder sb = new StringBuilder();
 
         // ==================== Plan Mode / 规划模式 ====================
@@ -390,37 +439,42 @@ public class PromptManager {
         sb.append("[Available Tools in Plan Mode]\n");
         sb.append("Format: #tool_name: argument\n\n");
 
-        sb.append("[Query]\n");
-        sb.append("  #search: <args>      - Internet/Wiki search.\n");
-        sb.append("  #skill: <id>         - Load Skill knowledge module.\n");
-        sb.append("  #unloadskill: <id>   - Unload a loaded Skill.\n");
-        sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n");
-        sb.append("  #ask: <json>         - Ask player a question.\n");
-        sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
+        if (nativeTools) {
+            sb.append("Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Available functions: search, skill, unloadskill, webfetch, ask, todo, mcp_tools, and read-only file tools (list/read). Do NOT call run/edit/write/exit — blocked in plan mode.\n");
+            sb.append("When your plan is complete, call the start function.\n\n");
+        } else {
+            sb.append("[Query]\n");
+            sb.append("  #search: <args>      - Internet/Wiki search.\n");
+            sb.append("  #skill: <id>         - Load Skill knowledge module.\n");
+            sb.append("  #unloadskill: <id>   - Unload a loaded Skill.\n");
+            sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n");
+            sb.append("  #ask: <json>         - Ask player a question.\n");
+            sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
 
-        sb.append("[File Tools]\n");
-        if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
-            sb.append("  #list: <path>    - List directory.\n");
-            sb.append("  #read: <path> [start-end]  - Read file with line numbers.\n");
+            sb.append("[File Tools]\n");
+            if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
+                sb.append("  #list: <path>    - List directory.\n");
+                sb.append("  #read: <path> [start-end]  - Read file with line numbers.\n");
+            }
+            sb.append("  Note: #edit and #write are NOT available in plan mode.\n\n");
+
+            sb.append("[Task Management]\n");
+            sb.append("  #todo: <json>  - Create/update task list.\n");
+            sb.append("    Required: id, task. Optional: status (pending/in_progress/completed/cancelled).\n");
+            sb.append("    After #todo: end the response immediately.\n\n");
+
+            if (plugin.getConfigManager().isMcpClientEnabled()) {
+                sb.append("[MCP External Tools]\n");
+                sb.append("  #mcp_tools  - List all MCP external tools and their enable/disable status.\n");
+                sb.append("    Use this to discover what external tools are available for your plan.\n");
+                sb.append("    Note: #mcp execution is NOT available in plan mode.\n\n");
+            }
+
+            sb.append("[Plan Mode]\n");
+            sb.append("  #start  - FINISH planning. Call when your plan is complete.\n");
+            sb.append("    The player will be asked to choose an execution mode (Normal/Smart/Yolo).\n");
+            sb.append("    After #start, you will enter execution mode and can use all tools.\n\n");
         }
-        sb.append("  Note: #edit and #write are NOT available in plan mode.\n\n");
-
-        sb.append("[Task Management]\n");
-        sb.append("  #todo: <json>  - Create/update task list.\n");
-        sb.append("    Required: id, task. Optional: status (pending/in_progress/completed/cancelled).\n");
-        sb.append("    After #todo: end the response immediately.\n\n");
-
-        if (plugin.getConfigManager().isMcpClientEnabled()) {
-            sb.append("[MCP External Tools]\n");
-            sb.append("  #mcp_tools  - List all MCP external tools and their enable/disable status.\n");
-            sb.append("    Use this to discover what external tools are available for your plan.\n");
-            sb.append("    Note: #mcp execution is NOT available in plan mode.\n\n");
-        }
-
-        sb.append("[Plan Mode]\n");
-        sb.append("  #start  - FINISH planning. Call when your plan is complete.\n");
-        sb.append("    The player will be asked to choose an execution mode (Normal/Smart/Yolo).\n");
-        sb.append("    After #start, you will enter execution mode and can use all tools.\n\n");
 
         // ==================== Plan Mode Rules / 规划模式规则 ====================
         sb.append("[Plan Mode Rules]\n");

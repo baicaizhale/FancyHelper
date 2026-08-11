@@ -126,3 +126,4 @@ buildNumber.properties
 run/
 .opencode
 .kilo/
+.zcode/

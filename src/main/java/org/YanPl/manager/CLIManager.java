@@ -9,6 +9,7 @@ import org.YanPl.api.LLMClient;
 import org.YanPl.api.StreamingHandler;
 import org.YanPl.model.AIResponse;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.NativeToolCall;
 import org.YanPl.model.SessionRecord;
 import org.YanPl.model.Skill;
 import org.YanPl.util.ColorUtil;
@@ -66,12 +67,25 @@ public class CLIManager {
     private final Map<UUID, String> currentThinkingWords = new ConcurrentHashMap<>();
     private final Map<UUID, Long> streamedOutputTokens = new ConcurrentHashMap<>();
     private final Map<UUID, Long> roundOutputTokens = new ConcurrentHashMap<>();
+    // 玩家名缓存：saveSessionToHistory 在玩家离线后（异步任务）仍需要玩家名来定位
+    // 会话目录，不能依赖 Bukkit.getPlayer()（离线返回 null 会导致会话保存被跳过）。
+    private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
 
     // 思考状态的随机神经病词列表
-    private static final String[] THINKING_WORDS = {
-        "Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Bamboozling", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Burrowing", "Calculating", "Canoodling", "Caramelizing", "Cascading", "Catapulting", "Catalyzing", "Cerebrating", "Channeling", "Channelling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Colloquializing", "Combobulating", "Composing", "Computing", "Concocting", "Congealing", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Decomposing", "Deliberating", "Determining", "Diffusing", "Dilly-dallying", "Discombobulating", "Dissolving", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Enchanting", "Envisioning", "Extrapolating", "Fermenting", "Festering", "Finagling", "Flambeing", "Flibbertigibbeting", "Flummoxing", "Forging", "Forming", "Frosting", "Frolicking", "Furnishing", "Gallivanting", "Galloping", "Garnishing", "Gelatinizing", "Generating", "Germinating", "Hatching", "Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring", "Ionizing", "Iridescent", "Jiving", "Jostling", "Julienning", "Kneading", "Leavening", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Moseying", "Moonwalking", "Mulling", "Mustering", "Musing", "Navigating", "Nebulating", "Noodling", "Osmosing", "Percolating", "Perusing", "Philosophising", "Polymerizing", "Pontificating", "Pondering", "Processing", "Proofing", "Puttering", "Puzzling", "Radiating", "Razzle-dazzling", "Reticulating", "Reverberating", "Ricocheting", "Rippling", "Ruminating", "Sauteing", "Scampering", "Scheming", "Schlepping", "Scurrying", "Seasoning", "Shimmying", "Shenaniganing", "Simmering", "Smooshing", "Soldering", "Spelunking", "Spinning", "Spiraling", "Synthesizing", "Synergizing", "Tempering", "Tinkering", "Thinking", "Tomfoolering", "Topsy-turvying", "Transmuting", "Trickling", "Ubiquitizing", "Undulating", "Unfurling", "Unravelling", "Untangling", "Vibing", "Vexing", "Waddling", "Wandering", "Waxing", "Whatchamacalliting", "Whirring", "Whisking", "Wibbling", "Wizarding", "Working", "Wrangling", "Zigzagging", "Zesting"
+    private static final String[] THINKING_WORDS = {        "Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Bamboozling", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Burrowing", "Calculating", "Canoodling", "Caramelizing", "Cascading", "Catapulting", "Catalyzing", "Cerebrating", "Channeling", "Channelling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Colloquializing", "Combobulating", "Composing", "Computing", "Concocting", "Congealing", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Decomposing", "Deliberating", "Determining", "Diffusing", "Dilly-dallying", "Discombobulating", "Dissolving", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Enchanting", "Envisioning", "Extrapolating", "Fermenting", "Festering", "Finagling", "Flambeing", "Flibbertigibbeting", "Flummoxing", "Forging", "Forming", "Frosting", "Frolicking", "Furnishing", "Gallivanting", "Galloping", "Garnishing", "Gelatinizing", "Generating", "Germinating", "Hatching", "Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring", "Ionizing", "Iridescent", "Jiving", "Jostling", "Julienning", "Kneading", "Leavening", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Moseying", "Moonwalking", "Mulling", "Mustering", "Musing", "Navigating", "Nebulating", "Noodling", "Osmosing", "Percolating", "Perusing", "Philosophising", "Polymerizing", "Pontificating", "Pondering", "Processing", "Proofing", "Puttering", "Puzzling", "Radiating", "Razzle-dazzling", "Reticulating", "Reverberating", "Ricocheting", "Rippling", "Ruminating", "Sauteing", "Scampering", "Scheming", "Schlepping", "Scurrying", "Seasoning", "Shimmying", "Shenaniganing", "Simmering", "Smooshing", "Soldering", "Spelunking", "Spinning", "Spiraling", "Synthesizing", "Synergizing", "Tempering", "Tinkering", "Thinking", "Tomfoolering", "Topsy-turvying", "Transmuting", "Trickling", "Ubiquitizing", "Undulating", "Unfurling", "Unravelling", "Untangling", "Vibing", "Vexing", "Waddling", "Wandering", "Waxing", "Whatchamacalliting", "Whirring", "Whisking", "Wibbling", "Wizarding", "Working", "Wrangling", "Zigzagging", "Zesting"
     };
-    
+
+    // 已知工具列表（顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持）
+    // #edit_memory 必须排在 #edit 之前，否则 #edit_memory: ... 会被 #edit 劫持
+    private static final List<String> KNOWN_TOOLS = List.of(
+        "#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill",
+        "#list", "#read", "#edit_global", "#edit_memory", "#edit", "#write", "#todo",
+        "#remember_global", "#remember", "#forget_global", "#forget",
+        "#webfetch", "#mcp_tools", "#mcp");
+
+    // 串行批量工具执行超时（毫秒）：批次中某工具异步异常长时间无反馈时强制终结
+    private static final long BATCH_TIMEOUT_MS = 60_000;
+
     // 状态栏呼吸动画
     private static final long[] BREATHING_PHASE_ENDS = { 500, 800, 1000, 1100, 1300, 1600 };
     private static final String[] BREATHING_HEX = {
@@ -542,6 +556,17 @@ public class CLIManager {
                         case EXECUTING_TOOL:
                             message = ChatColor.GRAY + "....";
                             sendStatusMessage(player, message);
+                            // 串行批量超时兜底：批次中没有任何工具反馈推进超过 BATCH_TIMEOUT_MS 时强制终结。
+                            // 基准为 session.batchLastFeedbackTime（setBatchInProgress 启动 / addPendingToolResult 推进），
+                            // 而非 generationStartTimes，避免单工具异步慢（webfetch/mcp 网络延迟）被误杀。
+                            DialogueSession batchSession = sessions.get(uuid);
+                            if (batchSession != null && batchSession.isBatchInProgress()) {
+                                long batchIdle = System.currentTimeMillis() - batchSession.getBatchLastFeedbackTime();
+                                if (batchIdle > BATCH_TIMEOUT_MS) {
+                                    plugin.getLogger().warning("[CLI] 批次工具执行超时 (" + BATCH_TIMEOUT_MS + "ms 无反馈)，强制终结批次: " + player.getName());
+                                    forceFinalizeBatch(player, batchSession);
+                                }
+                            }
                             break;
                         case WAITING_CONFIRM:
                             message = I18n.t("clim.status.ask.permission");
@@ -722,24 +747,35 @@ public class CLIManager {
             long now = System.currentTimeMillis();
             long thirtyMinutesMs = 30 * 60 * 1000;
 
+            // 只取最新的会话文件，与 loadLatestPlayerSession 判定一致：
+            // 若最新文件是显式退出的（退出 CLI 后重载），则不应自动恢复。
+            Path latestFile = null;
+            long latestTime = 0;
+
             try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(playerDir, "*.json")) {
                 for (Path file : stream) {
-                    if (now - Files.getLastModifiedTime(file).toMillis() <= thirtyMinutesMs) {
-                        // 检查是否显式退出的会话
-                        try {
-                            Gson gson = new Gson();
-                            String json = Files.readString(file, StandardCharsets.UTF_8);
-                            JsonObject obj = gson.fromJson(json, JsonObject.class);
-                            if (obj != null && obj.has("explicitExit") && obj.get("explicitExit").getAsBoolean()) {
-                                continue;
-                            }
-                        } catch (Exception e) {
-                            // 解析失败就当正常文件处理
-                        }
-                        return true;
+                    long lastMod = Files.getLastModifiedTime(file).toMillis();
+                    if (now - lastMod <= thirtyMinutesMs && lastMod > latestTime) {
+                        latestTime = lastMod;
+                        latestFile = file;
                     }
                 }
             }
+
+            if (latestFile == null) return false;
+
+            // 检查最新会话是否显式退出
+            try {
+                Gson gson = new Gson();
+                String json = Files.readString(latestFile, StandardCharsets.UTF_8);
+                JsonObject obj = gson.fromJson(json, JsonObject.class);
+                if (obj != null && obj.has("explicitExit") && obj.get("explicitExit").getAsBoolean()) {
+                    return false;
+                }
+            } catch (Exception e) {
+                // 解析失败就当正常文件处理
+            }
+            return true;
         } catch (IOException e) {
             // 忽略
         }
@@ -832,13 +868,14 @@ public class CLIManager {
      */
     public synchronized void saveSessionToHistory(UUID playerUUID, DialogueSession session) {
         try {
-            // 获取玩家名
+            // 获取玩家名：优先在线玩家，离线时用 enterCLI 记录的缓存（断线/退出场景
+            // 异步任务执行时玩家已离线，getPlayer 返回 null，直接跳过会丢会话）。
             Player player = Bukkit.getPlayer(playerUUID);
-            if (player == null) {
+            String playerName = (player != null) ? player.getName() : playerNameCache.get(playerUUID);
+            if (playerName == null) {
                 plugin.getLogger().warning("[CLI] 无法获取玩家信息，跳过保存会话历史");
                 return;
             }
-            String playerName = player.getName();
 
             // 创建 sessions/玩家名 目录
             Path playerDir = plugin.getDataFolder().toPath().resolve(SESSIONS_DIR).resolve(playerName);
@@ -897,9 +934,9 @@ public class CLIManager {
                 newRecord.setTitle(generatedTitle);
             }
 
-            // 写入文件
+            // 写入文件（原子写：先写临时文件再替换，避免中断留下半截 JSON 导致后续扫描报错）
             String json = gson.toJson(newRecord);
-            Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            atomicWriteSessionFile(sessionFile, json);
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 已保存会话到历史: " + playerName + "/" + sessionUUID + ".json");
@@ -907,6 +944,28 @@ public class CLIManager {
         } catch (Exception e) {
             plugin.getLogger().warning("[CLI] 保存会话历史失败: " + e.getMessage());
             plugin.getCloudErrorReport().report(e);
+        }
+    }
+
+    /**
+     * 原子写入会话文件：先写同目录临时文件再原子替换。
+     * 避免写入中途（进程被杀/插件重载/崩溃）留下半截 JSON——损坏文件会让每次
+     * /cli resume 扫描列表时报"读取会话文件失败"，且因解析失败无法从列表删除（隐身坏文件）。
+     * 同目录临时文件保证同文件系统，ATOMIC_MOVE 可行；失败时回退普通替换。
+     */
+    private void atomicWriteSessionFile(Path sessionFile, String json) {
+        try {
+            Files.createDirectories(sessionFile.getParent());
+            Path tmp = sessionFile.resolveSibling(sessionFile.getFileName() + ".tmp");
+            Files.write(tmp, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            try {
+                Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("[CLI] 会话文件原子写入失败: " + e.getMessage());
         }
     }
 
@@ -1103,11 +1162,11 @@ public class CLIManager {
                 return;
             }
 
-            // 写回文件（使用美化输出）
+            // 写回文件（使用美化输出，原子写）
             Gson prettyGson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
             String json = prettyGson.toJson(record);
             Files.createDirectories(playerDir);
-            Files.write(sessionFile, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            atomicWriteSessionFile(sessionFile, json);
 
             if (plugin.getConfigManager().isDebug()) {
                 plugin.getLogger().info("[CLI] 已更新会话标题: " + title);
@@ -1243,24 +1302,31 @@ public class CLIManager {
     }
 
     /**
-     * 发送插件卸载提示
+     * 发送插件卸载提示（插件重载/重启时调用）：会话已保存并退出，
+     * 提示玩家用 /cli resume <sessionUUID> 手动恢复（整条命令可点击执行）。
      * @param player 玩家
+     * @param sessionUUID 当前会话 UUID，用于构造恢复命令；为 null 时退化为通用 /cli resume
      */
-    public void sendUnloadMessage(Player player) {
+    public void sendUnloadMessage(Player player, String sessionUUID) {
         // 创建主消息 - 使用自定义颜色
         net.md_5.bungee.api.chat.BaseComponent[] components = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(
             I18n.t("clim.unload.suspended")
         );
         TextComponent message = new TextComponent(components);
 
-        // 创建了解更多按钮
-        TextComponent learnMoreBtn = new TextComponent(I18n.t("clim.unload.learn.more"));
-        learnMoreBtn.setColor(net.md_5.bungee.api.ChatColor.BLUE);
-        learnMoreBtn.setUnderlined(true);
-        learnMoreBtn.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://blog.baicaizhale.top/post/whyusee1"));
-        learnMoreBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.hover"))));
+        // 显示 /cli resume <uuid>，点击实际执行 /cli resume_confirm <uuid>（直接恢复该会话）
+        String label = (sessionUUID != null) ? I18n.t("clim.unload.resume", sessionUUID) : I18n.t("clim.unload.resume.short");
+        String cmd = (sessionUUID != null) ? "/cli resume_confirm " + sessionUUID : "/cli resume";
 
-        message.addExtra(learnMoreBtn);
+        // 创建恢复命令（下划线，可点击执行）
+        TextComponent resumeCmd = new TextComponent(label);
+        resumeCmd.setColor(net.md_5.bungee.api.ChatColor.WHITE);
+        resumeCmd.setUnderlined(true);
+        resumeCmd.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd));
+        resumeCmd.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.unload.resume.hover", cmd))));
+
+        message.addExtra(resumeCmd);
+        message.addExtra(new TextComponent(I18n.t("clim.unload.resume.suffix")));
         player.spigot().sendMessage(message);
     }
 
@@ -1284,7 +1350,8 @@ public class CLIManager {
         for (UUID uuid : new ArrayList<>(activeCLIPayers)) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
-                sendUnloadMessage(player);
+                DialogueSession currentSession = sessions.get(uuid);
+                sendUnloadMessage(player, currentSession != null ? currentSession.getSessionUUID() : null);
             }
             DialogueSession session = sessions.get(uuid);
             if (session != null && session.getHistory().size() > 0) {
@@ -1352,6 +1419,8 @@ public class CLIManager {
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在进入 FancyHelper。");
         }
+        // 记录玩家名供离线保存会话使用（断线/退出时 Bukkit.getPlayer 可能返回 null）
+        playerNameCache.put(uuid, player.getName());
         
         // 检查用户协议
         if (!agreedPlayers.contains(uuid)) {
@@ -1538,6 +1607,11 @@ public class CLIManager {
         UUID uuid = player.getUniqueId();
         
         if (!activeCLIPayers.contains(uuid)) {
+            // 待同意协议的玩家也允许退出：clim.agree.prompt 文案宣称"发送 /cli 退出"，
+            // 若不清除待同意状态，玩家将被困在协议提示循环且 /cli 无效。
+            if (pendingAgreementPlayers.remove(uuid)) {
+                sendExitMessage(player);
+            }
             return;
         }
         
@@ -2035,6 +2109,9 @@ public class CLIManager {
             if (!"CHOOSING".equals(cmd)) {
                 pendingCommands.remove(uuid);
                 generationStates.put(uuid, GenerationStatus.EXECUTING_TOOL);
+                // 重置超时起点：批次中确认的 run 可能在按钮上停留很久，避免 EXECUTING_TOOL
+                // 异步执行窗口内被批次超时兜底误杀
+                generationStartTimes.put(uuid, System.currentTimeMillis());
                 int colonIdx = cmd.indexOf(':');
                 String prefix = colonIdx > 0 ? cmd.substring(0, colonIdx).toUpperCase() : "";
                 if (FILE_OP_TYPES.contains(prefix)) {
@@ -2091,6 +2168,13 @@ public class CLIManager {
         if (pendingCommands.containsKey(uuid)) {
             pendingCommands.remove(uuid);
             player.sendMessage(I18n.t("clim.cancel.cmd"));
+            // 若处于串行批次中，把取消作为该工具的结果回灌，推进到下一工具（否则屏障永久卡死）
+            DialogueSession s = sessions.get(uuid);
+            if (s != null && s.isBatchInProgress()) {
+                s.addPendingToolResult("#error: 用户取消了该命令。");
+                executeNativeBatch(player, s);
+                return;
+            }
             isGenerating.put(uuid, false);
             generationStates.put(uuid, GenerationStatus.CANCELLED);
             generationStartTimes.put(uuid, System.currentTimeMillis());
@@ -2123,10 +2207,17 @@ public class CLIManager {
         
         pendingSmartActions.remove(uuid);
         player.sendMessage(I18n.t("clim.smart.denied"));
+        // 若处于串行批次中，把拒绝作为该工具的结果回灌，推进到下一工具（否则屏障永久卡死）
+        DialogueSession s = sessions.get(uuid);
+        if (s != null && s.isBatchInProgress()) {
+            s.addPendingToolResult("#error: 用户拒绝了此操作。");
+            executeNativeBatch(player, s);
+            return;
+        }
         isGenerating.put(uuid, false);
         generationStates.put(uuid, GenerationStatus.CANCELLED);
         generationStartTimes.put(uuid, System.currentTimeMillis());
-        
+
         feedbackToAI(player, "#error: 用户拒绝了此操作。");
     }
 
@@ -2274,6 +2365,12 @@ public class CLIManager {
                     generationStartTimes.put(uuid, System.currentTimeMillis());
                     interrupted = true;
                 }
+                // 清理批次状态：玩家主动 stop 时批次不再有效，避免后续 feedbackToAI
+                // 命中已死批次的 isBatchInProgress() 拦截器，导致工具反馈被吞入幽灵队列。
+                DialogueSession stopSession = sessions.get(uuid);
+                if (stopSession != null && stopSession.isBatchInProgress()) {
+                    stopSession.clearBatchState();
+                }
                 if (!interrupted) {
                     player.sendMessage(I18n.t("clim.stop.nothing"));
                 }
@@ -2398,7 +2495,7 @@ public class CLIManager {
 
                 // 重试时使用存储的 matchedSkills 重新构建系统提示
                 String retrySystemPrompt = promptManager.getBaseSystemPrompt(player, retryInfo.matchedSkills);
-                AIResponse response = ai.chat(retryInfo.session, retrySystemPrompt);
+                AIResponse response = ai.chat(player, retryInfo.session, retrySystemPrompt);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -2406,6 +2503,7 @@ public class CLIManager {
             } catch (IOException e) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(e);
+                plugin.getLogger().warning("[CLI] AI 请求失败 (重试) - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 再次失败，重新移除最后一条消息并保存重试信息
@@ -2427,6 +2525,7 @@ public class CLIManager {
             } catch (Throwable t) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] AI 请求异常 (重试) - " + player.getName() + ": " + t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 再次失败，重新移除最后一条消息并保存重试信息
@@ -2645,7 +2744,13 @@ public class CLIManager {
                     }
                 }
 
-                session.addMessage("assistant", response, finalThought);
+                // 原生函数调用：流式响应中解析出的结构化 tool_calls（在 assistant 消息中渲染回文本）
+                List<NativeToolCall> nativeCalls = streamingHandler.getNativeToolCalls();
+                if (nativeCalls != null && !nativeCalls.isEmpty()) {
+                    session.addMessage("assistant", ToolRegistry.renderForHistory(response, nativeCalls), finalThought);
+                } else {
+                    session.addMessage("assistant", response, finalThought);
+                }
                 session.logAIResponse(response + "\n\n[Streaming] Finish Reason: stop\n");
 
                 if (!thoughtContent.isEmpty()) {
@@ -2678,12 +2783,8 @@ public class CLIManager {
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
 
-                String toolCall = extractToolCall(response);
-                // 模型可能把 #run 放在 reasoning_content 而非 content 里
-                if (toolCall.isEmpty() && !thoughtContent.isEmpty()) {
-                    toolCall = extractToolCall(thoughtContent);
-                }
-                if (!toolCall.isEmpty()) {
+                boolean hasNative = nativeCalls != null && !nativeCalls.isEmpty();
+                if (hasNative) {
                     // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
                     Long streamedThisCycle = streamedOutputTokens.get(uuid);
                     if (streamedThisCycle != null && streamedThisCycle > 0) {
@@ -2691,18 +2792,34 @@ public class CLIManager {
                         roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
                     }
                     streamedOutputTokens.remove(uuid);
-                    executeTool(player, toolCall);
+                    dispatchNativeCalls(player, session, nativeCalls);
                 } else {
-                    // 本轮输出完全结束 → 累积 token 写回 session
-                    Long streamedTotal = streamedOutputTokens.get(uuid);
-                    if (streamedTotal != null && streamedTotal > 0) {
-                        session.addOutputTokens(streamedTotal);
-                        roundOutputTokens.merge(uuid, streamedTotal, (a, b) -> a + b);
+                    List<String> textTools = extractToolCalls(response);
+                    // 模型可能把 #tool 放在 reasoning_content 而非 content 里（仅文本协议时兜底）
+                    if (textTools.isEmpty() && thoughtContent != null && !thoughtContent.isEmpty()) {
+                        textTools = extractToolCalls(thoughtContent);
                     }
-                    streamedOutputTokens.remove(uuid);
-                    checkTokenWarning(player, session);
-                    autoCompressContext(player, session);
-                    playFeedbackSound(player, "ai_complete");
+                    if (!textTools.isEmpty()) {
+                        // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
+                        Long streamedThisCycle = streamedOutputTokens.get(uuid);
+                        if (streamedThisCycle != null && streamedThisCycle > 0) {
+                            session.addOutputTokens(streamedThisCycle);
+                            roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
+                        }
+                        streamedOutputTokens.remove(uuid);
+                        dispatchTextTools(player, session, textTools);
+                    } else {
+                        // 本轮输出完全结束 → 累积 token 写回 session
+                        Long streamedTotal = streamedOutputTokens.get(uuid);
+                        if (streamedTotal != null && streamedTotal > 0) {
+                            session.addOutputTokens(streamedTotal);
+                            roundOutputTokens.merge(uuid, streamedTotal, (a, b) -> a + b);
+                        }
+                        streamedOutputTokens.remove(uuid);
+                        checkTokenWarning(player, session);
+                        autoCompressContext(player, session);
+                        playFeedbackSound(player, "ai_complete");
+                    }
                 }
 
                 // 每次 AI 回复后保存会话到磁盘
@@ -2723,6 +2840,7 @@ public class CLIManager {
                 roundOutputTokens.merge(uuid, streamedOutErr, (a, b) -> a + b);
             }
             plugin.getCloudErrorReport().report(error);
+            plugin.getLogger().warning("[CLI] 流式输出错误 - " + player.getName() + ": " + error);
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (streamedOutErr > 0) {
@@ -2739,13 +2857,14 @@ public class CLIManager {
         });
 
         // 估算本轮输入的 prompt tokens 并记入 session
-        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message);
+        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message,
+                isNativeActiveForPrompt(player, session));
         String modelName = plugin.getConfigManager().getCloudflareModel();
         int estimatedInput = DialogueSession.calculateTokens(systemPrompt, modelName)
             + session.getEstimatedTokens(modelName) + 3;
         session.addInputTokens(estimatedInput);
 
-        String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
+        String completeText = ai.chatStreaming(player, session, systemPrompt, streamingHandler);
         
         if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
             responseHandled[0] = true;
@@ -2797,12 +2916,18 @@ public class CLIManager {
                 generationStates.put(uuid, GenerationStatus.COMPLETED);
                 generationStartTimes.remove(uuid);
                 
-                String toolCall = extractToolCall(finalResponse);
-                if (!toolCall.isEmpty()) {
-                    executeTool(player, toolCall);
+                // 原生函数调用优先；否则走文本协议提取
+                List<NativeToolCall> nativeCalls = streamingHandler.getNativeToolCalls();
+                if (nativeCalls != null && !nativeCalls.isEmpty()) {
+                    dispatchNativeCalls(player, session, nativeCalls);
                 } else {
-                    checkTokenWarning(player, session);
-                    autoCompressContext(player, session);
+                    List<String> textTools = extractToolCalls(finalResponse);
+                    if (!textTools.isEmpty()) {
+                        dispatchTextTools(player, session, textTools);
+                    } else {
+                        checkTokenWarning(player, session);
+                        autoCompressContext(player, session);
+                    }
                 }
                 playFeedbackSound(player, "ai_complete");
 
@@ -2817,8 +2942,9 @@ public class CLIManager {
     private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
         DialogueSession nsSession = sessions.get(player.getUniqueId());
         String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills,
-                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL, message);
-        AIResponse response = ai.chat(sessions.get(player.getUniqueId()), systemPrompt);
+                nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL, message,
+                isNativeActiveForPrompt(player, nsSession));
+        AIResponse response = ai.chat(player, sessions.get(player.getUniqueId()), systemPrompt);
 
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -2916,6 +3042,7 @@ public class CLIManager {
             } catch (IOException e) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(e);
+                plugin.getLogger().warning("[CLI] AI 请求失败 - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息（存储 matchedSkills，重试时重新构建系统提示）
@@ -2938,6 +3065,7 @@ public class CLIManager {
             } catch (Throwable t) {
                 activeStreamingHandlers.remove(uuid);
                 plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] AI 请求异常 - " + player.getName() + ": " + t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
@@ -3049,7 +3177,13 @@ public class CLIManager {
         session.setLastThought(finalThought);
 
         // 将 AI 的回复加入历史记录，并关联当前的思考内容
-        session.addMessage("assistant", cleanResponse, finalThought);
+        // 原生函数调用：把结构化 tool_calls 渲染回 #tool 文本，保证历史始终是 {role, content}
+        List<NativeToolCall> nativeCalls = aiResponse.getToolCalls();
+        if (nativeCalls != null && !nativeCalls.isEmpty()) {
+            session.addMessage("assistant", ToolRegistry.renderForHistory(cleanResponse, nativeCalls), finalThought);
+        } else {
+            session.addMessage("assistant", cleanResponse, finalThought);
+        }
         
         // 计算思考内容的 Token
         if (!thoughtContent.isEmpty()) {
@@ -3064,7 +3198,7 @@ public class CLIManager {
         String toolCall = "";
 
         // 定义已知工具列表（顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持）
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit_global", "#edit", "#write", "#todo", "#remember_global", "#remember", "#forget_global", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
+        List<String> knownTools = KNOWN_TOOLS;
 
         int currentPos = 0;
         boolean foundTool = false;
@@ -3229,7 +3363,20 @@ public class CLIManager {
             }
         }
 
-        // 处理工具调用
+        // 处理工具调用（原生函数调用优先；否则走文本协议提取）
+        boolean hasNative = nativeCalls != null && !nativeCalls.isEmpty();
+        if (hasNative) {
+            // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
+            Long streamedThisCycle = streamedOutputTokens.get(uuid);
+            if (streamedThisCycle != null && streamedThisCycle > 0) {
+                session.addOutputTokens(streamedThisCycle);
+                roundOutputTokens.merge(uuid, streamedThisCycle, (a, b) -> a + b);
+            }
+            streamedOutputTokens.remove(uuid);
+            dispatchNativeCalls(player, session, nativeCalls);
+            return;
+        }
+
         if (!toolCall.isEmpty()) {
             // cycle 结束但有下一轮 → 当前 tokens 落 session 并清空计数器
             Long streamedThisCycle = streamedOutputTokens.get(uuid);
@@ -3269,34 +3416,44 @@ public class CLIManager {
     }
 
     /**
-     * 从AI响应中提取工具调用
-     * @param response AI响应文本
-     * @return 工具调用字符串，如果没有则返回空字符串
+     * 剥离 AI 响应中的思考块（<thought>/<think>/```thought``` / Thought: 前缀），返回纯正文。
      */
-    private String extractToolCall(String response) {
-        String cleanResponse = response;
-        
-        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(cleanResponse);
+    private static String stripThoughtContent(String response) {
+        if (response == null || response.isEmpty()) {
+            return response;
+        }
+        String clean = response;
+        java.util.regex.Matcher thoughtMatcher = java.util.regex.Pattern.compile("(?s)<(thought|thinking)>(.*?)</\\1>").matcher(clean);
         if (thoughtMatcher.find()) {
-            cleanResponse = cleanResponse.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
+            clean = clean.replaceAll("(?s)<(thought|thinking)>.*?</\\1>", "");
         } else {
-            java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(cleanResponse);
+            java.util.regex.Matcher thinkTagMatcher = java.util.regex.Pattern.compile("(?s)<think>(.*?)</think>").matcher(clean);
             if (thinkTagMatcher.find()) {
-                cleanResponse = cleanResponse.replaceAll("(?s)<think>.*?</think>", "");
+                clean = clean.replaceAll("(?s)<think>.*?</think>", "");
             } else {
-                java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(cleanResponse);
+                java.util.regex.Matcher mdThoughtMatcher = java.util.regex.Pattern.compile("(?s)```thought\n?(.*?)\n?```").matcher(clean);
                 if (mdThoughtMatcher.find()) {
-                    cleanResponse = cleanResponse.replaceAll("(?s)```thought\n?.*?\n?```", "");
+                    clean = clean.replaceAll("(?s)```thought\n?.*?\n?```", "");
                 }
             }
         }
-        
-        cleanResponse = cleanResponse.replaceAll("(?i)^Thought:.*?\n", "");
-        cleanResponse = cleanResponse.replaceAll("(?i)^思考过程:.*?\n", "");
-        cleanResponse = cleanResponse.trim();
-        
-        // 顺序敏感：startsWith 前缀匹配，长名在前，否则 #edit_global 会被 #edit 劫持
-        List<String> knownTools = Arrays.asList("#start", "#end", "#exit", "#run", "#ask", "#search", "#skill", "#unloadskill", "#list", "#read", "#edit_global", "#edit", "#write", "#todo", "#remember_global", "#remember", "#forget_global", "#forget", "#edit_memory", "#webfetch", "#mcp_tools", "#mcp");
+        clean = clean.replaceAll("(?i)^Thought:.*?\n", "");
+        clean = clean.replaceAll("(?i)^思考过程:.*?\n", "");
+        return clean.trim();
+    }
+
+    /**
+     * 从AI响应中提取全部工具调用（文本协议多工具支持）。
+     * 与 extractToolCall 的解析规则一致，但收集所有合法 #tool 而非遇到第一个就返回。
+     * @return 工具调用列表，可能为空
+     */
+    private static List<String> extractToolCalls(String response) {
+        String cleanResponse = stripThoughtContent(response);
+        List<String> calls = new java.util.ArrayList<>();
+        if (cleanResponse == null || cleanResponse.isEmpty()) {
+            return calls;
+        }
+        List<String> knownTools = KNOWN_TOOLS;
 
         int currentPos = 0;
         while (currentPos < cleanResponse.length()) {
@@ -3312,6 +3469,7 @@ public class CLIManager {
 
             if (isValidStart) {
                 String potentialToolPart = cleanResponse.substring(hashIndex).trim();
+                boolean matched = false;
                 for (String tool : knownTools) {
                     if (potentialToolPart.toLowerCase().startsWith(tool)) {
                         String remainingAfterTool = potentialToolPart.substring(tool.length()).trim();
@@ -3336,13 +3494,22 @@ public class CLIManager {
                                     }
                                 }
                                 if (endIndex != -1) {
-                                    return tool + ":" + remainingAfterTool.substring(0, endIndex);
+                                    calls.add(tool + ":" + remainingAfterTool.substring(0, endIndex));
+                                    currentPos = hashIndex + tool.length() + endIndex;
+                                    matched = true;
+                                    break;
                                 } else {
                                     int lineEnd = remainingAfterTool.indexOf('\n');
                                     if (lineEnd != -1) {
-                                        return tool + ":" + remainingAfterTool.substring(0, lineEnd);
+                                        calls.add(tool + ":" + remainingAfterTool.substring(0, lineEnd));
+                                        currentPos = hashIndex + tool.length() + lineEnd;
+                                        matched = true;
+                                        break;
                                     } else {
-                                        return potentialToolPart;
+                                        calls.add(tool + ":" + remainingAfterTool.trim());
+                                        currentPos = hashIndex + tool.length() + remainingAfterTool.length();
+                                        matched = true;
+                                        break;
                                     }
                                 }
                             } else {
@@ -3361,21 +3528,148 @@ public class CLIManager {
                                 }
 
                                 if (paramEnd != -1) {
-                                    return tool + ":" + remainingAfterTool.substring(0, paramEnd).trim();
+                                    calls.add(tool + ":" + remainingAfterTool.substring(0, paramEnd).trim());
+                                    currentPos = hashIndex + tool.length() + paramEnd;
                                 } else {
-                                    return potentialToolPart;
+                                    // 最后一行（无换行、无后续工具）：规范化去掉冒号后空格，与其它分支一致
+                                    calls.add(tool + ":" + remainingAfterTool.trim());
+                                    currentPos = hashIndex + tool.length() + remainingAfterTool.length();
                                 }
+                                matched = true;
+                                break;
                             }
                         } else {
-                            return tool;
+                            calls.add(tool);
+                            currentPos = hashIndex + tool.length();
+                            matched = true;
+                            break;
                         }
                     }
                 }
+                if (!matched) {
+                    currentPos = hashIndex + 1;
+                }
+            } else {
+                currentPos = hashIndex + 1;
             }
-            currentPos = hashIndex + 1;
         }
-        
-        return "";
+        return calls;
+    }
+
+    /**
+     * 文本协议多工具分发：多个 #tool 走串行批次（复用原生 FC 批次屏障），单个保持原路径。
+     * 批次中的每个工具反馈由 feedbackToAI 拦截推进；批次终结时合并结果一次重入模型。
+     * 不可批工具（end/exit/start/未知工具/YOLO 风险 run）回灌模型告知，绝不静默丢弃。
+     */
+    private void dispatchTextTools(Player player, DialogueSession session, List<String> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return;
+        }
+        if (toolCalls.size() == 1) {
+            if (session != null) {
+                session.setPendingBatchDropNote(null);
+            }
+            executeTool(player, toolCalls.get(0));
+            return;
+        }
+        if (session == null) {
+            executeTool(player, toolCalls.get(0));
+            return;
+        }
+
+        // 划分可批 / 不可批（YOLO 风险 run 渲染确认按钮等待玩家，不入批）
+        List<String> batchable = new ArrayList<>();
+        List<String> excluded = new ArrayList<>();
+        for (String tc : toolCalls) {
+            if (isTextToolBatchable(tc, session)) {
+                batchable.add(tc);
+            } else {
+                excluded.add(tc);
+            }
+        }
+        String droppedNote = buildTextDroppedNote(excluded);
+
+        if (batchable.isEmpty()) {
+            // 全部不可批 → 不执行任何工具，直接回灌模型告知未执行
+            plugin.getLogger().warning("[CLI] 文本批次全部不可批，回灌模型未执行项: " + player.getName());
+            session.setPendingBatchDropNote(null);
+            invokeModelAfterFeedback(player, session, droppedNote);
+            return;
+        }
+
+        // 重置批次状态后写入本次未执行项（clearBatchState 会清掉历史遗留 note）
+        session.clearBatchState();
+        noteDroppedCalls(session, droppedNote);
+
+        if (batchable.size() == 1) {
+            executeTool(player, batchable.get(0));
+            return;
+        }
+
+        session.setBatchInProgress(true);
+        for (String tc : batchable) {
+            session.pushPendingNativeTool(tc);
+        }
+        executeNativeBatch(player, session);
+    }
+
+    /**
+     * 文本工具是否可进入串行批次：批次安全集内，且非 YOLO 风险 run。
+     */
+    private boolean isTextToolBatchable(String tc, DialogueSession session) {
+        if (tc == null || session == null) {
+            return false;
+        }
+        String tool = extractTextToolName(tc);
+        if (tool == null || !isBatchSafeTool(tool, session.getMode())) {
+            return false;
+        }
+        if (session.getMode() == DialogueSession.Mode.YOLO && "run".equals(tool)) {
+            int colon = tc.indexOf(':');
+            String cmd = (colon != -1 ? tc.substring(colon + 1) : "").trim();
+            if (ToolExecutor.isRiskyCommandPublic(cmd, plugin.getConfigManager().getYoloRiskCommands())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 从 #tool: 文本中提取工具名（无 # 前缀）；非法格式返回 null。
+     */
+    static String extractTextToolName(String tc) {
+        if (tc == null) {
+            return null;
+        }
+        String trimmed = tc.trim();
+        if (!trimmed.startsWith("#")) {
+            return null;
+        }
+        int colon = trimmed.indexOf(':');
+        String name = (colon > 0 ? trimmed.substring(0, colon) : trimmed);
+        if (name.length() <= 1) {
+            return null;
+        }
+        return name.substring(1).toLowerCase();
+    }
+
+    /**
+     * 构建文本协议批次中未执行调用的回灌说明（无未执行项返回 null）。
+     */
+    private static String buildTextDroppedNote(List<String> excluded) {
+        if (excluded == null || excluded.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("#error: 混合批次无法串行执行，以下工具调用未执行，请重新发起：");
+        for (int i = 0; i < excluded.size(); i++) {
+            if (i > 0) {
+                sb.append("、");
+            }
+            String name = extractTextToolName(excluded.get(i));
+            sb.append(name != null ? name : excluded.get(i));
+        }
+        return sb.toString();
     }
 
     /**
@@ -3415,13 +3709,15 @@ public class CLIManager {
             
             try {
                 // continueGeneration 不需要匹配新 Skills，使用空列表
-                AIResponse response = ai.chat(session, promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode()));
+                AIResponse response = ai.chat(player, session, promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode(),
+                        "", isNativeActiveForPrompt(player, session)));
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
                 });
             } catch (IOException e) {
                 plugin.getCloudErrorReport().report(e);
+                plugin.getLogger().warning("[CLI] 继续生成失败 - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     TextComponent fullMsg = buildErrorText(e.getMessage(), "继续生成失败");
@@ -3512,16 +3808,27 @@ public class CLIManager {
                     String role = msg.getRole();
                     String content = msg.getContent();
                     if (content == null || content.trim().isEmpty()) continue;
-                    // 截断过长内容，避免数数之类的大段无意义输出
-                    if (content.length() > 500) {
-                        content = content.substring(0, 500) + "...";
-                    }
+                    // 不截断：上下文完整传入压缩模型（压缩就是为长上下文设计的；
+                    // 截断会让工具调用/长回复的信息丢失，压缩结果残缺）。
+                    // 若压缩模型上下文窗口不够会由 API 报错，届时再按需设上限。
                     sb.append(role).append(": ").append(content).append("\n\n");
                 }
 
                 if (plugin.getConfigManager().isDebug()) {
                     String inputPreview = sb.length() > 800 ? sb.substring(0, 800) + "..." : sb.toString();
                     plugin.getLogger().info("[CLI] 压缩输入 (" + oldCount + " 条消息, " + sb.length() + " 字符):\n" + inputPreview);
+                    // 逐条列出 role+长度：直接看到工具调用消息（assistant 含 #tool / user 含 #run_result）
+                    // 有没有算进压缩、被截断多少（定位"工具调用上下文缺失"用）
+                    StringBuilder roles = new StringBuilder();
+                    int listed = 0;
+                    for (int i = serializeStart; i < oldCount && i < session.getHistory().size(); i++) {
+                        DialogueSession.Message m = session.getHistory().get(i);
+                        if (m.getContent() == null || m.getContent().trim().isEmpty()) continue;
+                        if (listed > 0) roles.append(", ");
+                        roles.append(m.getRole()).append("(").append(m.getContent().length()).append(")");
+                        listed++;
+                    }
+                    plugin.getLogger().info("[CLI] 压缩输入逐条 [" + listed + " 条]: " + roles);
                 }
 
                 StringBuilder fullPrompt = new StringBuilder();
@@ -3656,7 +3963,34 @@ public class CLIManager {
         return systemPromptTokens + historyTokens + replyPrimerTokens;
     }
 
+    /**
+     * 获取当前生效的主模型名（镜像 LLMClient.chat 的分发逻辑）。
+     * 用于判断该模型是否启用原生函数调用（决定提示词是否用精简工具列表）。
+     */
+    private String getEffectiveModel() {
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return plugin.getConfigManager().getFancyModel();
+        }
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return plugin.getConfigManager().getOpenAiModel();
+        }
+        return plugin.getConfigManager().getCloudflareModel();
+    }
+
+    /** 当前会话是否处于原生函数调用模式（开关开启 && 模型支持 && 未降级）。 */
+    private boolean isNativeActiveForPrompt(Player player, DialogueSession session) {
+        if (session == null || session.isNativeToolsDegraded()) {
+            return false;
+        }
+        return ToolRegistry.isNativeActiveForModel(
+                plugin.getConfigManager().isNativeToolCallingEnabled(), getEffectiveModel());
+    }
+
     private void executeTool(Player player, String toolCall) {
+        executeTool(player, toolCall, false);
+    }
+
+    private void executeTool(Player player, String toolCall, boolean force) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
@@ -3753,8 +4087,17 @@ public class CLIManager {
         // 如果该工具之前被中断过且现在继续执行，清除记录
         interruptedToolCalls.remove(uuid);
 
-        // 委托给 ToolExecutor 执行
-        boolean toolSuccess = toolExecutor.executeTool(player, toolCall, session);
+        // 委托给 ToolExecutor 执行。同步异常在此兜底（executeNativeBatch 的 catch 是双保险）：
+        // 避免单工具路径（processAIMessage 等）工具崩溃后无反馈，对话卡在 EXECUTING_TOOL。
+        boolean toolSuccess;
+        Throwable failure = null;
+        try {
+            toolSuccess = toolExecutor.executeTool(player, toolCall, session, force);
+        } catch (Throwable t) {
+            plugin.getCloudErrorReport().report(t);
+            toolSuccess = false;
+            failure = t;
+        }
 
         if (session != null) {
             if (toolSuccess) {
@@ -3763,6 +4106,14 @@ public class CLIManager {
                 session.incrementToolFailure();
             }
         }
+
+        // 异常兜底反馈：告知 AI 执行失败（批次路径被批次屏障拦截合并，单路径直接触发模型重入）
+        if (failure != null) {
+            if (session != null) {
+                session.setLastError("工具执行异常: " + failure.getMessage());
+            }
+            feedbackToAI(player, "#error: 工具执行异常 - " + failure.getMessage());
+        }
     }
 
     public void feedbackToAI(Player player, String feedback) {
@@ -3770,8 +4121,36 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
-        session.addMessage("user", feedback);
-        
+        // === 串行批量拦截：不重入模型，累计结果并推进下一工具 ===
+        if (session.isBatchInProgress()) {
+            session.addPendingToolResult(feedback);
+            executeNativeBatch(player, session);
+            return;
+        }
+
+        invokeModelAfterFeedback(player, session, feedback);
+    }
+
+    /**
+     * 工具反馈后触发一次真实的模型重入（单工具路径与批次终结共用）。
+     * 顺序与原 feedbackToAI 单路径完全一致：addMessage → token 估算日志 → 状态翻转 → 异步重入。
+     */
+    private void invokeModelAfterFeedback(Player player, DialogueSession session, String feedback) {
+        UUID uuid = player.getUniqueId();
+
+        // 混合批次中被剔除的调用：随本次反馈一并回灌模型，绝不静默丢弃
+        String dropNote = session != null ? session.getPendingBatchDropNote() : null;
+        final String effectiveFeedback;
+        if (dropNote != null && !dropNote.isEmpty()) {
+            effectiveFeedback = (feedback == null || feedback.isEmpty())
+                    ? dropNote : feedback + "\n" + dropNote;
+            session.setPendingBatchDropNote(null);
+        } else {
+            effectiveFeedback = feedback;
+        }
+
+        session.addMessage("user", effectiveFeedback);
+
         // 记录反馈后的 Token 估算
         int estimatedTokens = calculateTotalEstimatedTokens(player, session);
         if (plugin.getConfigManager().isDebug()) {
@@ -3784,14 +4163,15 @@ public class CLIManager {
 
         // 工具返回信息不显示给玩家，仅在日志记录并触发 AI 思考
         if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + feedback);
+            plugin.getLogger().info("[CLI] Feedback sent to AI for " + player.getName() + ": " + effectiveFeedback);
         }
 
         // 异步调用 AI，不显示 "Thought..." 提示，因为这是后台自动反馈
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             // feedbackToAI 不需要匹配新 Skills，使用空列表
-            final String systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode());
+            final String systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode(),
+                    "", isNativeActiveForPrompt(player, session));
             
             // 设置重试回调，向玩家显示重试提示
             ai.setRetryCallback((statusCode, retryMessage) -> {
@@ -3958,7 +4338,8 @@ public class CLIManager {
 
                             session.logAIResponse(completeText + "\n\n[Streaming] Finish Reason: stop\n");
                             AIResponse response = new AIResponse(completeText,
-                                (thought != null && !thought.isEmpty()) ? thought : null);
+                                (thought != null && !thought.isEmpty()) ? thought : null,
+                                0, 0, false, streamingHandler.getNativeToolCalls());
                             handleAIResponse(player, response, true);
                             playFeedbackSound(player, "ai_complete");
                         });
@@ -3974,13 +4355,14 @@ public class CLIManager {
                             roundOutputTokens.merge(uuid, streamedOutErr2, (a, b) -> a + b);
                         }
                         plugin.getCloudErrorReport().report(error);
+                        plugin.getLogger().warning("[CLI] 反馈流式输出错误 - " + player.getName() + ": " + error);
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (streamedOutErr2 > 0) {
                                 DialogueSession s2 = sessions.get(uuid);
                                 if (s2 != null) s2.addOutputTokens(streamedOutErr2);
                             }
-                            retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                            retryInfoMap.put(uuid, new RetryInfo(session, effectiveFeedback, false, Collections.emptyList()));
                             player.spigot().sendMessage(buildErrorText(error.getMessage(), I18n.t("clim.error.streaming")));
                             isGenerating.put(uuid, false);
                             generationStates.put(uuid, GenerationStatus.ERROR);
@@ -3996,7 +4378,7 @@ public class CLIManager {
                         + session.getEstimatedTokens(modelName) + 3;
                     session.addInputTokens(estimatedInput2);
 
-                    String completeText = ai.chatStreaming(session, systemPrompt, streamingHandler);
+                    String completeText = ai.chatStreaming(player, session, systemPrompt, streamingHandler);
 
                     // 回退：流式未产生任何 chunk（如文本一次到达）
                     if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
@@ -4038,7 +4420,7 @@ public class CLIManager {
                         });
                     }
                 } else {
-                    AIResponse response = ai.chat(session, systemPrompt);
+                    AIResponse response = ai.chat(player, session, systemPrompt);
 
                     if (!plugin.isEnabled()) return;
                     Bukkit.getScheduler().runTask(plugin, () -> {
@@ -4047,10 +4429,11 @@ public class CLIManager {
                     });
                 }
             } catch (IOException e) {
+                plugin.getLogger().warning("[CLI] 工具反馈后 AI 请求失败 - " + player.getName() + ": " + e);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息（feedbackToAI 不需要 Skills）
-                    retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, effectiveFeedback, false, Collections.emptyList()));
 
                     TextComponent fullMsg = buildErrorText(e.getMessage(), "AI请求出错");
                     fullMsg.addExtra(buildRetryButton(e.getMessage()));
@@ -4068,10 +4451,11 @@ public class CLIManager {
                 });
             } catch (Throwable t) {
                 plugin.getCloudErrorReport().report(t);
+                plugin.getLogger().warning("[CLI] 工具反馈后 AI 请求异常 - " + player.getName() + ": " + t);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // 保存重试信息
-                    retryInfoMap.put(uuid, new RetryInfo(session, feedback, false, Collections.emptyList()));
+                    retryInfoMap.put(uuid, new RetryInfo(session, effectiveFeedback, false, Collections.emptyList()));
 
                     TextComponent fullMsg = buildErrorText(t.getMessage(), "系统内部错误");
                     fullMsg.addExtra(buildRetryButton(t.getMessage()));
@@ -4093,6 +4477,239 @@ public class CLIManager {
                 ai.clearRetryCallback();
             }
         });
+    }
+
+    /**
+     * 该工具是否可安全进入串行批量（保证恰好一次异步 feedbackToAI，不会死锁批次屏障）。
+     * 交互/确认类工具（ask/edit/write/记忆类/mcp）的结果均经 feedbackToAI 或
+     * 批次感知的确认/取消/拒绝处理回灌，批次屏障可推进，因此均可批。
+     * 控制类工具（start/end/exit）与未知工具无反馈回灌，混入批次会卡死屏障，不可批。
+     */
+    static boolean isBatchSafeTool(String toolName, DialogueSession.Mode mode) {
+        String name = toolName == null ? "" : toolName.toLowerCase();
+        switch (name) {
+            case "search":
+            case "webfetch":
+            case "skill":
+            case "unloadskill":
+            case "mcp_tools":
+            case "mcp":
+            case "todo":
+            case "list":
+            case "read":
+            case "run":
+            case "ask":
+            case "edit":
+            case "edit_memory":
+            case "write":
+            case "remember":
+            case "forget":
+            case "remember_global":
+            case "forget_global":
+            case "edit_global":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * YOLO 模式下该 run 调用是否含风险命令（会渲染确认按钮等待玩家，不入批）。
+     */
+    static boolean isRiskyRunCall(NativeToolCall c, List<String> riskyCommands) {
+        if (c == null || !"run".equalsIgnoreCase(c.name())) {
+            return false;
+        }
+        ToolExecutor.ToolParseResult p = ToolExecutor.parseToolCall(ToolRegistry.bridgeToText(c));
+        return ToolExecutor.isRiskyCommandPublic(p.args, riskyCommands);
+    }
+
+    /**
+     * 该调用是否可进入串行批次：
+     * 1. 工具名属于批次安全集（结果必定经 feedbackToAI 恰好一次回灌，批次屏障可推进）；
+     * 2. YOLO 模式下 #run 含风险命令（会渲染确认按钮等待玩家）除外，与既有语义一致。
+     */
+    private boolean isBatchableCall(NativeToolCall c, DialogueSession session) {
+        if (c == null || c.name() == null) {
+            return false;
+        }
+        String name = c.name().toLowerCase();
+        if (!isBatchSafeTool(name, session != null ? session.getMode() : DialogueSession.Mode.NORMAL)) {
+            return false;
+        }
+        if (session != null && session.getMode() == DialogueSession.Mode.YOLO
+                && isRiskyRunCall(c, plugin.getConfigManager().getYoloRiskCommands())) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 构建混合批次中未执行调用的回灌说明（无未执行项返回 null）。
+     */
+    static String buildNativeDroppedNote(List<NativeToolCall> excluded) {
+        if (excluded == null || excluded.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("#error: 混合批次无法串行执行，以下工具调用未执行，请重新发起：");
+        for (int i = 0; i < excluded.size(); i++) {
+            if (i > 0) {
+                sb.append("、");
+            }
+            NativeToolCall c = excluded.get(i);
+            sb.append(c.name() != null ? c.name() : "unknown");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 把未执行项说明暂存到会话，随下一次工具反馈一并回灌模型。
+     */
+    private void noteDroppedCalls(DialogueSession session, String note) {
+        if (session == null || note == null || note.isEmpty()) {
+            return;
+        }
+        String existing = session.getPendingBatchDropNote();
+        session.setPendingBatchDropNote(existing == null || existing.isEmpty() ? note : existing + "\n" + note);
+    }
+
+    /**
+     * 统一分发原生函数调用：
+     * 1. 全部可批且 >1 → 串行批量（结果合并一次回灌模型）。
+     * 2. 混合批次（含 start/end/exit/未知工具或 YOLO 风险 run）→ 可批者走批量/单工具，
+     *    不可批者回灌模型告知未执行，绝不静默丢弃。
+     * 3. 全部不可批 → 不执行任何工具，直接回灌模型告知。
+     */
+    private void dispatchNativeCalls(Player player, DialogueSession session, List<NativeToolCall> calls) {
+        if (calls == null || calls.isEmpty()) {
+            return;
+        }
+        StringBuilder diag = new StringBuilder();
+        for (NativeToolCall c : calls) {
+            if (diag.length() > 0) diag.append(", ");
+            diag.append(c.name()).append(":").append(c.argumentsJson());
+        }
+        plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
+
+        // 单个调用直接执行（与旧版一致）；不可批/回灌逻辑只作用于多调用批次，
+        // 避免 end/exit/start 等控制类工具单独出现时被回灌成"未执行"而陷入重发循环。
+        if (calls.size() == 1) {
+            if (session != null) {
+                session.setPendingBatchDropNote(null);
+            }
+            String toolCall = ToolRegistry.bridgeToText(calls.get(0));
+            if (!toolCall.isEmpty()) {
+                executeTool(player, toolCall, ToolRegistry.isForceCall(calls.get(0)));
+            }
+            return;
+        }
+
+        List<NativeToolCall> batchable = new ArrayList<>();
+        List<NativeToolCall> excluded = new ArrayList<>();
+        for (NativeToolCall c : calls) {
+            if (isBatchableCall(c, session)) {
+                batchable.add(c);
+            } else {
+                excluded.add(c);
+            }
+        }
+        String droppedNote = buildNativeDroppedNote(excluded);
+
+        if (batchable.isEmpty()) {
+            // 全部不可批（如 end/exit 混批）→ 不执行任何工具，直接回灌模型告知未执行
+            plugin.getLogger().warning("[CLI] 批次全部不可批，回灌模型未执行项: " + player.getName());
+            if (session != null) {
+                session.setPendingBatchDropNote(null);
+            }
+            invokeModelAfterFeedback(player, session, droppedNote);
+            return;
+        }
+
+        if (session == null) {
+            // 无会话兜底：退化为单工具路径
+            String toolCall = ToolRegistry.bridgeToText(batchable.get(0));
+            if (!toolCall.isEmpty()) {
+                executeTool(player, toolCall, ToolRegistry.isForceCall(batchable.get(0)));
+            }
+            return;
+        }
+
+        // 重置批次状态后写入本次未执行项（clearBatchState 会清掉历史遗留 note）
+        session.clearBatchState();
+        noteDroppedCalls(session, droppedNote);
+
+        if (batchable.size() > 1) {
+            session.setBatchInProgress(true);
+            for (NativeToolCall call : batchable) {
+                session.pushPendingNativeTool(ToolRegistry.bridgeToText(call), ToolRegistry.isForceCall(call));
+            }
+            executeNativeBatch(player, session);
+            return;
+        }
+
+        // 单个可批工具走单工具路径
+        String toolCall = ToolRegistry.bridgeToText(batchable.get(0));
+        if (!toolCall.isEmpty()) {
+            executeTool(player, toolCall, ToolRegistry.isForceCall(batchable.get(0)));
+        }
+    }
+
+    /**
+     * 串行批量执行器（批次屏障）：
+     * 1. 队列非空 → 串行执行下一个工具（不重入模型）。
+     * 2. 队列耗尽 → 合并全部结果，一次真实模型重入。
+     */
+    private void executeNativeBatch(Player player, DialogueSession session) {
+        UUID uuid = player.getUniqueId();
+        if (!Bukkit.isPrimaryThread() || !plugin.isEnabled()) {
+            return;
+        }
+
+        // 1) 队列还有工具 → 串行执行下一个
+        String next = session.pollPendingNativeTool();
+        boolean force = session.pollPendingNativeToolForce();
+        if (next != null) {
+            plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
+            setGenerating(uuid, true, GenerationStatus.EXECUTING_TOOL);
+            try {
+                executeTool(player, next, force);
+            } catch (Throwable t) {
+                // 同步抛出的兜底：记录错误并继续批次
+                plugin.getCloudErrorReport().report(t);
+                session.addPendingToolResult("#error: 工具执行异常 - " + t.getMessage());
+                executeNativeBatch(player, session);
+            }
+            return;
+        }
+
+        // 2) 队列耗尽 → 合并全部结果，一次真实模型重入
+        session.setBatchInProgress(false);
+        session.clearPendingNativeTools();
+        List<String> results = session.drainPendingToolResults();
+        String joined = results.isEmpty()
+                ? "#error: 批量工具执行未返回任何结果。"
+                : String.join("\n", results);
+        // 成功/失败计数已由 executeTool 按执行结果布尔完成（每个工具执行时都经过），
+        // 此处不再按结果文本启发式重复计数——文本含 "_error" 字样（如搜索结果）会被误判失败。
+        invokeModelAfterFeedback(player, session, joined);
+    }
+
+    /**
+     * 批次安全超时兜底：批次某工具异步异常导致长时间无反馈时，强制终结批次并把部分结果回灌模型。
+     */
+    private void forceFinalizeBatch(Player player, DialogueSession session) {
+        if (session == null) {
+            return;
+        }
+        session.setBatchInProgress(false);
+        session.clearPendingNativeTools();
+        List<String> results = session.drainPendingToolResults();
+        String joined = (results.isEmpty()
+                ? java.util.List.of("#error: 批量工具执行超时，未能获取全部结果。")
+                : results).stream()
+                .collect(java.util.stream.Collectors.joining("\n"));
+        invokeModelAfterFeedback(player, session, joined);
     }
 
     /**

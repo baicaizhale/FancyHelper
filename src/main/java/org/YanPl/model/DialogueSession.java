@@ -36,6 +36,17 @@ public class DialogueSession {
      */
     private final List<Message> history = new ArrayList<>();
     private final List<String> toolCallHistory = new ArrayList<>();
+    // 串行批量工具执行状态：非空表示处于批次中（一次响应返回多个原生 tool_calls）
+    private final java.util.Deque<String> pendingNativeTools = new java.util.ArrayDeque<>();
+    private final java.util.Deque<Boolean> pendingNativeToolForces = new java.util.ArrayDeque<>();
+    private final List<String> pendingToolResults = new ArrayList<>();
+    // 整个批次生命周期标记：从批启动到最后一项结果回灌前为 true。
+    // 与 pendingNativeTools 非空不同，队列耗尽后仍为 true，使最后一项的异步反馈也能被批次屏障拦截合并。
+    private boolean batchInProgress = false;
+    // 混合批次中被剔除（不可批）的工具调用说明：随下一次反馈回灌模型，绝不静默丢弃
+    private String pendingBatchDropNote = null;
+    // 批次中最后一次 feedback 到达的时间戳（addPendingToolResult 时更新）。
+    private long batchLastFeedbackTime = 0;
     private long lastActivityTime;
     private long startTime;
     private int toolSuccessCount = 0;
@@ -671,6 +682,91 @@ public class DialogueSession {
      */
     public void setSessionUUID(String sessionUUID) {
         this.sessionUUID = sessionUUID;
+    }
+
+    private volatile boolean nativeToolsDegraded = false;
+
+    /** 原生函数调用是否已降级（provider 拒绝 tools 后置位，该会话后续不再发 tools）。 */
+    public boolean isNativeToolsDegraded() {
+        return nativeToolsDegraded;
+    }
+
+    /** 标记该会话的原生函数调用已降级。 */
+    public void setNativeToolsDegraded(boolean degraded) {
+        this.nativeToolsDegraded = degraded;
+    }
+
+    // ==================== 串行批量工具执行状态 ====================
+
+    public void pushPendingNativeTool(String toolText) {
+        pushPendingNativeTool(toolText, false);
+    }
+
+    public void pushPendingNativeTool(String toolText, boolean force) {
+        pendingNativeTools.addLast(toolText);
+        pendingNativeToolForces.addLast(force);
+    }
+
+    public String pollPendingNativeTool() {
+        return pendingNativeTools.pollFirst();
+    }
+
+    public boolean pollPendingNativeToolForce() {
+        return pendingNativeToolForces.isEmpty() ? false : pendingNativeToolForces.pollFirst();
+    }
+
+    public boolean hasPendingNativeTools() {
+        return !pendingNativeTools.isEmpty();
+    }
+
+    public boolean isBatchInProgress() {
+        return batchInProgress;
+    }
+
+    public void setBatchInProgress(boolean inProgress) {
+        this.batchInProgress = inProgress;
+        if (inProgress) {
+            long now = System.currentTimeMillis();
+            this.batchLastFeedbackTime = now;
+        }
+    }
+
+    public void clearPendingNativeTools() {
+        pendingNativeTools.clear();
+        pendingNativeToolForces.clear();
+    }
+
+    public void addPendingToolResult(String result) {
+        pendingToolResults.add(result);
+        this.batchLastFeedbackTime = System.currentTimeMillis();
+    }
+
+    public List<String> drainPendingToolResults() {
+        List<String> out = new ArrayList<>(pendingToolResults);
+        pendingToolResults.clear();
+        return out;
+    }
+
+    public void clearBatchState() {
+        pendingNativeTools.clear();
+        pendingNativeToolForces.clear();
+        pendingToolResults.clear();
+        batchInProgress = false;
+        pendingBatchDropNote = null;
+        batchLastFeedbackTime = 0;
+    }
+
+    /** 批次超时基准时间戳：首个 feedback 前取 batchStartTime，之后取 batchLastFeedbackTime。 */
+    public long getBatchLastFeedbackTime() {
+        return batchLastFeedbackTime;
+    }
+
+    public String getPendingBatchDropNote() {
+        return pendingBatchDropNote;
+    }
+
+    public void setPendingBatchDropNote(String note) {
+        this.pendingBatchDropNote = note;
     }
 
     public static class Message {

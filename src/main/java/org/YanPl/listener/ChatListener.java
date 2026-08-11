@@ -5,7 +5,6 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -43,20 +42,17 @@ public class ChatListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-
-        // 检查玩家是否有预加载的会话，如果有则静默进入CLI模式
-        if (plugin.getCliManager().hasPreloadedSession(player.getUniqueId())) {
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[ChatListener] 玩家 " + player.getName() + " 有预加载的会话，静默进入CLI模式");
-            }
-            // 延迟1秒后自动进入CLI模式，确保玩家完全加载
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (!plugin.isEnabled() || !player.isOnline()) return;
-                plugin.getCliManager().enterCLI(player, true);
-            }, 20L); // 1秒 = 20 ticks
-        }
-
+        // 已禁用：插件重载/重启后不再自动恢复会话，改为玩家手动 /cli resume。
+        // Player player = event.getPlayer();
+        // if (plugin.getCliManager().hasPreloadedSession(player.getUniqueId())) {
+        //     if (plugin.getConfigManager().isDebug()) {
+        //         plugin.getLogger().info("[ChatListener] 玩家 " + player.getName() + " 有预加载的会话，静默进入CLI模式");
+        //     }
+        //     Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        //         if (!plugin.isEnabled() || !player.isOnline()) return;
+        //         plugin.getCliManager().enterCLI(player, true);
+        //     }, 20L); // 1秒 = 20 ticks
+        // }
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

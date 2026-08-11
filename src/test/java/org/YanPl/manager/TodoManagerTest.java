@@ -86,6 +86,26 @@ class TodoManagerTest {
     }
 
     @Test
+    @DisplayName("native 模式的 todos 包裹对象应成功解析")
+    void testWrappedTodosObject() {
+        String result = todoManager.updateTodos(testUuid,
+            "{\"todos\":[{\"id\":\"1\",\"task\":\"包裹任务\"}]}");
+
+        assertFalse(result.startsWith("错误"), result);
+        assertEquals(1, todos(testUuid).size());
+        assertEquals("包裹任务", todos(testUuid).get(0).getTask());
+    }
+
+    @Test
+    @DisplayName("对象缺 todos 数组或 todos 非数组应报错")
+    void testWrappedTodosMissing() {
+        assertTrue(todoManager.updateTodos(testUuid, "{\"foo\":[{\"id\":\"1\",\"task\":\"x\"}]}").startsWith("错误"));
+        assertTrue(todoManager.updateTodos(testUuid, "{\"todos\":\"notarray\"}").startsWith("错误"));
+        assertTrue(todoManager.updateTodos(testUuid, "{\"todos\":{\"id\":\"1\"}}").startsWith("错误"));
+        assertTrue(todos(testUuid).isEmpty());
+    }
+
+    @Test
     @DisplayName("null/空/无效 JSON 应返回错误")
     void testInvalidJsonInputs() {
         assertTrue(todoManager.updateTodos(testUuid, null).startsWith("错误"));

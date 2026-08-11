@@ -65,6 +65,18 @@ public class ConfigManager {
         return config.getString("fancy.co-model", "default_co");
     }
 
+    /**
+     * 获取主对话采样温度。
+     * 返回 null 表示未配置（不发送 temperature 字段，跟随模型默认）；
+     * 返回 0 表示真正传入 temperature=0（完全确定性输出）。
+     */
+    public Double getFancyTemperature() {
+        if (!config.contains("fancy.temperature")) {
+            return null;
+        }
+        return config.getDouble("fancy.temperature");
+    }
+
     // ============================================================
     // 提供商配置
     // ============================================================
@@ -817,6 +829,15 @@ public class ConfigManager {
      */
     public boolean isServerMemoryEnabled() {
         return config.getBoolean("settings.memory.enabled", true);
+    }
+
+    /**
+     * 是否启用原生函数调用（Native Tool Calling）。
+     * 开启后 AI 通过 API 结构化工具调用触发工具，而非"#工具名"文本。
+     * 默认关闭，保持原有文本标记协议不变。
+     */
+    public boolean isNativeToolCallingEnabled() {
+        return config.getBoolean("settings.native_tool_calling", false);
     }
 
     /**

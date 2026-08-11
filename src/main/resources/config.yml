@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 4.3.0
+version: 4.3.1
 
 # 插件设置
 settings:
@@ -41,6 +41,10 @@ settings:
     inject_top_k: 4
     # 相关到什么程度才算“相关”，建议保持 1（只要沾边就算）
     min_relevance: 1
+  # 是否启用原生函数调用（Native Tool Calling）。
+  # 开启后 AI 会通过 API 的结构化工具调用机制触发工具，而不是靠"#工具名"文本。
+  # 需要模型本身支持函数调用；不支持的模型会自动回退到文本方式（无需额外配置）。
+  native_tool_calling: true
   # 防循环
   anti_loop:
     # 连续多少次相似调用触发中断
@@ -91,6 +95,9 @@ fancy:
   model: default
   # 副模型（用于压缩、标题生成等轻量级任务）
   co-model: default_co
+  # 主对话采样温度（0.0-2.0，越小越确定，越大越有创造性）
+  # 工具调用/命令执行任务建议 0.3-0.7；纯聊天可调高。删除此行则不发送该字段（跟随模型默认）
+  temperature: 0.4
 
 # CloudFlare Workers AI 配置
 cloudflare:
@@ -100,13 +107,13 @@ cloudflare:
   # 代理地址（可选），如果设置则所有请求会经过此代理转发到 Cloudflare Workers AI
   # 代理必须兼容 /v1/chat/completions 和 /v1/responses 端点
   proxy_url: "https://ptc.fancy.baicaizhale.top"
-  # 使用的模型名称，可以是任何一个Text-Generation模型
+  # 使用的模型名称，理论上可以是任何一个Text-Generation模型；注意当原生函数调用开启时，模型必须支持函数调用
   model: "@cf/google/gemma-4-26b-a4b-it"
   # 副模型设置（用于压缩等轻量级任务，使用主模型的 cf_key）
   co-model: "@cf/google/gemma-4-26b-a4b-it"
 
 # OpenAI 兼容端点配置（provider 设为 openai 时使用）
-# 理论上支持所有兼容 OpenAI Chat Completions API 的服务商
+# 理论上支持所有兼容 OpenAI Chat Completions API 的服务商；注意当原生函数调用开启时，模型必须支持函数调用
 # 详细配置指南见：https://blog.baicaizhale.top/post/openai-compatible-providers
 openai:
   # API 地址，各服务商地址不同
