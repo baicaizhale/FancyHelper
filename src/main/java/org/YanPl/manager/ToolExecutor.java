@@ -587,8 +587,8 @@ public class ToolExecutor {
 
         // #edit 和 #write 需要确认（YOLO模式除外，SMART模式也不特殊处理，与NORMAL一致）
         if (session != null && session.getMode() == DialogueSession.Mode.YOLO) {
-            String pendingStr = type.toUpperCase() + ":" + args;
-            cliManager.setPendingCommand(uuid, pendingStr);
+            // YOLO 免确认：不设置 pendingCommand（否则执行后残留，后续玩家消息全被
+            // "请确认 [Y/N]" 拦截吞掉），直接执行。
             cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
             executeFileOperation(player, type, args);
             return;
