@@ -247,6 +247,22 @@ public class LLMClient {
             plugin.getLogger().info("[AI 请求] 正在处理 " + historyCopy.size() + " 条历史消息");
         }
 
+        // 部分严格网关校验 "system 只能是第一条且后面必须跟 user"（如 reka-flash 上游）。
+        // 进入 CLI 时的欢迎语以 assistant 角色入历史（前面没有 user），会生成 [system, assistant, ...]
+        // 的非法序列。若 system 后首条历史不是 user，垫一条 user 占位兜底（不写回 history）。
+        if (messagesArray.size() == 1 && !historyCopy.isEmpty()) {
+            String firstRole = historyCopy.get(0).getRole();
+            if (firstRole != null && !"user".equalsIgnoreCase(firstRole.trim())) {
+                JsonObject placeholder = new JsonObject();
+                placeholder.addProperty("role", "user");
+                placeholder.addProperty("content", "Continue");
+                messagesArray.add(placeholder);
+                if (plugin.getConfigManager().isDebug()) {
+                    plugin.getLogger().info("[AI 请求] system 后首条消息非 user（" + firstRole.trim() + "），已垫 user 占位消息");
+                }
+            }
+        }
+
         for (DialogueSession.Message msg : historyCopy) {
             String content = msg.getContent();
             String role = msg.getRole();

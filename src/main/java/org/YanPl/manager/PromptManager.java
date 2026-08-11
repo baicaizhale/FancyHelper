@@ -106,8 +106,9 @@ public class PromptManager {
             sb.append("   - They execute in order; results feed back together. Parallelize independent operations.\n");
             sb.append("   - Dependent operations still require the previous result first.\n\n");
         } else {
-            sb.append("1. [Single Tool Call] Each response may contain ONLY ONE tool call.\n");
-            sb.append("   - For multiple operations: complete the first call, wait for result, then proceed.\n\n");
+            sb.append("1. [Multiple Tool Calls] You may output MULTIPLE independent #tool calls in ONE response, one per line.\n");
+            sb.append("   - They execute in order; results feed back together. Cover ALL requested operations — never silently drop part of the user's request.\n");
+            sb.append("   - Dependent operations still require the previous result first.\n\n");
         }
 
         if (nativeTools) {
@@ -115,7 +116,8 @@ public class PromptManager {
             sb.append("4. [Tool Position] Function calls stand alone. Never embed a call inside body text.\n\n");
             sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
         } else {
-            sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n\n");
+            sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n");
+            sb.append("   - Multiple independent commands: output multiple #run calls, one per line.\n\n");
             sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
             sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
             sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
@@ -124,8 +126,8 @@ public class PromptManager {
         if (!nativeTools) {
             sb.append("Example:\n");
             sb.append("  Correct: #run: give @p apple\n");
-            sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands)\n");
-            sb.append("  Wrong:   #todo: [...]\\n#run: say hello     (multiple tools in one response)\n");
+            sb.append("  Correct: #run: give @p apple\\n#run: give @p oak_planks 2  (multiple independent tools in one response are fine)\n");
+            sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands with && are forbidden)\n");
             sb.append("\n");
         }
 
