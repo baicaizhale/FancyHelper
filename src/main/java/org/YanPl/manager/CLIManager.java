@@ -67,6 +67,9 @@ public class CLIManager {
     private final Map<UUID, String> currentThinkingWords = new ConcurrentHashMap<>();
     private final Map<UUID, Long> streamedOutputTokens = new ConcurrentHashMap<>();
     private final Map<UUID, Long> roundOutputTokens = new ConcurrentHashMap<>();
+    // 玩家名缓存：saveSessionToHistory 在玩家离线后（异步任务）仍需要玩家名来定位
+    // 会话目录，不能依赖 Bukkit.getPlayer()（离线返回 null 会导致会话保存被跳过）。
+    private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
 
     // 思考状态的随机神经病词列表
     private static final String[] THINKING_WORDS = {        "Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Bamboozling", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Burrowing", "Calculating", "Canoodling", "Caramelizing", "Cascading", "Catapulting", "Catalyzing", "Cerebrating", "Channeling", "Channelling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Colloquializing", "Combobulating", "Composing", "Computing", "Concocting", "Congealing", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Decomposing", "Deliberating", "Determining", "Diffusing", "Dilly-dallying", "Discombobulating", "Dissolving", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Enchanting", "Envisioning", "Extrapolating", "Fermenting", "Festering", "Finagling", "Flambeing", "Flibbertigibbeting", "Flummoxing", "Forging", "Forming", "Frosting", "Frolicking", "Furnishing", "Gallivanting", "Galloping", "Garnishing", "Gelatinizing", "Generating", "Germinating", "Hatching", "Herding", "Honking", "Hustling", "Ideating", "Imagining", "Incubating", "Inferring", "Ionizing", "Iridescent", "Jiving", "Jostling", "Julienning", "Kneading", "Leavening", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Moseying", "Moonwalking", "Mulling", "Mustering", "Musing", "Navigating", "Nebulating", "Noodling", "Osmosing", "Percolating", "Perusing", "Philosophising", "Polymerizing", "Pontificating", "Pondering", "Processing", "Proofing", "Puttering", "Puzzling", "Radiating", "Razzle-dazzling", "Reticulating", "Reverberating", "Ricocheting", "Rippling", "Ruminating", "Sauteing", "Scampering", "Scheming", "Schlepping", "Scurrying", "Seasoning", "Shimmying", "Shenaniganing", "Simmering", "Smooshing", "Soldering", "Spelunking", "Spinning", "Spiraling", "Synthesizing", "Synergizing", "Tempering", "Tinkering", "Thinking", "Tomfoolering", "Topsy-turvying", "Transmuting", "Trickling", "Ubiquitizing", "Undulating", "Unfurling", "Unravelling", "Untangling", "Vibing", "Vexing", "Waddling", "Wandering", "Waxing", "Whatchamacalliting", "Whirring", "Whisking", "Wibbling", "Wizarding", "Working", "Wrangling", "Zigzagging", "Zesting"
@@ -865,13 +868,14 @@ public class CLIManager {
      */
     public synchronized void saveSessionToHistory(UUID playerUUID, DialogueSession session) {
         try {
-            // 获取玩家名
+            // 获取玩家名：优先在线玩家，离线时用 enterCLI 记录的缓存（断线/退出场景
+            // 异步任务执行时玩家已离线，getPlayer 返回 null，直接跳过会丢会话）。
             Player player = Bukkit.getPlayer(playerUUID);
-            if (player == null) {
+            String playerName = (player != null) ? player.getName() : playerNameCache.get(playerUUID);
+            if (playerName == null) {
                 plugin.getLogger().warning("[CLI] 无法获取玩家信息，跳过保存会话历史");
                 return;
             }
-            String playerName = player.getName();
 
             // 创建 sessions/玩家名 目录
             Path playerDir = plugin.getDataFolder().toPath().resolve(SESSIONS_DIR).resolve(playerName);
@@ -1393,6 +1397,8 @@ public class CLIManager {
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 玩家 " + player.getName() + " 正在进入 FancyHelper。");
         }
+        // 记录玩家名供离线保存会话使用（断线/退出时 Bukkit.getPlayer 可能返回 null）
+        playerNameCache.put(uuid, player.getName());
         
         // 检查用户协议
         if (!agreedPlayers.contains(uuid)) {
@@ -3780,16 +3786,27 @@ public class CLIManager {
                     String role = msg.getRole();
                     String content = msg.getContent();
                     if (content == null || content.trim().isEmpty()) continue;
-                    // 截断过长内容，避免数数之类的大段无意义输出
-                    if (content.length() > 500) {
-                        content = content.substring(0, 500) + "...";
-                    }
+                    // 不截断：上下文完整传入压缩模型（压缩就是为长上下文设计的；
+                    // 截断会让工具调用/长回复的信息丢失，压缩结果残缺）。
+                    // 若压缩模型上下文窗口不够会由 API 报错，届时再按需设上限。
                     sb.append(role).append(": ").append(content).append("\n\n");
                 }
 
                 if (plugin.getConfigManager().isDebug()) {
                     String inputPreview = sb.length() > 800 ? sb.substring(0, 800) + "..." : sb.toString();
                     plugin.getLogger().info("[CLI] 压缩输入 (" + oldCount + " 条消息, " + sb.length() + " 字符):\n" + inputPreview);
+                    // 逐条列出 role+长度：直接看到工具调用消息（assistant 含 #tool / user 含 #run_result）
+                    // 有没有算进压缩、被截断多少（定位"工具调用上下文缺失"用）
+                    StringBuilder roles = new StringBuilder();
+                    int listed = 0;
+                    for (int i = serializeStart; i < oldCount && i < session.getHistory().size(); i++) {
+                        DialogueSession.Message m = session.getHistory().get(i);
+                        if (m.getContent() == null || m.getContent().trim().isEmpty()) continue;
+                        if (listed > 0) roles.append(", ");
+                        roles.append(m.getRole()).append("(").append(m.getContent().length()).append(")");
+                        listed++;
+                    }
+                    plugin.getLogger().info("[CLI] 压缩输入逐条 [" + listed + " 条]: " + roles);
                 }
 
                 StringBuilder fullPrompt = new StringBuilder();
