@@ -499,24 +499,31 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
         player.sendMessage(I18n.t("cli.bind.verifying"));
 
-        org.YanPl.manager.FancyConsoleManager.ValidateKeyResult result =
-                plugin.getFancyConsoleManager().validateKey(apiKey);
+        // 网络校验在异步线程执行，避免阻塞服务器主线程（最长超时 10s）
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            org.YanPl.manager.FancyConsoleManager.ValidateKeyResult result =
+                    plugin.getFancyConsoleManager().validateKey(apiKey);
 
-        if (result.valid) {
-            plugin.getFancyConsoleManager().setApiKey(apiKey);
-            player.sendMessage(I18n.t("cli.bind.success"));
-            if (result.email != null && !result.email.isEmpty()) {
-                player.sendMessage(I18n.t("cli.bind.account", result.email));
-            }
-            if (result.tier != null && !result.tier.isEmpty()) {
-                player.sendMessage(I18n.t("cli.bind.tier", result.tier));
-            }
-            player.sendMessage(I18n.t("cli.bind.now.use"));
-        } else {
-            String errorMsg = result.error != null ? result.error : I18n.t("cli.bind.failed");
-            player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §c" + errorMsg));
-            player.sendMessage(I18n.t("cli.bind.check"));
-        }
+            // 插件可能在校验期间被重载/禁用，回主线程前检查，避免 runTask 抛 IllegalPluginAccessException
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (result.valid) {
+                    plugin.getFancyConsoleManager().setApiKey(apiKey);
+                    player.sendMessage(I18n.t("cli.bind.success"));
+                    if (result.email != null && !result.email.isEmpty()) {
+                        player.sendMessage(I18n.t("cli.bind.account", result.email));
+                    }
+                    if (result.tier != null && !result.tier.isEmpty()) {
+                        player.sendMessage(I18n.t("cli.bind.tier", result.tier));
+                    }
+                    player.sendMessage(I18n.t("cli.bind.now.use"));
+                } else {
+                    String errorMsg = result.error != null ? result.error : I18n.t("cli.bind.failed");
+                    player.sendMessage(ColorUtil.translateCustomColors("§zFancyConsole§b§r §7> §c" + errorMsg));
+                    player.sendMessage(I18n.t("cli.bind.check"));
+                }
+            });
+        });
         return true;
     }
 

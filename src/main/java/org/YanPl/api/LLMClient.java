@@ -324,12 +324,11 @@ public class LLMClient {
             messagesArray.add(m);
         }
 
-        // 验证消息数组
+        // 验证消息数组（显式检查字段存在性与非空，避免 getAsString() 对缺失字段抛 IllegalStateException）
         for (int i = 0; i < messagesArray.size(); i++) {
             JsonObject msg = messagesArray.get(i).getAsJsonObject();
-            String role = msg.get("role").getAsString();
-            String content = msg.get("content").getAsString();
-            if (role == null || content == null) {
+            if (!msg.has("role") || msg.get("role").isJsonNull()
+                    || !msg.has("content") || msg.get("content").isJsonNull()) {
                 plugin.getLogger().severe("[AI 请求] 在消息数组索引 " + i + " 处检测到空值");
                 throw new IllegalArgumentException("消息验证失败: 数组中存在空值");
             }
@@ -1000,14 +999,14 @@ public class LLMClient {
                     throw new IOException("§zFancyHelper§b§r §7> §f对话内容触发了风控，请新建对话后重试");
                 }
 
-                // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，尝试使用最简 payload 重试
+                // 如果是 400 (常见于 payload 错误) 或 500 (常见于推理模型参数不兼容)，保留完整上下文重试
                 if ((response.statusCode() == 400 || response.statusCode() == 500) && responseBody != null) {
-                    plugin.getLogger().warning("[AI] 检测到 CF API 错误 " + response.statusCode() + "，正在尝试使用简化载荷重试...");
+                    plugin.getLogger().warning("[AI] 检测到 CF API 错误 " + response.statusCode() + "，正在尝试使用完整上下文重试...");
                     // 400 且带 tools 时标记会话降级，后续轮次不再发 tools
                     if (response.statusCode() == 400 && bodyString.contains("\"tools\"")) {
                         session.setNativeToolsDegraded(true);
                     }
-                    return retryWithSimplifiedPayload(session, model, useResponsesApi, url, cfKey);
+                    return retryWithSimplifiedPayload(session, model, useResponsesApi, url, cfKey, systemPrompts);
                 }
 
                 throw new IOException("AI 调用失败: " + response.statusCode() + " - " + responseBody);
@@ -1040,46 +1039,29 @@ public class LLMClient {
     }
 
     /**
-     * 使用简化载荷重试 API 请求
-     * 当 API 返回 400 或 500 错误时，尝试使用最简化的请求体重试
+     * 使用完整上下文重试 API 请求
+     * 当 API 返回 400 或 500 错误时，保留完整会话上下文（system 提示 + 全部历史消息）重试，
+     * 仅去掉可能触发错误的 tools/reasoning 参数，避免压缩成单条消息导致 AI 丢失上下文答非所问。
      */
     private AIResponse retryWithSimplifiedPayload(DialogueSession session, String model, boolean useResponsesApi, 
-                                                    String url, String cfKey) throws IOException, InterruptedException {
-        // 构建简化的消息数组
-        JsonArray simpleInput = new JsonArray();
-        JsonObject simpleSystem = new JsonObject();
-        simpleSystem.addProperty("role", "system");
-        simpleSystem.addProperty("content", "你是一个得力的助手。");
-        simpleInput.add(simpleSystem);
+                                                    String url, String cfKey, List<String> systemPrompts) throws IOException, InterruptedException {
+        // 保留完整上下文重建消息数组（与原始请求一致，但不含 tools）
+        JsonArray fullMessages = buildMessagesArray(session, systemPrompts);
 
-        // 获取最后一条用户消息
-        String lastUser = getLastUserMessage(session);
-        JsonObject simpleUser = new JsonObject();
-        simpleUser.addProperty("role", "user");
-        simpleUser.addProperty("content", lastUser);
-        simpleInput.add(simpleUser);
-
-        // 构建简化的请求体
+        // 构建请求体（不附加 tools / tool_choice / parallel_tool_calls / reasoning）
         JsonObject simpleBody = new JsonObject();
         simpleBody.addProperty("model", model);
         simpleBody.addProperty("max_tokens", 10000);
 
         if (useResponsesApi) {
-            simpleBody.add("input", simpleInput);
-            JsonObject reasoning = new JsonObject();
-            reasoning.addProperty("effort", "medium");
-            reasoning.addProperty("summary", "detailed");
-            simpleBody.add("reasoning", reasoning);
+            simpleBody.add("input", fullMessages);
         } else {
-            simpleBody.add("messages", simpleInput);
-            if (model.contains("gpt") || model.contains("o1") || model.contains("deepseek-reasoner")) {
-                simpleBody.addProperty("reasoning_effort", "medium");
-            }
+            simpleBody.add("messages", fullMessages);
         }
 
         String simpleBodyString = gson.toJson(simpleBody);
         if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[AI Request] Retrying with simplified payload: " + simpleBodyString);
+            plugin.getLogger().info("[AI Request] Retrying with full context payload: " + simpleBodyString);
         }
 
         HttpRequest simpleRequest = HttpRequest.newBuilder()
@@ -1113,21 +1095,6 @@ public class LLMClient {
         }
         plugin.getLogger().warning("[AI 错误] 无法解析重试响应: " + simpleRespBody);
         throw new IOException("§zFancyHelper§b§r §7> §fAPI调用发生未知错误，请查看控制台");
-    }
-
-    /**
-     * 获取会话中最后一条用户消息
-     */
-    private String getLastUserMessage(DialogueSession session) {
-        List<DialogueSession.Message> hist = new ArrayList<>(session.getHistory());
-        for (int i = hist.size() - 1; i >= 0; i--) {
-            DialogueSession.Message mm = hist.get(i);
-            if (mm != null && mm.getRole() != null && mm.getRole().equalsIgnoreCase("user") 
-                && mm.getContent() != null && !mm.getContent().trim().isEmpty()) {
-                return mm.getContent().trim();
-            }
-        }
-        return "Hello";
     }
 
     /**

@@ -289,25 +289,41 @@ public class PromptManager {
         }
 
         // ====================================================================
-        //  段 5：已加载的 Skills（为空则跳过）
+        //  段 5：已加载的 Skills（自动匹配 + 玩家显式 /cli skill load / #skill，为空则跳过）
         // ====================================================================
+        // 合并自动匹配的 Skills 与玩家显式加载的 Skills（playerLoadedSkills 由 /cli skill load / #skill 写入）
+        List<Skill> effectiveSkills = new ArrayList<>();
+        if (loadedSkills != null) {
+            effectiveSkills.addAll(loadedSkills);
+        }
+        java.util.Set<String> playerLoadedIds = plugin.getSkillManager().getPlayerLoadedSkills(player);
+        for (String loadedId : playerLoadedIds) {
+            boolean alreadyIncluded = effectiveSkills.stream()
+                    .anyMatch(s -> s.getId().equalsIgnoreCase(loadedId));
+            if (alreadyIncluded) continue;
+            Skill loadedSkill = plugin.getSkillManager().getSkill(loadedId);
+            if (loadedSkill != null) {
+                effectiveSkills.add(loadedSkill);
+            }
+        }
+
         {
-            if (loadedSkills != null && !loadedSkills.isEmpty()) {
+            if (!effectiveSkills.isEmpty()) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("<system-reminder>\n");
 
-                String skillNames = loadedSkills.stream()
+                String skillNames = effectiveSkills.stream()
                     .limit(MAX_LOADED_SKILLS)
                     .map(s -> s.getMetadata().getName())
                     .collect(Collectors.joining(" | "));
                 sb.append("Loaded Skills: ").append(skillNames);
-                if (loadedSkills.size() > MAX_LOADED_SKILLS) {
-                    sb.append(" | ... (").append(loadedSkills.size() - MAX_LOADED_SKILLS).append(" more)");
+                if (effectiveSkills.size() > MAX_LOADED_SKILLS) {
+                    sb.append(" | ... (").append(effectiveSkills.size() - MAX_LOADED_SKILLS).append(" more)");
                 }
                 sb.append("\n\n");
 
                 int count = 0;
-                for (Skill skill : loadedSkills) {
+                for (Skill skill : effectiveSkills) {
                     if (count >= MAX_LOADED_SKILLS) break;
 
                     sb.append("--[ ").append(skill.getId()).append(": ").append(skill.getMetadata().getName()).append(" ]--\n");
@@ -334,7 +350,7 @@ public class PromptManager {
         //  段 6：服务器级记忆（每次可能变，为空则跳过）
         // ====================================================================
         {
-            String serverMemory = buildServerMemory(player, loadedSkills, currentMessage);
+            String serverMemory = buildServerMemory(player, effectiveSkills, currentMessage);
             if (serverMemory != null) {
                 parts.add(serverMemory);
             }

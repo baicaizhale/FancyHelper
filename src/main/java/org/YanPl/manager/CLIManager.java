@@ -1712,6 +1712,7 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
 
         // 如果玩家不在 CLI 模式中，自动进入 CLI
+        boolean wasInCLI = session != null;
         if (session == null) {
             ensureInCLI(player);
             session = sessions.get(uuid);
@@ -1750,7 +1751,13 @@ public class CLIManager {
             player.sendMessage(ChatColor.GRAY + "------------------");
             player.sendMessage(I18n.t("clim.mode.normal"));
         }
-        sendEnterMessage(player);
+        // 模式切换：已在 CLI 中只重绘模式标题行，避免整段头部（含随机提示语）重复刷屏；
+        // 首次经此进入 CLI 时仍展示完整头部
+        if (wasInCLI) {
+            sendModeLine(player);
+        } else {
+            sendEnterMessage(player);
+        }
     }
 
     private void sendYoloWarning(Player player) {
@@ -1835,6 +1842,7 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
 
         // 如果玩家不在 CLI 模式中，自动进入 CLI
+        boolean wasInCLI = session != null;
         if (session == null) {
             ensureInCLI(player);
             session = sessions.get(uuid);
@@ -1875,13 +1883,15 @@ public class CLIManager {
             return;
         }
 
-        activatePlanMode(player);
+        // fullHeader 与 wasInCLI 语义相反：已在 CLI 中只重绘模式标题行，首次经此进入才显示完整头部
+        activatePlanMode(player, !wasInCLI);
     }
 
     /**
      * 激活 Plan Mode（清空上下文后直接进入）
+     * @param fullHeader true 时展示完整进入头部（首次经此进入 CLI），false 仅重绘模式标题行
      */
-    private void activatePlanMode(Player player) {
+    private void activatePlanMode(Player player, boolean fullHeader) {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
@@ -1891,7 +1901,11 @@ public class CLIManager {
         saveYoloModeState(uuid, false);
         saveSmartModeState(uuid, false);
 
-        sendEnterMessage(player);
+        if (fullHeader) {
+            sendEnterMessage(player);
+        } else {
+            sendModeLine(player);
+        }
         player.sendMessage(I18n.t("clim.plan.entered"));
 
         // 将进入 Plan Mode 的记录存入上下文，等待用户提问，不触发 API 调用
@@ -1910,7 +1924,7 @@ public class CLIManager {
         if (session != null) {
             session.clearHistory();
         }
-        activatePlanMode(player);
+        activatePlanMode(player, false);
     }
 
     /**
@@ -1921,7 +1935,8 @@ public class CLIManager {
         if (!pendingPlanContextClear.contains(uuid)) return;
         pendingPlanContextClear.remove(uuid);
 
-        activatePlanMode(player);
+        // 此时玩家已在 CLI 中（有历史才会询问），仅重绘模式标题行
+        activatePlanMode(player, false);
     }
 
     /**
@@ -5022,15 +5037,30 @@ public class CLIManager {
     }
 
     private void sendEnterMessage(Player player) {
-        UUID uuid = player.getUniqueId();
-        DialogueSession session = sessions.get(uuid);
-        DialogueSession.Mode mode = session != null ? session.getMode() : DialogueSession.Mode.NORMAL;
-
         // 顶部分隔线
         player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
         player.sendMessage("");
 
         // ▌FancyHelper ── Chatting  [Normal] [⚙]
+        sendModeLine(player);
+
+        // ▌💡 Tips整行悬停显示 "沉默的设计师"
+        TextComponent tipLine = new TextComponent("§8▌ §e💡 §f" + getRandomTip());
+        tipLine.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.enter.tips.hover"))));
+        player.spigot().sendMessage(tipLine);
+        player.sendMessage("");
+        player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
+    }
+
+    /**
+     * 仅重绘模式标题行 ▌FancyHelper ── Chatting [Mode] [🔧] [⌚]。
+     * 模式切换（switchMode / Plan 激活）时使用，避免整段头部（含随机提示语）重复刷屏。
+     */
+    private void sendModeLine(Player player) {
+        UUID uuid = player.getUniqueId();
+        DialogueSession session = sessions.get(uuid);
+        DialogueSession.Mode mode = session != null ? session.getMode() : DialogueSession.Mode.NORMAL;
+
         TextComponent line1 = new TextComponent();
 
         TextComponent bar = new TextComponent("▌ ");
@@ -5092,13 +5122,6 @@ public class CLIManager {
         line1.addExtra(resumeBtn);
 
         player.spigot().sendMessage(line1);
-
-        // ▌💡 Tips整行悬停显示 "沉默的设计师"
-        TextComponent tipLine = new TextComponent("§8▌ §e💡 §f" + getRandomTip());
-        tipLine.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.enter.tips.hover"))));
-        player.spigot().sendMessage(tipLine);
-        player.sendMessage("");
-        player.sendMessage(ChatColor.DARK_GRAY + "" + ChatColor.STRIKETHROUGH + "------------------------------------");
     }
 
     private void sendExitMessage(Player player) {
