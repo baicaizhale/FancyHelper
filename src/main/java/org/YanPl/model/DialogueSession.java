@@ -232,21 +232,23 @@ public class DialogueSession {
     }
     
     /**
-     * 记录系统提示词（每个会话只记录一次）
-     * @param systemPrompt 系统提示词内容
+     * 记录系统提示词（多条 system 消息逐条累积写入同一个 SYSTEM PROMPT 块）
+     * @param systemPrompt 单条系统提示词内容
      */
     public synchronized void logSystemPrompt(String systemPrompt) {
-        if (logFilePath == null || systemPromptLogged) return;
+        if (logFilePath == null || systemPrompt == null) return;
 
+        boolean isFirst = !systemPromptLogged;
         systemPromptLogged = true;
 
         try {
-            String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             StringBuilder sb = new StringBuilder();
-            sb.append(SEPARATOR).append("\n");
-            sb.append("[").append(time).append("] SYSTEM PROMPT\n\n");
+            if (isFirst) {
+                String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+                sb.append(SEPARATOR).append("\n");
+                sb.append("[").append(time).append("] SYSTEM PROMPT\n\n");
+            }
             sb.append(systemPrompt).append("\n");
-            sb.append(SEPARATOR).append("\n\n");
 
             Files.write(Paths.get(logFilePath), sb.toString().getBytes(StandardCharsets.UTF_8),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);

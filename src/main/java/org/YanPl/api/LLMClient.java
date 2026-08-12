@@ -155,6 +155,14 @@ public class LLMClient {
                         if (usage.has("total_tokens")) {
                             responseSb.append(", total=").append(usage.get("total_tokens").getAsInt());
                         }
+                        // 上下文缓存命中统计（DeepSeek 等返回 prompt_cache_hit_tokens / prompt_cache_miss_tokens）
+                        if (usage.has("prompt_cache_hit_tokens") || usage.has("prompt_cache_miss_tokens")) {
+                            long cacheHit = usage.has("prompt_cache_hit_tokens") ? usage.get("prompt_cache_hit_tokens").getAsLong() : 0;
+                            long cacheMiss = usage.has("prompt_cache_miss_tokens") ? usage.get("prompt_cache_miss_tokens").getAsLong() : 0;
+                            long total = cacheHit + cacheMiss;
+                            long pct = total > 0 ? cacheHit * 100 / total : 0;
+                            responseSb.append(", cache_hit=").append(cacheHit).append(" (").append(pct).append("%), cache_miss=").append(cacheMiss);
+                        }
                         responseSb.append("\n");
                     }
                 }
@@ -224,22 +232,40 @@ public class LLMClient {
 
     /**
      * 构建消息数组（OpenAI 和 CloudFlare API 通用）
+     * @param systemPrompts 多条独立 system 消息内容（按稳定度排列，静态在前、动态在后，利于前缀缓存命中）。
+     *                      空列表或全空元素时回退到默认提示。
      */
-    private JsonArray buildMessagesArray(DialogueSession session, String systemPrompt) {        JsonArray messagesArray = new JsonArray();
+    private JsonArray buildMessagesArray(DialogueSession session, List<String> systemPrompts) {
+        JsonArray messagesArray = new JsonArray();
 
-        String safeSystemPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : "你是一个得力的助手。";
-        safeSystemPrompt = safeSystemPrompt.trim();
-
-        if (safeSystemPrompt.isEmpty()) {
-            safeSystemPrompt = "你是一个得力的助手。";
+        boolean addedAnySystem = false;
+        if (systemPrompts != null) {
+            for (String part : systemPrompts) {
+                if (part == null) continue;
+                String trimmed = part.trim();
+                if (trimmed.isEmpty()) continue;
+                JsonObject systemMsg = new JsonObject();
+                systemMsg.addProperty("role", "system");
+                systemMsg.addProperty("content", trimmed);
+                messagesArray.add(systemMsg);
+                addedAnySystem = true;
+            }
         }
-
-        JsonObject systemMsg = new JsonObject();
-        systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", safeSystemPrompt);
-        messagesArray.add(systemMsg);
-        if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[AI 请求] 已添加 System Prompt (长度: " + safeSystemPrompt.length() + ")");
+        if (!addedAnySystem) {
+            JsonObject systemMsg = new JsonObject();
+            systemMsg.addProperty("role", "system");
+            systemMsg.addProperty("content", "你是一个得力的助手。");
+            messagesArray.add(systemMsg);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[AI 请求] System Prompt 为空，已使用默认提示");
+            }
+        } else if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[AI 请求] 已添加 " + messagesArray.size() + " 条 System Prompt 消息");
+            // 打印每条 system 消息的指纹（内容 hashCode），用于排查缓存命中率：同一会话内指纹应逐条稳定
+            for (int i = 0; i < messagesArray.size(); i++) {
+                String content = messagesArray.get(i).getAsJsonObject().get("content").getAsString();
+                plugin.getLogger().info("[AI 请求] system[" + i + "] 长度=" + content.length() + " 指纹=" + content.hashCode());
+            }
         }
 
         List<DialogueSession.Message> historyCopy = new ArrayList<>(session.getHistory());
@@ -248,9 +274,10 @@ public class LLMClient {
         }
 
         // 部分严格网关校验 "system 只能是第一条且后面必须跟 user"（如 reka-flash 上游）。
-        // 进入 CLI 时的欢迎语以 assistant 角色入历史（前面没有 user），会生成 [system, assistant, ...]
-        // 的非法序列。若 system 后首条历史不是 user，垫一条 user 占位兜底（不写回 history）。
-        if (messagesArray.size() == 1 && !historyCopy.isEmpty()) {
+        // 多条 system 消息同样适用：最后一条 system 后面必须紧跟 user。
+        // 进入 CLI 时的欢迎语以 assistant 角色入历史（前面没有 user），会生成 [system..., assistant, ...]
+        // 的非法序列。若最后一条 system 后首条历史不是 user，垫一条 user 占位兜底（不写回 history）。
+        if (!historyCopy.isEmpty()) {
             String firstRole = historyCopy.get(0).getRole();
             if (firstRole != null && !"user".equalsIgnoreCase(firstRole.trim())) {
                 JsonObject placeholder = new JsonObject();
@@ -462,25 +489,25 @@ public class LLMClient {
         return String.format("https://api.cloudflare.com/client/v4/accounts/%s/ai/v1/%s", accountId, endpoint);
     }
 
-    public AIResponse chat(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
+    public AIResponse chat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts) throws IOException {
         checkConfigLoaded();
 
         // 检测是否启用 FancyConsole 模式
         if (plugin.getConfigManager().isFancyConsoleAi()) {
-            return chatWithFancyConsole(player, session, systemPrompt);
+            return chatWithFancyConsole(player, session, systemPrompts);
         }
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAI(player, session, systemPrompt);
+            return chatWithOpenAI(player, session, systemPrompts);
         }
         // 否则使用 CloudFlare Workers AI
-        return chatWithCloudFlare(player, session, systemPrompt);
+        return chatWithCloudFlare(player, session, systemPrompts);
     }
 
     /**
      * 使用 FancyConsole 进行对话（OpenAI 兼容格式）
      */
-    private AIResponse chatWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
+    private AIResponse chatWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts) throws IOException {
         String apiUrl = plugin.getConfigManager().getFancyApiUrl();
         String apiKey = plugin.getFancyConsoleManager().getApiKey();
         String model = plugin.getConfigManager().getFancyModel();
@@ -497,7 +524,7 @@ public class LLMClient {
             }
         }
 
-        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompts);
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
@@ -555,7 +582,7 @@ public class LLMClient {
     /**
      * 使用 OpenAI 兼容 API 进行对话
      */
-    private AIResponse chatWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
+    private AIResponse chatWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts) throws IOException {
         String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
         String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getOpenAiModel();
@@ -597,7 +624,7 @@ public class LLMClient {
         }
 
         // 构建消息数组
-        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompts);
 
         // 构建请求体
         JsonObject bodyJson = new JsonObject();
@@ -876,7 +903,7 @@ public class LLMClient {
     /**
      * 使用 CloudFlare Workers AI 进行对话
      */
-    private AIResponse chatWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt) throws IOException {
+    private AIResponse chatWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts) throws IOException {
         // 将会话历史与 systemPrompt 打包为 CloudFlare Responses API 所需的 JSON，发起 HTTP 请求并解析返回
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
@@ -905,7 +932,7 @@ public class LLMClient {
 
         boolean useResponsesApi = model.contains("gpt-oss");
         // 使用公共方法构建消息数组
-        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompts);
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
@@ -1114,13 +1141,14 @@ public class LLMClient {
         DialogueSession tempSession = new DialogueSession();
         tempSession.addMessage("user", prompt);
         // chatSimple 用于风险评估等一次性调用：不带玩家（无工具门控），直接走当前 provider
+        List<String> defaultPrompts = java.util.Collections.singletonList("你是一个得力的助手。");
         if (plugin.getConfigManager().isFancyConsoleAi()) {
-            return chatWithFancyConsole(null, tempSession, "你是一个得力的助手。");
+            return chatWithFancyConsole(null, tempSession, defaultPrompts);
         }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatWithOpenAI(null, tempSession, "你是一个得力的助手。");
+            return chatWithOpenAI(null, tempSession, defaultPrompts);
         }
-        return chatWithCloudFlare(null, tempSession, "你是一个得力的助手。");
+        return chatWithCloudFlare(null, tempSession, defaultPrompts);
     }
 
     /**
@@ -2007,26 +2035,26 @@ public class LLMClient {
     /**
      * 使用流式输出进行对话
      * @param session 对话会话
-     * @param systemPrompt 系统提示
+     * @param systemPrompts 多条系统提示消息（按稳定度排列）
      * @param streamingHandler 流式处理器
      * @return 完整的响应文本
      */
-    public String chatStreaming(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    public String chatStreaming(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
         checkConfigLoaded();
 
         if (plugin.getConfigManager().isFancyConsoleAi()) {
-            return chatStreamingWithFancyConsole(player, session, systemPrompt, streamingHandler);
+            return chatStreamingWithFancyConsole(player, session, systemPrompts, streamingHandler);
         }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
-            return chatStreamingWithOpenAI(player, session, systemPrompt, streamingHandler);
+            return chatStreamingWithOpenAI(player, session, systemPrompts, streamingHandler);
         }
-        return chatStreamingWithCloudFlare(player, session, systemPrompt, streamingHandler);
+        return chatStreamingWithCloudFlare(player, session, systemPrompts, streamingHandler);
     }
 
     /**
      * 使用 FancyConsole 进行流式对话（OpenAI 兼容格式）
      */
-    private String chatStreamingWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
         String apiUrl = plugin.getConfigManager().getFancyApiUrl();
         String apiKey = plugin.getFancyConsoleManager().getApiKey();
         String model = plugin.getConfigManager().getFancyModel();
@@ -2043,7 +2071,7 @@ public class LLMClient {
             }
         }
 
-        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompts);
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
@@ -2094,7 +2122,7 @@ public class LLMClient {
     /**
      * 使用 OpenAI 兼容 API 进行流式对话
      */
-    private String chatStreamingWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
         String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
         String apiKey = plugin.getConfigManager().getOpenAiApiKey();
         String model = plugin.getConfigManager().getOpenAiModel();
@@ -2115,7 +2143,7 @@ public class LLMClient {
             }
         }
 
-        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompts);
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);
@@ -2165,7 +2193,7 @@ public class LLMClient {
     /**
      * 使用 CloudFlare Workers AI 进行流式对话
      */
-    private String chatStreamingWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, String systemPrompt, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
 
@@ -2188,7 +2216,7 @@ public class LLMClient {
 
         boolean useResponsesApi = model.contains("gpt-oss");
 
-        JsonArray messagesArray = buildMessagesArray(session, systemPrompt);
+        JsonArray messagesArray = buildMessagesArray(session, systemPrompts);
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("model", model);

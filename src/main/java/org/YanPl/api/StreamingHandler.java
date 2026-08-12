@@ -54,6 +54,8 @@ public class StreamingHandler {
     private final int readTimeoutSeconds;  // 流式读取超时秒数
     private long pendingUsageInput = 0;    // 流中最后一次出现的 usage 输入 token（累计值）
     private long pendingUsageOutput = 0;   // 流中最后一次出现的 usage 输出 token（累计值）
+    private long pendingUsageCacheHit = 0;   // 流中最后一次出现的 usage 缓存命中 token（DeepSeek 等提供）
+    private long pendingUsageCacheMiss = 0;  // 流中最后一次出现的 usage 缓存未命中 token
     private boolean usageSeen = false;     // 本次流是否出现过非零 usage
 
     // 原生函数调用（Native Function Calling）累加器
@@ -344,6 +346,13 @@ public class StreamingHandler {
                 } catch (Exception usageCallbackError) {
                     logger.warning("[Stream] token 用量回调异常: " + usageCallbackError.getMessage());
                 }
+                // 上下文缓存命中日志（每次请求只打一条，便于观察缓存命中率变化）
+                if (pendingUsageCacheHit > 0 || pendingUsageCacheMiss > 0) {
+                    long total = pendingUsageCacheHit + pendingUsageCacheMiss;
+                    long pct = total > 0 ? pendingUsageCacheHit * 100 / total : 0;
+                    logger.info("[Cache] 本次请求 prompt=" + pendingUsageInput
+                        + " 缓存命中=" + pendingUsageCacheHit + " (" + pct + "%) 未命中=" + pendingUsageCacheMiss);
+                }
             }
 
             // 完成回调：只在未被取消且未出错时触发
@@ -453,6 +462,13 @@ public class StreamingHandler {
                 if (pt > 0 || ct > 0) {
                     pendingUsageInput = pt;
                     pendingUsageOutput = ct;
+                    // 上下文缓存命中统计（DeepSeek 等返回 prompt_cache_hit_tokens / prompt_cache_miss_tokens）
+                    if (usage.has("prompt_cache_hit_tokens")) {
+                        pendingUsageCacheHit = usage.get("prompt_cache_hit_tokens").getAsLong();
+                    }
+                    if (usage.has("prompt_cache_miss_tokens")) {
+                        pendingUsageCacheMiss = usage.get("prompt_cache_miss_tokens").getAsLong();
+                    }
                     usageSeen = true;
                 }
             }

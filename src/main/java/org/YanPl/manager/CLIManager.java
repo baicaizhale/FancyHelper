@@ -2494,8 +2494,8 @@ public class CLIManager {
                 }
 
                 // 重试时使用存储的 matchedSkills 重新构建系统提示
-                String retrySystemPrompt = promptManager.getBaseSystemPrompt(player, retryInfo.matchedSkills);
-                AIResponse response = ai.chat(player, retryInfo.session, retrySystemPrompt);
+                List<String> retrySystemPrompts = promptManager.getBaseSystemPrompt(player, retryInfo.matchedSkills);
+                AIResponse response = ai.chat(player, retryInfo.session, retrySystemPrompts);
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     handleAIResponse(player, response);
@@ -2857,14 +2857,15 @@ public class CLIManager {
         });
 
         // 估算本轮输入的 prompt tokens 并记入 session
-        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message,
+        List<String> systemPrompts = promptManager.getSystemPromptForSession(player, matchedSkills, session.getMode(), message,
                 isNativeActiveForPrompt(player, session));
         String modelName = plugin.getConfigManager().getCloudflareModel();
-        int estimatedInput = DialogueSession.calculateTokens(systemPrompt, modelName)
+        int promptTokens = systemPrompts.stream().mapToInt(p -> DialogueSession.calculateTokens(p, modelName)).sum();
+        int estimatedInput = promptTokens
             + session.getEstimatedTokens(modelName) + 3;
         session.addInputTokens(estimatedInput);
 
-        String completeText = ai.chatStreaming(player, session, systemPrompt, streamingHandler);
+        String completeText = ai.chatStreaming(player, session, systemPrompts, streamingHandler);
         
         if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
             responseHandled[0] = true;
@@ -2941,10 +2942,10 @@ public class CLIManager {
 
     private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
         DialogueSession nsSession = sessions.get(player.getUniqueId());
-        String systemPrompt = promptManager.getSystemPromptForSession(player, matchedSkills,
+        List<String> systemPrompts = promptManager.getSystemPromptForSession(player, matchedSkills,
                 nsSession != null ? nsSession.getMode() : DialogueSession.Mode.NORMAL, message,
                 isNativeActiveForPrompt(player, nsSession));
-        AIResponse response = ai.chat(player, sessions.get(player.getUniqueId()), systemPrompt);
+        AIResponse response = ai.chat(player, sessions.get(player.getUniqueId()), systemPrompts);
 
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -3948,11 +3949,14 @@ public class CLIManager {
         String modelName = plugin.getConfigManager().getCloudflareModel();
 
         // 1. 计算 System Prompt Token（使用空列表，估算最大 Token 数）
-        String systemPrompt = promptManager.getBaseSystemPrompt(player, Collections.emptyList());
-        // System Prompt 是一条完整的消息: <|im_start|>system\n{content}<|im_end|>\n
-        int systemPromptTokens = DialogueSession.calculateTokens(systemPrompt, modelName);
-        systemPromptTokens += DialogueSession.calculateTokens("system", modelName);
-        systemPromptTokens += 3; // per-message overhead
+        // 多条独立 system 消息，每条都有 role + per-message 开销
+        List<String> systemPromptParts = promptManager.getBaseSystemPrompt(player, Collections.emptyList());
+        int systemPromptTokens = 0;
+        for (String part : systemPromptParts) {
+            systemPromptTokens += DialogueSession.calculateTokens(part, modelName);
+            systemPromptTokens += DialogueSession.calculateTokens("system", modelName);
+            systemPromptTokens += 3; // per-message overhead
+        }
 
         // 2. 获取历史记录 Token
         int historyTokens = session.getEstimatedTokens(modelName);
@@ -4170,7 +4174,7 @@ public class CLIManager {
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             // feedbackToAI 不需要匹配新 Skills，使用空列表
-            final String systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode(),
+            final List<String> systemPrompt = promptManager.getSystemPromptForSession(player, Collections.emptyList(), session.getMode(),
                     "", isNativeActiveForPrompt(player, session));
             
             // 设置重试回调，向玩家显示重试提示
@@ -4374,7 +4378,8 @@ public class CLIManager {
 
                     // 估算本轮输入的 prompt tokens 并记入 session
                     String modelName = plugin.getConfigManager().getCloudflareModel();
-                    int estimatedInput2 = DialogueSession.calculateTokens(systemPrompt, modelName)
+                    int promptTokens = systemPrompt.stream().mapToInt(p -> DialogueSession.calculateTokens(p, modelName)).sum();
+                    int estimatedInput2 = promptTokens
                         + session.getEstimatedTokens(modelName) + 3;
                     session.addInputTokens(estimatedInput2);
 
