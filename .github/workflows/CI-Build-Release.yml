@@ -63,7 +63,8 @@ jobs:
           cache: maven
 
       - name: 运行单元测试
-        run: mvn -B test
+        # pom 默认 skipTests=true（方便本地打包），CI 里显式覆盖为 false 让测试真正执行
+        run: mvn -B test -DskipTests=false
 
       - name: 上传测试报告
         if: always()
