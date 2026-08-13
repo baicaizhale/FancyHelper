@@ -1704,7 +1704,7 @@ public class LLMClient {
         JsonArray messagesArray = new JsonArray();
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        systemMsg.addProperty("content", "Title labeling task. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
         messagesArray.add(systemMsg);
 
         JsonObject userMsg = new JsonObject();
@@ -1820,7 +1820,7 @@ public class LLMClient {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        systemMsg.addProperty("content", "Title labeling task. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
         messagesArray.add(systemMsg);
 
         // user 消息
@@ -1896,7 +1896,7 @@ public class LLMClient {
         // system 消息
         JsonObject systemMsg = new JsonObject();
         systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", "Title labeling task. Do NOT think, reason, or echo. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
+        systemMsg.addProperty("content", "Title labeling task. Output ONLY: {\"title\": \"topic summary\"}. Describe the TOPIC of the message, do NOT repeat it. Same language.");
         messagesArray.add(systemMsg);
 
         // user 消息
