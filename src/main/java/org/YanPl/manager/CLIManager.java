@@ -2567,6 +2567,15 @@ public class CLIManager {
     }
 
     private void processStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {
+        runStreamingRound(player, message, matchedSkills, 1);
+    }
+
+    /**
+     * 单轮流式对话请求 + 思考循环自动重试链。
+     * @param attempt 1=正常轮（保留模型思考）；2=思考循环原样重试（仍保留思考，循环有随机性）；
+     *                3=仍循环则降级重试（附加 enable_thinking=false 关思考，牺牲一点能力换可用性）
+     */
+    private void runStreamingRound(Player player, String message, List<org.YanPl.model.Skill> matchedSkills, int attempt) throws IOException {
         UUID uuid = player.getUniqueId();
         DialogueSession session = sessions.get(uuid);
         
@@ -2726,6 +2735,14 @@ public class CLIManager {
                 String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
                 session.setLastThought(finalThought);
 
+                // 思考循环检测：模型长时间只输出思考内容未出正文（流被 StreamingHandler 主动中断）。
+                // 走自动重试链：原样重试 → 仍循环则降级关思考重试 → 仍失败明确提示，不再静默无输出。
+                // 中断轮的空响应不写入会话历史，避免污染上下文。
+                if (streamingHandler.isReasoningBudgetExceeded() && response.trim().isEmpty()) {
+                    handleThinkingLoopRetry(player, session, message, matchedSkills, attempt);
+                    return;
+                }
+
                 String formatted = convertMarkdownBoldToMinecraft(accumulatedText.toString());
                 formatted = ColorUtil.translateCustomColors(formatted);
                 
@@ -2880,10 +2897,16 @@ public class CLIManager {
             + session.getEstimatedTokens(modelName) + 3;
         session.addInputTokens(estimatedInput);
 
-        String completeText = ai.chatStreaming(player, session, systemPrompts, streamingHandler);
+        String completeText = ai.chatStreaming(player, session, systemPrompts, streamingHandler, attempt >= 3);
         
         if (!streamingHandler.isCancelled() && !responseHandled[0] && fullResponseText.length() == 0) {
             responseHandled[0] = true;
+
+            // 思考循环兜底（onComplete 未触发路径）：同样走自动重试链，避免玩家干等
+            if (streamingHandler.isReasoningBudgetExceeded() && (completeText == null || completeText.trim().isEmpty())) {
+                handleThinkingLoopRetry(player, session, message, matchedSkills, attempt);
+                return;
+            }
             
             String response = completeText;
             String thoughtContent = "";
@@ -2953,6 +2976,47 @@ public class CLIManager {
                 });
             });
         }
+    }
+
+    /**
+     * 思考循环自动重试链。
+     * 流式检测到"模型长时间只输出思考内容未出正文"（StreamingHandler 已中断流）时调用：
+     * attempt 1 → 静默原样重试（保留思考）；attempt 2 → 静默降级重试（关思考）；
+     * attempt 3 → 明确告知玩家失败，保存 retryInfo 供 /cli retry 使用。
+     * 前两轮重试对玩家静默（自动收敛，不打扰），仅最终失败才提示。
+     * @return true 表示已处理（调用方应直接返回，不再走正常完成逻辑）
+     */
+    private boolean handleThinkingLoopRetry(Player player, DialogueSession session, String message,
+                                            List<org.YanPl.model.Skill> matchedSkills, int attempt) {
+        if (attempt <= 2) {
+            // 重试轮必须放异步线程执行：runStreamingRound 内部有阻塞的 HTTP 流式读取，
+            // 调用方（onComplete 回调的 runTask）在主线程，直接同步重试会卡服（Watchdog 报 read 挂起）
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    runStreamingRound(player, message, matchedSkills, attempt + 1);
+                } catch (IOException e) {
+                    plugin.getLogger().warning("[CLI] 思考循环自动重试失败 - " + player.getName() + ": " + e.getMessage());
+                    Bukkit.getScheduler().runTask(plugin, () -> showThinkingLoopFailed(player, session, message, matchedSkills));
+                }
+            });
+            return true;
+        }
+        showThinkingLoopFailed(player, session, message, matchedSkills);
+        return true;
+    }
+
+    /**
+     * 思考循环重试链彻底失败：明确提示玩家，保存重试信息供 /cli retry 使用。
+     */
+    private void showThinkingLoopFailed(Player player, DialogueSession session, String message,
+                                        List<org.YanPl.model.Skill> matchedSkills) {
+        UUID uuid = player.getUniqueId();
+        player.sendMessage(I18n.t("clim.streaming.retry_failed"));
+        retryInfoMap.put(uuid, new RetryInfo(session, message, true, matchedSkills));
+        isGenerating.put(uuid, false);
+        generationStates.put(uuid, GenerationStatus.ERROR);
+        generationStartTimes.remove(uuid);
+        playFeedbackSound(player, "ai_error");
     }
 
     private void processNonStreamingMessage(Player player, String message, List<org.YanPl.model.Skill> matchedSkills) throws IOException {

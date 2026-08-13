@@ -33,6 +33,14 @@ import java.util.logging.Logger;
 public class StreamingHandler {
     private static final int MAX_LINE_WIDTH = 55;  // 视觉宽度阈值（中文字符=2，英文字符=1）
     private static final long READ_POLL_INTERVAL_MS = 100;  // 读取超时轮询间隔
+    // 思考内容预算（字符）：gemma-4 等思考模型正常思考几百~2000 字符即出正文，
+    // 超过该阈值仍无正文视为"思考循环"（反复输出同一段内心戏），流式侧主动中断，
+    // 避免上游一直吐 reasoning 把请求拖到超时/无输出（连接有数据，看门狗不会触发）。
+    private static final int THINKING_BUDGET = 4000;
+    // 思考时间预算（毫秒）：模型思考超时仍未出正文同样视为循环。
+    // 模型吐 reasoning 慢时字符预算可能迟迟达不到（HTTP 绝对超时先到，玩家看到超时错误），
+    // 时间维度在 HTTP 超时前中断，让循环走"自动重试链"而非报错。
+    private static final long THINKING_TIME_BUDGET_MS = 60000;
 
     private final FancyHelper plugin;
     private final StringBuffer buffer;  // 线程安全的 StringBuffer 替代 StringBuilder
@@ -49,6 +57,7 @@ public class StreamingHandler {
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
+    private volatile boolean reasoningBudgetExceeded = false;  // 思考内容超预算（疑似循环思考）已被中断
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
@@ -158,6 +167,14 @@ public class StreamingHandler {
     public boolean hasReasoningCompleteFired() {
         return reasoningCompleteFired;
     }
+
+    /**
+     * 本次流是否因"思考内容超预算（疑似循环思考）"被主动中断
+     * @return true 表示模型长时间只输出思考内容未出正文，流已被中断
+     */
+    public boolean isReasoningBudgetExceeded() {
+        return reasoningBudgetExceeded;
+    }
     
     /**
      * 取消流式输出
@@ -214,6 +231,9 @@ public class StreamingHandler {
         nativeToolCalls = List.of();
         StringBuilder fullText = new StringBuilder();
         StringBuilder nonSseFallback = new StringBuilder();  // 非SSE回退缓冲
+        // 流开始时间戳：用于"总时长预算"——即使模型完全不吐 reasoning（连接挂起/无数据），
+        // 只要超时仍未出正文也中断，让上层走自动重试链而非等 HTTP 绝对超时
+        long streamStartTime = System.currentTimeMillis();
 
         // 看门狗共享状态：只有真实模型数据（data: 行）才重置计时，
         // SSE 心跳注释行（如 ": keep-alive"）仅保活连接，不视为有效进度，
@@ -270,6 +290,26 @@ public class StreamingHandler {
                                     } catch (Exception cbError) {
                                         logger.warning("[Stream] 思考结束回调异常: " + cbError.getMessage());
                                     }
+                                }
+                            }
+
+                            // 思考循环检测：模型长时间只输出 reasoning_content（内心戏）不出正文，
+                            // 或连接挂起（既不吐思考也不吐正文）。SSE 连接可能一直有数据，看门狗不会触发；
+                            // 这里按思考内容量/时长（含无 reasoning 的挂起）主动中断，
+                            // 避免上游"思考循环/挂起"把请求拖到超时/无输出（日志表现为长时间无响应最后返回空）。
+                            if (!reasoningBudgetExceeded && fullText.length() == 0
+                                    && !reasoningCompleteFired
+                                    && (textChunk == null || textChunk.isEmpty())) {
+                                long thinkingMs = reasoningStartTime != -1
+                                        ? System.currentTimeMillis() - reasoningStartTime : 0;
+                                long elapsedMs = System.currentTimeMillis() - streamStartTime;
+                                boolean overChars = thoughtContent.length() > THINKING_BUDGET;
+                                boolean overTime = elapsedMs > THINKING_TIME_BUDGET_MS;
+                                if (overChars || overTime) {
+                                    reasoningBudgetExceeded = true;
+                                    logger.warning("[Stream] 思考超预算 (" + thoughtContent.length()
+                                            + " 字符/" + (elapsedMs / 1000) + "s) 仍未输出正文，疑似思考循环或挂起，已中断本次流");
+                                    break;
                                 }
                             }
 

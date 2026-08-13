@@ -387,6 +387,26 @@ public class LLMClient {
     }
 
     /**
+     * 附加"关闭思考"参数（仅降级重试时生效）。
+     * gemma-4 等思考模型的 thinking 是能力来源（工具调用、复杂任务依赖它），
+     * 正常请求必须保持开启；仅当流式检测到"思考循环"降级重试时，
+     * 通过 Workers AI 官方支持的 chat_template_kwargs.enable_thinking=false
+     * 让模型跳过内心戏直接回答（牺牲一点能力换可用性）。
+     * FancyConsole 是 CF 思考模型路由（fancy.model 常为 default），始终附加；
+     * CF 直连仅 gemma 系模型附加，避免影响 gpt-oss 等其他模型。
+     */
+    private void attachThinkingControl(JsonObject bodyJson, String model, boolean noThinking, boolean fancyConsole) {
+        if (!noThinking) {
+            return;
+        }
+        if (fancyConsole || (model != null && model.toLowerCase().contains("gemma"))) {
+            JsonObject chatTemplateKwargs = new JsonObject();
+            chatTemplateKwargs.addProperty("enable_thinking", false);
+            bodyJson.add("chat_template_kwargs", chatTemplateKwargs);
+        }
+    }
+
+    /**
      * 400/422 硬拒回退：克隆请求体并去掉 tools 字段，重试走文本协议。
      * tool_choice/parallel_tool_calls 与 tools 配对，一并移除，避免无 tools 时残留触发部分 provider 报错。
      */
@@ -2000,28 +2020,43 @@ public class LLMClient {
     }
 
     /**
-     * 使用流式输出进行对话
+     * 使用流式输出进行对话（默认保留模型思考）
+     * @param player 玩家
      * @param session 对话会话
      * @param systemPrompts 多条系统提示消息（按稳定度排列）
      * @param streamingHandler 流式处理器
      * @return 完整的响应文本
      */
     public String chatStreaming(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
+        return chatStreaming(player, session, systemPrompts, streamingHandler, false);
+    }
+
+    /**
+     * 使用流式输出进行对话
+     * @param player 玩家
+     * @param session 对话会话
+     * @param systemPrompts 多条系统提示消息（按稳定度排列）
+     * @param streamingHandler 流式处理器
+     * @param noThinking true 表示降级重试：附加 enable_thinking=false 让思考模型跳过内心戏直接回答
+     *                   （仅用于"思考循环"兜底，正常请求必须保持 false 以保留模型能力）
+     * @return 完整的响应文本
+     */
+    public String chatStreaming(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler, boolean noThinking) throws IOException {
         checkConfigLoaded();
 
         if (plugin.getConfigManager().isFancyConsoleAi()) {
-            return chatStreamingWithFancyConsole(player, session, systemPrompts, streamingHandler);
+            return chatStreamingWithFancyConsole(player, session, systemPrompts, streamingHandler, noThinking);
         }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(player, session, systemPrompts, streamingHandler);
         }
-        return chatStreamingWithCloudFlare(player, session, systemPrompts, streamingHandler);
+        return chatStreamingWithCloudFlare(player, session, systemPrompts, streamingHandler, noThinking);
     }
 
     /**
      * 使用 FancyConsole 进行流式对话（OpenAI 兼容格式）
      */
-    private String chatStreamingWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithFancyConsole(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler, boolean noThinking) throws IOException {
         String apiUrl = plugin.getConfigManager().getFancyApiUrl();
         String apiKey = plugin.getFancyConsoleManager().getApiKey();
         String model = plugin.getConfigManager().getFancyModel();
@@ -2053,6 +2088,7 @@ public class LLMClient {
         bodyJson.addProperty("stream", true);
         attachTemperature(bodyJson);
         attachNativeTools(bodyJson, player, session, model, false);
+        attachThinkingControl(bodyJson, model, noThinking, true);
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[FancyConsole Streaming] 请求: " + apiUrl + " 模型: " + model);
@@ -2075,6 +2111,28 @@ public class LLMClient {
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                // 400/422 且携带 chat_template_kwargs（降级关思考参数）被上游拒绝时：
+                // 剥掉该字段重试一次，避免代理不认该参数导致降级请求直接失败
+                if ((response.statusCode() == 400 || response.statusCode() == 422)
+                        && bodyJson.has("chat_template_kwargs")) {
+                    plugin.getLogger().warning("[FancyConsole Streaming] 上游拒绝 chat_template_kwargs ("
+                            + response.statusCode() + ")，剥掉该字段重试一次");
+                    bodyJson.remove("chat_template_kwargs");
+                    String retryBody = gson.toJson(bodyJson);
+                    HttpRequest retryRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(apiUrl))
+                            .header("Authorization", "Bearer " + apiKey)
+                            .header("Content-Type", "application/json; charset=utf-8")
+                            .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                            .POST(HttpRequest.BodyPublishers.ofString(retryBody, StandardCharsets.UTF_8))
+                            .build();
+                    HttpResponse<InputStream> retryResponse = httpClient.send(retryRequest, HttpResponse.BodyHandlers.ofInputStream());
+                    if (retryResponse.statusCode() != 200) {
+                        String retryError = new String(retryResponse.body().readAllBytes(), StandardCharsets.UTF_8);
+                        throw new IOException("FancyConsole 流式请求失败: " + retryResponse.statusCode() + " - " + retryError);
+                    }
+                    return streamingHandler.processStream(retryResponse);
+                }
                 throw new IOException("FancyConsole 流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
 
@@ -2160,7 +2218,7 @@ public class LLMClient {
     /**
      * 使用 CloudFlare Workers AI 进行流式对话
      */
-    private String chatStreamingWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithCloudFlare(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler, boolean noThinking) throws IOException {
         String cfKey = plugin.getConfigManager().getCloudflareCfKey();
         String model = plugin.getConfigManager().getCloudflareModel();
 
@@ -2189,6 +2247,7 @@ public class LLMClient {
         bodyJson.addProperty("model", model);
         bodyJson.addProperty("max_tokens", 10000);
         attachTemperature(bodyJson);
+        attachThinkingControl(bodyJson, model, noThinking, false);
 
         if (useResponsesApi) {
             // gpt-oss 模型通过 Responses API 不支持流式，走非流式请求
@@ -2253,6 +2312,27 @@ public class LLMClient {
                 }
                 if (response.statusCode() == 429) {
                     throw new IOException(getCloudflare429Message());
+                }
+                // 400/422 且携带 chat_template_kwargs（降级关思考参数）被上游拒绝时：
+                // 剥掉该字段重试一次，避免上游不认该参数导致降级请求直接失败
+                if ((response.statusCode() == 400 || response.statusCode() == 422)
+                        && bodyJson.has("chat_template_kwargs")) {
+                    plugin.getLogger().warning("[AI] 上游拒绝 chat_template_kwargs (" + response.statusCode() + ")，剥掉该字段重试一次");
+                    bodyJson.remove("chat_template_kwargs");
+                    String retryBody = gson.toJson(bodyJson);
+                    HttpRequest retryRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(url))
+                            .header("Authorization", "Bearer " + cfKey)
+                            .header("Content-Type", "application/json; charset=utf-8")
+                            .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
+                            .POST(HttpRequest.BodyPublishers.ofString(retryBody, StandardCharsets.UTF_8))
+                            .build();
+                    HttpResponse<InputStream> retryResponse = httpClient.send(retryRequest, HttpResponse.BodyHandlers.ofInputStream());
+                    if (retryResponse.statusCode() != 200) {
+                        String retryError = new String(retryResponse.body().readAllBytes(), StandardCharsets.UTF_8);
+                        throw new IOException("流式请求失败: " + retryResponse.statusCode() + " - " + retryError);
+                    }
+                    return streamingHandler.processStream(retryResponse);
                 }
                 throw new IOException("流式请求失败: " + response.statusCode() + " - " + errorBody);
             }
