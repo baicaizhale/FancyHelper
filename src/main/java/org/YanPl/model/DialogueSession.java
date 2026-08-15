@@ -815,7 +815,8 @@ public class DialogueSession {
         }
 
         public boolean hasThought() {
-            return thought != null && !thought.isEmpty();
+            // 空/纯空白思考视为无思考，不呈现 Thought 按钮
+            return thought != null && !thought.trim().isEmpty();
         }
     }
 }

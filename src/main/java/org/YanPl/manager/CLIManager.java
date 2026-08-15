@@ -2603,7 +2603,7 @@ public class CLIManager {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline()) return;
                 String currentThought = streamingHandler.getThoughtContent();
-                if (currentThought == null || currentThought.isEmpty()) return;
+                if (currentThought == null || currentThought.trim().isEmpty()) return;
 
                 // 提前设置思考内容，让 /cli thought 可立即访问
                 session.setLastThought(currentThought);
@@ -2800,7 +2800,7 @@ public class CLIManager {
                 }
 
                 // 流式模式也显示思考按钮（仅当 reasoning-complete 未触发时作为 fallback，如标签提取的思考）
-                if (finalThought != null && !streamingHandler.hasReasoningCompleteFired()) {
+                if (finalThought != null && !finalThought.trim().isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
                     long thoughtMessageId = -1;
                     long thoughtThinkingTimeMs = session.getLastThinkingTimeMs();
                     List<DialogueSession.Message> history = session.getHistory();
@@ -4316,7 +4316,7 @@ public class CLIManager {
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             if (!player.isOnline()) return;
                             String currentThought = streamingHandler.getThoughtContent();
-                            if (currentThought == null || currentThought.isEmpty()) return;
+                            if (currentThought == null || currentThought.trim().isEmpty()) return;
 
                             session.setLastThought(currentThought);
                             session.addThinkingTime(thinkingTimeMs);
@@ -4408,7 +4408,7 @@ public class CLIManager {
                             String thought = streamingHandler.getThoughtContent();
 
                             // 流式模式也显示思考按钮（仅当 reasoning-complete 未触发时作为 fallback，如标签提取的思考）
-                            if (thought != null && !thought.isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
+                            if (thought != null && !thought.trim().isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
                                 long fbThoughtMessageId = -1;
                                 long fbThoughtThinkingTimeMs = session.getLastThinkingTimeMs();
                                 List<DialogueSession.Message> history = session.getHistory();
@@ -4489,7 +4489,7 @@ public class CLIManager {
                         if (!plugin.isEnabled()) return;
                         Bukkit.getScheduler().runTask(plugin, () -> {
                             // 回退路径也显示思考按钮（reasoning-complete 未触发时的 fallback）
-                            if (thought != null && !thought.isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
+                            if (thought != null && !thought.trim().isEmpty() && !streamingHandler.hasReasoningCompleteFired()) {
                                 long fbThoughtMessageId = -1;
                                 long fbThoughtThinkingTimeMs = session.getLastThinkingTimeMs();
                                 List<DialogueSession.Message> history = session.getHistory();
@@ -4865,7 +4865,7 @@ public class CLIManager {
                 }
             }
             
-            if (thoughtToShow != null) {
+            if (thoughtToShow != null && !thoughtToShow.trim().isEmpty()) {
                 TextComponent thoughtBtn = new TextComponent(ChatColor.GRAY + " ○ Thought");
                 // 传递 messageId 以便稳定地回放对应 Thought（避免历史裁剪导致索引漂移）
                 String cmd = "/cli thought" + (thoughtMessageId != -1 ? " t:" + thoughtMessageId : "");
@@ -4969,7 +4969,7 @@ public class CLIManager {
             thought = session.getLastThought();
         }
 
-        if (thought == null) {
+        if (thought == null || thought.trim().isEmpty()) {
             player.sendMessage(ColorUtil.translateCustomColors("§zFancyHelper§b§r §7> §f找不到对应的思考过程。"));
             return;
         }
