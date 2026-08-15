@@ -76,6 +76,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 return handleBind((Player) sender, args);
+            case "serverid":
+                handleServerId(sender);
+                break;
             case "reload":
                 if (!sender.hasPermission("fancyhelper.reload")) {
                     sender.sendMessage(I18n.t("cli.no.perm.reload"));
@@ -204,6 +207,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(I18n.t("cli.help.reload"));
         sender.sendMessage(I18n.t("cli.help.reload.deep"));
         sender.sendMessage(I18n.t("cli.help.status"));
+        sender.sendMessage(I18n.t("cli.help.serverid"));
         sender.sendMessage(I18n.t("cli.help.stats"));
         sender.sendMessage(I18n.t("cli.help.checkupdate"));
         sender.sendMessage(I18n.t("cli.help.upgrade"));
@@ -668,6 +672,19 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         player.spigot().sendMessage(actionLine);
 
         player.sendMessage(ColorUtil.translateCustomColors("&8&m----------------------------------------"));
+    }
+
+    /**
+     * 输出当前服务器的 Server ID（无需权限，控制台与玩家均可用）。
+     * Server ID 在 client-fancy.yml 首次生成时自动创建为 UUID。
+     */
+    private void handleServerId(CommandSender sender) {
+        String serverId = plugin.getFancyConsoleManager().getServerId();
+        if (serverId == null || serverId.trim().isEmpty()) {
+            sender.sendMessage(I18n.t("cli.serverid.not.set"));
+            return;
+        }
+        sender.sendMessage(I18n.t("cli.reg.server.id", serverId.trim()));
     }
 
     /**
@@ -1924,7 +1941,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "bind", "reload", "status", "stats", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
+                "bind", "serverid", "reload", "status", "stats", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
