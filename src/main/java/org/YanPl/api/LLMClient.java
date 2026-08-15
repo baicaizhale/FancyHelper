@@ -103,6 +103,37 @@ public class LLMClient {
         throw new IOException("请求失败：超过最大重试次数");
     }
 
+    /**
+     * 发送流式 HTTP 请求并带有重试机制（与 sendWithRetry 相同的偶发网络错误判定）。
+     * 流式/SSE 请求此前直接 httpClient.send，遇到 "header parser received no bytes" /
+     * Connection reset / EOF reached 等偶发错误会直接失败给玩家；此处统一重试，
+     * 降低 FancyConsole 链路偶发断连的影响。注意：仅在 send 阶段重试（此时尚未开始
+     * processStream，onErrorCallback 未触发，重试是安全的）。
+     */
+    private <T> HttpResponse<T> sendWithRetryStream(HttpRequest request, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        int maxRetries = 3;
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                return httpClient.send(request, handler);
+            } catch (IOException e) {
+                String errorMsg = e.getMessage();
+                // 常见的偶发性网络错误，值得重试
+                if (errorMsg != null && (errorMsg.contains("header parser received no bytes") ||
+                    errorMsg.contains("Connection reset") ||
+                    errorMsg.contains("EOF reached"))) {
+                    plugin.getLogger().warning("[ReTry] 流式网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
+                    if (i < maxRetries - 1) {
+                        Thread.sleep(500 * (i + 1)); // 指数退避
+                        continue;
+                    }
+                }
+                throw e; // 达到最大重试次数或非偶发性错误，抛出异常
+            }
+        }
+        // 理论上不会到达这里，除非 maxRetries <= 0
+        throw new IOException("请求失败：超过最大重试次数");
+    }
+
     public void shutdown() {
         // Java 标准库的 HttpClient 不需要显式关闭
         // 它使用系统默认的 executor，会随 JVM 退出而终止
@@ -1203,7 +1234,7 @@ public class LLMClient {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<java.io.InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
@@ -1291,7 +1322,7 @@ public class LLMClient {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<java.io.InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
@@ -1382,7 +1413,7 @@ public class LLMClient {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<java.io.InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
@@ -2107,7 +2138,7 @@ public class LLMClient {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
@@ -2126,7 +2157,7 @@ public class LLMClient {
                             .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
                             .POST(HttpRequest.BodyPublishers.ofString(retryBody, StandardCharsets.UTF_8))
                             .build();
-                    HttpResponse<InputStream> retryResponse = httpClient.send(retryRequest, HttpResponse.BodyHandlers.ofInputStream());
+                    HttpResponse<InputStream> retryResponse = sendWithRetryStream(retryRequest, HttpResponse.BodyHandlers.ofInputStream());
                     if (retryResponse.statusCode() != 200) {
                         String retryError = new String(retryResponse.body().readAllBytes(), StandardCharsets.UTF_8);
                         throw new IOException("FancyConsole 流式请求失败: " + retryResponse.statusCode() + " - " + retryError);
@@ -2195,7 +2226,7 @@ public class LLMClient {
                     .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
@@ -2301,7 +2332,7 @@ public class LLMClient {
                 return fullText;
             }
 
-            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
@@ -2327,7 +2358,7 @@ public class LLMClient {
                             .timeout(Duration.ofSeconds(plugin.getConfigManager().getApiTimeoutSeconds()))
                             .POST(HttpRequest.BodyPublishers.ofString(retryBody, StandardCharsets.UTF_8))
                             .build();
-                    HttpResponse<InputStream> retryResponse = httpClient.send(retryRequest, HttpResponse.BodyHandlers.ofInputStream());
+                    HttpResponse<InputStream> retryResponse = sendWithRetryStream(retryRequest, HttpResponse.BodyHandlers.ofInputStream());
                     if (retryResponse.statusCode() != 200) {
                         String retryError = new String(retryResponse.body().readAllBytes(), StandardCharsets.UTF_8);
                         throw new IOException("流式请求失败: " + retryResponse.statusCode() + " - " + retryError);

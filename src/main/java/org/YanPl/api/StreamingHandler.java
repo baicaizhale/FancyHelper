@@ -300,8 +300,6 @@ public class StreamingHandler {
                             if (!reasoningBudgetExceeded && fullText.length() == 0
                                     && !reasoningCompleteFired
                                     && (textChunk == null || textChunk.isEmpty())) {
-                                long thinkingMs = reasoningStartTime != -1
-                                        ? System.currentTimeMillis() - reasoningStartTime : 0;
                                 long elapsedMs = System.currentTimeMillis() - streamStartTime;
                                 boolean overChars = thoughtContent.length() > THINKING_BUDGET;
                                 boolean overTime = elapsedMs > THINKING_TIME_BUDGET_MS;
@@ -314,6 +312,16 @@ public class StreamingHandler {
                             }
 
                             if (textChunk != null && !textChunk.isEmpty()) {
+                                // 流起始（尚无任何正文）时裁掉正文前的空白占位。
+                                // 部分模型（如 FancyConsole default → agnes-2.5-flash）正文前会先输出
+                                // \n 或 \n\n 等空白 delta，若原样进入 buffer，CLIManager 按行切分后
+                                // 会在玩家聊天框产生 "◆ " 空行 + 缩进正文（正文开始后的段落空行不受影响）。
+                                if (fullText.length() == 0) {
+                                    textChunk = ltrim(textChunk);
+                                    if (textChunk.isEmpty()) {
+                                        continue; // 前导纯空白 chunk：丢弃，不进入 buffer/fullText
+                                    }
+                                }
                                 fullText.append(textChunk);
 
                                 if (!toolCallDetected) {
@@ -366,8 +374,12 @@ public class StreamingHandler {
                     String fallbackText = extractTextFromSSE(fallbackJson);
                     if (fallbackText != null && !fallbackText.isEmpty()) {
                         logger.info("[Stream] 从非SSE响应中提取到文本 (长度: " + fallbackText.length() + ")");
-                        fullText.append(fallbackText);
-                        buffer.append(fallbackText);
+                        // 与流式路径一致：非SSE回退同样裁掉正文前导空白
+                        fallbackText = ltrim(fallbackText);
+                        if (!fallbackText.isEmpty()) {
+                            fullText.append(fallbackText);
+                            buffer.append(fallbackText);
+                        }
                     }
                 } catch (Exception e) {
                     logger.warning("[Stream] 非SSE回退解析失败: " + e.getMessage());
@@ -493,9 +505,15 @@ public class StreamingHandler {
                 return null;
             }
 
+            // 标记本 chunk 是否包含 reasoning（思考）内容或纯控制信息
+            // （finish_reason / usage / tool_calls），若是则无需在末尾打印"无法提取文本"的调试日志
+            boolean hasReasoningInChunk = false;
+            boolean hasControlData = false;
+
             // 检测 SSE usage 字段（API 返回的真实 token 消耗）。
             // 某些模型会在每个 chunk 都附带 usage（累计值），只暂存最后一次，流结束时统一触发一次
             if (json.has("usage") && json.get("usage").isJsonObject()) {
+                hasControlData = true; // 纯 usage 统计 chunk，由上方代码消费，不是"无法提取"的异常
                 JsonObject usage = json.getAsJsonObject("usage");
                 long pt = usage.has("prompt_tokens") ? usage.get("prompt_tokens").getAsLong() : 0;
                 long ct = usage.has("completion_tokens") ? usage.get("completion_tokens").getAsLong() : 0;
@@ -513,19 +531,23 @@ public class StreamingHandler {
                 }
             }
 
-            // 标记本 chunk 是否包含 reasoning（思考）内容，
-            // 若是则无需在末尾打印"无法提取文本"的调试日志
-            boolean hasReasoningInChunk = false;
-
             // 1. 尝试解析 OpenAI 格式 (choices 数组)
             if (json.has("choices") && json.get("choices").isJsonArray()) {
                 var choices = json.getAsJsonArray("choices");
                 if (choices.size() > 0) {
                     var choice = choices.get(0).getAsJsonObject();
+                    // 流结束标记（finish_reason）chunk：无文本，不打印"无法提取"
+                    if (choice.has("finish_reason") && !choice.get("finish_reason").isJsonNull()) {
+                        hasControlData = true;
+                    }
                     if (choice.has("delta") && choice.get("delta").isJsonObject()) {
                         var delta = choice.getAsJsonObject("delta");
                         // 原生函数调用：tool_calls 与 content 可能同框出现，必须在 return 前处理
                         handleDeltaToolCalls(delta);
+                        // 纯 tool_calls 增量由 handleDeltaToolCalls 消费，不是"无法提取"的异常
+                        if (delta.has("tool_calls") && !delta.get("tool_calls").isJsonNull()) {
+                            hasControlData = true;
+                        }
                         if (delta.has("content") && !delta.get("content").isJsonNull()) {
                             // 首次从 reasoning 切换到 content，标记思考结束
                             if (!reasoningCompleteFired && !reasoningJustCompleted && reasoningStartTime != -1 && thoughtContent.length() > 0) {
@@ -621,6 +643,7 @@ public class StreamingHandler {
                 }
                 // 原生函数调用（防御性）：gpt-oss 当前走非流式，此分支为未来流式 Responses 预留
                 if ("response.output_item.added".equals(type)) {
+                    hasControlData = true; // 控制事件，由下方逻辑消费，不是"无法提取"的异常
                     if (json.has("data") && json.get("data").isJsonObject()) {
                         JsonObject innerData = json.getAsJsonObject("data");
                         JsonObject item = innerData.has("item") && innerData.get("item").isJsonObject()
@@ -636,6 +659,7 @@ public class StreamingHandler {
                     return null;
                 }
                 if ("response.function_call_arguments.delta".equals(type)) {
+                    hasControlData = true; // 工具调用参数增量，由下方逻辑消费
                     if (json.has("data") && json.get("data").isJsonObject()) {
                         JsonObject innerData = json.getAsJsonObject("data");
                         if (innerData.has("delta") && !innerData.get("delta").isJsonNull()) {
@@ -750,8 +774,8 @@ public class StreamingHandler {
             }
 
             // 如果到这里，可能是其他格式的 SSE 数据（如 [DONE] 标记或控制信息）
-            // reasoning 内容已在前面捕获，跳过日志避免噪音
-            if (plugin.getConfigManager().isDebug() && !hasReasoningInChunk) {
+            // reasoning 内容/控制信息已在前面捕获，跳过日志避免噪音
+            if (plugin.getConfigManager().isDebug() && !hasReasoningInChunk && !hasControlData) {
                 logger.info("[Stream] 无法从JSON中提取文本内容: " + jsonStr);
             }
 
@@ -1004,6 +1028,17 @@ public class StreamingHandler {
             end--;
         }
         return text.substring(0, end);
+    }
+
+    /**
+     * 去掉字符串前导空白字符（空格、\r、\n、\t 等）
+     */
+    private static String ltrim(String text) {
+        int start = 0;
+        while (start < text.length() && Character.isWhitespace(text.charAt(start))) {
+            start++;
+        }
+        return text.substring(start);
     }
 
     /**

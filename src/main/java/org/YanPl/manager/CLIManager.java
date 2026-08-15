@@ -1547,14 +1547,16 @@ public class CLIManager {
         DialogueSession session = sessions.get(uuid);
         if (session == null) return;
 
-        isGenerating.put(uuid, true); // 设置生成状态，防止在此期间玩家输入触发新的 AI 调用
+        // 注意：此处不能设置 isGenerating=true。问候语是 0.3s 后延迟展示的，
+        // 若进入 CLI 时置 true，玩家紧接着发消息会被"请不要在生成内容时发送消息"误拦
+        // （0.3s 窗口竞态，实测进入后立即输入必中招）。问候语只是插件自身展示+写历史，
+        // 不需要拦截玩家输入。
 
         // 进入 CLI 后 0.3s 延迟展示 (约 6 ticks)
         if (!plugin.isEnabled()) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            try {
-                // 检查玩家是否仍在线且在 CLI 模式中
-                if (!plugin.isEnabled() || !activeCLIPayers.contains(uuid) || !player.isOnline()) return;
+            // 检查玩家是否仍在线且在 CLI 模式中
+            if (!plugin.isEnabled() || !activeCLIPayers.contains(uuid) || !player.isOnline()) return;
 
                 // 1. 获取基于时间的问候语
                 int hour = java.time.LocalDateTime.now().getHour();
@@ -1593,10 +1595,6 @@ public class CLIManager {
                 // 4. 将问候语记录到对话历史中，让 AI 知道已经打过招呼了
                 String fullGreeting = timeGreeting + "，" + player.getName() + "。" + randomHelp;
                 session.addMessage("assistant", fullGreeting);
-            } finally {
-                // 确保生成状态为 false，允许玩家开始输入
-                isGenerating.put(uuid, false);
-            }
         }, 6L);
     }
 
@@ -1691,6 +1689,16 @@ public class CLIManager {
             }
         }
         
+        // 退出前取消进行中的流式输出：多轮工具调用（技能/搜索/执行）的反馈轮会发起异步
+        // 流式请求，若不 cancel，该请求在会话销毁后仍会执行回调并重新 isGenerating.put(true)，
+        // 导致下一场会话首条消息被"请不要在生成内容时发送消息"拦截（约 90s 后自愈）。
+        // cancel() 置 isCancelled 并清空回调，processStream 走取消分支静默返回，异步尾巴不再执行。
+        StreamingHandler exitingHandler = activeStreamingHandlers.get(uuid);
+        if (exitingHandler != null) {
+            exitingHandler.cancel();
+            activeStreamingHandlers.remove(uuid);
+        }
+
         activeCLIPayers.remove(uuid);
         pendingAgreementPlayers.remove(uuid);
         pendingYoloAgreementPlayers.remove(uuid);
