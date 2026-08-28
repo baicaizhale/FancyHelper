@@ -22,6 +22,7 @@ import org.YanPl.manager.SkillManager;
 import org.YanPl.manager.SkillUpdateManager;
 import org.YanPl.manager.StatsManager;
 import org.YanPl.manager.FancyConsoleManager;
+import org.YanPl.manager.FancyHealthMonitor;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.YanPl.util.I18n;
@@ -65,6 +66,7 @@ public final class FancyHelper extends JavaPlugin {
     private StatsManager statsManager;
     private McpManager mcpManager;
     private FancyConsoleManager fancyConsoleManager;
+    private FancyHealthMonitor fancyHealthMonitor;
 
     @Override
     public void onEnable() {
@@ -183,6 +185,10 @@ public final class FancyHelper extends JavaPlugin {
 
             // 当提供商使用 Fancy 且已配置 API Key 时，校验该 Key 对当前 server-id 是否有效
             checkFancyConsoleApiKey();
+
+            // 启动 FancyConsole 健康监控（仅 provider.ai: fancy 时生效，内部自含门控）
+            fancyHealthMonitor = new FancyHealthMonitor(this, fancyConsoleManager);
+            fancyHealthMonitor.start();
 
             // 检查 server.properties 中的安全配置并提示
             checkSecureProfile();
@@ -348,10 +354,10 @@ public final class FancyHelper extends JavaPlugin {
                 }
 
                 String error = result.error != null ? result.error : "验证失败";
-                // 连接失败不代表 Key 无效，仅调试模式提示，避免误报
-                if (error.startsWith("无法连接到")) {
+                // 服务不可用（宕机/网关错误/网络异常）不代表 Key 无效，仅调试模式提示，避免误报
+                if (result.serviceUnavailable) {
                     if (configManager.isDebug()) {
-                        getLogger().warning("[FancyConsole] API Key 验证时无法连接服务端: " + error);
+                        getLogger().warning("[FancyConsole] API Key 验证时服务不可用: " + error);
                     }
                     return;
                 }
@@ -483,6 +489,11 @@ public final class FancyHelper extends JavaPlugin {
             mcpManager.shutdown();
         }
 
+        // 停止 FancyConsole 健康监控
+        if (fancyHealthMonitor != null) {
+            fancyHealthMonitor.shutdown();
+        }
+
         // 保存统计数据
         if (statsManager != null) {
             statsManager.save();
@@ -504,6 +515,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public FancyConsoleManager getFancyConsoleManager() {
         return fancyConsoleManager;
+    }
+
+    public FancyHealthMonitor getFancyHealthMonitor() {
+        return fancyHealthMonitor;
     }
 
     public WorkspaceIndexer getWorkspaceIndexer() {

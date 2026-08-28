@@ -117,6 +117,37 @@ public class FancyConsoleManager {
     }
 
     /**
+     * 检查 FancyConsole 服务是否健康（GET /health）。
+     * @return true 表示 HTTP 200（服务可用）；连接失败/超时/非 200 一律返回 false
+     */
+    public boolean checkHealth() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(getConsoleUrl() + "/health"))
+                    .header("Accept", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 判断 HTTP 状态码是否表示"服务不可用"（5xx 及网关错误）。
+     * 仅把 >=500 视为服务不可用，避免把"key 确实错误"的 4xx（如 401/403）误判为宕机。
+     *
+     * @param status HTTP 状态码
+     * @return true 表示服务端错误（服务宕机/过载/网关错误）
+     */
+    public static boolean isServiceUnavailableStatus(int status) {
+        return status >= 500;
+    }
+
+    /**
      * 向 FancyConsole 验证 API Key 是否有效
      * @param apiKey 要验证的 API Key
      * @return 验证结果
@@ -135,7 +166,21 @@ public class FancyConsoleManager {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            JsonObject json = gson.fromJson(response.body(), JsonObject.class);
+
+            // 服务不可用（5xx/网关错误）：fancyapi 宕机时网关常返回 502/503/504，
+            // 这不是 key 无效，不得让上层误报"API Key 无效"。
+            if (isServiceUnavailableStatus(response.statusCode())) {
+                return ValidateKeyResult.serviceUnavailable("FancyConsole 服务不可用 (HTTP " + response.statusCode() + ")");
+            }
+
+            JsonObject json;
+            try {
+                json = gson.fromJson(response.body(), JsonObject.class);
+            } catch (Exception e) {
+                // 响应体非 JSON（如网关 HTML 错误页）：无法判断 key 有效性，
+                // 视为服务异常而非 key 无效，避免误报。
+                return ValidateKeyResult.serviceUnavailable("FancyConsole 响应解析失败");
+            }
 
             if (response.statusCode() == 200 && json.has("valid") && json.get("valid").getAsBoolean()) {
                 String email = json.has("user") ? json.getAsJsonObject("user").get("email").getAsString() : "";
@@ -147,7 +192,7 @@ public class FancyConsoleManager {
             return new ValidateKeyResult(false, null, null, error);
 
         } catch (Exception e) {
-            return new ValidateKeyResult(false, null, null, "无法连接到 FancyConsole: " + e.getMessage());
+            return ValidateKeyResult.serviceUnavailable("无法连接到 FancyConsole: " + e.getMessage());
         }
     }
 
@@ -231,19 +276,28 @@ public class FancyConsoleManager {
         public final String email;
         public final String tier;
         public final String error;
+        /** 服务不可用（宕机/网关错误/网络异常）：不能据此判定 key 无效。 */
+        public final boolean serviceUnavailable;
 
         public ValidateKeyResult(boolean valid, String email, String tier) {
-            this.valid = valid;
-            this.email = email;
-            this.tier = tier;
-            this.error = null;
+            this(valid, email, tier, null, false);
         }
 
         public ValidateKeyResult(boolean valid, String email, String tier, String error) {
+            this(valid, email, tier, error, false);
+        }
+
+        public ValidateKeyResult(boolean valid, String email, String tier, String error, boolean serviceUnavailable) {
             this.valid = valid;
             this.email = email;
             this.tier = tier;
             this.error = error;
+            this.serviceUnavailable = serviceUnavailable;
+        }
+
+        /** 服务不可用（宕机/网关错误/网络异常）时的结果：不视为 key 无效。 */
+        public static ValidateKeyResult serviceUnavailable(String error) {
+            return new ValidateKeyResult(false, null, null, error, true);
         }
     }
 }

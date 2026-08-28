@@ -178,6 +178,11 @@ public class I18n {
         Map.entry("cli.bind.now.use", "§7  现在可以使用 §b/cli §7进入 AI 对话了"),
         Map.entry("cli.bind.failed", "验证失败"),
         Map.entry("cli.bind.check", "§7  请确认 API Key 正确，或重新在网页注册"),
+        // ---- 健康检查 / 宕机门控 ----
+        Map.entry("cli.health.checking", "§zFancyHelper§b§r §7> §f正在检查 FancyConsole 服务状态..."),
+        Map.entry("cli.health.down", "§zFancyHelper§b§r §7> §c抱歉，FancyConsole AI 服务暂时不可用。您可以手动配置第三方 OpenAI 兼容提供商继续使用，教程："),
+        Map.entry("cli.health.down.link", "§8[ §b点击查看教程 §8]"),
+        Map.entry("cli.health.down.link.hover", "§7点击打开第三方提供商配置教程"),
         // ---- 重载 / 深度重载 ----
         Map.entry("cli.reload.all", "§zFancyHelper§b§r §7> §f配置、玩家数据、FancyConsole、工作区、EULA、Skill 与 MCP 已重新加载。"),
         Map.entry("cli.reload.workspace", "§zFancyHelper§b§r §7> §f工作区索引已重新加载。"),
@@ -757,6 +762,11 @@ public class I18n {
         Map.entry("cli.bind.now.use", "§7  You can now use §b/cli §7to enter the AI conversation"),
         Map.entry("cli.bind.failed", "Verification failed"),
         Map.entry("cli.bind.check", "§7  Please confirm the API Key is correct, or re-register on the website"),
+        // ---- 健康检查 / 宕机门控 ----
+        Map.entry("cli.health.checking", "§zFancyHelper§b§r §7> §fChecking FancyConsole service status..."),
+        Map.entry("cli.health.down", "§zFancyHelper§b§r §7> §cSorry, the FancyConsole AI service is temporarily unavailable. You can manually configure a third-party OpenAI-compatible provider to continue, see:"),
+        Map.entry("cli.health.down.link", "§8[ §bClick here for the guide §8]"),
+        Map.entry("cli.health.down.link.hover", "§7Click to open the third-party provider configuration guide"),
         // ---- 重载 / 深度重载 ----
         Map.entry("cli.reload.all", "§zFancyHelper§b§r §7> §fConfig, player data, FancyConsole, workspace, EULA, Skills and MCP reloaded."),
         Map.entry("cli.reload.workspace", "§zFancyHelper§b§r §7> §fWorkspace index reloaded."),
@@ -1336,6 +1346,11 @@ public class I18n {
         Map.entry("cli.bind.now.use", "§7  今可用 §b/cli §7入 AI 之谈矣"),
         Map.entry("cli.bind.failed", "验证不成"),
         Map.entry("cli.bind.check", "§7  请确 API Key 无误，或于网页重注"),
+        // ---- 健康检查 / 宕机门控 ----
+        Map.entry("cli.health.checking", "§zFancyHelper§b§r §7> §f方查 FancyConsole 之态..."),
+        Map.entry("cli.health.down", "§zFancyHelper§b§r §7> §c抱歉，FancyConsole AI 之役暂不可用。君可自配第三方 OpenAI 兼容之提供者以继用，教程："),
+        Map.entry("cli.health.down.link", "§8[ §b点此观教程 §8]"),
+        Map.entry("cli.health.down.link.hover", "§7点开第三方提供者配置教程"),
         // ---- 重载 / 深度重载 ----
         Map.entry("cli.reload.all", "§zFancyHelper§b§r §7> §f配置、玩家之数、FancyConsole、工坊、EULA、Skill 与 MCP 皆已重载。"),
         Map.entry("cli.reload.workspace", "§zFancyHelper§b§r §7> §f工坊之索已重载。"),
