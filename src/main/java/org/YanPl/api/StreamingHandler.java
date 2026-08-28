@@ -33,14 +33,12 @@ import java.util.logging.Logger;
 public class StreamingHandler {
     private static final int MAX_LINE_WIDTH = 55;  // 视觉宽度阈值（中文字符=2，英文字符=1）
     private static final long READ_POLL_INTERVAL_MS = 100;  // 读取超时轮询间隔
-    // 思考内容预算（字符）：gemma-4 等思考模型正常思考几百~2000 字符即出正文，
-    // 超过该阈值仍无正文视为"思考循环"（反复输出同一段内心戏），流式侧主动中断，
-    // 避免上游一直吐 reasoning 把请求拖到超时/无输出（连接有数据，看门狗不会触发）。
-    private static final int THINKING_BUDGET = 4000;
-    // 思考时间预算（毫秒）：模型思考超时仍未出正文同样视为循环。
-    // 模型吐 reasoning 慢时字符预算可能迟迟达不到（HTTP 绝对超时先到，玩家看到超时错误），
-    // 时间维度在 HTTP 超时前中断，让循环走"自动重试链"而非报错。
-    private static final long THINKING_TIME_BUDGET_MS = 60000;
+    // 思考循环检测改为"重复检测"：不再按思考字符数/时长预算截断（长思考是正常现象，
+    // 早前 THINKING_BUDGET=4000 会把"思考 4004 字符、10s 即出正文"的正常请求误判为循环）。
+    // 真正的循环特征是"反复输出同一段内心戏"——累积的 thoughtContent 尾部由同一单元
+    // 连续重复构成，判定逻辑见 ReasoningLoopDetector。
+    // 每隔这么多字符增长才重查一次，避免每个 reasoning delta 都做尾部全量扫描。
+    private static final int LOOP_CHECK_INTERVAL = 64;
 
     private final FancyHelper plugin;
     private final StringBuffer buffer;  // 线程安全的 StringBuffer 替代 StringBuilder
@@ -57,7 +55,7 @@ public class StreamingHandler {
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
     private boolean reasoningCompleteFired = false;  // 是否已触发过思考结束回调
-    private volatile boolean reasoningBudgetExceeded = false;  // 思考内容超预算（疑似循环思考）已被中断
+    private volatile boolean reasoningLoopDetected = false;  // 思考内容出现重复循环（反复输出同一段内心戏）已被中断
     private volatile boolean toolCallDetected = false;  // 是否已检测到 # 工具调用标记
     private final Logger logger;
     private final int readTimeoutSeconds;  // 流式读取超时秒数
@@ -169,11 +167,11 @@ public class StreamingHandler {
     }
 
     /**
-     * 本次流是否因"思考内容超预算（疑似循环思考）"被主动中断
-     * @return true 表示模型长时间只输出思考内容未出正文，流已被中断
+     * 本次流是否因"思考内容出现重复循环"被主动中断
+     * @return true 表示模型反复输出同一段思考内容未出正文（检测到重复），流已被中断
      */
-    public boolean isReasoningBudgetExceeded() {
-        return reasoningBudgetExceeded;
+    public boolean isReasoningLoopDetected() {
+        return reasoningLoopDetected;
     }
     
     /**
@@ -231,9 +229,8 @@ public class StreamingHandler {
         nativeToolCalls = List.of();
         StringBuilder fullText = new StringBuilder();
         StringBuilder nonSseFallback = new StringBuilder();  // 非SSE回退缓冲
-        // 流开始时间戳：用于"总时长预算"——即使模型完全不吐 reasoning（连接挂起/无数据），
-        // 只要超时仍未出正文也中断，让上层走自动重试链而非等 HTTP 绝对超时
-        long streamStartTime = System.currentTimeMillis();
+        // 上次做思考循环重复检测时的思考内容长度：按 LOOP_CHECK_INTERVAL 节流重查
+        int lastLoopCheckLen = 0;
 
         // 看门狗共享状态：只有真实模型数据（data: 行）才重置计时，
         // SSE 心跳注释行（如 ": keep-alive"）仅保活连接，不视为有效进度，
@@ -293,21 +290,24 @@ public class StreamingHandler {
                                 }
                             }
 
-                            // 思考循环检测：模型长时间只输出 reasoning_content（内心戏）不出正文，
-                            // 或连接挂起（既不吐思考也不吐正文）。SSE 连接可能一直有数据，看门狗不会触发；
-                            // 这里按思考内容量/时长（含无 reasoning 的挂起）主动中断，
-                            // 避免上游"思考循环/挂起"把请求拖到超时/无输出（日志表现为长时间无响应最后返回空）。
-                            if (!reasoningBudgetExceeded && fullText.length() == 0
+                            // 思考循环检测（重复检测）：仅当"尚未出正文 && 思考未结束 && 本 chunk 无正文"时检查。
+                            // 模型反复输出同一段 reasoning（内心戏）不出正文时，thoughtContent 尾部会出现
+                            // 同一单元连续重复——此时才中断；长但持续推进的思考不会被误判。
+                            // （真正的"连接挂起、无任何数据"由下方看门狗 readTimeoutSeconds 兜底，不在此处处理。）
+                            if (!reasoningLoopDetected && fullText.length() == 0
                                     && !reasoningCompleteFired
                                     && (textChunk == null || textChunk.isEmpty())) {
-                                long elapsedMs = System.currentTimeMillis() - streamStartTime;
-                                boolean overChars = thoughtContent.length() > THINKING_BUDGET;
-                                boolean overTime = elapsedMs > THINKING_TIME_BUDGET_MS;
-                                if (overChars || overTime) {
-                                    reasoningBudgetExceeded = true;
-                                    logger.warning("[Stream] 思考超预算 (" + thoughtContent.length()
-                                            + " 字符/" + (elapsedMs / 1000) + "s) 仍未输出正文，疑似思考循环或挂起，已中断本次流");
-                                    break;
+                                int thoughtLen = thoughtContent.length();
+                                if (thoughtLen - lastLoopCheckLen >= LOOP_CHECK_INTERVAL) {
+                                    lastLoopCheckLen = thoughtLen;
+                                    String repeatedUnit = ReasoningLoopDetector.detect(thoughtContent.toString());
+                                    if (repeatedUnit != null) {
+                                        reasoningLoopDetected = true;
+                                        logger.warning("[Stream] 检测到思考循环：reasoning 尾部同一片段重复 ("
+                                                + repeatedUnit.length() + " 字符 × " + ReasoningLoopDetector.MIN_REPEATS
+                                                + "+ 次) 仍未输出正文，已中断本次流");
+                                        break;
+                                    }
                                 }
                             }
 

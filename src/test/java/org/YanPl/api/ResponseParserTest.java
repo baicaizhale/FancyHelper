@@ -84,6 +84,35 @@ class ResponseParserTest {
         assertEquals("工具调用文本", response.getContent());
     }
 
+    @Test
+    @DisplayName("content 为空时，长但非重复的 reasoning_content 仍作为正文（不再按 800 字符截断）")
+    void testLongNonRepetitiveReasoningFallsBackToContent() {
+        StringBuilder longReasoning = new StringBuilder();
+        for (int i = 0; i < 100; i++) {
+            longReasoning.append("这是第").append(i).append("步思考，持续推进；");
+        }
+        String reasoning = longReasoning.toString();
+        assertTrue(reasoning.length() > 800, "前置：思考内容应超过旧的 800 字符阈值");
+
+        AIResponse response = parser.parseResponse(parse(
+                "{\"choices\": [{\"message\": {\"reasoning_content\": \"" + reasoning + "\"}}]}"));
+
+        assertNotNull(response);
+        assertEquals(reasoning, response.getContent());
+    }
+
+    @Test
+    @DisplayName("content 为空且 reasoning_content 为重复循环时不顶替（保持无正文）")
+    void testRepetitiveReasoningNotFallsBackToContent() {
+        String unit = "let me think again carefully";
+        String loop = unit + unit + unit;
+
+        AIResponse response = parser.parseResponse(parse(
+                "{\"choices\": [{\"message\": {\"reasoning_content\": \"" + loop + "\"}}]}"));
+
+        assertNull(response, "重复循环的 reasoning 不应被顶替为正文");
+    }
+
     // ======================== Cloudflare output 格式 ========================
 
     @Test

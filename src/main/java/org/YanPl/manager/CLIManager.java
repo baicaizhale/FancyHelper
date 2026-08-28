@@ -2743,10 +2743,10 @@ public class CLIManager {
                 String finalThought = thoughtContent.isEmpty() ? null : thoughtContent;
                 session.setLastThought(finalThought);
 
-                // 思考循环检测：模型长时间只输出思考内容未出正文（流被 StreamingHandler 主动中断）。
+                // 思考循环检测：模型反复输出同一段思考内容未出正文（流被 StreamingHandler 主动中断）。
                 // 走自动重试链：原样重试 → 仍循环则降级关思考重试 → 仍失败明确提示，不再静默无输出。
                 // 中断轮的空响应不写入会话历史，避免污染上下文。
-                if (streamingHandler.isReasoningBudgetExceeded() && response.trim().isEmpty()) {
+                if (streamingHandler.isReasoningLoopDetected() && response.trim().isEmpty()) {
                     handleThinkingLoopRetry(player, session, message, matchedSkills, attempt);
                     return;
                 }
@@ -2911,7 +2911,7 @@ public class CLIManager {
             responseHandled[0] = true;
 
             // 思考循环兜底（onComplete 未触发路径）：同样走自动重试链，避免玩家干等
-            if (streamingHandler.isReasoningBudgetExceeded() && (completeText == null || completeText.trim().isEmpty())) {
+            if (streamingHandler.isReasoningLoopDetected() && (completeText == null || completeText.trim().isEmpty())) {
                 handleThinkingLoopRetry(player, session, message, matchedSkills, attempt);
                 return;
             }
@@ -2988,7 +2988,7 @@ public class CLIManager {
 
     /**
      * 思考循环自动重试链。
-     * 流式检测到"模型长时间只输出思考内容未出正文"（StreamingHandler 已中断流）时调用：
+     * 流式检测到"模型反复输出同一段思考内容（检测到重复）未出正文"（StreamingHandler 已中断流）时调用：
      * attempt 1 → 静默原样重试（保留思考）；attempt 2 → 静默降级重试（关思考）；
      * attempt 3 → 明确告知玩家失败，保存 retryInfo 供 /cli retry 使用。
      * 前两轮重试对玩家静默（自动收敛，不打扰），仅最终失败才提示。

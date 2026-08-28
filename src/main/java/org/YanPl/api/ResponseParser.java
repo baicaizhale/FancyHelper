@@ -15,11 +15,6 @@ import java.util.List;
  */
 public class ResponseParser {
 
-    // 思考内容顶替正文的长度上限（字符）：短思考（真·工具调用兜底）正常顶替，
-    // 超长说明模型可能陷入"思考循环"（只吐内心戏不出正文），不顶替、保持正文为空，
-    // 让上层走自动重试/明确提示，避免把循环思考内容直接发给玩家。
-    private static final int THOUGHT_FALLBACK_LIMIT = 800;
-
     /**
      * 解析 AI API 响应
      * 支持多种格式：OpenAI choices 格式、CloudFlare output 格式、CloudFlare result 格式
@@ -153,10 +148,12 @@ public class ResponseParser {
         // 处理 reasoning_content 字段（OpenAI 格式）
         if (message.has("reasoning_content") && !message.get("reasoning_content").isJsonNull()) {
             content.thought = message.get("reasoning_content").getAsString();
-            // 如果 content 为空，将较短的 reasoning_content 作为 content 兜底；
-            // 超长思考（>800 字符）疑似思考循环，不顶替，保持 content 为空走上层重试/提示
+            // 如果 content 为空，将 reasoning_content 作为 content 兜底（真·工具调用兜底）；
+            // 仅当 reasoning 疑似"思考循环"（尾部同一片段重复）时不顶替，保持 content 为空，
+            // 让上层走自动重试/明确提示，避免把循环思考内容直接发给玩家。
             if ((content.text == null || content.text.isEmpty())
-                    && content.thought != null && content.thought.length() <= THOUGHT_FALLBACK_LIMIT) {
+                    && content.thought != null
+                    && ReasoningLoopDetector.detect(content.thought) == null) {
                 content.text = content.thought;
             }
         }
@@ -164,9 +161,11 @@ public class ResponseParser {
         // 处理 reasoning 字段（Kimi K2.5 等模型格式）
         if (message.has("reasoning") && !message.get("reasoning").isJsonNull()) {
             String reasoning = message.get("reasoning").getAsString();
-            // 如果 content 为空，将较短的 reasoning 作为 content（包含思考过程和工具调用）
+            // 如果 content 为空，将 reasoning 作为 content（包含思考过程和工具调用）；
+            // 同样仅当 reasoning 非"思考循环"（无重复尾部）时才顶替。
             if ((content.text == null || content.text.isEmpty())
-                    && reasoning != null && reasoning.length() <= THOUGHT_FALLBACK_LIMIT) {
+                    && reasoning != null
+                    && ReasoningLoopDetector.detect(reasoning) == null) {
                 content.text = reasoning;
             } else if (content.text != null && !content.text.isEmpty()) {
                 // content 已有实际内容，reasoning 是真正的思考过程
