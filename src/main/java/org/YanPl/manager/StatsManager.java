@@ -240,27 +240,11 @@ public class StatsManager {
     // ==================== 定时上报 ====================
 
     /**
-     * 计算到下一个上报时刻（06:00 / 12:00 / 18:00 / 24:00）的延迟毫秒数
+     * 计算到下一个整点的延迟毫秒数（每小时上报一次）
      */
     private long millisToNextReport() {
         LocalDateTime now = LocalDateTime.now();
-        int[] reportHours = {6, 12, 18, 24};
-        LocalDateTime next = null;
-
-        for (int hour : reportHours) {
-            LocalDateTime candidate = now.with(LocalTime.of(hour % 24, 0));
-            if (hour == 24) candidate = candidate.plusDays(1).with(LocalTime.MIDNIGHT);
-            if (candidate.isAfter(now)) {
-                next = candidate;
-                break;
-            }
-        }
-
-        if (next == null) {
-            // 所有时刻都已过今天，取明天 06:00
-            next = now.plusDays(1).with(LocalTime.of(6, 0));
-        }
-
+        LocalDateTime next = now.plusHours(1).truncatedTo(java.time.temporal.ChronoUnit.HOURS);
         return Duration.between(now, next).toMillis();
     }
 
