@@ -4682,7 +4682,9 @@ public class CLIManager {
             if (diag.length() > 0) diag.append(", ");
             diag.append(c.name()).append(":").append(c.argumentsJson());
         }
-        plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
+        }
 
         // 单个调用直接执行（与旧版一致）；不可批/回灌逻辑只作用于多调用批次，
         // 避免 end/exit/start 等控制类工具单独出现时被回灌成"未执行"而陷入重发循环。
@@ -4762,7 +4764,9 @@ public class CLIManager {
         String next = session.pollPendingNativeTool();
         boolean force = session.pollPendingNativeToolForce();
         if (next != null) {
-            plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
+            }
             setGenerating(uuid, true, GenerationStatus.EXECUTING_TOOL);
             try {
                 executeTool(player, next, force);
