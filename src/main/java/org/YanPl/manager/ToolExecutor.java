@@ -14,10 +14,13 @@ import org.YanPl.util.ColorUtil;
 import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
@@ -559,6 +562,20 @@ public class ToolExecutor {
                 });
             }
             return;
+        }
+
+        // yml/yaml 写入前语法校验（优先级最高，先于 read-before-write 与确认流程；
+        // 语法错误时隐式反馈 AI 并拒绝，不通知玩家，保证玩家全程无感知）
+        if ("write".equals(type) || "edit".equals(type)) {
+            File root = Bukkit.getWorldContainer();
+            String yamlError = validateYamlSyntax(root, type, args);
+            if (yamlError != null) {
+                cliManager.feedbackToAI(player, "#" + type + "_result: 错误 - 目标为 YAML 文件，写入内容存在语法错误，已拒绝写入，请修正后重写。\n语法错误详情: " + yamlError);
+                if (session != null) {
+                    session.setLastError("YAML 语法错误: " + yamlError);
+                }
+                return;
+            }
         }
 
         // #write 的 read-before-write 检查
@@ -1259,6 +1276,71 @@ public class ToolExecutor {
         }
         int pipeIdx = pathArg.indexOf("|");
         return pipeIdx == -1 ? trimmed : pathArg.substring(0, pipeIdx).trim();
+    }
+
+    /**
+     * 从 #write 参数中提取待写入的内容（仅用于 YAML 语法预检，不写盘）。
+     * 与 executeWriteOperation 的解析规则一致：JSON 格式直接取 content；旧格式取第一个 | 之后并做 \n 转义。
+     * 解析失败返回 null（交给后续正式执行去报错）。
+     */
+    private String extractWriteContentForValidation(String pathArg) {
+        String trimmedArg = pathArg.trim();
+        if (trimmedArg.startsWith("{")) {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(trimmedArg).getAsJsonObject();
+                return json.has("content") ? json.get("content").getAsString() : "";
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        int pipeIndex = pathArg.indexOf("|");
+        if (pipeIndex == -1) return null;
+        String content = pathArg.substring(pipeIndex + 1);
+        content = content.replace("\\\\n", "\u0001");
+        content = content.replace("\\n", "\n");
+        content = content.replace("\u0001", "\\n");
+        return content;
+    }
+
+    /**
+     * 对 #write / #edit 目标为 .yml/.yaml 文件时做写入前语法预检。
+     * <p>#write 直接校验 content；#edit 用 dry-run（computeEditPreview）计算修改后的完整内容再校验，不写盘。
+     *
+     * @param root 文件操作根目录（与 executeFileOperation 一致）
+     * @return null 表示目标非 YAML、或内容语法合法、或无法预检（交给后续正式执行报错）；
+     *         非 null 返回语法错误信息
+     */
+    private String validateYamlSyntax(File root, String type, String args) {
+        String path = extractFilePathFromArgs(args);
+        if (path.isEmpty()) return null;
+        String lower = path.toLowerCase();
+        if (!lower.endsWith(".yml") && !lower.endsWith(".yaml")) return null;
+
+        String content;
+        if ("write".equals(type)) {
+            content = extractWriteContentForValidation(args);
+        } else if ("edit".equals(type)) {
+            try {
+                EditPreview preview = computeEditPreview(root, args.trim());
+                // edit 匹配失败/其他错误时，交给正式执行去报错，此处不拦截
+                if (!preview.success) return null;
+                content = preview.after;
+            } catch (Exception e) {
+                return null;
+            }
+        } else {
+            return null;
+        }
+
+        if (content == null) return null;
+
+        try {
+            YamlConfiguration yc = new YamlConfiguration();
+            yc.load(new StringReader(content));
+            return null;
+        } catch (InvalidConfigurationException | IOException e) {
+            return e.getMessage();
+        }
     }
 
     private String executeWriteOperation(File root, String pathArg) throws IOException {

@@ -16,6 +16,8 @@ import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -711,5 +713,72 @@ class ConfigManagerTest {
     @DisplayName("空版本号应标记需要迁移（视为旧配置）")
     void testEmptyVersion_RequiresMigration() {
         assertTrue(ConfigManager.isLegacyPlayerListVersion(""));
+    }
+
+    // ==================== 方案 A：supplementary_prompt 迁移到独立文件 ====================
+
+    @Test
+    @DisplayName("getSupplementaryPrompt 优先读 runtime/supplementary_prompt.txt")
+    void testGetSupplementaryPrompt_PrefersFile() throws IOException {
+        File runtimeDir = new File(tempDir.toFile(), "runtime");
+        Files.createDirectories(runtimeDir.toPath());
+        Files.write(new File(runtimeDir, "supplementary_prompt.txt").toPath(),
+                "file prompt".getBytes(StandardCharsets.UTF_8));
+
+        String result = configManager.getSupplementaryPrompt();
+
+        assertEquals("file prompt", result);
+    }
+
+    @Test
+    @DisplayName("getSupplementaryPrompt 无文件时回退到 config 旧字段（向后兼容）")
+    void testGetSupplementaryPrompt_FallbackToConfig() {
+        when(config.getString("settings.supplementary_prompt", "")).thenReturn("config prompt");
+
+        String result = configManager.getSupplementaryPrompt();
+
+        assertEquals("config prompt", result);
+    }
+
+    // ==================== 方案 B：repairSupplementaryPromptLine 自动修复 ====================
+
+    private String callRepair(String raw) throws Exception {
+        Method m = ConfigManager.class.getDeclaredMethod("repairSupplementaryPromptLine", String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(configManager, raw);
+    }
+
+    @Test
+    @DisplayName("repairSupplementaryPromptLine：双引号标量含未转义双引号时改写为单引号")
+    void testRepairSupplementaryPrompt_ConvertsToSingleQuote() throws Exception {
+        String raw = "settings:\n  supplementary_prompt: \"必须告诉玩家\"命令执行失败\"，绝对不能谎报成功！\"\n  debug: false\n";
+        String repaired = callRepair(raw);
+
+        assertNotNull(repaired);
+        assertTrue(repaired.contains("supplementary_prompt: '"), repaired);
+        assertTrue(repaired.contains("必须告诉玩家\"命令执行失败\""), repaired);
+        assertTrue(repaired.contains("debug: false"), repaired);
+    }
+
+    @Test
+    @DisplayName("repairSupplementaryPromptLine：内容含单引号时翻倍转义")
+    void testRepairSupplementaryPrompt_EscapesSingleQuote() throws Exception {
+        String raw = "supplementary_prompt: \"it's a test\"\n";
+        String repaired = callRepair(raw);
+
+        assertNotNull(repaired);
+        assertTrue(repaired.contains("supplementary_prompt: 'it''s a test'"), repaired);
+    }
+
+    @Test
+    @DisplayName("repairSupplementaryPromptLine：无目标行时返回 null")
+    void testRepairSupplementaryPrompt_NoTargetReturnsNull() throws Exception {
+        assertNull(callRepair("settings:\n  debug: false\n"));
+    }
+
+    @Test
+    @DisplayName("repairSupplementaryPromptLine：单引号标量不处理返回 null")
+    void testRepairSupplementaryPrompt_SingleQuoteUntouched() throws Exception {
+        assertNull(callRepair("supplementary_prompt: 'already safe'\n"));
     }
 }

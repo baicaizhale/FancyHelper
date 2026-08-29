@@ -7,6 +7,8 @@ import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -355,17 +357,35 @@ public class ConfigManager {
         try {
             plugin.reloadConfig();
         } catch (Exception e) {
-            configLoadFailed = true;
-            configLoadError = e.getMessage();
-            plugin.getLogger().severe("config.yml 格式错误，无法加载配置文件: " + e.getMessage());
-            if (config == null) {
-                // 首次加载失败时，回退到默认空配置
-                config = plugin.getConfig();
+            // 方案 B：尝试自动修复 supplementary_prompt 未转义双引号导致的解析失败
+            if (attemptConfigRescue()) {
+                try {
+                    plugin.reloadConfig();
+                } catch (Exception e2) {
+                    configLoadFailed = true;
+                    configLoadError = e2.getMessage();
+                    plugin.getLogger().severe("config.yml 格式错误，自动修复后仍无法加载: " + e2.getMessage());
+                    if (config == null) {
+                        config = plugin.getConfig();
+                    }
+                    return;
+                }
+            } else {
+                configLoadFailed = true;
+                configLoadError = e.getMessage();
+                plugin.getLogger().severe("config.yml 格式错误，无法加载配置文件: " + e.getMessage());
+                if (config == null) {
+                    // 首次加载失败时，回退到默认空配置
+                    config = plugin.getConfig();
+                }
+                // 保留旧 config 对象不变，避免下游读取到空值产生误导性错误
+                return;
             }
-            // 保留旧 config 对象不变，避免下游读取到空值产生误导性错误
-            return;
         }
         this.config = plugin.getConfig();
+
+        // 方案 A：将 settings.supplementary_prompt 迁移到 runtime/supplementary_prompt.txt 并删除旧字段
+        migrateSupplementaryPromptToFile();
 
         // 清理 config.yml 中可能存在的旧玩家数据（迁移到 playerdata.yml 后）
         if (config.contains("player_tools")) {
@@ -658,7 +678,112 @@ public class ConfigManager {
      * @return 补充系统提示词
      */
     public String getSupplementaryPrompt() {
+        // 优先读取独立文件（自由文本不存 YAML，规避双引号转义导致的解析失败）
+        File promptFile = new File(plugin.getDataFolder(), "runtime/supplementary_prompt.txt");
+        if (promptFile.exists()) {
+            try {
+                return new String(Files.readAllBytes(promptFile.toPath()), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                plugin.getLogger().warning("读取 supplementary_prompt.txt 失败: " + e.getMessage());
+            }
+        }
+        // 回退：旧版 config.yml 字段（向后兼容）
         return config.getString("settings.supplementary_prompt", "");
+    }
+
+    /**
+     * 将 config.yml 中已废弃的 settings.supplementary_prompt 迁移到
+     * plugins/FancyHelper/runtime/supplementary_prompt.txt，并从 config.yml 删除该字段。
+     * 迁移后 getSupplementaryPrompt() 优先读取该文件，彻底规避 YAML 转义问题。
+     */
+    private void migrateSupplementaryPromptToFile() {
+        if (!config.contains("settings.supplementary_prompt")) {
+            return;
+        }
+        String legacy = config.getString("settings.supplementary_prompt", "");
+        if (legacy != null && !legacy.trim().isEmpty()) {
+            File runtimeDir = new File(plugin.getDataFolder(), "runtime");
+            File promptFile = new File(runtimeDir, "supplementary_prompt.txt");
+            try {
+                if (!runtimeDir.exists() && !runtimeDir.mkdirs()) {
+                    plugin.getLogger().warning("无法创建 runtime 目录，supplementary_prompt 迁移失败，保留 config.yml 旧字段。");
+                    return;
+                }
+                if (!promptFile.exists()) {
+                    Files.write(promptFile.toPath(), legacy.getBytes(StandardCharsets.UTF_8));
+                    plugin.getLogger().info("已将 supplementary_prompt 迁移到 " + promptFile.getPath());
+                }
+            } catch (IOException e) {
+                plugin.getLogger().warning("迁移 supplementary_prompt 失败，保留 config.yml 旧字段: " + e.getMessage());
+                return;
+            }
+        }
+        config.set("settings.supplementary_prompt", null);
+        save();
+        plugin.getLogger().info("已从 config.yml 移除旧的 supplementary_prompt 字段。");
+    }
+
+    /**
+     * 尝试自动修复 config.yml：当 supplementary_prompt 以双引号包裹且内部含未转义双引号时，
+     * SnakeYAML 会解析失败。此处将值改写为单引号包裹（内部单引号翻倍转义），修复后重新加载。
+     *
+     * @return true 表示已修复并写回文件；false 表示无需修复或无法修复
+     */
+    private boolean attemptConfigRescue() {
+        File configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists()) return false;
+        try {
+            String raw = new String(Files.readAllBytes(configFile.toPath()), StandardCharsets.UTF_8);
+            String repaired = repairSupplementaryPromptLine(raw);
+            if (repaired == null) return false;
+
+            File backup = new File(plugin.getDataFolder(), "config.yml.broken-" + System.currentTimeMillis());
+            try {
+                Files.copy(configFile.toPath(), backup.toPath());
+            } catch (IOException ignored) {
+                // 备份失败不阻断修复
+            }
+            Files.write(configFile.toPath(), repaired.getBytes(StandardCharsets.UTF_8));
+            plugin.getLogger().warning("检测到 config.yml 的 supplementary_prompt 存在未转义双引号，已自动修复（原文件备份为 " + backup.getName() + "）。");
+            return true;
+        } catch (IOException e) {
+            plugin.getLogger().warning("自动修复 config.yml 失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 将 supplementary_prompt 的双引号标量改写为单引号标量（仅当值以双引号开头时处理）。
+     * 返回 null 表示没有需要修复的行。
+     */
+    private String repairSupplementaryPromptLine(String raw) {
+        String[] lines = raw.split("\n", -1);
+        boolean changed = false;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("supplementary_prompt:")) continue;
+
+            int colonIdx = line.indexOf(':');
+            String value = line.substring(colonIdx + 1).trim();
+            if (!value.startsWith("\"")) continue; // 仅处理双引号标量被破坏的场景
+
+            // 去掉首尾双引号（未转义的双引号已破坏原值，此处尽力还原为单引号包裹）
+            String inner;
+            if (value.length() >= 2 && value.endsWith("\"")) {
+                inner = value.substring(1, value.length() - 1);
+            } else {
+                inner = value.substring(1);
+            }
+            // 保留前导缩进
+            int indentLen = 0;
+            while (indentLen < line.length() && (line.charAt(indentLen) == ' ' || line.charAt(indentLen) == '\t')) indentLen++;
+            String indent = line.substring(0, indentLen);
+            String escaped = inner.replace("'", "''");
+            lines[i] = indent + "supplementary_prompt: '" + escaped + "'";
+            changed = true;
+        }
+        return changed ? String.join("\n", lines) : null;
     }
 
     /**
