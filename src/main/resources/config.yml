@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 4.3.3
+version: 4.3.4
 
 # 插件设置
 settings:
@@ -11,8 +11,7 @@ settings:
   meow: true
   # 如果支持流式输出但玩家没有设置，是否默认启用流式输出
   streaming: true
-  # 补充系统提示词（会自动追加到基础系统提示词后面，不加就留空；注意如果是角色扮演类提示词请关闭Meow模式）
-  supplementary_prompt: ""
+  # 补充系统提示词：请直接编辑 plugins/FancyHelper/runtime/supplementary_prompt.txt（纯文本，无 YAML 转义问题）
   # CLI 模式会话的自动过期时间 （以分钟为单位）
   timeout_minutes: 60
   # API 请求超时时间（以秒为单位）

@@ -7,6 +7,9 @@ import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,7 @@ public class ConfigManager {
 
     public ConfigManager(FancyHelper plugin) {
         this.plugin = plugin;
+        ensureConfigRepaired();
         checkAndUpdateConfig();
         loadConfig();
         loadPlayerData();
@@ -166,6 +170,14 @@ public class ConfigManager {
         // 首次安装：释放 lib JAR 后返回
         if (!configFile.exists()) {
             plugin.extractLibJar();
+            return;
+        }
+
+        // 语法损坏且无法修复（如 AI 用 #write 写入未转义双引号）时，禁止执行版本迁移/重置，
+        // 避免把包含用户数据的配置整份覆盖成默认模板。enforceConfigRepaired 已尝试修复，
+        // 这里仍损坏则一律跳过版本检查，保留原文件供人工处理。
+        if (!isValidYaml(configFile)) {
+            plugin.getLogger().severe("config.yml 语法错误，已跳过版本检查（配置未被重置，请人工检查 config.yml）。");
             return;
         }
 
@@ -350,22 +362,45 @@ public class ConfigManager {
         configLoadFailed = false;
         configLoadError = "";
 
+        // 配置语法网关：启动（构造函数）与运行时重载（FileWatcher 自动重载 / /fancyhelper reload）
+        // 都会走到这里。坏配置先尝试定点修复（supplementary_prompt 双引号），失败再用最后已知
+        // 良好配置兜底恢复，确保任何加载入口都能先让 config.yml 变得可解析。
+        ensureConfigRepaired();
+
         // 确保存在默认配置并读取
         plugin.saveDefaultConfig();
         try {
             plugin.reloadConfig();
         } catch (Exception e) {
-            configLoadFailed = true;
-            configLoadError = e.getMessage();
-            plugin.getLogger().severe("config.yml 格式错误，无法加载配置文件: " + e.getMessage());
-            if (config == null) {
-                // 首次加载失败时，回退到默认空配置
-                config = plugin.getConfig();
+            // 方案 B：尝试自动修复 supplementary_prompt 未转义双引号导致的解析失败
+            if (attemptConfigRescue()) {
+                try {
+                    plugin.reloadConfig();
+                } catch (Exception e2) {
+                    configLoadFailed = true;
+                    configLoadError = e2.getMessage();
+                    plugin.getLogger().severe("config.yml 格式错误，自动修复后仍无法加载: " + e2.getMessage());
+                    if (config == null) {
+                        config = plugin.getConfig();
+                    }
+                    return;
+                }
+            } else {
+                configLoadFailed = true;
+                configLoadError = e.getMessage();
+                plugin.getLogger().severe("config.yml 格式错误，无法加载配置文件: " + e.getMessage());
+                if (config == null) {
+                    // 首次加载失败时，回退到默认空配置
+                    config = plugin.getConfig();
+                }
+                // 保留旧 config 对象不变，避免下游读取到空值产生误导性错误
+                return;
             }
-            // 保留旧 config 对象不变，避免下游读取到空值产生误导性错误
-            return;
         }
         this.config = plugin.getConfig();
+
+        // 方案 A：将 settings.supplementary_prompt 迁移到 runtime/supplementary_prompt.txt 并删除旧字段
+        migrateSupplementaryPromptToFile();
 
         // 清理 config.yml 中可能存在的旧玩家数据（迁移到 playerdata.yml 后）
         if (config.contains("player_tools")) {
@@ -373,6 +408,9 @@ public class ConfigManager {
             save();
             plugin.getLogger().info("已从 config.yml 中移除旧的玩家工具权限数据。");
         }
+
+        // 记录本次成功加载的"最后已知良好"配置，供下次解析失败时兜底恢复
+        saveLastKnownGood();
     }
 
     public String getCloudflareCfKey() {
@@ -658,7 +696,189 @@ public class ConfigManager {
      * @return 补充系统提示词
      */
     public String getSupplementaryPrompt() {
+        // 优先读取独立文件（自由文本不存 YAML，规避双引号转义导致的解析失败）
+        File promptFile = new File(plugin.getDataFolder(), "runtime/supplementary_prompt.txt");
+        if (promptFile.exists()) {
+            try {
+                return new String(Files.readAllBytes(promptFile.toPath()), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                plugin.getLogger().warning("读取 supplementary_prompt.txt 失败: " + e.getMessage());
+            }
+        }
+        // 回退：旧版 config.yml 字段（向后兼容）
         return config.getString("settings.supplementary_prompt", "");
+    }
+
+    /**
+     * 将 config.yml 中已废弃的 settings.supplementary_prompt 迁移到
+     * plugins/FancyHelper/runtime/supplementary_prompt.txt，并从 config.yml 删除该字段。
+     * 迁移后 getSupplementaryPrompt() 优先读取该文件，彻底规避 YAML 转义问题。
+     */
+    private void migrateSupplementaryPromptToFile() {
+        if (!config.contains("settings.supplementary_prompt")) {
+            return;
+        }
+        String legacy = config.getString("settings.supplementary_prompt", "");
+        if (legacy != null && !legacy.trim().isEmpty()) {
+            File runtimeDir = new File(plugin.getDataFolder(), "runtime");
+            File promptFile = new File(runtimeDir, "supplementary_prompt.txt");
+            try {
+                if (!runtimeDir.exists() && !runtimeDir.mkdirs()) {
+                    plugin.getLogger().warning("无法创建 runtime 目录，supplementary_prompt 迁移失败，保留 config.yml 旧字段。");
+                    return;
+                }
+                if (!promptFile.exists()) {
+                    Files.write(promptFile.toPath(), legacy.getBytes(StandardCharsets.UTF_8));
+                    plugin.getLogger().info("已将 supplementary_prompt 迁移到 " + promptFile.getPath());
+                }
+            } catch (IOException e) {
+                plugin.getLogger().warning("迁移 supplementary_prompt 失败，保留 config.yml 旧字段: " + e.getMessage());
+                return;
+            }
+        }
+        config.set("settings.supplementary_prompt", null);
+        save();
+        plugin.getLogger().info("已从 config.yml 移除旧的 supplementary_prompt 字段。");
+    }
+
+    /**
+     * 启动时预检 config.yml：若语法损坏则先尝试自动修复，再进入版本检查/加载。
+     * 不能依赖 Bukkit 的 reloadConfig()/loadConfiguration() 抛异常——它们会在内部吞掉解析错误
+     * 并返回空配置（Paper 1.21+ 实测如此），导致调用方把坏配置误判为"空版本"而整份重置。
+     * 因此这里改用会真正抛异常的 YamlConfiguration.load(Reader) 自行判断。
+     */
+    private void ensureConfigRepaired() {
+        File configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists()) return;
+        if (isValidYaml(configFile)) return; // 语法正常，无需处理
+
+        // 第一层：定点修复（repairSupplementaryPromptLine 只处理 supplementary_prompt 双引号场景）
+        if (attemptConfigRescue()) {
+            plugin.getLogger().info("config.yml 语法错误已自动修复。");
+            return;
+        }
+        // 第二层：兜底恢复（任何未知损坏 → 用最后已知良好配置覆盖，先备份坏文件）
+        if (restoreLastKnownGood(configFile)) {
+            plugin.getLogger().info("config.yml 损坏，已从最后已知良好配置恢复。");
+            return;
+        }
+        plugin.getLogger().severe("config.yml 语法错误且无法自动修复，请人工检查 config.yml。");
+    }
+
+    /**
+     * 用会真正抛异常的加载路径判断 config.yml 是否为合法 YAML。
+     * @return true 表示可正常解析；false 表示语法损坏
+     */
+    private boolean isValidYaml(File configFile) {
+        try {
+            String raw = new String(Files.readAllBytes(configFile.toPath()), StandardCharsets.UTF_8);
+            YamlConfiguration yc = new YamlConfiguration();
+            yc.load(new StringReader(raw));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 将本次成功加载的 config.yml 快照到 runtime/config.yml.lastgood，
+     * 供下次配置损坏时兜底恢复。仅当当前文件为合法 YAML 时才保存，
+     * 避免把坏配置覆盖掉之前的好快照。
+     */
+    private void saveLastKnownGood() {
+        File configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists() || !isValidYaml(configFile)) return;
+        try {
+            File runtimeDir = new File(plugin.getDataFolder(), "runtime");
+            if (!runtimeDir.exists()) runtimeDir.mkdirs();
+            File lastGood = new File(runtimeDir, "config.yml.lastgood");
+            Files.copy(configFile.toPath(), lastGood.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            plugin.getLogger().warning("保存最后已知良好配置失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 用最后已知良好配置覆盖坏 config.yml（先备份当前坏文件）。
+     * 用于定点修复（repairSupplementaryPromptLine）无法处理的未知损坏。
+     * @return true 表示已恢复
+     */
+    private boolean restoreLastKnownGood(File configFile) {
+        File lastGood = new File(new File(plugin.getDataFolder(), "runtime"), "config.yml.lastgood");
+        if (!lastGood.exists()) return false;
+        try {
+            File backup = new File(plugin.getDataFolder(), "config.yml.broken-" + System.currentTimeMillis());
+            Files.copy(configFile.toPath(), backup.toPath());
+            Files.copy(lastGood.toPath(), configFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            plugin.getLogger().warning("config.yml 无法自动修复，已用最后已知良好配置覆盖（当前损坏文件备份为 " + backup.getName() + "）。");
+            return true;
+        } catch (IOException e) {
+            plugin.getLogger().warning("恢复最后已知良好配置失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 尝试自动修复 config.yml：当 supplementary_prompt 以双引号包裹且内部含未转义双引号时，
+     * SnakeYAML 会解析失败。此处将值改写为单引号包裹（内部单引号翻倍转义），修复后重新加载。
+     *
+     * @return true 表示已修复并写回文件；false 表示无需修复或无法修复
+     */
+    private boolean attemptConfigRescue() {
+        File configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists()) return false;
+        try {
+            String raw = new String(Files.readAllBytes(configFile.toPath()), StandardCharsets.UTF_8);
+            String repaired = repairSupplementaryPromptLine(raw);
+            if (repaired == null) return false;
+
+            File backup = new File(plugin.getDataFolder(), "config.yml.broken-" + System.currentTimeMillis());
+            try {
+                Files.copy(configFile.toPath(), backup.toPath());
+            } catch (IOException ignored) {
+                // 备份失败不阻断修复
+            }
+            Files.write(configFile.toPath(), repaired.getBytes(StandardCharsets.UTF_8));
+            plugin.getLogger().warning("检测到 config.yml 的 supplementary_prompt 存在未转义双引号，已自动修复（原文件备份为 " + backup.getName() + "）。");
+            return true;
+        } catch (IOException e) {
+            plugin.getLogger().warning("自动修复 config.yml 失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 将 supplementary_prompt 的双引号标量改写为单引号标量（仅当值以双引号开头时处理）。
+     * 返回 null 表示没有需要修复的行。
+     */
+    private String repairSupplementaryPromptLine(String raw) {
+        String[] lines = raw.split("\n", -1);
+        boolean changed = false;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("supplementary_prompt:")) continue;
+
+            int colonIdx = line.indexOf(':');
+            String value = line.substring(colonIdx + 1).trim();
+            if (!value.startsWith("\"")) continue; // 仅处理双引号标量被破坏的场景
+
+            // 去掉首尾双引号（未转义的双引号已破坏原值，此处尽力还原为单引号包裹）
+            String inner;
+            if (value.length() >= 2 && value.endsWith("\"")) {
+                inner = value.substring(1, value.length() - 1);
+            } else {
+                inner = value.substring(1);
+            }
+            // 保留前导缩进
+            int indentLen = 0;
+            while (indentLen < line.length() && (line.charAt(indentLen) == ' ' || line.charAt(indentLen) == '\t')) indentLen++;
+            String indent = line.substring(0, indentLen);
+            String escaped = inner.replace("'", "''");
+            lines[i] = indent + "supplementary_prompt: '" + escaped + "'";
+            changed = true;
+        }
+        return changed ? String.join("\n", lines) : null;
     }
 
     /**

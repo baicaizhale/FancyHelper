@@ -22,8 +22,11 @@ import org.bukkit.entity.Player;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +35,12 @@ import java.util.stream.Collectors;
  */
 public class CLICommand implements CommandExecutor, TabCompleter {
     private final FancyHelper plugin;
+
+    /** 第三方 OpenAI 兼容提供商配置教程（FancyConsole 宕机时引导玩家自行配置） */
+    private static final String PROVIDER_TUTORIAL_URL = "https://blog.baicaizhale.top/post/openai-compatible-providers";
+
+    /** 正在做宕机探测的玩家（UUID），避免探测期间重复 /cli 造成重复探测/重复 toggle */
+    private final Set<UUID> healthCheckingPlayers = new HashSet<>();
 
     public CLICommand(FancyHelper plugin) {
         this.plugin = plugin;
@@ -62,6 +71,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                     && !plugin.getFancyConsoleManager().hasApiKey()
                     && (plugin.getConfigManager().isFancyConsoleSearch() || plugin.getConfigManager().isFancyConsoleJina())) {
                 showFancyServiceBindWarning(player);
+            }
+
+            // FancyConsole 宕机门控：仅 provider.ai: fancy 且当前宕机时，先探测一次 health 再决定是否放行
+            if (plugin.getConfigManager().isFancyConsoleAi()
+                    && plugin.getFancyHealthMonitor() != null
+                    && plugin.getFancyHealthMonitor().isDown()) {
+                handleHealthGatedEnter(player);
+                return true;
             }
 
             toggleCLIMode(player);
@@ -529,6 +546,58 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             });
         });
         return true;
+    }
+
+    /**
+     * FancyConsole 宕机时的 /cli 进入门控：先探测一次 health，
+     * 恢复则直接放行（无额外提示），仍宕机则向玩家道歉并引导配置第三方提供商。
+     */
+    private void handleHealthGatedEnter(Player player) {
+        UUID uuid = player.getUniqueId();
+        synchronized (healthCheckingPlayers) {
+            if (healthCheckingPlayers.contains(uuid)) {
+                // 已在探测中，避免重复探测/重复 toggle
+                return;
+            }
+            healthCheckingPlayers.add(uuid);
+        }
+
+        player.sendMessage(I18n.t("cli.health.checking"));
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean healthy;
+            try {
+                healthy = plugin.getFancyHealthMonitor().checkOnce();
+            } finally {
+                synchronized (healthCheckingPlayers) {
+                    healthCheckingPlayers.remove(uuid);
+                }
+            }
+
+            // 插件可能在校验期间被重载/禁用，回主线程前检查
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) return;
+                if (healthy) {
+                    // 已恢复：直接进入
+                    toggleCLIMode(player);
+                } else {
+                    // 仍宕机：道歉 + 教程链接
+                    player.sendMessage(I18n.t("cli.health.down"));
+                    sendProviderTutorialLink(player);
+                }
+            });
+        });
+    }
+
+    /**
+     * 发送可点击的第三方提供商配置教程链接。
+     */
+    private void sendProviderTutorialLink(Player player) {
+        TextComponent link = new TextComponent(TextComponent.fromLegacyText(I18n.t("cli.health.down.link")));
+        link.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, PROVIDER_TUTORIAL_URL));
+        link.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("cli.health.down.link.hover"))));
+        player.spigot().sendMessage(link);
     }
 
     private void toggleCLIMode(Player player) {

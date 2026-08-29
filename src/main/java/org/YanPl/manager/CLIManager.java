@@ -2639,11 +2639,28 @@ public class CLIManager {
             }
         });
 
+        // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
+        streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
+            if (session == null) return;
+            long total = cacheHit + cacheMiss;
+            long pct = total > 0 ? cacheHit * 100 / total : 0;
+            session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
+                + " 缓存命中=" + cacheHit + " (" + pct + "%) 未命中=" + cacheMiss);
+        });
+
         streamingHandler.setOnChunkCallback((chunk) -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
             
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
+
+                // 首个 chunk 到达时间 = TTFT（相对本轮生成开始）
+                if (accumulatedText.length() == 0) {
+                    Long start = generationStartTimes.get(uuid);
+                    if (start != null) {
+                        plugin.getStatsManager().addTtft(System.currentTimeMillis() - start);
+                    }
+                }
 
                 accumulatedText.append(chunk);
 
@@ -2696,6 +2713,12 @@ public class CLIManager {
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline()) return;
+
+                // 本轮总耗时（生成开始 → 完成）
+                Long start = generationStartTimes.get(uuid);
+                if (start != null) {
+                    plugin.getStatsManager().addResponseTime(System.currentTimeMillis() - start);
+                }
 
                 String response = completeText;
                 String thoughtContent = "";
@@ -4310,6 +4333,15 @@ public class CLIManager {
                         }
                     });
 
+                    // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
+                    streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
+                        if (session == null) return;
+                        long total = cacheHit + cacheMiss;
+                        long pct = total > 0 ? cacheHit * 100 / total : 0;
+                        session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
+                            + " 缓存命中=" + cacheHit + " (" + pct + "%) 未命中=" + cacheMiss);
+                    });
+
                     // 思考结束回调：在工具反馈流中也显示思考按钮
                     streamingHandler.setOnReasoningCompleteCallback((thinkingTimeMs) -> {
                         if (!plugin.isEnabled() || !player.isOnline()) return;
@@ -4682,7 +4714,9 @@ public class CLIManager {
             if (diag.length() > 0) diag.append(", ");
             diag.append(c.name()).append(":").append(c.argumentsJson());
         }
-        plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
+        if (plugin.getConfigManager().isDebug()) {
+            plugin.getLogger().info("[CLI] 原生 tool_calls 分发 " + player.getName() + " (" + calls.size() + " 个): " + diag);
+        }
 
         // 单个调用直接执行（与旧版一致）；不可批/回灌逻辑只作用于多调用批次，
         // 避免 end/exit/start 等控制类工具单独出现时被回灌成"未执行"而陷入重发循环。
@@ -4762,7 +4796,9 @@ public class CLIManager {
         String next = session.pollPendingNativeTool();
         boolean force = session.pollPendingNativeToolForce();
         if (next != null) {
-            plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[CLI] 批次执行 " + player.getName() + " 下一工具: " + next);
+            }
             setGenerating(uuid, true, GenerationStatus.EXECUTING_TOOL);
             try {
                 executeTool(player, next, force);

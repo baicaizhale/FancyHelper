@@ -180,4 +180,45 @@ class ToolExecutorFileFormatTest {
         assertEquals("config.yml", m.invoke(executor, "config.yml|enabled: true"));
         assertEquals("config.yml", m.invoke(executor, "config.yml"));
     }
+
+    private String callValidateYaml(String type, String args) throws Exception {
+        Method m = ToolExecutor.class.getDeclaredMethod("validateYamlSyntax", File.class, String.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(executor, tempDir.toFile(), type, args);
+    }
+
+    @Test
+    @DisplayName("validateYamlSyntax：合法 YAML 写入返回 null（放行）")
+    void testValidateYamlWriteValid() throws Exception {
+        assertNull(callValidateYaml("write", "{\"path\":\"a.yml\",\"content\":\"a: 1\\nb: 2\\n\"}"));
+    }
+
+    @Test
+    @DisplayName("validateYamlSyntax：含未转义双引号的 YAML 写入返回错误（拒绝）")
+    void testValidateYamlWriteBrokenQuote() throws Exception {
+        String err = callValidateYaml("write", "{\"path\":\"a.yml\",\"content\":\"key: \\\"值含\\\"引号\"}");
+        assertNotNull(err);
+    }
+
+    @Test
+    @DisplayName("validateYamlSyntax：非 yml/yaml 目标跳过校验返回 null")
+    void testValidateYamlSkipsNonYaml() throws Exception {
+        assertNull(callValidateYaml("write", "{\"path\":\"a.txt\",\"content\":\"anything {not yaml}\"}"));
+    }
+
+    @Test
+    @DisplayName("validateYamlSyntax：edit dry-run 后内容非法 YAML 返回错误")
+    void testValidateYamlEditBroken() throws Exception {
+        write("config.yml", "enabled: true\n");
+        // edit 将 enabled: true 替换为未闭合双引号的内容，dry-run 后应识别为非法 YAML
+        String err = callValidateYaml("edit", "{\"path\":\"config.yml\",\"original\":\"enabled: true\",\"replacement\":\"enabled: \\\"坏\"}");
+        assertNotNull(err);
+    }
+
+    @Test
+    @DisplayName("validateYamlSyntax：edit dry-run 后内容合法 YAML 返回 null")
+    void testValidateYamlEditValid() throws Exception {
+        write("config.yml", "enabled: true\n");
+        assertNull(callValidateYaml("edit", "{\"path\":\"config.yml\",\"original\":\"enabled: true\",\"replacement\":\"enabled: false\"}"));
+    }
 }

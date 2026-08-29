@@ -51,6 +51,7 @@ public class StreamingHandler {
     private volatile Consumer<String> onReasoningCallback;      // 思考内容逐片回调
     private volatile Consumer<Long> onReasoningCompleteCallback;  // 思考结束回调，参数为思考耗时ms
     private volatile BiConsumer<Long, Long> onUsageTokens;        // API 返回的 token 用量回调 (input, output)
+    private volatile BiConsumer<Long, Long> onCacheStats;          // 上下文缓存命中/未命中统计回调 (hit, miss)
     private volatile boolean errorOccurred = false;
     private long reasoningStartTime = -1;       // 第一个 reasoning token 的时间戳
     private boolean reasoningJustCompleted = false;  // 本次 extractTextFromSSE 是否刚完成思考
@@ -140,6 +141,14 @@ public class StreamingHandler {
      */
     public void setOnUsageTokens(BiConsumer<Long, Long> callback) {
         this.onUsageTokens = callback;
+    }
+
+    /**
+     * 设置上下文缓存统计回调（缓存命中/未命中 token 数）。
+     * 用于把每次请求的缓存命中率写入会话对话日志，而不是刷服务器控制台。
+     */
+    public void setOnCacheStats(BiConsumer<Long, Long> callback) {
+        this.onCacheStats = callback;
     }
 
     /**
@@ -398,12 +407,11 @@ public class StreamingHandler {
                 } catch (Exception usageCallbackError) {
                     logger.warning("[Stream] token 用量回调异常: " + usageCallbackError.getMessage());
                 }
-                // 上下文缓存命中日志（每次请求只打一条，便于观察缓存命中率变化）
+                // 上下文缓存命中统计：交给回调写入会话对话日志（不再打服务器控制台）
                 if (pendingUsageCacheHit > 0 || pendingUsageCacheMiss > 0) {
-                    long total = pendingUsageCacheHit + pendingUsageCacheMiss;
-                    long pct = total > 0 ? pendingUsageCacheHit * 100 / total : 0;
-                    logger.info("[Cache] 本次请求 prompt=" + pendingUsageInput
-                        + " 缓存命中=" + pendingUsageCacheHit + " (" + pct + "%) 未命中=" + pendingUsageCacheMiss);
+                    if (onCacheStats != null) {
+                        onCacheStats.accept(pendingUsageCacheHit, pendingUsageCacheMiss);
+                    }
                 }
             }
 
