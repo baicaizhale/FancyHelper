@@ -258,7 +258,6 @@ public class FancyConsoleManager {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(getConsoleUrl() + "/api/fancyhelper/report-stats"))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + getApiKey())
                     .timeout(Duration.ofSeconds(15))
                     .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
                     .build();
