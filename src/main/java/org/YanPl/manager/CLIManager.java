@@ -2639,6 +2639,15 @@ public class CLIManager {
             }
         });
 
+        // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
+        streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
+            if (session == null) return;
+            long total = cacheHit + cacheMiss;
+            long pct = total > 0 ? cacheHit * 100 / total : 0;
+            session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
+                + " 缓存命中=" + cacheHit + " (" + pct + "%) 未命中=" + cacheMiss);
+        });
+
         streamingHandler.setOnChunkCallback((chunk) -> {
             if (!plugin.isEnabled() || !player.isOnline()) return;
             
@@ -4308,6 +4317,15 @@ public class CLIManager {
                             session.addInputTokens(inputTokens);
                             session.addOutputTokens(outputTokens);
                         }
+                    });
+
+                    // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
+                    streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
+                        if (session == null) return;
+                        long total = cacheHit + cacheMiss;
+                        long pct = total > 0 ? cacheHit * 100 / total : 0;
+                        session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
+                            + " 缓存命中=" + cacheHit + " (" + pct + "%) 未命中=" + cacheMiss);
                     });
 
                     // 思考结束回调：在工具反馈流中也显示思考按钮
