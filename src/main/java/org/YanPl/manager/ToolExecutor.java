@@ -2287,6 +2287,8 @@ public class ToolExecutor {
                 } else {
                     result = performWikiSearch(query, player);
                 }
+                // 搜索调用成功计数（异常路径不计）
+                plugin.getStatsManager().incrementSearchCount();
             } catch (Exception e) {
                 // 异步异常兜底：必须反馈 AI，否则对话卡在 EXECUTING_TOOL（批次中 60s 超时兜底）
                 plugin.getCloudErrorReport().report(e);
@@ -2700,6 +2702,8 @@ public class ToolExecutor {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 String result = fetchWebPage(url);
+                // 网页抓取成功计数（异常路径不计）
+                plugin.getStatsManager().incrementFetchCount();
                 final String finalResult = result;
                 if (!plugin.isEnabled()) return;
                 Bukkit.getScheduler().runTask(plugin, () -> {

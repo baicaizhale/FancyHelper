@@ -28,6 +28,11 @@ public class StatsManager {
     private final AtomicLong toolFailureCount = new AtomicLong(0);
     private final AtomicLong errorCount = new AtomicLong(0);
     private final AtomicLong totalThinkingTimeMs = new AtomicLong(0);
+    private final AtomicLong totalTtftMs = new AtomicLong(0);         // 累计首 token 时间（TTFT）
+    private final AtomicLong totalResponseTimeMs = new AtomicLong(0); // 累计每轮总耗时
+    private final AtomicLong responseCount = new AtomicLong(0);       // 流式响应轮次（平均耗时分母）
+    private final AtomicLong searchCount = new AtomicLong(0);         // 搜索调用次数
+    private final AtomicLong fetchCount = new AtomicLong(0);          // 网页抓取次数
     private final Gson gson = new Gson();
     private final File dataFile;
     private final Object saveLock = new Object();
@@ -71,6 +76,11 @@ public class StatsManager {
                 if (json.has("toolFailureCount")) toolFailureCount.set(json.get("toolFailureCount").getAsLong());
                 if (json.has("errorCount")) errorCount.set(json.get("errorCount").getAsLong());
                 if (json.has("totalThinkingTimeMs")) totalThinkingTimeMs.set(json.get("totalThinkingTimeMs").getAsLong());
+                if (json.has("totalTtftMs")) totalTtftMs.set(json.get("totalTtftMs").getAsLong());
+                if (json.has("totalResponseTimeMs")) totalResponseTimeMs.set(json.get("totalResponseTimeMs").getAsLong());
+                if (json.has("responseCount")) responseCount.set(json.get("responseCount").getAsLong());
+                if (json.has("searchCount")) searchCount.set(json.get("searchCount").getAsLong());
+                if (json.has("fetchCount")) fetchCount.set(json.get("fetchCount").getAsLong());
             }
         } catch (IOException e) {
             plugin.getLogger().warning("[StatsManager] 加载统计数据失败: " + e.getMessage());
@@ -92,6 +102,11 @@ public class StatsManager {
                 json.addProperty("toolFailureCount", toolFailureCount.get());
                 json.addProperty("errorCount", errorCount.get());
                 json.addProperty("totalThinkingTimeMs", totalThinkingTimeMs.get());
+                json.addProperty("totalTtftMs", totalTtftMs.get());
+                json.addProperty("totalResponseTimeMs", totalResponseTimeMs.get());
+                json.addProperty("responseCount", responseCount.get());
+                json.addProperty("searchCount", searchCount.get());
+                json.addProperty("fetchCount", fetchCount.get());
                 try (FileWriter writer = new FileWriter(dataFile)) {
                     gson.toJson(json, writer);
                 }
@@ -140,6 +155,27 @@ public class StatsManager {
         if (ms > 0) totalThinkingTimeMs.addAndGet(ms);
     }
 
+    /** 记录一次流式响应的首 token 时间（TTFT） */
+    public void addTtft(long ms) {
+        if (ms >= 0) totalTtftMs.addAndGet(ms);
+    }
+
+    /** 记录一次流式响应的总耗时，并计入响应轮次（平均耗时分母） */
+    public void addResponseTime(long ms) {
+        if (ms >= 0) {
+            totalResponseTimeMs.addAndGet(ms);
+            responseCount.incrementAndGet();
+        }
+    }
+
+    public void incrementSearchCount() {
+        searchCount.incrementAndGet();
+    }
+
+    public void incrementFetchCount() {
+        fetchCount.incrementAndGet();
+    }
+
     // ==================== 快照 ====================
 
     /**
@@ -171,6 +207,11 @@ public class StatsManager {
         snap.toolFailureCount = (int) toolFailureCount.get();
         snap.errorCount = (int) errorCount.get();
         snap.totalThinkingTimeMs = totalThinkingTimeMs.get();
+        snap.totalTtftMs = totalTtftMs.get();
+        snap.totalResponseTimeMs = totalResponseTimeMs.get();
+        snap.responseCount = (int) responseCount.get();
+        snap.searchCount = (int) searchCount.get();
+        snap.fetchCount = (int) fetchCount.get();
 
         // 运行时快照
         snap.onlinePlayers = server.getOnlinePlayers().size();
@@ -334,6 +375,11 @@ public class StatsManager {
         public int toolFailureCount;
         public int errorCount;
         public long totalThinkingTimeMs;
+        public long totalTtftMs;
+        public long totalResponseTimeMs;
+        public int responseCount;
+        public int searchCount;
+        public int fetchCount;
 
         // 运行时快照
         public int onlinePlayers;

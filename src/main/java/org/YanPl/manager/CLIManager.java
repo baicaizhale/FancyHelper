@@ -2654,6 +2654,14 @@ public class CLIManager {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline() || !isGenerating.getOrDefault(uuid, false)) return;
 
+                // 首个 chunk 到达时间 = TTFT（相对本轮生成开始）
+                if (accumulatedText.length() == 0) {
+                    Long start = generationStartTimes.get(uuid);
+                    if (start != null) {
+                        plugin.getStatsManager().addTtft(System.currentTimeMillis() - start);
+                    }
+                }
+
                 accumulatedText.append(chunk);
 
                 // 实时累计流式输出 Token
@@ -2705,6 +2713,12 @@ public class CLIManager {
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline()) return;
+
+                // 本轮总耗时（生成开始 → 完成）
+                Long start = generationStartTimes.get(uuid);
+                if (start != null) {
+                    plugin.getStatsManager().addResponseTime(System.currentTimeMillis() - start);
+                }
 
                 String response = completeText;
                 String thoughtContent = "";

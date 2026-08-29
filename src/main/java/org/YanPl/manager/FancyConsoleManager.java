@@ -243,6 +243,11 @@ public class FancyConsoleManager {
             body.addProperty("tool_failure_count", snapshot.toolFailureCount);
             body.addProperty("error_count", snapshot.errorCount);
             body.addProperty("total_thinking_time_ms", snapshot.totalThinkingTimeMs);
+            body.addProperty("total_ttft_ms", snapshot.totalTtftMs);
+            body.addProperty("total_response_time_ms", snapshot.totalResponseTimeMs);
+            body.addProperty("response_count", snapshot.responseCount);
+            body.addProperty("search_count", snapshot.searchCount);
+            body.addProperty("fetch_count", snapshot.fetchCount);
 
             // 快照
             body.addProperty("online_players", snapshot.onlinePlayers);
