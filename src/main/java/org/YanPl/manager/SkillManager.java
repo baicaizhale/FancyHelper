@@ -4,6 +4,7 @@ import org.YanPl.FancyHelper;
 import org.YanPl.model.Skill;
 import org.YanPl.model.SkillMetadata;
 import org.YanPl.util.I18n;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.io.File;
@@ -113,7 +114,7 @@ public class SkillManager {
      * @return Skill 摘要列表
      */
     public List<String> getSkillSummariesForPrompt() {
-        return registry.getAllSkillSummaries();
+        return registry.getAllSkillSummaries(skill -> isPluginRequirementSatisfied(skill));
     }
 
     /**
@@ -123,9 +124,44 @@ public class SkillManager {
      * @return 精简列表
      */
     public List<String> getSkillBriefList() {
-        return registry.getAllSkills().stream()
+        return filterByPluginRequirement(registry.getAllSkills()).stream()
                 .map(skill -> skill.getId() + ": " + skill.getMetadata().getName())
                 .sorted()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 检查 Skill 的插件依赖是否满足（requires_plugin 为空视为无依赖）。
+     * 在注入时实时检查，服务器中途安装/卸载插件无需重载技能。
+     * 插件名大小写不敏感（避免技能作者写 essentials 而插件注册名是 EssentialsX 时误判）。
+     */
+    public boolean isPluginRequirementSatisfied(Skill skill) {
+        List<String> required = skill.getMetadata().getRequiresPlugin();
+        if (required == null || required.isEmpty()) {
+            return true;
+        }
+        org.bukkit.plugin.PluginManager pm = Bukkit.getPluginManager();
+        if (pm == null) {
+            // 无插件管理器（异常环境）时放行，不因检查失效而隐藏技能
+            return true;
+        }
+        Set<String> installed = Arrays.stream(pm.getPlugins())
+                .map(p -> p.getName().toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        for (String r : required) {
+            if (!installed.contains(r.trim().toLowerCase(Locale.ROOT))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 过滤掉插件依赖未满足的 Skill
+     */
+    private List<Skill> filterByPluginRequirement(List<Skill> skills) {
+        return skills.stream()
+                .filter(this::isPluginRequirementSatisfied)
                 .collect(Collectors.toList());
     }
 
@@ -163,6 +199,10 @@ public class SkillManager {
         for (Skill skill : registry.getAllSkills()) {
             // auto_trigger: false 的 Skill 不参与自动注入，仍可通过手动加载使用
             if (!skill.getMetadata().isAutoTrigger()) {
+                continue;
+            }
+            // 插件依赖未满足的 Skill 不注入（如未装 LuckPerms 时不注入 LuckPerms 知识）
+            if (!isPluginRequirementSatisfied(skill)) {
                 continue;
             }
             int score = skill.matchTrigger(input);
@@ -217,7 +257,13 @@ public class SkillManager {
 
         UUID uuid = player.getUniqueId();
         Set<String> loaded = playerLoadedSkills.computeIfAbsent(uuid, k -> new HashSet<>());
-        return loaded.add(skill.getId().toLowerCase());
+        boolean added = loaded.add(skill.getId().toLowerCase());
+        // 手动加载不拦截，但依赖的插件未安装时提醒，避免 AI 拿着不适用的知识去用
+        if (added && !isPluginRequirementSatisfied(skill)) {
+            player.sendMessage(I18n.t("cli.skill.plugin.missing",
+                    String.join(", ", skill.getMetadata().getRequiresPlugin())));
+        }
+        return added;
     }
 
     /**

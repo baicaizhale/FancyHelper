@@ -1,5 +1,6 @@
 ---
 name: "placeholderapi"
+requires_plugin: "PlaceholderAPI"
 description: "PlaceholderAPI 变量系统的完整使用指南"
 triggers:
   - "placeholderapi"

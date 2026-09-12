@@ -1,5 +1,6 @@
 ---
 name: "luckperms"
+requires_plugin: "LuckPerms"
 description: "LuckPerms 权限管理插件的完整使用指南"
 triggers:
   - "luckperms"

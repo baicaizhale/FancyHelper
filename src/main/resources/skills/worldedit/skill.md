@@ -1,5 +1,6 @@
 ---
 name: "worldedit"
+requires_plugin: "WorldEdit"
 description: "WorldEdit 世界编辑插件的使用指南"
 triggers:
   - "worldedit"

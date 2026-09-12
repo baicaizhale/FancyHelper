@@ -22,6 +22,8 @@ public class SkillMetadata {
     private Map<String, Object> extra = new HashMap<>();
     private int priority = 50;
     private Map<String, String> variables = new HashMap<>();
+    // 依赖的插件名列表（requires_plugin），为空表示无插件依赖
+    private List<String> requiresPlugin = new ArrayList<>();
 
     /**
      * 从 YAML 字符串解析元数据
@@ -54,6 +56,7 @@ public class SkillMetadata {
             metadata.source = getString(data, "source", "");
             metadata.categories = getStringList(data, "categories");
             metadata.priority = getInt(data, "priority", 50);
+            metadata.requiresPlugin = getStringList(data, "requires_plugin");
 
             // 解析自定义模板变量
             Object variablesObj = data.get("variables");
@@ -112,6 +115,9 @@ public class SkillMetadata {
         if (!variables.isEmpty()) {
             data.put("variables", variables);
         }
+        if (!requiresPlugin.isEmpty()) {
+            data.put("requires_plugin", requiresPlugin);
+        }
 
         // 添加额外的字段
         data.putAll(extra);
@@ -127,7 +133,8 @@ public class SkillMetadata {
         return key.equals("name") || key.equals("description") || key.equals("triggers")
                 || key.equals("auto_trigger") || key.equals("author") || key.equals("version")
                 || key.equals("source") || key.equals("categories") || key.equals("variables")
-                || key.equals("priority") || key.equals("trigger_weights");
+                || key.equals("priority") || key.equals("trigger_weights")
+                || key.equals("requires_plugin");
     }
 
     /**
@@ -302,6 +309,17 @@ public class SkillMetadata {
 
     public Map<String, String> getVariables() {
         return new HashMap<>(variables);
+    }
+
+    /**
+     * 获取依赖的插件名列表（空列表表示无插件依赖）
+     */
+    public List<String> getRequiresPlugin() {
+        return new ArrayList<>(requiresPlugin);
+    }
+
+    public void setRequiresPlugin(List<String> requiresPlugin) {
+        this.requiresPlugin = requiresPlugin == null ? new ArrayList<>() : new ArrayList<>(requiresPlugin);
     }
 
     /**
