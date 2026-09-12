@@ -23,6 +23,20 @@ public class JsonRpcHandler {
         return gson.toJson(JsonRpcMessage.Request.create(id, method, params));
     }
 
+    /**
+     * 以指定 id 构建请求（发送方需要用 id 关联异步到达的响应时使用，如 MCP SSE 传输）
+     */
+    public static String buildRequestJson(String id, String method, JsonObject params) {
+        return gson.toJson(JsonRpcMessage.Request.create(id, method, params));
+    }
+
+    /**
+     * 构建对服务器主动请求的错误响应（如不支持 sampling/roots 时回 METHOD_NOT_FOUND）
+     */
+    public static String buildErrorResponseJson(String id, int code, String message) {
+        return gson.toJson(JsonRpcMessage.Response.error(id, code, message));
+    }
+
     public static String buildNotificationJson(String method, JsonObject params) {
         return gson.toJson(JsonRpcMessage.Notification.create(method, params));
     }

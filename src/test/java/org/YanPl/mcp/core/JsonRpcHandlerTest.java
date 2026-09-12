@@ -30,10 +30,10 @@ class JsonRpcHandlerTest {
     @Test
     @DisplayName("buildRequestJson 的 id 应自增")
     void testBuildRequestJsonIncrementsId() {
-        long first = Long.parseLong(JsonRpcHandler.buildRequestJson("a", new JsonObject())
-                .replaceAll("\\D", ""));
-        long second = Long.parseLong(JsonRpcHandler.buildRequestJson("b", new JsonObject())
-                .replaceAll("\\D", ""));
+        long first = Long.parseLong(JsonRpcMessage.extractId(
+                JsonRpcHandler.buildRequestJson("a", new JsonObject())));
+        long second = Long.parseLong(JsonRpcMessage.extractId(
+                JsonRpcHandler.buildRequestJson("b", new JsonObject())));
 
         assertEquals(first + 1, second);
     }

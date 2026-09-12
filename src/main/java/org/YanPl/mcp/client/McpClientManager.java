@@ -53,9 +53,15 @@ public class McpClientManager {
                 logger.info("[MCP] 跳过已禁用的服务器 " + config.getName());
                 continue;
             }
-            if (clients.containsKey(config.getName())) {
+            if (clients.containsKey(config.getName())
+                    && clients.get(config.getName()).isConnected()) {
                 logger.fine("[MCP] 服务器已连接，跳过 " + config.getName());
                 continue;
+            }
+            // 旧实例已死则先清理，避免残留半死客户端
+            McpClient stale = clients.remove(config.getName());
+            if (stale != null) {
+                stale.disconnect();
             }
 
             McpClient client = new McpClient(config, connectTimeoutSeconds, logger);
@@ -71,7 +77,13 @@ public class McpClientManager {
 
     public boolean connectServer(McpClientConfig config) {
         if (!enabled || !config.isEnabled()) return false;
-        if (clients.containsKey(config.getName())) return true;
+        McpClient existing = clients.get(config.getName());
+        if (existing != null) {
+            // 已连接直接复用；连接已死（SSE 流断开/ping 失败）的旧实例先清理再重连
+            if (existing.isConnected()) return true;
+            clients.remove(config.getName());
+            existing.disconnect();
+        }
 
         McpClient client = new McpClient(config, connectTimeoutSeconds, logger);
         if (client.connect()) {
@@ -157,7 +169,10 @@ public class McpClientManager {
     public List<McpClientConfig> getDisconnectedServers() {
         List<McpClientConfig> result = new ArrayList<>();
         for (McpClientConfig cfg : serverConfigs) {
-            if (cfg.isEnabled() && !clients.containsKey(cfg.getName())) {
+            if (!cfg.isEnabled()) continue;
+            McpClient client = clients.get(cfg.getName());
+            // 未连接过 或 连接已死（SSE 流断开/ping 失败置 connected=false）都算断线
+            if (client == null || !client.isConnected()) {
                 result.add(cfg);
             }
         }
