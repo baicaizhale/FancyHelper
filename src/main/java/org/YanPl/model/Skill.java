@@ -148,10 +148,16 @@ public class Skill {
             }
         }
 
-        // 名称匹配（较低权重）
+        // 名称匹配（较低权重）：ASCII 名称要求整词命中（forgive 不命中 give），
+        // 空名称不参与匹配（contains("") 恒为 true 会让任何输入白拿 40 分）
         String lowerName = metadata.getName().toLowerCase();
-        if (lowerInput.contains(lowerName)) {
-            maxScore = Math.max(maxScore, 40);
+        if (!lowerName.isEmpty() && lowerInput.contains(lowerName)) {
+            boolean nameMatch = !isAsciiWord(lowerName)
+                    || hasWordBoundaryMatch(lowerInput, lowerName)
+                    || startsWithWord(lowerInput, lowerName);
+            if (nameMatch) {
+                maxScore = Math.max(maxScore, 40);
+            }
         }
 
         return maxScore;
