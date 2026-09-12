@@ -2131,7 +2131,7 @@ public class CLIManager {
         player.spigot().sendMessage(message);
     }
 
-    private static final java.util.Set<String> FILE_OP_TYPES = java.util.Set.of("LS", "READ", "EDIT", "DIFF", "WRITE");
+    private static final java.util.Set<String> FILE_OP_TYPES = java.util.Set.of("LS", "READ", "EDIT", "WRITE");
 
     public void handleConfirm(Player player) {
         UUID uuid = player.getUniqueId();
@@ -2189,7 +2189,7 @@ public class CLIManager {
     private String mapTypeToToolName(String type) {
         return switch (type.toLowerCase()) {
             case "ls", "read" -> "read";
-            case "edit", "diff", "write" -> "write";
+            case "edit", "write" -> "write";
             default -> type;
         };
     }
@@ -2276,20 +2276,18 @@ public class CLIManager {
     }
 
     /**
-     * 执行SMART模式的操作
+     * 执行SMART模式的操作。
+     * 注意：SMART 的 #edit 不走风险评估确认（与 NORMAL 一致，见 ToolExecutor.handleFileTool），
+     * 因此这里只会收到 run 类型的 action；2026-04 重构(25d6b9b)删除 edit 风险评估时遗留的
+     * DIFF 死分支已清理。
      */
     private void executeSmartAction(Player player, PendingSmartAction action) {
         UUID uuid = player.getUniqueId();
-        
+
         if ("run".equals(action.actionType)) {
             player.sendMessage(I18n.t("tool.run.smart", action.actionContent));
             setGenerating(uuid, false, GenerationStatus.EXECUTING_TOOL);
             toolExecutor.executeCommand(player, action.actionContent);
-        } else if ("edit".equals(action.actionType)) {
-            String pendingStr = "DIFF:" + action.actionContent;
-            setPendingCommand(uuid, pendingStr);
-            setGenerating(uuid, false, GenerationStatus.WAITING_CONFIRM);
-            toolExecutor.sendConfirmButtons(player, "");
         }
     }
 
