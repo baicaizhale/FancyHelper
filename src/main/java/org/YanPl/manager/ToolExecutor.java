@@ -483,8 +483,15 @@ public class ToolExecutor {
         if (cleanCmd.startsWith("/")) {
             cleanCmd = cleanCmd.substring(1).trim();
         }
-        if (cleanCmd.toLowerCase().startsWith("minecraft:")) {
-            cleanCmd = cleanCmd.substring(10).trim();
+        // 循环剥离任意命名空间前缀（minecraft: / bukkit: / essentials: 等），
+        // 只剥真正处于命令名位置的前缀（冒号前不允许出现空格），
+        // 防止 bukkit:op、essentials:ban 这类写法绕过 YOLO 风险确认
+        while (true) {
+            int colon = cleanCmd.indexOf(':');
+            if (colon <= 0) break;
+            String ns = cleanCmd.substring(0, colon);
+            if (!ns.matches("(?i)[a-z0-9._-]+")) break;
+            cleanCmd = cleanCmd.substring(colon + 1).trim();
         }
 
         // 处理 execute 命令的递归检查
@@ -500,14 +507,20 @@ public class ToolExecutor {
         if (risky == null || risky.isEmpty()) return false;
 
         String lc = cleanCmd.toLowerCase();
+        // 只比对命令名（第一个 token），不比对参数
+        int spaceIndex = lc.indexOf(' ');
+        String token = spaceIndex == -1 ? lc : lc.substring(0, spaceIndex);
         for (String r : risky) {
             if (r == null) continue;
             String rr = r.trim().toLowerCase();
             if (rr.isEmpty()) continue;
 
-            // 精确匹配命令名或带参数的命令
-            if (lc.equals(rr)) return true;
-            if (lc.startsWith(rr + " ")) return true;
+            // 精确匹配命令名（含带参数的命令）
+            if (token.equals(rr)) return true;
+            // ban-ip 这类以风险命令为前缀的衍生命令同样视为风险
+            if (token.startsWith(rr + "-")) return true;
+            // 兼容风险条目本身带空格的情况（如 "whitelist add"）
+            if (rr.contains(" ") && lc.startsWith(rr + " ")) return true;
         }
         return false;
     }

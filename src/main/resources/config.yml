@@ -66,6 +66,7 @@ settings:
     - kill
     - nbt
     - ban
+    - ban-ip
     - unban
     - plugman
     - plm

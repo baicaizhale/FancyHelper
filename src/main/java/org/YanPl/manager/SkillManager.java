@@ -161,6 +161,10 @@ public class SkillManager {
         List<SkillMatch> matches = new ArrayList<>();
         
         for (Skill skill : registry.getAllSkills()) {
+            // auto_trigger: false 的 Skill 不参与自动注入，仍可通过手动加载使用
+            if (!skill.getMetadata().isAutoTrigger()) {
+                continue;
+            }
             int score = skill.matchTrigger(input);
             // 应用优先级加成
             int priority = skill.getMetadata().getPriority();
