@@ -264,7 +264,18 @@ public class SkillRegistry {
      * @return Skill 摘要列表
      */
     public List<String> getAllSkillSummaries() {
+        return getAllSkillSummaries(skill -> true);
+    }
+
+    /**
+     * 获取通过过滤的 Skill 摘要信息（用于提示词）
+     *
+     * @param filter Skill 过滤条件
+     * @return Skill 摘要列表
+     */
+    public List<String> getAllSkillSummaries(java.util.function.Predicate<Skill> filter) {
         return allSkills.stream()
+                .filter(filter)
                 .map(skill -> {
                     StringBuilder sb = new StringBuilder();
                     sb.append(skill.getId()).append(": ");

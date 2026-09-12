@@ -1,5 +1,6 @@
 ---
 name: "vault"
+requires_plugin: "Vault"
 description: "Vault 经济系统插件的使用指南"
 triggers:
   - "vault"

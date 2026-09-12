@@ -1,5 +1,6 @@
 ---
 name: "mcmmo"
+requires_plugin: "mcMMO"
 description: "mcMMO 技能系统的完整使用指南"
 triggers:
   - "mcmmo"
