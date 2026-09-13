@@ -607,7 +607,6 @@ class ConfigManagerTest {
         assertTrue(configManager.isPlayerToolEnabled(player, "read"));
         assertTrue(configManager.isPlayerToolEnabled(player, "ls"));
         assertTrue(configManager.isPlayerToolEnabled(player, "edit"));
-        assertTrue(configManager.isPlayerToolEnabled(player, "diff"));
     }
 
     @Test
@@ -620,18 +619,13 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("edit/diff 映射到 write 组（隐含 read）")
-    void testEditDiffMapToWriteGroup() {
+    @DisplayName("edit 映射到 write 组（隐含 read）")
+    void testEditMapToWriteGroup() {
         configManager.setPlayerToolEnabled(player, "edit", true);
 
         assertTrue(configManager.isPlayerToolEnabled(player, "edit"));
         assertTrue(configManager.isPlayerToolEnabled(player, "read"));
         assertTrue(configManager.isPlayerToolEnabled(player, "write"));
-        // diff 与 edit 同属 write 组
-        assertTrue(configManager.isPlayerToolEnabled(player, "diff"));
-
-        configManager.setPlayerToolEnabled(player, "diff", true);
-        assertTrue(configManager.isPlayerToolEnabled(player, "diff"));
     }
 
     @Test

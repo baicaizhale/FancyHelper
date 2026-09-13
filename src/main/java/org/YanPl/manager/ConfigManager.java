@@ -987,7 +987,7 @@ public class ConfigManager {
         // 映射到 read/write 两大权限组
         String group = switch (lower) {
             case "ls", "read" -> "read";
-            case "edit", "diff", "write" -> "write";
+            case "edit", "write" -> "write";
             default -> lower;
         };
 
@@ -1010,7 +1010,7 @@ public class ConfigManager {
         // 映射到 read/write 两大权限组
         String group = switch (lower) {
             case "ls", "read" -> "read";
-            case "edit", "diff", "write" -> "write";
+            case "edit", "write" -> "write";
             default -> lower;
         };
 
