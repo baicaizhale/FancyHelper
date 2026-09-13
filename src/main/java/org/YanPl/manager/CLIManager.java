@@ -956,16 +956,52 @@ public class CLIManager {
     private void atomicWriteSessionFile(Path sessionFile, String json) {
         try {
             Files.createDirectories(sessionFile.getParent());
-            Path tmp = sessionFile.resolveSibling(sessionFile.getFileName() + ".tmp");
+        } catch (IOException e) {
+            plugin.getLogger().warning("[CLI] 创建会话目录失败(" + e.getClass().getSimpleName()
+                    + ": " + e.getMessage() + "): " + sessionFile.getParent());
+            return;
+        }
+        Path tmp = sessionFile.resolveSibling(sessionFile.getFileName() + ".tmp");
+        try {
             Files.write(tmp, json.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            plugin.getLogger().warning("[CLI] 会话临时文件写入失败(" + e.getClass().getSimpleName()
+                    + ": " + e.getMessage() + "): " + tmp);
+            return;
+        }
+        // Windows 上杀软/索引器可能短暂锁住刚写入的 tmp 或目标文件，导致 ATOMIC_MOVE
+        // 瞬时失败（实测 resume 后连续 3 次失败）：短重试 + 非原子降级，仍失败则清理
+        // tmp 残留并把异常类型记进日志（此前只打路径不打原因，无法排查）。
+        String cause = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
             try {
                 Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                return;
             } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                cause = e.getClass().getSimpleName() + ": " + e.getMessage();
+                break;
+            } catch (IOException e) {
+                cause = e.getClass().getSimpleName() + ": " + e.getMessage();
+                if (attempt < 2) {
+                    try { Thread.sleep(150); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        try {
+            Files.move(tmp, sessionFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            if (cause != null) {
+                plugin.getLogger().warning("[CLI] 会话文件原子移动不可用(" + cause + ")，已降级为普通替换: " + sessionFile.getFileName());
             }
         } catch (IOException e) {
-            plugin.getLogger().warning("[CLI] 会话文件原子写入失败: " + e.getMessage());
+            plugin.getLogger().warning("[CLI] 会话文件写入失败(" + e.getClass().getSimpleName() + ": " + e.getMessage()
+                    + ")，本次会话内容可能未持久化: " + sessionFile);
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {}
         }
     }
 
@@ -1614,8 +1650,50 @@ public class CLIManager {
     /**
      * 退出 CLI 模式
      */
-    public void exitCLI(Player player) {
+    /**
+     * 开启全新会话：保存当前会话到历史，清空待办与已加载 Skill，创建空会话。
+     * 语义与 exit+enter 等效（复用 enterCLI 的会话创建），但保持 CLI 模式、
+     * 不刷退出/进入横幅。生成进行中不允许切换，避免保存竞态。
+     */
+    public void startNewSession(Player player) {
         UUID uuid = player.getUniqueId();
+        if (!activeCLIPayers.contains(uuid)) {
+            player.sendMessage(I18n.t("cli.skill.need.cli"));
+            return;
+        }
+        if (isGenerating.getOrDefault(uuid, false)) {
+            player.sendMessage(I18n.t("clim.warn.no.send"));
+            return;
+        }
+        if (pendingCommands.remove(uuid) != null) {
+            player.sendMessage(I18n.t("clim.cancel.pending"));
+        }
+        pendingSmartActions.remove(uuid);
+        retryInfoMap.remove(uuid);
+        plugin.getTodoManager().clearTodos(uuid);
+        plugin.getSkillManager().clearPlayerSkills(player);
+
+        DialogueSession old = sessions.remove(uuid);
+        if (old != null) {
+            boolean hasUserMessage = false;
+            for (DialogueSession.Message msg : old.getHistory()) {
+                if ("user".equals(msg.getRole())) {
+                    hasUserMessage = true;
+                    break;
+                }
+            }
+            if (hasUserMessage) {
+                DialogueSession captured = old;
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> saveSessionToHistory(uuid, captured));
+            }
+        }
+
+        activeCLIPayers.remove(uuid);
+        enterCLI(player);
+        player.sendMessage(I18n.t("clim.new.created"));
+    }
+
+    public void exitCLI(Player player) {        UUID uuid = player.getUniqueId();
         
         if (!activeCLIPayers.contains(uuid)) {
             // 待同意协议的玩家也允许退出：clim.agree.prompt 文案宣称"发送 /cli 退出"，

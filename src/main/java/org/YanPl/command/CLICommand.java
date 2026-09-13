@@ -172,6 +172,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "smart_deny":
             case "smart_never":
             case "compact":
+            case "new":
             case "resume":
             case "resume_confirm":
             case "resume_delete":
@@ -246,6 +247,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(I18n.t("cli.help.streaming"));
         sender.sendMessage(I18n.t("cli.help.sound"));
         sender.sendMessage(I18n.t("cli.help.resume"));
+        sender.sendMessage(I18n.t("cli.help.new"));
         sender.sendMessage(I18n.t("cli.help.skill"));
         sender.sendMessage(I18n.t("cli.help.skill.list"));
         sender.sendMessage(I18n.t("cli.help.skill.info"));
@@ -257,6 +259,9 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
         switch (subCommand) {
+            case "new":
+                plugin.getCliManager().startNewSession(player);
+                return true;
             case "yolo":
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.YOLO);
                 return true;
@@ -367,6 +372,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 plugin.getCliManager().exitCLI(player);
                 return true;
             case "todo":
+                player.sendMessage(I18n.t("clim.todo.opened"));
                 plugin.getCliManager().openTodoBook(player);
                 return true;
             case "gui":
@@ -2010,7 +2016,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
-                "bind", "serverid", "reload", "status", "stats", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade",
+                "bind", "serverid", "reload", "status", "stats", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade", "new",
                 "read", "set", "settings", "tools", "display", "streaming", "toggle",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
