@@ -511,6 +511,7 @@ public class CLIManager {
                                 word = THINKING_WORDS[new Random().nextInt(THINKING_WORDS.length)];
                                 currentThinkingWords.put(uuid, word);
                                 wordStartTimes.put(uuid, now);
+                                wordStart = now; // 同步局部变量，否则下一行拆箱 null 会 NPE
                             }
 
                             // 打字机缓动效果 — ease-out cubic，先快后慢，约 3.5s 打完
@@ -4339,6 +4340,8 @@ public class CLIManager {
      * 顺序与原 feedbackToAI 单路径完全一致：addMessage → token 估算日志 → 状态翻转 → 异步重入。
      */
     private void invokeModelAfterFeedback(Player player, DialogueSession session, String feedback) {
+        // 防御：现有调用方均已判空，这里兜底（下游 lambda 直接持有 session 引用）
+        if (session == null) return;
         UUID uuid = player.getUniqueId();
 
         // 混合批次中被剔除的调用：随本次反馈一并回灌模型，绝不静默丢弃
