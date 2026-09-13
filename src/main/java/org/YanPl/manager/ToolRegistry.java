@@ -142,8 +142,11 @@ public final class ToolRegistry {
             addTool(tools, "mcp", responsesFormat, "Call an external MCP tool. Format: server.tool|jsonArgs. Call mcp_tools first to see available tools.",
                     obj("server", str("string", "MCP server name"),
                             "tool", str("string", "MCP tool name"),
-                            "arguments", obj("type", str("string", "object"),
-                                    "description", str("string", "Tool arguments JSON object"))));
+                            // arguments 是 object 类型的参数：这里必须是字面量 "object"，
+                            // 之前误用 str() 生成了嵌套 schema 节点，被 DeepSeek 等严格校验的
+                            // 端点判 400（Invalid schema for function 'mcp'），MCP 因此从未跑通
+                            "arguments", obj("type", new com.google.gson.JsonPrimitive("object"),
+                                    "description", new com.google.gson.JsonPrimitive("Tool arguments JSON object"))));
         }
         return tools;
     }
