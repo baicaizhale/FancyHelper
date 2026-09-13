@@ -58,19 +58,29 @@ public class InstructionManager {
     public String addInstruction(Player player, String content, String category) {
         UUID uuid = player.getUniqueId();
         List<PlayerInstruction> instructions = getInstructions(uuid);
-        
+
         if (instructions.size() >= 50) {
             return "error: " + I18n.t("inst.error.max");
         }
-        
-        PlayerInstruction instruction = new PlayerInstruction(content, category);
+
+        String normalized = content == null ? "" : content.trim();
+        // 查重：同玩家已存在完全相同的记忆内容时不再追加。
+        // AI 跨会话容易反复记录同一偏好（实测同一玩家堆出 11 条"喜欢紫色"），
+        // 重复记忆既污染 /cli memory 列表也污染注入提示词。
+        for (int i = 0; i < instructions.size(); i++) {
+            if (instructions.get(i).getContent().trim().equals(normalized)) {
+                return "success: " + I18n.t("inst.duplicate", i + 1);
+            }
+        }
+
+        PlayerInstruction instruction = new PlayerInstruction(normalized, category);
         instructions.add(instruction);
         saveInstructions(uuid, instructions);
-        
+
         if (plugin.getConfigManager().isDebug()) {
-            plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 添加了新记忆: " + content);
+            plugin.getLogger().info("[Instruction] 玩家 " + player.getName() + " 添加了新记忆: " + normalized);
         }
-        return "success: 已记住: " + content;
+        return "success: 已记住: " + normalized;
     }
 
     public String removeInstruction(Player player, int index) {

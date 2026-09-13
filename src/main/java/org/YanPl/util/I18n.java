@@ -115,6 +115,7 @@ public class I18n {
         Map.entry("cli.help.notice", " §7- §b/cli notice §f: 查看系统公告"),
         Map.entry("cli.help.notice.read", " §7- §b/cli notice read §f: 将公告标记为已读"),
         Map.entry("cli.help.todo", " §7- §b/cli todo §f: 查看待办事项列表"),
+        Map.entry("cli.help.new", " §7- §b/cli new §f: 开启全新会话（当前对话自动保存）"),
         Map.entry("cli.help.settings", " §7- §b/cli settings §f: 打开个人设置界面"),
         Map.entry("cli.help.memory", " §7- §b/cli memory §f: 管理偏好记忆"),
         Map.entry("cli.help.tools", " §7- §b/cli tools §f: 查看工具列表"),
@@ -375,6 +376,9 @@ public class I18n {
         Map.entry("clim.eula.invalid", "§zFancyHelper§b§r §7> §f错误：EULA 文件缺失或被非法改动且无法还原，请联系管理员检查权限设置。"),
         Map.entry("clim.resume.ready", "§zFancyHelper§b§r §7> §f会话已恢复，您可以继续了"),
         Map.entry("clim.cancel.pending", "§7⇒ 已取消待处理的操作"),
+        Map.entry("clim.new.created", "§a✦ 已开启全新会话，之前的对话已保存（/cli resume 可找回）"),
+        Map.entry("clim.todo.opened", "§7待办清单已在书本中打开"),
+        Map.entry("inst.duplicate", "该记忆已存在（第 {0} 条），未重复添加"),
         Map.entry("clim.mode.yolo", "§f⨀ 已切换至 YOLO 模式。在该模式下，Fancy 执行命令将不再请求您的确认。"),
         Map.entry("clim.mode.smart", "§f⨀ 已切换至 SMART 模式。在该模式下，Fancy 会先评估操作风险，高风险操作需要您的确认。"),
         Map.entry("clim.mode.normal", "§f⨀ 已切换至 Normal 模式。"),
@@ -660,7 +664,7 @@ public class I18n {
         Map.entry("skillmgr.none", "§c暂无可用 Skill"),
         Map.entry("skillmgr.list.title", "§6========== 可用 Skill 列表 =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),
-        Map.entry("skillmgr.list.count", "§7共 {0} 个 Skill | 使用 /fancy skill info <id> 查看详情")
+        Map.entry("skillmgr.list.count", "§7共 {0} 个 Skill | 使用 /cli skill info <id> 查看详情")
 
         // ============================================================
         //  PromptManager 语言指令
@@ -700,6 +704,7 @@ public class I18n {
         Map.entry("cli.help.notice", " §7- §b/cli notice §f: View system notices"),
         Map.entry("cli.help.notice.read", " §7- §b/cli notice read §f: Mark a notice as read"),
         Map.entry("cli.help.todo", " §7- §b/cli todo §f: View your todo list"),
+        Map.entry("cli.help.new", " §7- §b/cli new §f: Start a fresh session (current one is saved)"),
         Map.entry("cli.help.settings", " §7- §b/cli settings §f: Open personal settings"),
         Map.entry("cli.help.memory", " §7- §b/cli memory §f: Manage preference memory"),
         Map.entry("cli.help.tools", " §7- §b/cli tools §f: View tool list"),
@@ -960,6 +965,9 @@ public class I18n {
         Map.entry("clim.eula.invalid", "§zFancyHelper§b§r §7> §fError: EULA file is missing or tampered with and cannot be restored. Contact an admin to check permissions."),
         Map.entry("clim.resume.ready", "§zFancyHelper§b§r §7> §fSession restored, you may continue"),
         Map.entry("clim.cancel.pending", "§7⇒ Pending operation cancelled"),
+        Map.entry("clim.new.created", "§a✦ New session started. Your previous conversation has been saved (recover with /cli resume)"),
+        Map.entry("clim.todo.opened", "§7Your todo list has been opened in a book"),
+        Map.entry("inst.duplicate", "This memory already exists (entry {0}); skipped duplicate"),
         Map.entry("clim.mode.yolo", "§f⨀ Switched to YOLO mode. Fancy will no longer ask for confirmation when executing commands."),
         Map.entry("clim.mode.smart", "§f⨀ Switched to SMART mode. Fancy will assess operation risk; high-risk operations need your confirmation."),
         Map.entry("clim.mode.normal", "§f⨀ Switched to Normal mode."),
@@ -1245,7 +1253,7 @@ public class I18n {
         Map.entry("skillmgr.none", "§cNo Skills available"),
         Map.entry("skillmgr.list.title", "§6========== Available Skills =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),
-        Map.entry("skillmgr.list.count", "§7{0} Skills | Use /fancy skill info <id> for details")
+        Map.entry("skillmgr.list.count", "§7{0} Skills | Use /cli skill info <id> for details")
 
         // ============================================================
         //  PromptManager 语言指令
@@ -1285,6 +1293,7 @@ public class I18n {
         Map.entry("cli.help.notice", " §7- §b/cli notice §f: 观系统公告"),
         Map.entry("cli.help.notice.read", " §7- §b/cli notice read §f: 标公告为已读"),
         Map.entry("cli.help.todo", " §7- §b/cli todo §f: 观待办之单"),
+        Map.entry("cli.help.new", " §7- §b/cli new §f: 启新谈（旧谈自存）"),
         Map.entry("cli.help.settings", " §7- §b/cli settings §f: 开个人设置"),
         Map.entry("cli.help.memory", " §7- §b/cli memory §f: 理偏好之忆"),
         Map.entry("cli.help.tools", " §7- §b/cli tools §f: 观工具之单"),
@@ -1545,6 +1554,9 @@ public class I18n {
         Map.entry("clim.eula.invalid", "§zFancyHelper§b§r §7> §f误：EULA 之文缺失或遭擅改而不可复，请联管理员察其权。"),
         Map.entry("clim.resume.ready", "§zFancyHelper§b§r §7> §f会已复，汝可续之"),
         Map.entry("clim.cancel.pending", "§7⇒ 待办之事已罢"),
+        Map.entry("clim.new.created", "§a✦ 新谈已启，旧谈自存（/cli resume 可寻回）"),
+        Map.entry("clim.todo.opened", "§7待办之单已展于书"),
+        Map.entry("inst.duplicate", "此忆已存（第 {0} 条），未复录"),
         Map.entry("clim.mode.yolo", "§f⨀ 已入 YOLO 之境。此境之下，Fancy 行令不复求汝之许。"),
         Map.entry("clim.mode.smart", "§f⨀ 已入 SMART 之境。此境之下，Fancy 先衡其险，高危之务须汝之许。"),
         Map.entry("clim.mode.normal", "§f⨀ 已入 Normal 之境。"),
@@ -1830,7 +1842,7 @@ public class I18n {
         Map.entry("skillmgr.none", "§c今无可用 Skill"),
         Map.entry("skillmgr.list.title", "§6========== 可用 Skill 之单 =========="),
         Map.entry("skillmgr.list.bottom", "§6===================================="),
-        Map.entry("skillmgr.list.count", "§7凡 {0} 个 Skill | 用 /fancy skill info <id> 观其详")
+        Map.entry("skillmgr.list.count", "§7凡 {0} 个 Skill | 用 /cli skill info <id> 观其详")
 
         // ============================================================
         //  PromptManager 语言指令
