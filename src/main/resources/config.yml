@@ -120,9 +120,9 @@ openai:
   # API 密钥
   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   # 模型名称
-  model: deepseek-v4-pro
+  model: deepseek-flash
   # 副模型设置（用于压缩等轻量级任务，使用主模型的 api_url 和 api_key）
-  co-model: deepseek-v4-flash
+  co-model: deepseek-flash
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:
