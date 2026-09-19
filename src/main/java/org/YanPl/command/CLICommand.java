@@ -766,11 +766,6 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      * 手动触发一次统计数据上报（用于测试）
      */
     private void handleStatsCommand(CommandSender sender) {
-        if (!plugin.getFancyConsoleManager().isReady()) {
-            sender.sendMessage(I18n.t("cli.stats.no.key"));
-            return;
-        }
-
         sender.sendMessage(I18n.t("cli.stats.sending"));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

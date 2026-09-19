@@ -51,6 +51,8 @@ public class StatsManager {
         startAutoSave();
         if (plugin.getConfigManager().isStatsReportEnabled()) {
             scheduleNextReport();
+            plugin.getLogger().info("[StatsManager] 统计上报已启用：每小时以 server-id 匿名上报，无需注册；"
+                    + "如需关闭请设置 config.yml 的 settings.stats_report=false");
         } else {
             plugin.getLogger().info("[StatsManager] 统计上报已禁用（settings.stats_report=false），不会定时上报");
         }
@@ -295,13 +297,6 @@ public class StatsManager {
     private void doReport() {
         // 配置重载后关闭统计上报时，跳过已排队的定时任务
         if (!plugin.getConfigManager().isStatsReportEnabled()) {
-            return;
-        }
-
-        if (!plugin.getFancyConsoleManager().isReady()) {
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[StatsManager] 跳过上报：未配置 API Key");
-            }
             return;
         }
 

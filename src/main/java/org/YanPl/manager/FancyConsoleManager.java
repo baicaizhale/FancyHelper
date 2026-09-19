@@ -48,6 +48,21 @@ public class FancyConsoleManager {
             createDefaultConfig();
         }
         config = YamlConfiguration.loadConfiguration(configFile);
+        ensureServerId();
+    }
+
+    /**
+     * 保证 server-id 存在。统计上报以 server-id 作为唯一身份且不要求注册，
+     * 因此旧版本文件或手工编辑导致该字段缺失时必须补齐，否则上报无法归属。
+     */
+    private void ensureServerId() {
+        String serverId = config.getString("server-id", "");
+        if (serverId != null && !serverId.trim().isEmpty()) {
+            return;
+        }
+        config.set("server-id", UUID.randomUUID().toString());
+        save();
+        plugin.getLogger().info("client-fancy.yml 缺少 server-id，已生成新值");
     }
 
     private void createDefaultConfig() {
@@ -77,6 +92,7 @@ public class FancyConsoleManager {
      */
     public void reload() {
         config = YamlConfiguration.loadConfiguration(configFile);
+        ensureServerId();
     }
 
     /**
