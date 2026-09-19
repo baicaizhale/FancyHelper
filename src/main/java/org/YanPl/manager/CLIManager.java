@@ -2731,7 +2731,6 @@ public class CLIManager {
 
         // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
         streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
-            if (session == null) return;
             long total = cacheHit + cacheMiss;
             long pct = total > 0 ? cacheHit * 100 / total : 0;
             session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
@@ -4427,7 +4426,6 @@ public class CLIManager {
 
                     // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
                     streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
-                        if (session == null) return;
                         long total = cacheHit + cacheMiss;
                         long pct = total > 0 ? cacheHit * 100 / total : 0;
                         session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
