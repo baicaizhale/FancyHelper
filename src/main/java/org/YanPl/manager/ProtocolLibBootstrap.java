@@ -10,6 +10,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ProtocolLib 自动引导：ProtocolLib 未安装时，按服务器 MC 版本下载匹配的 ProtocolLib
@@ -154,10 +156,48 @@ public class ProtocolLibBootstrap {
         return 0;
     }
 
-    /** 下载发布资产到 target：先写临时文件，校验 ZIP 魔数与大小后再原子改名 */
+    /**
+     * 按优先级构建下载源列表。注意只能用 GitHub Release 的完整 shade 包——
+     * Maven Central 上的 net.dmulloy2:ProtocolLib 是未 shade 的精简构件（缺 byte-buddy 等
+     * 运行依赖，加载即 NoClassDefFoundError），不能用于安装。
+     * 级联：自定义镜像前缀（settings.protocol_lib_mirror，如 ghproxy 类代理，大陆友好）→ ghproxy → GitHub 直连。
+     */
+    private List<String> buildSourceUrls(String tag) {
+        List<String> urls = new ArrayList<>();
+        String githubAsset = String.format(GITHUB_ASSET_URL, tag);
+        String mirror = plugin.getConfig().getString("settings.protocol_lib_mirror", "").trim();
+        if (!mirror.isEmpty()) {
+            urls.add(mirror + githubAsset);
+        }
+        urls.add("https://ghproxy.vip/" + githubAsset);
+        urls.add(githubAsset);
+        return urls;
+    }
+
+    /**
+     * 依序尝试所有下载源，全部失败才抛异常。
+     * 每个源先写临时文件，校验 ZIP 魔数与大小后再原子改名。
+     */
     private void download(String tag, File target) throws Exception {
         File tmp = new File(target.getParentFile(), target.getName() + ".tmp");
-        HttpURLConnection conn = (HttpURLConnection) new URL(String.format(GITHUB_ASSET_URL, tag)).openConnection();
+        Exception last = null;
+        for (String url : buildSourceUrls(tag)) {
+            try {
+                fetchToFile(url, tmp);
+                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                plugin.getLogger().info("[ProtocolLib-Bootstrap] 下载源: " + url);
+                return;
+            } catch (Exception e) {
+                last = e;
+                plugin.getLogger().warning("[ProtocolLib-Bootstrap] 下载源不可用 (" + url + "): " + e.getMessage());
+                tmp.delete();
+            }
+        }
+        throw new IllegalStateException("所有下载源均失败，最后错误: " + (last == null ? "未知" : last.getMessage()));
+    }
+
+    private void fetchToFile(String url, File tmp) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setRequestProperty("User-Agent", "FancyHelper-ProtocolLib-Bootstrap");
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(60000);
@@ -165,7 +205,7 @@ public class ProtocolLibBootstrap {
 
         int code = conn.getResponseCode();
         if (code != 200) {
-            throw new IllegalStateException("HTTP " + code + " from " + conn.getURL());
+            throw new IllegalStateException("HTTP " + code);
         }
 
         try (InputStream in = conn.getInputStream()) {
@@ -176,16 +216,19 @@ public class ProtocolLibBootstrap {
 
         long size = tmp.length();
         if (size < MIN_JAR_BYTES || size > MAX_JAR_BYTES) {
-            tmp.delete();
             throw new IllegalStateException("下载内容大小异常: " + size + " bytes");
         }
         try (InputStream in = Files.newInputStream(tmp.toPath())) {
             if (in.read() != 'P' || in.read() != 'K') {
-                tmp.delete();
                 throw new IllegalStateException("下载内容不是合法的 jar（缺少 ZIP 魔数）");
             }
         }
-
-        Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        // 深度校验：必须是含 plugin.yml 的插件 jar，挡住"合法 zip 但不是插件"的包
+        // （如 Maven Central 上的未 shade 精简构件）
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(tmp)) {
+            if (zip.getEntry("plugin.yml") == null) {
+                throw new IllegalStateException("jar 中缺少 plugin.yml，不是可安装的插件包");
+            }
+        }
     }
 }
