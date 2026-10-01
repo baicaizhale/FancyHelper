@@ -7,6 +7,7 @@ import org.YanPl.listener.ChatListener;
 import org.YanPl.manager.CLIManager;
 import org.YanPl.manager.ConfigManager;
 import org.YanPl.manager.PacketCaptureManager;
+import org.YanPl.manager.ProtocolLibBootstrap;
 import org.YanPl.manager.VerificationManager;
 import org.YanPl.mcp.McpManager;
 import org.YanPl.manager.EulaManager;
@@ -96,25 +97,20 @@ public final class FancyHelper extends JavaPlugin {
             verificationManager = new VerificationManager(this);
 
             // 检查 ProtocolLib 依赖并初始化数据包捕获管理器
-            if (getServer().getPluginManager().isPluginEnabled("ProtocolLib")) {
+            Plugin protocolLib = getServer().getPluginManager().getPlugin("ProtocolLib");
+            if (protocolLib != null && protocolLib.isEnabled()) {
+                initPacketCapture();
+            } else if (protocolLib == null && new ProtocolLibBootstrap(this).ensureInstalled()) {
+                // 自动下载并启用成功，继续正常初始化
                 initPacketCapture();
             } else {
-                getLogger().severe("==================================================");
-                getLogger().severe("未检测到 ProtocolLib！");
-                getLogger().severe("FancyHelper 依赖 ProtocolLib 提供命令输出捕获等核心功能，缺少它将无法正常工作。");
-                getLogger().severe("请前往以下地址下载并安装 ProtocolLib，然后重启服务器：");
-                getLogger().severe("https://www.spigotmc.org/resources/protocollib.1997/");
-                getLogger().severe("==================================================");
-
-                // 如果 ReloadService 正在运行，也一并停掉，避免它残留等待一个已禁用的主插件
-                Plugin reloadService = getServer().getPluginManager().getPlugin("FancyHelperReloadService");
-                if (reloadService != null && reloadService.isEnabled()) {
-                    getLogger().severe("检测到 FancyHelperReloadService 正在运行，已一并停止。");
-                    getServer().getPluginManager().disablePlugin(reloadService);
-                }
-
-                packetCaptureManager = null;
-                setEnabled(false);
+                // 走到这里的两种情况：ProtocolLib 存在但启用失败（多为 MC 版本不匹配，自举无济于事）；
+                // 或未安装且自动引导失败/被关闭
+                String reason = protocolLib != null
+                        ? "ProtocolLib 已安装但未能启用（多为 MC 版本不匹配），请更换与服务器匹配的版本后重启。"
+                        : "未检测到 ProtocolLib，且自动引导未能完成安装（可检查网络，或手动下载放入 plugins/）：\n"
+                          + "https://www.spigotmc.org/resources/protocollib.1997/";
+                disableWithoutProtocolLib(reason);
                 return;
             }
 
@@ -437,6 +433,29 @@ public final class FancyHelper extends JavaPlugin {
         // 初始化数据包捕获管理器
         packetCaptureManager = new PacketCaptureManager(this);
         getLogger().info("已检测到 ProtocolLib，启用高级功能。");
+    }
+
+    /**
+     * ProtocolLib 不可用时的统一收尾：打印原因、停掉依赖本插件的 ReloadService、禁用自身。
+     * 调用方需自行 return，不再继续 onEnable。
+     */
+    private void disableWithoutProtocolLib(String reason) {
+        getLogger().severe("==================================================");
+        getLogger().severe("FancyHelper 依赖 ProtocolLib 提供命令输出捕获等核心功能，缺少它将无法正常工作。");
+        for (String line : reason.split("\n")) {
+            getLogger().severe(line);
+        }
+        getLogger().severe("==================================================");
+
+        // 如果 ReloadService 正在运行，也一并停掉，避免它残留等待一个已禁用的主插件
+        Plugin reloadService = getServer().getPluginManager().getPlugin("FancyHelperReloadService");
+        if (reloadService != null && reloadService.isEnabled()) {
+            getLogger().severe("检测到 FancyHelperReloadService 正在运行，已一并停止。");
+            getServer().getPluginManager().disablePlugin(reloadService);
+        }
+
+        packetCaptureManager = null;
+        setEnabled(false);
     }
 
     @Override

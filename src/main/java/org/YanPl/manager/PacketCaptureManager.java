@@ -35,8 +35,10 @@ public class PacketCaptureManager {
             registerListener();
             enabled = true;
             plugin.getLogger().info("[PacketCapture] 已检测到 ProtocolLib，启用数据包级命令输出捕获。");
-        } catch (Exception e) {
-            plugin.getLogger().warning("[PacketCapture] 注册 ProtocolLib 监听器失败: " + e.getMessage());
+        } catch (Throwable t) {
+            // 必须接 Throwable：ProtocolLib 完全缺席时 registerListener 抛 NoClassDefFoundError（Error 而非 Exception），
+            // catch Exception 接不住会炸穿 onEnable
+            plugin.getLogger().warning("[PacketCapture] 注册 ProtocolLib 监听器失败: " + t);
         }
     }
 
