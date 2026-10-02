@@ -2386,7 +2386,9 @@ public class ToolExecutor {
      */
     private String performWikiSearch(String query, Player player) {
         String result = fetchWikiResult(query);
-        if (result.equals("未找到相关 Wiki 条目。")) {
+        // 两种失败都要回退：没搜到条目（正常空结果）与请求异常（网络/TLS 问题，如生产服 PKIX）——
+        // 异常不回退的话错误原文直接丢给 AI，Metaso 明明可用却拿不到结果
+        if (result.equals("未找到相关 Wiki 条目。") || result.startsWith("Wiki 搜索出错")) {
             if (plugin.getMetasoAPI().isAvailable()) {
                 return plugin.getMetasoAPI().search(query);
             } else if (plugin.getConfigManager().isTavilyEnabled()) {
