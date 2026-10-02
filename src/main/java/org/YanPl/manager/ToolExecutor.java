@@ -10,6 +10,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
 import org.YanPl.model.DialogueSession;
+import org.YanPl.model.NativeToolCall;
 import org.YanPl.mcp.client.McpClientManager;
 import org.YanPl.mcp.core.McpTypes;
 import org.YanPl.util.ColorUtil;
@@ -29,6 +30,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -77,7 +79,9 @@ public class ToolExecutor {
         // 解析工具名称和参数
         ToolParseResult parseResult = parseToolCall(toolCall);
         String toolName = parseResult.toolName;
-        String args = parseResult.args;
+        // JSON 参数归一化：模型受原生 schema / #ask 等 JSON 习惯影响，可能在文本协议里把参数写成 JSON，
+        // 而单字符串参数的 handler 只认裸字符串，整串 JSON 会被当参数用坏。入口统一翻译，见 normalizeJsonArgs。
+        String args = normalizeJsonArgs(parseResult.toolName, parseResult.args);
 
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[CLI] 正在为 " + player.getName() + " 执行工具: " + toolName + " (参数: " + args + ")");
@@ -251,6 +255,42 @@ public class ToolExecutor {
         }
 
         return new ToolParseResult(toolName, args);
+    }
+
+    /** 文本协议参数需要 JSON 归一化的工具（单字符串/管道格式参数，handler 不自己解析 JSON）。
+     *  #ask / #todo / #edit / #write 本身就是 JSON 协议，不在列。 */
+    private static final Set<String> JSON_ARG_TOOLS = Set.of(
+            "search", "run", "list", "read", "skill", "unloadskill", "webfetch", "mcp",
+            "forget", "forget_global", "remember", "remember_global",
+            "edit_memory", "edit_global");
+
+    /**
+     * 文本协议 JSON 参数归一化：把模型写成 JSON 的工具参数翻译回裸字符串/管道格式。
+     * 模型受原生 function calling schema 与 #ask/#edit 的 JSON 习惯影响，可能在正文输出
+     * #search: {"query":"..."} 这类调用，而单字符串参数的 handler 只认裸字符串，整串 JSON
+     * 会被当参数用坏（webfetch 修过一回，其余几组工具同病）。这里在 executeTool 入口统一
+     * 复用 ToolRegistry.bridgeToText 的键名映射（与原生 schema 单一来源）翻译；
+     * 非适用工具 / 非法 JSON / 键名全对不上时原样返回，走各 handler 旧行为兜底。
+     */
+    public static String normalizeJsonArgs(String toolName, String args) {
+        if (args == null) return null;
+        String trimmed = args.trim();
+        if (!trimmed.startsWith("{")) return args;
+        String name = toolName == null ? "" : toolName.toLowerCase();
+        if (name.startsWith("#")) name = name.substring(1);
+        if (!JSON_ARG_TOOLS.contains(name)) return args;
+        try {
+            JsonParser.parseString(trimmed).getAsJsonObject();
+        } catch (Exception e) {
+            return args;
+        }
+        String bridged = ToolRegistry.bridgeToText(new NativeToolCall(null, name, trimmed));
+        ToolParseResult reparsed = parseToolCall(bridged);
+        // 键名对不上时 bridge 回退 raw 原样输出，翻译结果等于输入 → 透传
+        if (!reparsed.toolName.equalsIgnoreCase("#" + name) || reparsed.args.equals(trimmed)) {
+            return args;
+        }
+        return reparsed.args;
     }
 
     /**

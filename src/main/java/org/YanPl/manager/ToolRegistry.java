@@ -114,12 +114,12 @@ public final class ToolRegistry {
                             "content", str("string", "New file content, use \\n for newlines")));
         }
 
-        addTool(tools, "remember", responsesFormat, "Save a permanent player preference (<=50 chars, avoid first/second-person wording like I/you/please). Format: category|content. Do not include | characters in the parameter.",
+        addTool(tools, "remember", responsesFormat, "Save a permanent player preference (<=50 chars, avoid first/second-person wording like I/you/please). Do not include | characters in the content.",
                 obj("content", str("string", "Memory content"),
                         "category", str("string", "Category, default general")));
         addTool(tools, "forget", responsesFormat, "Delete one or all player memories.",
                 obj("index", str("string", "Index number or all")));
-        addTool(tools, "edit_memory", responsesFormat, "Update one player memory. Format: index|category|content. Do not include | characters in the parameter.",
+        addTool(tools, "edit_memory", responsesFormat, "Update one player memory. Do not include | characters in the content.",
                 obj("index", str("number", "Memory index"),
                         "content", str("string", "New content"),
                         "category", str("string", "Category, default general")));
@@ -129,7 +129,7 @@ public final class ToolRegistry {
                         "category", str("string", "Category, default rule")));
         addTool(tools, "forget_global", responsesFormat, "Delete one or all server memories (admin only).",
                 obj("index", str("string", "Index number or all")));
-        addTool(tools, "edit_global", responsesFormat, "Update one server memory (admin only). Format: index|category|content. Do not include | characters in the parameter.",
+        addTool(tools, "edit_global", responsesFormat, "Update one server memory (admin only). Do not include | characters in the content.",
                 obj("index", str("number", "Memory index"),
                         "content", str("string", "New content"),
                         "category", str("string", "Category, default rule")));
@@ -139,7 +139,7 @@ public final class ToolRegistry {
 
         if (mcpEnabled) {
             addTool(tools, "mcp_tools", responsesFormat, "List all MCP external tools and their enabled status.", new JsonObject());
-            addTool(tools, "mcp", responsesFormat, "Call an external MCP tool. Format: server.tool|jsonArgs. Call mcp_tools first to see available tools.",
+            addTool(tools, "mcp", responsesFormat, "Call an external MCP tool. Call mcp_tools first to see available tools and their status.",
                     obj("server", str("string", "MCP server name"),
                             "tool", str("string", "MCP tool name"),
                             // arguments 是 object 类型的参数：这里必须是字面量 "object"，

@@ -136,21 +136,21 @@ public class PromptManager {
 
             if (!nativeTools) {
                 sb.append("Example:\n");
-                sb.append("  Correct: #run: give @p apple\n");
-                sb.append("  Correct: #run: give @p apple\\n#run: give @p oak_planks 2  (multiple independent tools in one response are fine)\n");
-                sb.append("  Wrong:   #run: give @p apple && say hello  (chained commands with && are forbidden)\n");
+                sb.append("  Correct: #run: {\"command\":\"give @p apple\"}\n");
+                sb.append("  Correct: #run: {\"command\":\"give @p apple\"}\\n#run: {\"command\":\"give @p oak_planks 2\"}  (multiple independent tools in one response are fine)\n");
+                sb.append("  Wrong:   #run: {\"command\":\"give @p apple && say hello\"}  (chained commands with && are forbidden)\n");
                 sb.append("\n");
             }
 
             if (nativeTools) {
                 sb.append("[Tools] Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Every tool (search, run, todo, edit, memory, mcp, exit, etc.) is provided to you as a function. Call multiple functions in one response when they are independent.\n\n");
             } else {
-                sb.append("[Tools] Format: #tool_name: argument\n\n");
+                sb.append("[Tools] Format: #tool_name: argument. Prefer JSON object arguments as shown in the examples; plain strings are also accepted.\n\n");
 
                 sb.append("[Query]\n");
-                sb.append("  #search: <args>      - Internet search (Wiki priority). Add 'widely' to force general web search.\n");
-                sb.append("  #skill: <id>         - Load Skill knowledge module. Always check Available Skills list first.\n");
-                sb.append("  #unloadskill: <id>   - Unload a loaded Skill to free context space.\n");
+                sb.append("  #search: <json>      - Internet search (Wiki priority). Example: #search: {\"query\":\"villager trades\"}; add 'widely' inside query to force general web search.\n");
+                sb.append("  #skill: <json>       - Load Skill knowledge module. Always check Available Skills list first. Example: #skill: {\"id\":\"redstone\"}\n");
+                sb.append("  #unloadskill: <json> - Unload a loaded Skill to free context space. Example: #unloadskill: {\"id\":\"redstone\"}\n");
                 sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
                 sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
                 sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
@@ -158,14 +158,14 @@ public class PromptManager {
                 sb.append("    Example: #webfetch: {\"url\":\"https://example.com\"} (a bare URL is also accepted).\n\n");
 
                 sb.append("[Execution]\n");
-                sb.append("  #run: <command>  - Execute ONE Minecraft in-game command. Never use for system/shell commands.\n");
+                sb.append("  #run: <json>     - Execute ONE Minecraft in-game command. Never use for system/shell commands. Example: #run: {\"command\":\"give @p apple 1\"}\n");
                 sb.append("  #end             - Mark task complete. Must follow a summary to the player. Never call alone.\n");
                 sb.append("  #exit            - Call when player wants to exit FancyHelper.\n\n");
 
                 sb.append("[File Tools] (Results not visible to players)\n");
                 if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
-                    sb.append("  #list: <path>    - List directory. Example: #list: plugins/FancyHelper\n");
-                    sb.append("  #read: <path> [start-end]  - Read file with line numbers. Example: #read: config.yml 1-50\n");
+                    sb.append("  #list: <json>    - List directory. Example: #list: {\"path\":\"plugins/FancyHelper\"}\n");
+                    sb.append("  #read: <json>  - Read file with line numbers. Example: #read: {\"path\":\"config.yml\",\"range\":\"1-50\"} (omit range to read whole file)\n");
                     sb.append("    Line numbers in output are used to target #edit precisely.\n");
                 }
                 if (plugin.getConfigManager().isPlayerToolEnabled(player, "write")) {
@@ -186,16 +186,16 @@ public class PromptManager {
                 sb.append("  Note: Use #skill for Skill modules, NOT #read.\n\n");
 
                 sb.append("[Memory]\n");
-                sb.append("  #remember: category|content  - Save permanent preference (max 50 chars, no 'I/You/Please').\n");
-                sb.append("    Example: #remember: style|concise\n");
+                sb.append("  #remember: <json>  - Save permanent preference (max 50 chars, no 'I/You/Please'). Fields: content (required), category (default general).\n");
+                sb.append("    Example: #remember: {\"category\":\"style\",\"content\":\"concise\"}\n");
                 sb.append("    Only for permanent facts/prefs. Never for ongoing tasks (use #todo instead).\n");
-                sb.append("  #forget: <index|all>         - Delete one or all memories.\n");
-                sb.append("  #edit_memory: <index>|<new>  - Update existing memory.\n");
-                sb.append("  #remember_global: category|content  - Save SERVER rule/fact (admin only, affects ALL players). Max 100 chars.\n");
-                sb.append("    Example: #remember_global: rule|周五晚高峰20点提醒玩家注意\n");
+                sb.append("  #forget: <json>    - Delete one or all memories. Example: #forget: {\"index\":\"3\"} or {\"index\":\"all\"}\n");
+                sb.append("  #edit_memory: <json>  - Update existing memory. Example: #edit_memory: {\"index\":3,\"content\":\"new text\",\"category\":\"style\"}\n");
+                sb.append("  #remember_global: <json>  - Save SERVER rule/fact (admin only, affects ALL players). Max 100 chars. Fields: content (required), category (default rule).\n");
+                sb.append("    Example: #remember_global: {\"category\":\"rule\",\"content\":\"周五晚高峰20点提醒玩家注意\"}\n");
                 sb.append("    Only admins (fancyhelper.admin). Non-admin will get an error — then use #remember instead.\n");
-                sb.append("  #forget_global: <index|all>  - Delete one/all server memories (admin only).\n");
-                sb.append("  #edit_global: <index>|<new>  - Update a server memory (admin only).\n\n");
+                sb.append("  #forget_global: <json>  - Delete one/all server memories (admin only). Example: #forget_global: {\"index\":\"all\"}\n");
+                sb.append("  #edit_global: <json>  - Update a server memory (admin only). Example: #edit_global: {\"index\":1,\"content\":\"new rule\",\"category\":\"rule\"}\n\n");
 
                 sb.append("[Task Management]\n");
                 sb.append("  #todo: <json>  - Create/update task list. Replaces existing list entirely.\n");
@@ -207,8 +207,8 @@ public class PromptManager {
                 if (plugin.getConfigManager().isMcpClientEnabled()) {
                     sb.append("[MCP External Tools]\n");
                     sb.append("  #mcp_tools                         - List all MCP external tools and their enable/disable status.\n");
-                    sb.append("  #mcp: serverName.toolName|jsonArgs - Call an external MCP tool.\n");
-                    sb.append("    Format: #mcp: server.tool|{\"arg1\":\"value1\"}\n");
+                    sb.append("  #mcp: <json>                       - Call an external MCP tool.\n");
+                    sb.append("    Example: #mcp: {\"server\":\"weather\",\"tool\":\"query\",\"arguments\":{\"city\":\"Beijing\"}}\n");
                     sb.append("    Always use #mcp_tools first to check available tools and their status.\n\n");
                 }
             }
@@ -218,7 +218,7 @@ public class PromptManager {
             if (nativeTools) {
                 sb.append("2. If a command is unknown, try running <pluginname> help first to discover its usage.\n");
             } else {
-                sb.append("2. Fallback: If search fails, try #run: pluginname help to discover usage.\n");
+                sb.append("2. Fallback: If search fails, try #run: {\"command\":\"pluginname help\"} to discover usage.\n");
             }
             sb.append("3. Complex tasks (3+ steps): Use the todo function first to show progress, then execute step by step.\n");
             if (nativeTools) {
@@ -489,24 +489,24 @@ public class PromptManager {
             StringBuilder sb = new StringBuilder();
 
             sb.append("[Available Tools in Plan Mode]\n");
-            sb.append("Format: #tool_name: argument\n\n");
+            sb.append("Format: #tool_name: argument. Prefer JSON object arguments as shown in the examples; plain strings are also accepted.\n\n");
 
             if (nativeTools) {
                 sb.append("Use the NATIVE function-calling tools API exclusively — never output #tool text commands. Available functions: search, skill, unloadskill, webfetch, ask, todo, mcp_tools, and read-only file tools (list/read). Do NOT call run/edit/write/exit — blocked in plan mode.\n");
                 sb.append("When your plan is complete, call the start function.\n\n");
             } else {
                 sb.append("[Query]\n");
-                sb.append("  #search: <args>      - Internet/Wiki search.\n");
-                sb.append("  #skill: <id>         - Load Skill knowledge module.\n");
-                sb.append("  #unloadskill: <id>   - Unload a loaded Skill.\n");
-                sb.append("  #webfetch: <json>     - Fetch and parse a web page ({\"url\":\"...\"} or bare URL).\n");
+                sb.append("  #search: <json>      - Internet/Wiki search. Example: #search: {\"query\":\"...\"}\n");
+                sb.append("  #skill: <json>       - Load Skill knowledge module. Example: #skill: {\"id\":\"...\"}\n");
+                sb.append("  #unloadskill: <json> - Unload a loaded Skill. Example: #unloadskill: {\"id\":\"...\"}\n");
+                sb.append("  #webfetch: <json>    - Fetch and parse a web page ({\"url\":\"...\"} or bare URL).\n");
                 sb.append("  #ask: <json>         - Ask player a question.\n");
                 sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
 
                 sb.append("[File Tools]\n");
                 if (plugin.getConfigManager().isPlayerToolEnabled(player, "read")) {
-                    sb.append("  #list: <path>    - List directory.\n");
-                    sb.append("  #read: <path> [start-end]  - Read file with line numbers.\n");
+                    sb.append("  #list: <json>    - List directory. Example: #list: {\"path\":\"...\"}\n");
+                    sb.append("  #read: <json>  - Read file with line numbers. Example: #read: {\"path\":\"...\",\"range\":\"1-50\"}\n");
                 }
                 sb.append("  Note: #edit and #write are NOT available in plan mode.\n\n");
 
