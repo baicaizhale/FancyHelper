@@ -79,7 +79,7 @@ public class ProtocolLibBootstrap {
                 plugin.getLogger().info("[ProtocolLib-Bootstrap] 下载完成: " + target.getAbsolutePath());
             } catch (Throwable t) {
                 plugin.getLogger().severe("[ProtocolLib-Bootstrap] 下载 ProtocolLib " + tag + " 失败: " + t.getMessage());
-                plugin.getLogger().severe("[ProtocolLib-Bootstrap] 可手动下载放入 plugins/ 后重启，或在 config.yml 将 protocol_lib_version 指定版本。");
+                plugin.getLogger().severe("[ProtocolLib-Bootstrap] 可手动下载放入 plugins/ 后重启。");
                 target.delete();
                 return false;
             }
@@ -106,18 +106,12 @@ public class ProtocolLibBootstrap {
 
     /**
      * 解析要下载的发布 tag。
-     * 优先级：配置强制指定 → 内置映射表 → 表未命中时取 dev-build（上游对新 MC 的支持总是先出现在 dev-build）。
+     * 优先级：内置映射表 → 表未命中时取 dev-build（上游对新 MC 的支持总是先出现在 dev-build）。
      *
      * @return tag，null 表示判断为"上游尚不支持当前 MC 版本"
      */
     private String resolveTag() {
-        String forced = plugin.getConfig().getString("settings.protocol_lib_version", "").trim();
         String mcVersion = mcVersion();
-
-        if (!forced.isEmpty()) {
-            plugin.getLogger().info("[ProtocolLib-Bootstrap] 使用配置指定的版本: " + forced + "（MC " + mcVersion + "）");
-            return forced;
-        }
 
         for (String[] range : SUPPORT_RANGES) {
             if (compare(mcVersion, range[0]) >= 0 && compare(mcVersion, range[1]) <= 0) {
@@ -160,15 +154,11 @@ public class ProtocolLibBootstrap {
      * 按优先级构建下载源列表。注意只能用 GitHub Release 的完整 shade 包——
      * Maven Central 上的 net.dmulloy2:ProtocolLib 是未 shade 的精简构件（缺 byte-buddy 等
      * 运行依赖，加载即 NoClassDefFoundError），不能用于安装。
-     * 级联：自定义镜像前缀（settings.protocol_lib_mirror，如 ghproxy 类代理，大陆友好）→ ghproxy → GitHub 直连。
+     * 级联：ghproxy → GitHub 直连。
      */
     private List<String> buildSourceUrls(String tag) {
         List<String> urls = new ArrayList<>();
         String githubAsset = String.format(GITHUB_ASSET_URL, tag);
-        String mirror = plugin.getConfig().getString("settings.protocol_lib_mirror", "").trim();
-        if (!mirror.isEmpty()) {
-            urls.add(mirror + githubAsset);
-        }
         urls.add("https://ghproxy.vip/" + githubAsset);
         urls.add(githubAsset);
         return urls;
