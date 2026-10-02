@@ -154,7 +154,8 @@ public class PromptManager {
                 sb.append("  #ask: <json>         - Present choices to player. ONE question per call.\n");
                 sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description), otherLabel (optional free-input).\n");
                 sb.append("    Example: #ask: {\"question\":\"Which database?\",\"options\":[{\"label\":\"MySQL\",\"description\":\"Relational\"},{\"label\":\"MongoDB\",\"description\":\"NoSQL\"}]}\n");
-                sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n\n");
+                sb.append("  #webfetch: <json>     - Fetch and parse a web page.\n");
+                sb.append("    Example: #webfetch: {\"url\":\"https://example.com\"} (a bare URL is also accepted).\n\n");
 
                 sb.append("[Execution]\n");
                 sb.append("  #run: <command>  - Execute ONE Minecraft in-game command. Never use for system/shell commands.\n");
@@ -498,7 +499,7 @@ public class PromptManager {
                 sb.append("  #search: <args>      - Internet/Wiki search.\n");
                 sb.append("  #skill: <id>         - Load Skill knowledge module.\n");
                 sb.append("  #unloadskill: <id>   - Unload a loaded Skill.\n");
-                sb.append("  #webfetch: <url>      - Fetch and parse a web page.\n");
+                sb.append("  #webfetch: <json>     - Fetch and parse a web page ({\"url\":\"...\"} or bare URL).\n");
                 sb.append("  #ask: <json>         - Ask player a question.\n");
                 sb.append("    Fields: question (required), header (max 12 chars), options[] (2-4, each: label + description).\n\n");
 

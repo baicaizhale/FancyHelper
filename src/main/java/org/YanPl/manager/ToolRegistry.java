@@ -83,8 +83,8 @@ public final class ToolRegistry {
                         "header", str("string", "Header, <=12 chars"),
                         "options", arr("Options array, 2-4 items, each with label and description", "object"),
                         "otherLabel", str("string", "Optional free-text input label")));
-        addTool(tools, "webfetch", responsesFormat, "Fetch and parse web page content.",
-                obj("url", str("string", "URL to fetch")));
+        addTool(tools, "webfetch", responsesFormat, "Fetch and parse web page content. Pass the target URL via the url parameter.",
+                obj("url", str("string", "URL to fetch, e.g. https://example.com")));
 
         // 注意：force 键刻意不进 schema。它是命令被拦截（NORMAL/SMART 风险确认）后的二次尝试逃生通道，
         // 若声明为常规参数，模型可能随意带上 force 绕过全部确认；故仅在拦截反馈文案中示例引导，见 ToolExecutor.handleBlockedCommand。

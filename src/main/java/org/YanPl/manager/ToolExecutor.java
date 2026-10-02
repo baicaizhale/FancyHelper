@@ -1,6 +1,8 @@
 package org.YanPl.manager;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.annotations.SerializedName;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
@@ -2673,36 +2675,59 @@ public class ToolExecutor {
 
     /**
      * 处理 #webfetch 工具 - 读取网页内容
-     * 格式: #webfetch: https://example.com
+     * 格式: #webfetch: {"url": "https://example.com"} 或裸 URL #webfetch: https://example.com
      */
     private void handleWebFetchTool(Player player, String args, DialogueSession session) {
         UUID uuid = player.getUniqueId();
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
 
-        if (args == null || args.trim().isEmpty()) {
+        // 参数兼容 JSON 与裸 URL 两种写法；解析不出 URL 时给出引导反馈
+        String url = extractWebFetchUrl(args);
+        if (url.isEmpty()) {
             player.sendMessage(I18n.t("tool.webfetch.need.url"));
             cliManager.feedbackToAI(player, "#webfetch_result: error - 需要提供URL参数，例如 #webfetch: https://example.com");
             return;
         }
 
-        // 清理URL，去除可能的Markdown格式和其他无关字符
-        String url = args.trim();
-        
-        // 去除反引号
-        url = url.replaceAll("`", "");
-        
-        // 去除可能的括号
-        url = url.replaceAll("^\\(", "");
-        url = url.replaceAll("\\)$", "");
-        
-        // 去除引号
-        url = url.replaceAll("^['\"](.*)['\"]$", "$1");
-        
-        // 再次修剪空格
-        url = url.trim();
-
         // 直接执行网页阅读，不需要验证
         executeWebFetch(player, url);
+    }
+
+    /**
+     * 从 #webfetch 参数中提取 URL。
+     * 模型受 #ask / #edit 的 JSON 参数习惯影响，可能把参数写成 JSON（如 {"url":"https://..."}），
+     * 旧实现会把整串 JSON 当 URL 发起请求导致必然失败；这里兼容两种写法：
+     * 参数以 { 开头时按 JSON 解析取 url 键（兼容 {name, arguments:{url}} 包裹层）；
+     * 其余情况（裸 URL、非法 JSON、JSON 缺 url 键）一律回退到裸 URL 清理，交由后续 http 前缀校验反馈错误。
+     */
+    public static String extractWebFetchUrl(String args) {
+        if (args == null) return "";
+        String trimmed = args.trim();
+        if (trimmed.startsWith("{")) {
+            try {
+                JsonObject obj = JsonParser.parseString(trimmed).getAsJsonObject();
+                JsonObject source = obj;
+                if (!source.has("url") && source.has("arguments") && source.get("arguments").isJsonObject()) {
+                    source = source.getAsJsonObject("arguments");
+                }
+                if (source.has("url") && source.get("url").isJsonPrimitive()) {
+                    return cleanWebFetchUrl(source.get("url").getAsString());
+                }
+            } catch (Exception ignored) {
+                // 非法 JSON：按裸 URL 清理回退
+            }
+        }
+        return cleanWebFetchUrl(trimmed);
+    }
+
+    /** 清理 URL 的 Markdown/引号包装：反引号、首尾圆括号、首尾成对引号 */
+    private static String cleanWebFetchUrl(String raw) {
+        String url = raw.trim();
+        url = url.replaceAll("`", "");
+        url = url.replaceAll("^\\(", "");
+        url = url.replaceAll("\\)$", "");
+        url = url.replaceAll("^['\"](.*)['\"]$", "$1");
+        return url.trim();
     }
 
     /**
