@@ -415,6 +415,28 @@ public class LLMClient {
             messagesArray.add(m);
         }
 
+        // DeepSeek V4 思考模式要求"上一轮 assistant"逐字回传 reasoning_content；
+        // 合成 assistant 消息（进入 CLI 的问候语、Plan Mode 通知）没有思考链，恰好成为
+        // 上一轮 assistant 时整个请求 400（实测新会话首轮必现）。这类消息只服务于玩家侧
+        // 展示，从出站请求摘除即可；仅处理后面还跟着 user 消息的（prefill 请求以
+        // assistant 结尾，是合法用法，不动）。
+        if (includeReasoningContent && messagesArray.size() > 1) {
+            for (int i = messagesArray.size() - 2; i >= 0; i--) {
+                JsonObject m = messagesArray.get(i).getAsJsonObject();
+                String role = m.get("role").getAsString();
+                if ("user".equalsIgnoreCase(role)) break;
+                if ("assistant".equalsIgnoreCase(role)) {
+                    if (!m.has("reasoning_content")) {
+                        messagesArray.remove(i);
+                        if (plugin.getConfigManager().isDebug()) {
+                            plugin.getLogger().info("[AI 请求] 已摘除末尾无思考链的合成 assistant 消息（思考模式回传要求）");
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
         // 自动匹配技能的全文挂到当次请求最后一条 user 消息尾部（只影响本次请求，不写回历史）。
         // 位于历史之后：内容每轮变化也只占用本就新增的尾部，不会打断其前的上下文缓存。
         String pendingSkillContext = session.getPendingSkillContext();
