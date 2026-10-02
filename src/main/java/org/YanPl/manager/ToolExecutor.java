@@ -934,9 +934,19 @@ public class ToolExecutor {
             return f1.getName().compareToIgnoreCase(f2.getName());
         });
 
+        // 目录可能极大（如 world/data 有数千个地图数据文件），全量回灌会一次性吃掉数万 token
+        // 并永久占住上下文，超出部分截断，提示 AI 换更具体的路径
+        final int maxListEntries = 200;
+        int shown = 0;
         for (File f : files) {
+            if (shown >= maxListEntries) {
+                sb.append("... 还有 ").append(files.length - shown).append(" 个未列出（共 ")
+                  .append(files.length).append(" 个）。目录过大，请改用更具体的子路径或 #read 查看\n");
+                break;
+            }
             String size = f.isDirectory() ? "" : " (" + (f.length() / 1024) + "KB)";
             sb.append(f.isDirectory() ? "[DIR] " : "[FILE] ").append(f.getName()).append(size).append("\n");
+            shown++;
         }
 
         return sb.toString();

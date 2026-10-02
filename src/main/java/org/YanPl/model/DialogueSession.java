@@ -68,6 +68,17 @@ public class DialogueSession {
     private int lastLoggedMessageCount = 0;
     private String sessionUUID = null; // 持久化标识，首次创建时分配
     private final Set<String> readFiles = new java.util.HashSet<>();
+    /** 自动匹配技能的待挂载上下文：每条用户消息覆盖写入，LLMClient 组装请求时挂到
+     *  最后一条 user 消息尾部（只影响当次请求，不写入历史）。volatile：主线程写、请求线程读。 */
+    private volatile String pendingSkillContext = null;
+
+    public String getPendingSkillContext() {
+        return pendingSkillContext;
+    }
+
+    public void setPendingSkillContext(String text) {
+        this.pendingSkillContext = (text == null || text.isEmpty()) ? null : text;
+    }
 
     public void addReadFile(String path) {
         readFiles.add(path);
@@ -367,6 +378,7 @@ public class DialogueSession {
     public void clearHistory() {
         history.clear();
         toolCallHistory.clear();
+        pendingSkillContext = null;
         synchronized (thoughtSnapshots) {
             thoughtSnapshots.clear();
         }

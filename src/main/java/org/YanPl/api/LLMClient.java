@@ -286,10 +286,26 @@ public class LLMClient {
      * 把动态尾部追加到最后一条 user 消息尾部并写回历史。
      * 每次请求之间必有新消息入历史，因此上次附加过的消息不会再是最后一条；
      * 唯一例外是失败重试（无新消息），靠 marker 查重跳过（查重与追加在会话锁内原子完成）。
+     * 服务器记忆同样每次请求都可能变（按当前消息做相关性筛选），一并挂到尾部，
+     * 不再放进 system 前缀（会把其后整段历史的上下文缓存作废）。
      */
     private void attachDynamicTail(org.bukkit.entity.Player player, DialogueSession session) {
         if (player == null) return;
-        session.appendToLastUserMessage(DYNAMIC_TAIL_MARKER, buildDynamicTail(player));
+        // 记忆相关性查询取拼接前的最后一条 user 消息内容，避免把尾部自身算进查询
+        String memoryQuery = "";
+        List<DialogueSession.Message> history = session.getHistory();
+        if (!history.isEmpty()) {
+            DialogueSession.Message last = history.get(history.size() - 1);
+            if (last != null && "user".equalsIgnoreCase(last.getRole()) && last.getContent() != null) {
+                memoryQuery = last.getContent();
+            }
+        }
+        String tail = buildDynamicTail(player);
+        // Plan Mode 的 system 提示词本就不含服务器记忆，保持原有行为
+        if (session.getMode() != DialogueSession.Mode.PLAN) {
+            tail += plugin.getCliManager().getPromptManager().buildServerMemoryBlock(memoryQuery);
+        }
+        session.appendToLastUserMessage(DYNAMIC_TAIL_MARKER, tail);
     }
 
     /**
@@ -397,6 +413,19 @@ public class LLMClient {
                 }
             }
             messagesArray.add(m);
+        }
+
+        // 自动匹配技能的全文挂到当次请求最后一条 user 消息尾部（只影响本次请求，不写回历史）。
+        // 位于历史之后：内容每轮变化也只占用本就新增的尾部，不会打断其前的上下文缓存。
+        String pendingSkillContext = session.getPendingSkillContext();
+        if (pendingSkillContext != null) {
+            for (int i = messagesArray.size() - 1; i >= 0; i--) {
+                JsonObject tailMsg = messagesArray.get(i).getAsJsonObject();
+                if ("user".equalsIgnoreCase(tailMsg.get("role").getAsString())) {
+                    tailMsg.addProperty("content", tailMsg.get("content").getAsString() + pendingSkillContext);
+                    break;
+                }
+            }
         }
 
         // 验证消息数组（显式检查字段存在性与非空，避免 getAsString() 对缺失字段抛 IllegalStateException）

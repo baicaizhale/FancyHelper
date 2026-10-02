@@ -18,9 +18,6 @@ public class PromptManager {
 
     private final FancyHelper plugin;
 
-    /** 最多同时加载的 Skill 数量 */
-    private static final int MAX_LOADED_SKILLS = 5;
-
     public PromptManager(FancyHelper plugin) {
         this.plugin = plugin;
     }
@@ -38,7 +35,7 @@ public class PromptManager {
      * 返回多条独立 system 消息列表，按稳定度排列：静态在前、动态在后，利于 API 前缀缓存命中。
      *
      * @param player 玩家
-     * @param loadedSkills 已匹配的 Skill 列表（最多 MAX_LOADED_SKILLS 个）
+     * @param loadedSkills 已匹配的 Skill 列表（保留参数兼容旧调用；技能全文已不再注入 system 前缀，见段 5 注释）
      * @return 系统提示消息列表（每个元素作为独立的 system 角色消息）
      *
      * ═══ 分段规则 ═══
@@ -55,8 +52,8 @@ public class PromptManager {
      * 获取基础系统提示（包含动态加载的 Skills 与服务器级记忆）
      *
      * @param player 玩家
-     * @param loadedSkills 已匹配的 Skill 列表（最多 MAX_LOADED_SKILLS 个）
-     * @param currentMessage 当前玩家消息（用于服务器记忆相关性筛选，可为空串）
+     * @param loadedSkills 已匹配的 Skill 列表（保留参数兼容旧调用；技能全文已不再注入 system 前缀，见段 5 注释）
+     * @param currentMessage 当前玩家消息（保留参数兼容旧调用；服务器记忆已改挂请求尾部用户消息，见 buildServerMemoryBlock）
      * @return 系统提示消息列表
      */
     public List<String> getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills, String currentMessage) {
@@ -290,115 +287,63 @@ public class PromptManager {
         }
 
         // ====================================================================
-        //  段 5：已加载的 Skills（自动匹配 + 玩家显式 /cli skill load / #skill，为空则跳过）
+        //  段 5：已加载的 Skills（仅名字清单，为空则跳过）
         // ====================================================================
-        // 合并自动匹配的 Skills 与玩家显式加载的 Skills（playerLoadedSkills 由 /cli skill load / #skill 写入）
-        List<Skill> effectiveSkills = new ArrayList<>();
-        if (loadedSkills != null) {
-            effectiveSkills.addAll(loadedSkills);
-        }
-        java.util.Set<String> playerLoadedIds = plugin.getSkillManager().getPlayerLoadedSkills(player);
-        for (String loadedId : playerLoadedIds) {
-            boolean alreadyIncluded = effectiveSkills.stream()
-                    .anyMatch(s -> s.getId().equalsIgnoreCase(loadedId));
-            if (alreadyIncluded) continue;
-            Skill loadedSkill = plugin.getSkillManager().getSkill(loadedId);
-            if (loadedSkill != null) {
-                effectiveSkills.add(loadedSkill);
-            }
-        }
-
+        //  技能全文不再放进 system 前缀：system 消息位于全部历史之前，技能一旦加载或
+        //  自动匹配变动，其后整段对话历史的上下文缓存全部作废（实测命中率 99%→7%）。
+        //  全文投递路径：
+        //  - #skill 加载：ToolExecutor 的 #skill_result 反馈消息携带全文进入历史；
+        //  - /cli skill load：CLICommand 把全文作为 user 消息写入历史；
+        //  - 自动匹配：CLIManager 写入会话 pendingSkillContext，LLMClient 组装请求时
+        //    挂到最后一条 user 消息尾部（位于历史之后，只占用本就新增的部分）。
+        //  这里只保留已显式加载技能的 ID 清单，供模型决定 #unloadskill。
         {
-            if (!effectiveSkills.isEmpty()) {
+            java.util.Set<String> playerLoadedIds = plugin.getSkillManager().getPlayerLoadedSkills(player);
+            if (!playerLoadedIds.isEmpty()) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("<system-reminder>\n");
-
-                String skillNames = effectiveSkills.stream()
-                    .limit(MAX_LOADED_SKILLS)
-                    .map(s -> s.getMetadata().getName())
-                    .collect(Collectors.joining(" | "));
-                sb.append("Loaded Skills: ").append(skillNames);
-                if (effectiveSkills.size() > MAX_LOADED_SKILLS) {
-                    sb.append(" | ... (").append(effectiveSkills.size() - MAX_LOADED_SKILLS).append(" more)");
-                }
-                sb.append("\n\n");
-
-                int count = 0;
-                for (Skill skill : effectiveSkills) {
-                    if (count >= MAX_LOADED_SKILLS) break;
-
-                    sb.append("--[ ").append(skill.getId()).append(": ").append(skill.getMetadata().getName()).append(" ]--\n");
-
-                    if (!skill.getMetadata().getTriggers().isEmpty()) {
-                        sb.append("Applicable: ").append(String.join(", ", skill.getMetadata().getTriggers())).append("\n");
-                    }
-
-                    String content = skill.getContent().trim();
-                    if (!content.isEmpty()) {
-                        sb.append("---\n");
-                        sb.append(content);
-                        sb.append("\n---\n");
-                    }
-                    sb.append("\n");
-                    count++;
-                }
+                sb.append("Loaded Skills: ").append(String.join(" | ", playerLoadedIds));
+                sb.append("\nUse the unloadskill function to unload a Skill when it is no longer needed.\n");
                 sb.append("</system-reminder>\n\n");
                 parts.add(sb.toString());
             }
         }
 
-        // ====================================================================
-        //  段 6：服务器级记忆（每次可能变，为空则跳过）
-        // ====================================================================
-        {
-            String serverMemory = buildServerMemory(player, effectiveSkills, currentMessage);
-            if (serverMemory != null) {
-                parts.add(serverMemory);
-            }
-        }
-
-        // 段 7（上次工具错误）、段 8（玩家名 + 当前时间）已移出 system 前缀：
+        // 段 6（服务器级记忆）、段 7（上次工具错误）、段 8（玩家名 + 当前时间）已移出 system 前缀：
         // 它们每次请求都可能变，放在历史消息之前会把其后整段对话的上下文缓存作废。
-        // 现改由 LLMClient.attachDynamicTail 追加到最后一条 user 消息尾部。
+        // 服务器记忆现由 LLMClient.attachDynamicTail 调 buildServerMemoryBlock 查询，
+        // 与上次工具错误、玩家名、当前时间一起追加到最后一条 user 消息尾部。
         return parts;
     }
 
     /**
-     * 构建服务器级记忆（[Server Memory]）段：按当前消息 + 已加载 Skill 关键词做 Top-K 筛选。
-     * 仅当 memory.enabled 且筛选结果非空时返回内容，否则返回 null。
+     * 构建服务器级记忆文本块（[Server Memory]）：按查询文本做 Top-K 相关性筛选。
+     * 不再作为 system 消息放进前缀（位置在历史之前，命中条目一变就打断其后全部缓存），
+     * 而是由 LLMClient.attachDynamicTail 追加到最后一条 user 消息尾部，与 [System Info] 同批。
+     *
+     * @param queryText 相关性筛选的查询文本（通常为最后一条 user 消息内容）
+     * @return 记忆块文本；未启用或无相关记忆时返回空串
      */
-    private String buildServerMemory(org.bukkit.entity.Player player,
-                                      List<Skill> loadedSkills, String currentMessage) {
+    public String buildServerMemoryBlock(String queryText) {
         if (!plugin.getConfigManager().isServerMemoryEnabled()) {
-            return null;
-        }
-        StringBuilder query = new StringBuilder();
-        if (currentMessage != null) {
-            query.append(currentMessage);
-        }
-        if (loadedSkills != null) {
-            for (Skill skill : loadedSkills) {
-                query.append(' ').append(skill.getMetadata().getName());
-                query.append(' ').append(String.join(" ", skill.getMetadata().getTriggers()));
-            }
+            return "";
         }
 
         List<ServerMemoryManager.ServerMemory> hits = plugin.getServerMemoryManager()
-                .getMemoriesForPrompt(query.toString(),
+                .getMemoriesForPrompt(queryText == null ? "" : queryText,
                         plugin.getConfigManager().getServerMemoryInjectTopK(),
                         plugin.getConfigManager().getServerMemoryMinRelevance());
         if (hits.isEmpty()) {
-            return null;
+            return "";
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[Server Memory]\n");
+        sb.append("\n\n[Server Memory]\n");
         sb.append("以下是管理员写入的服务器规则/事实，与当前对话相关，对所有玩家生效，优先级高于玩家个人偏好。\n");
         sb.append("注意：若与其他记忆冲突，以较新的为准；服务器规则优先于 [Player Preferences]。\n");
         for (ServerMemoryManager.ServerMemory memory : hits) {
             sb.append("- [").append(memory.getCategory()).append("] ").append(memory.getContent()).append("\n");
         }
-        sb.append("\n");
         return sb.toString();
     }
 

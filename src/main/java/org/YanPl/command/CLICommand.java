@@ -1620,11 +1620,18 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         }
 
         // 加载 Skill 到当前对话
-        plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
+        boolean newlyLoaded = plugin.getSkillManager().loadSkillForPlayer(player, skill.getId());
 
-        // 将 Skill 内容添加到对话上下文
+        // 将 Skill 内容添加到对话上下文：全文经由历史进入请求（system 前缀只保留名字清单），
+        // 格式与 #skill 的 #skill_result 反馈一致；重复加载不重复注入
         org.YanPl.model.DialogueSession session = plugin.getCliManager().getSession(player.getUniqueId());
-        if (session != null) {
+        if (session != null && newlyLoaded) {
+            Map<String, String> templateContext = new java.util.HashMap<>();
+            templateContext.put("player", player.getName());
+            StringBuilder skillContext = new StringBuilder();
+            skillContext.append("#skill_result: Loaded Skill [").append(skill.getMetadata().getName()).append("]\n\n");
+            skillContext.append(skill.getFormattedProcessedContent(templateContext));
+            session.addMessage("user", skillContext.toString());
         }
 
         player.sendMessage(I18n.t("cli.skill.loaded", skill.getMetadata().getName()));
