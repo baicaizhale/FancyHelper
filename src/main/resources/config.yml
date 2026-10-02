@@ -29,10 +29,9 @@ settings:
   op_update_notify: true
   # 是否在检测到新版本时自动下载并安装更新
   auto_upgrade: true
-  # ProtocolLib 未安装时是否自动下载并启用匹配 MC 版本的 ProtocolLib（首次需联网，之后缓存在 plugins/）
-  # 下载源级联：ghproxy → GitHub 直连
+  # ProtocolLib 未安装时是否自动下载并启用匹配 MC 版本的 ProtocolLib（需联网）
   protocol_lib_auto_install: true
-  # 服务器记忆：管理员写下的全局规则/事实，所有玩家的 AI 聊天都能看到
+  # 服务器记忆（管理员写下的全局规则/事实，全局启用）
   memory:
     # 是否开启
     enabled: true
@@ -40,7 +39,7 @@ settings:
     max_entries: 100
     # 每次聊天最多提醒 AI 几条相关的（0 表示不提醒）
     inject_top_k: 4
-    # 相关到什么程度才算“相关”，建议保持 1（只要沾边就算）
+    # 相关到什么程度才算“相关”，建议 1（只要沾边就算）
     min_relevance: 1
   # 是否启用原生函数调用（Native Tool Calling）。
   # 开启后 AI 会通过 API 的结构化工具调用机制触发工具，而不是靠"#工具名"文本。
