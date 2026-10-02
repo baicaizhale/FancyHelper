@@ -30,12 +30,8 @@ settings:
   # 是否在检测到新版本时自动下载并安装更新
   auto_upgrade: true
   # ProtocolLib 未安装时是否自动下载并启用匹配 MC 版本的 ProtocolLib（首次需联网，之后缓存在 plugins/）
-  # 下载源级联：自定义镜像前缀（如有）→ ghproxy → GitHub 直连
+  # 下载源级联：ghproxy → GitHub 直连
   protocol_lib_auto_install: true
-  # 强制指定 ProtocolLib 版本 tag（如 5.4.0 或 dev-build），留空=按 MC 版本自动选择
-  protocol_lib_version: ""
-  # 自定义下载镜像前缀（如自建 Worker/ghproxy 类代理），插到所有下载源最前，留空=不使用
-  protocol_lib_mirror: ""
   # 服务器记忆：管理员写下的全局规则/事实，所有玩家的 AI 聊天都能看到
   memory:
     # 是否开启

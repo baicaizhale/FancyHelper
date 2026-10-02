@@ -2730,10 +2730,12 @@ public class CLIManager {
         });
 
         // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
+        // prompt= 用上游真实值（命中+未命中，覆盖 system+全部历史）；
+        // 本地 getEstimatedTokens 只数历史不含 system，与命中数口径不一致（会出现命中>prompt 的假象）
         streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
             long total = cacheHit + cacheMiss;
             long pct = total > 0 ? cacheHit * 100 / total : 0;
-            session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
+            session.appendLog("CACHE", "本次请求 prompt=" + total
                 + " 缓存命中=" + cacheHit + " (" + pct + "%) 未命中=" + cacheMiss);
         });
 
@@ -3208,6 +3210,10 @@ public class CLIManager {
         // 最多匹配 3 个 Skills，最小匹配分数 30
         List<org.YanPl.model.Skill> matchedSkills = plugin.getSkillManager()
                 .findMatchingSkills(message, 3, 30);
+
+        // 匹配到的技能全文不再放进 system 前缀（位于历史之前，每轮变动会打断上下文缓存），
+        // 改为暂存到会话，由 LLMClient 组装请求时挂到最后一条 user 消息尾部（历史之后）
+        session.setPendingSkillContext(buildAutoSkillContext(player, session, matchedSkills));
 
         if (plugin.getConfigManager().isDebug() && !matchedSkills.isEmpty()) {
             String skillIds = matchedSkills.stream()
@@ -4425,10 +4431,11 @@ public class CLIManager {
                     });
 
                     // 上下文缓存命中统计：写入会话对话日志（不刷服务器控制台）
+                    // prompt= 用上游真实值（命中+未命中），与 2738 行主轮日志口径一致
                     streamingHandler.setOnCacheStats((cacheHit, cacheMiss) -> {
                         long total = cacheHit + cacheMiss;
                         long pct = total > 0 ? cacheHit * 100 / total : 0;
-                        session.appendLog("CACHE", "本次请求 prompt=" + session.getEstimatedTokens()
+                        session.appendLog("CACHE", "本次请求 prompt=" + total
                             + " 缓存命中=" + cacheHit + " (" + pct + "%) 未命中=" + cacheMiss);
                     });
 
@@ -5444,6 +5451,43 @@ public class CLIManager {
     public String getLastError(UUID uuid) {
         DialogueSession session = sessions.get(uuid);
         return session != null ? session.getLastError() : null;
+    }
+
+    /**
+     * 获取 PromptManager（LLMClient 组装请求尾部时调用，用于服务器记忆筛选）
+     */
+    public PromptManager getPromptManager() {
+        return promptManager;
+    }
+
+    /**
+     * 构建自动匹配 Skill 的上下文文本。
+     * 全文挂到当次请求最后一条 user 消息尾部（LLMClient 消费，不写入历史）：
+     * system 前缀位于全部历史之前，技能匹配每轮不同，放那里会反复打断上下文缓存。
+     * 已显式加载的技能（#skill / /cli skill load）全文已在历史中，跳过避免重复。
+     */
+    private String buildAutoSkillContext(org.bukkit.entity.Player player, DialogueSession session,
+                                         List<org.YanPl.model.Skill> matchedSkills) {
+        if (matchedSkills == null || matchedSkills.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (org.YanPl.model.Skill skill : matchedSkills) {
+            String skillId = skill.getId().toLowerCase();
+            if (session.getLoadedSkillIds().contains(skillId)) continue;
+            if (plugin.getSkillManager().hasPlayerLoadedSkill(player, skill.getId())) continue;
+            if (count == 0) sb.append("\n\n[Auto Matched Skills]\n");
+            sb.append("--[ ").append(skill.getId()).append(": ").append(skill.getMetadata().getName()).append(" ]--\n");
+            if (!skill.getMetadata().getTriggers().isEmpty()) {
+                sb.append("Applicable: ").append(String.join(", ", skill.getMetadata().getTriggers())).append("\n");
+            }
+            String content = skill.getContent().trim();
+            if (!content.isEmpty()) {
+                sb.append("---\n").append(content).append("\n---\n");
+            }
+            sb.append("\n");
+            count++;
+        }
+        return count > 0 ? sb.toString() : null;
     }
 
     /**
