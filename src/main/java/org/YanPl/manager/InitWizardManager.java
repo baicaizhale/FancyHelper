@@ -752,7 +752,7 @@ public class InitWizardManager {
         };
     }
 
-    /** 完成向导：展示终卡并结束会话 */
+    /** 完成向导：展示终卡并直接带玩家进入 CLI 对话模式 */
     private void finish(Player player, WizardSession session) {
         sessions.remove(player.getUniqueId());
         sendDivider(player);
@@ -762,8 +762,15 @@ public class InitWizardManager {
         player.sendMessage("");
         sendSummary(player, session, true);
         player.sendMessage("");
-        player.sendMessage(I18n.t("wizard.done.hint"));
-        player.spigot().sendMessage(clickable(I18n.t("wizard.done.button"), "/cli", I18n.t("wizard.done.button.hover")));
+        if (player.hasPermission("fancyhelper.cli")) {
+            // 自动带进对话模式：新手常在终卡后直接打字聊天（此时不在 CLI 模式，
+            // 消息会当普通聊天广播出去且没有任何 AI 回复），不依赖玩家点按钮或敲 /fancy
+            player.sendMessage(I18n.t("wizard.done.hint.auto"));
+            plugin.getCliManager().enterCLI(player);
+        } else {
+            player.sendMessage(I18n.t("wizard.done.hint"));
+            player.spigot().sendMessage(clickable(I18n.t("wizard.done.button"), "/cli", I18n.t("wizard.done.button.hover")));
+        }
         player.sendMessage("");
         sendDivider(player);
     }
