@@ -97,9 +97,19 @@ public class InitWizardManager {
         REGISTER_ASK, CHOOSE, FANCY_KEY, OPENAI_URL, OPENAI_KEY, OPENAI_MODELS, OPENAI_MANUAL_MODEL, CF_KEY
     }
 
+    /**
+     * 绑定 Fancy key 子流程结束后去哪（由把玩家带进该子流程的入口决定）。
+     * 同一个 key 粘贴卡被三处复用：2a 注册询问、2b 选 Fancy 但未绑 key、搜索步选 Fancy 搜索但未绑 key。
+     */
+    private enum KeyFlowReturn {
+        TO_CHOOSE,       // 2a 注册询问进入：绑完（或跳过）回 AI 提供商选择卡
+        FINISH_PROVIDER, // 2b 选了 Fancy 但未绑 key：绑完（或跳过）落 provider.ai 并进搜索
+        SEARCH_SAVE      // 搜索步选了 Fancy 搜索但未绑 key：绑完存 fancy-tavily 进网页抓取，跳过则回搜索卡
+    }
+
     /** SEARCH 步骤内的子流程状态 */
     private enum SearchSub {
-        CHOOSE, METASO_KEY, TAVILY_KEY
+        CHOOSE, FANCY_KEY, METASO_KEY, TAVILY_KEY
     }
 
     private static class WizardSession {
@@ -116,7 +126,8 @@ public class InitWizardManager {
         boolean webfetchOn = true;
 
         // PROVIDER 子流程临时数据
-        boolean fancyRegistered; // 是否已注册/绑定 FancyConsole（决定后续 Fancy 选项是否可用）
+        boolean declinedFancy;  // 仅当 2a 明确选择"不注册"时为 true（决定后续 Fancy 选项是否画删除线）
+        KeyFlowReturn keyFlowReturn;
         String pendingKey;      // 异步校验防竞态：回调仅处理与会话中一致的 key
         String openAiUrl;
         String openAiKey;
@@ -262,11 +273,12 @@ public class InitWizardManager {
         switch (session.providerSub) {
             case REGISTER_ASK: {
                 if (lower.equals("1") || lower.equals("yes") || input.equals("注册") || input.equals("注籍")) {
+                    session.keyFlowReturn = KeyFlowReturn.TO_CHOOSE;
                     session.providerSub = ProviderSub.FANCY_KEY;
                     renderFancyKey(player);
                 } else if (lower.equals("2") || lower.equals("no") || lower.equals("skip")
                         || input.equals("不注册") || input.equals("不注籍")) {
-                    session.fancyRegistered = false;
+                    session.declinedFancy = true;
                     session.providerSub = ProviderSub.CHOOSE;
                     player.sendMessage(I18n.t("wizard.fancyreg.skipnote"));
                     renderProviderChoose(player, session);
@@ -277,15 +289,22 @@ public class InitWizardManager {
             }
             case CHOOSE: {
                 if (lower.equals("1") || lower.equals("fancy")) {
-                    if (!session.fancyRegistered) {
+                    if (session.declinedFancy) {
                         // 选项已画删除线，这里兜底拦截直接打字输入的情况
                         player.sendMessage(I18n.t("wizard.fancyreg.needregister"));
                         renderProviderChoose(player, session);
                         return true;
                     }
-                    session.providerLabel = I18n.t("wizard.provider.1");
-                    plugin.getConfigManager().set("provider.ai", "fancy");
-                    goTo(player, session, Step.SEARCH);
+                    if (plugin.getFancyConsoleManager().hasApiKey()) {
+                        session.providerLabel = I18n.t("wizard.provider.1");
+                        plugin.getConfigManager().set("provider.ai", "fancy");
+                        goTo(player, session, Step.SEARCH);
+                    } else {
+                        // 注册时跳过了 key：就地补绑，绑完（或再跳过）直接以 Fancy 落地
+                        session.keyFlowReturn = KeyFlowReturn.FINISH_PROVIDER;
+                        session.providerSub = ProviderSub.FANCY_KEY;
+                        renderFancyKey(player);
+                    }
                 } else if (lower.equals("2") || lower.equals("openai")) {
                     session.providerLabel = I18n.t("wizard.provider.2");
                     session.providerSub = ProviderSub.OPENAI_URL;
@@ -321,10 +340,22 @@ public class InitWizardManager {
         String lower = input.toLowerCase();
         if (lower.equals("skip")) {
             player.sendMessage(I18n.t("wizard.skip.step"));
-            player.sendMessage(I18n.t("wizard.fancyreg.skipnote"));
-            session.fancyRegistered = false;
-            session.providerSub = ProviderSub.CHOOSE;
-            renderProviderChoose(player, session);
+            switch (session.keyFlowReturn) {
+                case FINISH_PROVIDER -> {
+                    // 用户坚持选 Fancy 但没绑 key：尊重选择，落 provider.ai（绑定前 AI 暂不可用）
+                    player.sendMessage(I18n.t("wizard.fancyreg.skipnote"));
+                    finishFancyProvider(player, session);
+                }
+                case SEARCH_SAVE -> {
+                    session.searchSub = SearchSub.CHOOSE;
+                    renderSearch(player, session);
+                }
+                default -> {
+                    player.sendMessage(I18n.t("wizard.fancyreg.skipnote"));
+                    session.providerSub = ProviderSub.CHOOSE;
+                    renderProviderChoose(player, session);
+                }
+            }
             return true;
         }
         if (lower.equals("retry")) {
@@ -349,15 +380,15 @@ public class InitWizardManager {
                 }
                 WizardSession current = sessions.get(player.getUniqueId());
                 // 玩家在等待期间又粘贴了新 key：旧结果作废，等新结果
-                if (current == null || current != session || current.providerSub != ProviderSub.FANCY_KEY
+                // （key 卡被 2a/2b/搜索步三处复用，providerSub 或 searchSub 处于 FANCY_KEY 均合法）
+                if (current == null || current != session
+                        || (current.providerSub != ProviderSub.FANCY_KEY && current.searchSub != SearchSub.FANCY_KEY)
                         || !key.equals(current.pendingKey)) {
                     return;
                 }
                 if (result.valid) {
                     plugin.getFancyConsoleManager().setApiKey(key);
                     current.pendingKey = null;
-                    current.fancyRegistered = true;
-                    current.providerSub = ProviderSub.CHOOSE;
                     player.sendMessage(I18n.t("wizard.fancy.success"));
                     if (result.email != null && !result.email.isEmpty()) {
                         player.sendMessage(I18n.t("wizard.fancy.success.account", result.email));
@@ -365,7 +396,17 @@ public class InitWizardManager {
                     if (result.tier != null && !result.tier.isEmpty()) {
                         player.sendMessage(I18n.t("wizard.fancy.success.tier", result.tier));
                     }
-                    renderProviderChoose(player, current);
+                    switch (current.keyFlowReturn) {
+                        case FINISH_PROVIDER -> finishFancyProvider(player, current);
+                        case SEARCH_SAVE -> {
+                            current.searchSub = SearchSub.CHOOSE;
+                            saveFancySearch(player, current);
+                        }
+                        default -> {
+                            current.providerSub = ProviderSub.CHOOSE;
+                            renderProviderChoose(player, current);
+                        }
+                    }
                 } else if (result.serviceUnavailable) {
                     player.sendMessage(I18n.t("wizard.fancy.unavailable", result.error != null ? result.error : "?"));
                     player.sendMessage(I18n.t("wizard.fancy.unavailable.hint"));
@@ -376,6 +417,23 @@ public class InitWizardManager {
             });
         });
         return true;
+    }
+
+    /** 玩家选定 Fancy 为 AI 提供商后的落地：写 provider.ai 并进搜索步（key 可能尚未绑定，已两次提示） */
+    private void finishFancyProvider(Player player, WizardSession session) {
+        session.providerLabel = I18n.t("wizard.provider.1");
+        plugin.getConfigManager().set("provider.ai", "fancy");
+        session.providerSub = ProviderSub.CHOOSE;
+        session.searchSub = SearchSub.CHOOSE;
+        goTo(player, session, Step.SEARCH);
+    }
+
+    /** 搜索步选定 Fancy 搜索后的落地：写 fancy-tavily 并进网页抓取步 */
+    private void saveFancySearch(Player player, WizardSession session) {
+        plugin.getConfigManager().set("provider.search", "fancy-tavily");
+        session.searchLabel = I18n.t("wizard.search.1");
+        player.sendMessage(I18n.t("wizard.search.saved", session.searchLabel));
+        goTo(player, session, Step.WEBFETCH);
     }
 
     private boolean handleOpenAiUrl(Player player, WizardSession session, String input) {
@@ -552,16 +610,20 @@ public class InitWizardManager {
         switch (session.searchSub) {
             case CHOOSE: {
                 if (lower.equals("1") || lower.equals("fancy")) {
-                    if (!session.fancyRegistered) {
+                    if (session.declinedFancy) {
                         // 选项已画删除线，这里兜底拦截直接打字输入的情况
                         player.sendMessage(I18n.t("wizard.fancyreg.needregister"));
                         renderSearch(player, session);
                         return true;
                     }
-                    plugin.getConfigManager().set("provider.search", "fancy-tavily");
-                    session.searchLabel = I18n.t("wizard.search.1");
-                    player.sendMessage(I18n.t("wizard.search.saved", session.searchLabel));
-                    goTo(player, session, Step.WEBFETCH);
+                    if (plugin.getFancyConsoleManager().hasApiKey()) {
+                        saveFancySearch(player, session);
+                    } else {
+                        // 未绑 key：先补绑定，绑完存 fancy-tavily；再跳过则回搜索卡
+                        session.keyFlowReturn = KeyFlowReturn.SEARCH_SAVE;
+                        session.searchSub = SearchSub.FANCY_KEY;
+                        renderFancyKey(player);
+                    }
                 } else if (lower.equals("2") || lower.equals("metaso")) {
                     session.searchSub = SearchSub.METASO_KEY;
                     renderSearchKey(player, true);
@@ -577,6 +639,8 @@ public class InitWizardManager {
                 }
                 return true;
             }
+            case FANCY_KEY:
+                return handleFancyKeyInput(player, session, input);
             case METASO_KEY: {
                 if (lower.equals("skip")) {
                     player.sendMessage(I18n.t("wizard.skip.step"));
@@ -733,15 +797,15 @@ public class InitWizardManager {
         sendCardFooter(player, false);
     }
 
-    /** 第 2 步第 2 卡：选 AI 提供商；未注册 FancyConsole 时 Fancy 选项画删除线禁用 */
+    /** 第 2 步第 2 卡：选 AI 提供商；仅在 2a 明确"不注册"时 Fancy 选项画删除线禁用 */
     private void renderProviderChoose(Player player, WizardSession session) {
         sendCardTop(player, Step.PROVIDER);
         player.sendMessage(I18n.t("wizard.provider.question"));
-        if (session.fancyRegistered) {
+        if (plugin.getFancyConsoleManager().hasApiKey()) {
             player.sendMessage(I18n.t("wizard.fancyreg.note.bound"));
         }
         player.sendMessage("");
-        if (session.fancyRegistered) {
+        if (!session.declinedFancy) {
             player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.provider.1") + " §7- " + I18n.t("wizard.provider.1.desc"),
                     "/cli select 1", I18n.t("wizard.option.hint")));
         } else {
@@ -833,7 +897,7 @@ public class InitWizardManager {
         sendCardTop(player, Step.SEARCH);
         player.sendMessage(I18n.t("wizard.search.question"));
         player.sendMessage("");
-        if (session.fancyRegistered) {
+        if (!session.declinedFancy) {
             player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.search.1") + " §7- " + I18n.t("wizard.search.1.desc"),
                     "/cli select 1", I18n.t("wizard.option.hint")));
         } else {
@@ -1029,11 +1093,13 @@ public class InitWizardManager {
         session.expiry = System.currentTimeMillis() + SESSION_TIMEOUT_MS;
         switch (next) {
             case PROVIDER -> {
-                // 重跑向导且已绑定过 Fancy 时免问注册，直接进 AI 提供商选择
+                // 已绑定过 Fancy 时免问注册，直接进 AI 提供商选择
                 if (plugin.getFancyConsoleManager().hasApiKey()) {
-                    session.fancyRegistered = true;
+                    session.providerSub = ProviderSub.CHOOSE;
+                    renderProviderChoose(player, session);
+                } else {
+                    renderProviderAsk(player);
                 }
-                renderProviderAsk(player);
             }
             case SEARCH -> renderSearch(player, session);
             case WEBFETCH -> renderWebfetch(player);
