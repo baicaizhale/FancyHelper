@@ -103,7 +103,8 @@ public class InitWizardManager {
 
     private static class WizardSession {
         Step step = Step.LANG;
-        ProviderSub providerSub = ProviderSub.CHOOSE;
+        // 初始子状态是"是否注册 FancyConsole"询问（2a），答完才进 CHOOSE 选 AI 提供商（2b）
+        ProviderSub providerSub = ProviderSub.REGISTER_ASK;
         SearchSub searchSub = SearchSub.CHOOSE;
         long expiry = System.currentTimeMillis() + SESSION_TIMEOUT_MS;
 
