@@ -8,6 +8,7 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import org.YanPl.FancyHelper;
+import org.YanPl.util.ColorUtil;
 import org.YanPl.util.I18n;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -711,11 +712,11 @@ public class InitWizardManager {
         sendCardTop(player, Step.LANG);
         player.sendMessage(I18n.t("wizard.lang.question"));
         player.sendMessage("");
-        player.spigot().sendMessage(clickable(" §e[1] §f" + I18n.t("wizard.lang.1") + " §7- " + I18n.t("wizard.lang.1.desc"),
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.lang.1") + " §7- " + I18n.t("wizard.lang.1.desc"),
                 "/cli select 1", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[2] §f" + I18n.t("wizard.lang.2") + " §7- " + I18n.t("wizard.lang.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.lang.2") + " §7- " + I18n.t("wizard.lang.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[3] §f" + I18n.t("wizard.lang.3") + " §7- " + I18n.t("wizard.lang.3.desc"),
+        player.spigot().sendMessage(clickable(" §x[3] §f" + I18n.t("wizard.lang.3") + " §7- " + I18n.t("wizard.lang.3.desc"),
                 "/cli select 3", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
@@ -725,9 +726,9 @@ public class InitWizardManager {
         sendCardTop(player, Step.PROVIDER);
         player.sendMessage(I18n.t("wizard.fancyreg.question"));
         player.sendMessage("");
-        player.spigot().sendMessage(clickable(" §e[1] §f" + I18n.t("wizard.fancyreg.1") + " §7- " + I18n.t("wizard.fancyreg.1.desc"),
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.fancyreg.1") + " §7- " + I18n.t("wizard.fancyreg.1.desc"),
                 "/cli select 1", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[2] §f" + I18n.t("wizard.fancyreg.2") + " §7- " + I18n.t("wizard.fancyreg.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.fancyreg.2") + " §7- " + I18n.t("wizard.fancyreg.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
@@ -741,15 +742,15 @@ public class InitWizardManager {
         }
         player.sendMessage("");
         if (session.fancyRegistered) {
-            player.spigot().sendMessage(clickable(" §e[1] §f" + I18n.t("wizard.provider.1") + " §7- " + I18n.t("wizard.provider.1.desc"),
+            player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.provider.1") + " §7- " + I18n.t("wizard.provider.1.desc"),
                     "/cli select 1", I18n.t("wizard.option.hint")));
         } else {
             player.spigot().sendMessage(disabledOption(" §7[1] §8§m" + I18n.t("wizard.provider.1")
                     + I18n.t("wizard.provider.disabled.suffix"), I18n.t("wizard.provider.disabled.hover")));
         }
-        player.spigot().sendMessage(clickable(" §e[2] §f" + I18n.t("wizard.provider.2") + " §7- " + I18n.t("wizard.provider.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.provider.2") + " §7- " + I18n.t("wizard.provider.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[3] §f" + I18n.t("wizard.provider.3") + " §7- " + I18n.t("wizard.provider.3.desc"),
+        player.spigot().sendMessage(clickable(" §x[3] §f" + I18n.t("wizard.provider.3") + " §7- " + I18n.t("wizard.provider.3.desc"),
                 "/cli select 3", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
@@ -788,7 +789,7 @@ public class InitWizardManager {
         int end = Math.min(start + MODELS_PAGE_SIZE, session.openAiModels.size());
         for (int i = start; i < end; i++) {
             int n = i - start + 1;
-            player.spigot().sendMessage(clickable(" §e[" + n + "] §f" + session.openAiModels.get(i),
+            player.spigot().sendMessage(clickable(" §x[" + n + "] §f" + session.openAiModels.get(i),
                     "/cli select " + n, I18n.t("wizard.openai.models.pick.hover")));
         }
         player.sendMessage("");
@@ -833,17 +834,17 @@ public class InitWizardManager {
         player.sendMessage(I18n.t("wizard.search.question"));
         player.sendMessage("");
         if (session.fancyRegistered) {
-            player.spigot().sendMessage(clickable(" §e[1] §f" + I18n.t("wizard.search.1") + " §7- " + I18n.t("wizard.search.1.desc"),
+            player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.search.1") + " §7- " + I18n.t("wizard.search.1.desc"),
                     "/cli select 1", I18n.t("wizard.option.hint")));
         } else {
             player.spigot().sendMessage(disabledOption(" §7[1] §8§m" + I18n.t("wizard.search.1")
                     + I18n.t("wizard.provider.disabled.suffix"), I18n.t("wizard.provider.disabled.hover")));
         }
-        player.spigot().sendMessage(clickable(" §e[2] §f" + I18n.t("wizard.search.2") + " §7- " + I18n.t("wizard.search.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.search.2") + " §7- " + I18n.t("wizard.search.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[3] §f" + I18n.t("wizard.search.3") + " §7- " + I18n.t("wizard.search.3.desc"),
+        player.spigot().sendMessage(clickable(" §x[3] §f" + I18n.t("wizard.search.3") + " §7- " + I18n.t("wizard.search.3.desc"),
                 "/cli select 3", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[4] §f" + I18n.t("wizard.search.4") + " §7- " + I18n.t("wizard.search.4.desc"),
+        player.spigot().sendMessage(clickable(" §x[4] §f" + I18n.t("wizard.search.4") + " §7- " + I18n.t("wizard.search.4.desc"),
                 "/cli select 4", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
@@ -862,9 +863,9 @@ public class InitWizardManager {
         sendCardTop(player, Step.WEBFETCH);
         player.sendMessage(I18n.t("wizard.webfetch.question"));
         player.sendMessage("");
-        player.spigot().sendMessage(clickable(" §e[1] §f" + I18n.t("wizard.webfetch.1") + " §7- " + I18n.t("wizard.webfetch.1.desc"),
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.webfetch.1") + " §7- " + I18n.t("wizard.webfetch.1.desc"),
                 "/cli select 1", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §e[2] §f" + I18n.t("wizard.webfetch.2") + " §7- " + I18n.t("wizard.webfetch.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.webfetch.2") + " §7- " + I18n.t("wizard.webfetch.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
@@ -946,8 +947,9 @@ public class InitWizardManager {
         sendDivider(player);
         sendHeader(player);
         if (step.displayNumber > 0) {
-            player.sendMessage(I18n.t("wizard.step.progress", step.displayNumber, TOTAL_STEPS)
-                    + "  " + progressDots(step.displayNumber));
+            player.sendMessage(ColorUtil.translateCustomColors(
+                    I18n.t("wizard.step.progress", step.displayNumber, TOTAL_STEPS)
+                            + "  " + progressDots(step.displayNumber)));
         }
         player.sendMessage("");
     }
@@ -955,8 +957,8 @@ public class InitWizardManager {
     private String progressDots(int current) {
         StringBuilder sb = new StringBuilder();
         for (int i = 1; i <= TOTAL_STEPS; i++) {
-            if (i < current) sb.append("§a●");
-            else if (i == current) sb.append("§e●");
+            if (i < current) sb.append("§x●");
+            else if (i == current) sb.append("§z●");
             else sb.append("§8○");
         }
         return sb.toString();
@@ -994,7 +996,7 @@ public class InitWizardManager {
 
     /** 可点击选项（RUN_COMMAND，经 /cli select 转发回 handleChat） */
     private TextComponent clickable(String legacyText, String clickCommand, String hover) {
-        TextComponent c = new TextComponent(TextComponent.fromLegacyText(legacyText));
+        TextComponent c = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors(legacyText)));
         c.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, clickCommand));
         if (hover != null) {
             c.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(hover)));
@@ -1004,7 +1006,7 @@ public class InitWizardManager {
 
     /** 可点击链接（OPEN_URL） */
     private TextComponent link(String legacyText, String url, String hover) {
-        TextComponent c = new TextComponent(TextComponent.fromLegacyText(legacyText));
+        TextComponent c = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors(legacyText)));
         c.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url));
         c.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(hover)));
         return c;
@@ -1012,7 +1014,7 @@ public class InitWizardManager {
 
     /** 禁用态选项：置灰删除线、不可点击，悬停解释原因 */
     private TextComponent disabledOption(String legacyText, String hover) {
-        TextComponent c = new TextComponent(TextComponent.fromLegacyText(legacyText));
+        TextComponent c = new TextComponent(TextComponent.fromLegacyText(ColorUtil.translateCustomColors(legacyText)));
         c.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(hover)));
         return c;
     }
