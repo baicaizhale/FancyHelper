@@ -980,6 +980,23 @@ public class ConfigManager {
         save();
     }
 
+    /**
+     * 通用单键写入并立即落盘（初始化向导等运行时改配置场景）。
+     * 只写具体键、不触碰 version，避免触发版本迁移重写。
+     */
+    public void set(String path, Object value) {
+        config.set(path, value);
+        save();
+    }
+
+    /**
+     * 网页抓取是否开启（provider.jina: none 表示用户显式关闭）。
+     * 此前 none 仅影响提示文案，现作为真实开关（ToolExecutor webfetch 门控读取）。
+     */
+    public boolean isWebFetchEnabled() {
+        return !"none".equalsIgnoreCase(getJinaProvider());
+    }
+
     public boolean isPlayerToolEnabled(org.bukkit.entity.Player player, String tool) {
         String uuid = player.getUniqueId().toString();
         String lower = tool.toLowerCase();

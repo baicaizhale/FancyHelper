@@ -56,7 +56,14 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
             // Check registration status
             if (!plugin.getFancyConsoleManager().isReady() && !isAnyByokConfigured()) {
-                showRegistrationPrompt((Player) sender);
+                // 未初始化特征（provider 仍为默认 fancy 且未绑定 key）：
+                // 有向导权限的展示初始化询问卡，其余展示旧注册引导
+                Player gatePlayer = (Player) sender;
+                if (gatePlayer.hasPermission("fancyhelper.init")) {
+                    plugin.getInitWizardManager().showUninitializedPrompt(gatePlayer);
+                } else {
+                    showRegistrationPrompt(gatePlayer);
+                }
                 return true;
             }
 
@@ -176,6 +183,8 @@ public class CLICommand implements CommandExecutor, TabCompleter {
             case "resume":
             case "resume_confirm":
             case "resume_delete":
+            case "init":
+            case "reg":
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(I18n.t("cli.only.player.sub"));
                     return true;
@@ -221,6 +230,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(I18n.t("cli.help.title"));
         sender.sendMessage(I18n.t("cli.help.toggle"));
+        sender.sendMessage(I18n.t("cli.help.init"));
         sender.sendMessage(I18n.t("cli.help.bind"));
         sender.sendMessage(I18n.t("cli.help.reload"));
         sender.sendMessage(I18n.t("cli.help.reload.deep"));
@@ -259,6 +269,17 @@ public class CLICommand implements CommandExecutor, TabCompleter {
 
     private boolean handlePlayerSubCommand(Player player, String subCommand, String[] args) {
         switch (subCommand) {
+            case "init":
+                if (!player.hasPermission("fancyhelper.init")) {
+                    player.sendMessage(I18n.t("cli.no.perm.cmd"));
+                    return true;
+                }
+                plugin.getInitWizardManager().start(player);
+                return true;
+            case "reg":
+                // 隐藏子命令：初始化询问卡上 [跳过] 按钮的落点，展示旧注册引导
+                showRegistrationPrompt(player);
+                return true;
             case "new":
                 plugin.getCliManager().startNewSession(player);
                 return true;
@@ -2019,7 +2040,7 @@ public class CLICommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             List<String> subCommands = new ArrayList<>(Arrays.asList(
                 "bind", "serverid", "reload", "status", "stats", "yolo", "normal", "smart", "plan", "checkupdate", "upgrade", "new",
-                "read", "set", "settings", "tools", "display", "streaming", "toggle",
+                "read", "set", "settings", "tools", "display", "streaming", "toggle", "init",
                 "notice", "retry", "todo", "memory", "mem", "confirm",
                 "cancel", "agree", "thought", "select", "exempt_anti_loop",
                 "stop", "exit", "download", "help", "lib", "compact", "skill", "sound", "resume",

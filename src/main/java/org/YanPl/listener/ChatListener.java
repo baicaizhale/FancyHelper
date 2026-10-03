@@ -52,6 +52,7 @@ public class ChatListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
         lastChatHandledAt.remove(event.getPlayer().getUniqueId());
+        plugin.getInitWizardManager().cleanup(event.getPlayer().getUniqueId());
         plugin.getCliManager().exitCLI(event.getPlayer());
     }
 
@@ -110,7 +111,19 @@ public class ChatListener implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
-        if (!plugin.getCliManager().isInCLI(player)) return;
+        if (!plugin.getCliManager().isInCLI(player)) {
+            // 初始化向导玩家：新手常把"停"打成 /stop，这里拦下当作退出向导，避免误停服务器
+            if (plugin.getInitWizardManager().isActive(player)) {
+                String cmd = event.getMessage().toLowerCase().split(" ")[0];
+                if (cmd.equals("/stop") || cmd.equals("/exit") || cmd.equals("/quit")) {
+                    event.setCancelled(true);
+                    plugin.getInitWizardManager().cleanup(player.getUniqueId());
+                    player.sendMessage(I18n.t("wizard.exited"));
+                    player.sendMessage(I18n.t("wizard.exited.hint"));
+                }
+            }
+            return;
+        }
 
         String cmd = event.getMessage().toLowerCase().split(" ")[0];
 

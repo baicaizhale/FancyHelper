@@ -1,5 +1,5 @@
 name: FancyHelper
-version: 4.3.8
+version: 4.4.0
 main: org.YanPl.FancyHelper
 api-version: '1.18'
 softdepend: [ ProtocolLib ]
@@ -11,6 +11,9 @@ commands:
 permissions:
   fancyhelper.cli:
     description: 允许进入 FancyHelper CLI
+    default: op
+  fancyhelper.init:
+    description: 允许运行初始化向导（/fancy init）
     default: op
   fancyhelper.reload:
     description: 允许重载 FancyHelper 配置
