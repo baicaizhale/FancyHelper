@@ -23,11 +23,13 @@
 ## 功能
 
 - **对谈理政** — 输入 `/cli` 启对谈之门，如晤同僚，片言只语即可理政。
+- **启蒙之导** — 初试 `/cli`，必出问询之卡，循卡点选，语言、AI 端、搜索、网页抓取诸事顷刻可定；答至何处，存至何处，事毕自入对谈（随时可 `/fancy init` 重行）。
 - **灵枢拟旨** — 默认走 FancyConsole（免钥中转），亦承 OpenAI、DeepSeek、CloudFlare Workers AI 等 OpenAI 兼容端点（自带密钥）。
 - **四境理政** — **常境**：凡令必待君亲允；**放手境**：立约之后，寻常细事自当躬行，然 `op`、`ban`、`stop` 等要务仍必请旨；**明智境**：灵枢自度风险，卑险者径行；**图谋境**：先谋划后施行，宜乎繁难之事。
 - **慎行确认** — 常境之下，凡所拟指令，必待君亲览确认（`y`/`n`）方可行之，以防纷乱。
 - **流光动态** — 动作栏实时显现灵枢之态（思索中 / 施行中 / 候命中），流式逐字而现。
 - **博学维基** — 内置 LuckPerms、EssentialsX、WorldEdit 等主流插件之典籍（Skills）。若典籍无载，亦可全网搜寻（Tavily / Metaso）。
+- **网罗篇章** — 使灵枢以 `#webfetch` 取网页正文为参（config 中可关）。
 - **博艺之籍** — 以 markdown 文档为灵枢注入某插件之用典，更有线上市集，一键装置更新。
 - **反馈回环** — 指令既行，成败反馈灵枢。若有谬误，灵枢自能补正。
 - **文牍之器** — 使灵枢读写服务器配置文件（`#read` / `#edit` / `#write`），初用须验明正身。
@@ -78,19 +80,25 @@
 
 ### 配置 AI
 
-插件默认走 **FancyConsole**（免钥之 AI 中转服务），开箱即用，然须注册绑定一次：
+插件默认走 **FancyConsole**（免钥之 AI 中转服务），开箱即用，然须注册绑定一次。最便者莫若启蒙之导：
 
-1. 境中输入 `/cli`，点击消息中之链接前往注册页，或访问 `https://console.fancy.baicaizhale.top/register?server=<君之服务器ID>`。
+1. 境中输入 `/cli`（或 `/fancy`），未绑 key 者必见问询之卡，循卡入导；未出则输 `/fancy init`。
+2. 循卡点选：择语言 → 绑 FancyConsole Key（卡中附注册之链，注册既成，以 Key 直发聊天框即可）→ 搜索、网页抓取各取所需。
+3. 导毕自入对谈之门，直抒所求即可。
+
+不欲循导，旧径仍在：
+
+1. 境中输入 `/cli`，点击消息中之链接前往注册页，或径访 `https://console.fancy.baicaizhale.top/register?server=<君之服务器ID>`。
 2. 注册既成，得 API Key，境中输入 `/cli bind <API Key>`。
 3. 绑定成功，即可对谈。
 
 **欲用己钥（BYOK）：** 将 `config.yml` 之 `provider.ai` 改为 `openai` 或 `cloudflare`，填妥相应之 `api_key` / `cf_key`。
 
 **CloudFlare Workers AI：**
-教程详见 [![blog](https://img.shields.io/badge/兼容端点配置指南-Blog-blue)](https://blog.baicaizhale.top/post/create-cf-key-for-fhai)
+教程详见 [![blog](https://img.shields.io/badge/创Cloudflare之AI访问密钥-Blog-blue)](https://blog.baicaizhale.top/post/create-cf-key-for-fhai)
 
 **OpenAI 兼容 API（DeepSeek、OpenAI 等）：**
-教程详见 [![blog](https://img.shields.io/badge/创建Cloudflare的AI访问密钥-Blog-blue)](https://blog.baicaizhale.top/post/openai-compatible-providers)
+教程详见 [![blog](https://img.shields.io/badge/OpenAI兼容端点配置指南-Blog-blue)](https://blog.baicaizhale.top/post/openai-compatible-providers)
 
 **MCP 工具服务器：**
 教程详见 [![blog](https://img.shields.io/badge/MCP%20配置指南-Blog-blue)](https://blog.baicaizhale.top/post/mcp-config)
@@ -115,6 +123,8 @@
 | `/cli retry` | 重试上回之响应 |
 | `/cli exempt_anti_loop` | 暂关死循环检测 |
 | `/cli resume` | 续上回之会话 |
+| `/cli new` | 另起新章，前尘清零 |
+| `/cli compact` | 压缩当下会话之上下文 |
 | `/cli skill list` | 览已装之 Skill |
 | `/cli todo` | 启待办清册之书 |
 | `!消息` | 以 `!` 为始直发闲谈，不劳灵枢 |
@@ -124,30 +134,35 @@
 | 指令 | 描述 | 默认权限 |
 | :--- | :--- | :--- |
 | `/fancyhelper` | 插件主指令（别名：`/cli`, `/fancy`） | `fancyhelper.cli` |
-| `/fancyhelper bind <key>` | 绑定 FancyConsole API Key | OP |
+| `/fancyhelper init` | 行启蒙之导 | `fancyhelper.init` |
+| `/fancyhelper bind <key>` | 绑定 FancyConsole API Key | 众玩家皆可 |
 | `/fancyhelper reload [target]` | 重载插件配置（可指定 `config` / `workspace` / `playerdata` / `skill` / `mcp` / `deeply`） | `fancyhelper.reload` |
-| `/fancyhelper status` | 查看插件状态 | `fancyhelper.cli` |
-| `/fancyhelper yolo` / `smart` / `normal` / `plan` | 切换对话模式 | `fancyhelper.cli` |
-| `/fancyhelper settings` | 打开个人设置（流式输出、显示位置、声音等） | `fancyhelper.cli` |
-| `/fancyhelper tools` | 管理文件工具权限（read / write） | `fancyhelper.cli` |
-| `/fancyhelper memory` | 管理灵枢偏好记忆 | `fancyhelper.cli` |
-| `/fancyhelper resume` | 恢复历史会话 | `fancyhelper.cli` |
-| `/fancyhelper todo` | 打开待办清册 | `fancyhelper.cli` |
+| `/fancyhelper status` | 察插件之状 | 众玩家皆可 |
+| `/fancyhelper yolo` / `smart` / `normal` / `plan` | 易对谈之境 | 众玩家皆可 |
+| `/fancyhelper settings` | 启个人之设（流式输出、显示之位、声音等） | 众玩家皆可 |
+| `/fancyhelper tools` | 理文牍之器权限（read / write） | 众玩家皆可 |
+| `/fancyhelper memory` | 理灵枢偏好之忆 | 众玩家皆可 |
+| `/fancyhelper new` | 另起新章（前尘清零） | 众玩家皆可 |
+| `/fancyhelper compact` | 压缩当下会话之上下文 | 众玩家皆可 |
+| `/fancyhelper resume` | 续旧日之会话 | 众玩家皆可 |
+| `/fancyhelper todo` | 启待办清册 | 众玩家皆可 |
 | `/fancyhelper skill <list\|info\|load>` | Skill 之目 / 详 / 载 | `fancyhelper.skill.use` |
-| `/fancyhelper skill <reload\|install\|upgrade>` | 管理 Skill（重载 / 装置 / 更新） | `fancyhelper.skill.admin` |
-| `/fancyhelper mcp tools` | 览 MCP 外部工具 | `fancyhelper.cli` |
-| `/fancyhelper checkupdate` | 查插件更新 | `fancyhelper.cli` |
+| `/fancyhelper skill <reload\|install\|upgrade>` | 理 Skill（重载 / 装置 / 更新） | `fancyhelper.skill.admin` |
+| `/fancyhelper mcp tools` | 览 MCP 外部工具 | 众玩家皆可 |
+| `/fancyhelper checkupdate` | 察插件更新 | 众玩家皆可 |
 | `/fancyhelper upgrade` | 下载并装置新版 | `fancyhelper.reload` |
-| `/fancyhelper notice` | 查看插件公告 | `fancyhelper.notice` |
+| `/fancyhelper notice` | 览插件公告 | `fancyhelper.notice` |
 | `/fancyhelper lib install protocollib` | 下载并装置 ProtocolLib 依赖 | OP |
 
 | 权限 | 描述 | 默认 |
 | :--- | :--- | :--- |
 | `fancyhelper.cli` | 允许使用 CLI 模式 | OP |
+| `fancyhelper.init` | 允行启蒙之导（`/fancy init`） | OP |
 | `fancyhelper.reload` | 允许重载配置 | OP |
 | `fancyhelper.notice` | 允许查看插件公告 | OP |
 | `fancyhelper.skill.use` | 允许使用技能命令 | OP |
 | `fancyhelper.skill.admin` | 允许管理技能 | OP |
+| `fancyhelper.admin` | 允许书写服务器级记忆（server memory） | OP |
 
 ## 常见问题
 

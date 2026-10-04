@@ -23,11 +23,13 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 ## Features
 
 - **Chat-based Management** — Type `/cli` to enter conversation mode. Manage your server as if you're chatting with a human co-admin.
+- **Setup Wizard** — The first `/cli` opens a card-based wizard: pick your language, AI provider, search and web fetch step by step. Answers are saved as you go, and it drops you straight into chat when done (rerun anytime with `/fancy init`).
 - **AI Command Generation** — Defaults to FancyConsole (keyless AI relay). Also supports OpenAI-compatible endpoints such as OpenAI, DeepSeek, and CloudFlare Workers AI (BYOK).
 - **Four Conversation Modes** — **Normal**: every command needs confirmation. **YOLO**: after agreeing to the terms, most commands run automatically, though high-risk ones like `op`, `ban`, and `stop` still ask. **SMART**: the AI judges risk and executes low-risk commands directly. **Plan**: plan first, then execute — great for complex tasks.
 - **Pre-execution Confirmation** — In Normal mode, AI-generated commands require manual confirmation (`y`/`n`) to prevent accidents.
 - **Real-time Status Bar** — The Action Bar displays what the AI is doing (Thinking / Executing / Waiting for confirmation), with streaming output word by word.
 - **Built-in Wiki Search** — Comes with documentation presets (Skills) for LuckPerms, EssentialsX, WorldEdit and other major plugins. Falls back to web search (Tavily / Metaso) if nothing is found.
+- **Web Fetch** — Let the AI pull a page's content as reference with `#webfetch` (can be disabled in config).
 - **Skill System** — Inject markdown knowledge files into the AI for specific plugins. Online market for one-click install/update.
 - **Feedback Loop** — The output of executed commands is fed back to the AI. If something fails, the AI can correct itself.
 - **File Tools** — Let the AI read and edit server config files (`#read` / `#edit` / `#write`). First-time use requires verification.
@@ -78,7 +80,13 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 
 ### Configure AI
 
-The plugin defaults to **FancyConsole** (a keyless AI relay service). It works out of the box, but you need to register and bind once:
+The plugin defaults to **FancyConsole** (a keyless AI relay service). It works out of the box, but you need to register and bind once. The easy path is the setup wizard:
+
+1. Type `/cli` (or `/fancy`) in-game. Without a bound key, the setup wizard prompt appears. Enter the wizard; if it doesn't, type `/fancy init`.
+2. Follow the cards: pick a language → bind your FancyConsole key (the card carries the registration link; register, then paste the key into chat) → choose search and web fetch options as needed.
+3. When the wizard finishes, you land directly in chat mode.
+
+Prefer the old manual flow?
 
 1. Type `/cli` in-game and click the registration link, or visit `https://console.fancy.baicaizhale.top/register?server=<your-server-id>`.
 2. After registering, get your API Key and bind it in-game: `/cli bind <API Key>`.
@@ -115,6 +123,8 @@ Tutorial: [![blog](https://img.shields.io/badge/MCP%20Setup%20Guide-Blog-blue)](
 | `/cli retry` | Retry the previous AI response |
 | `/cli exempt_anti_loop` | Temporarily disable anti-loop detection |
 | `/cli resume` | Resume a previous session |
+| `/cli new` | Start a fresh session (context cleared) |
+| `/cli compact` | Manually compact the current session context |
 | `/cli skill list` | List installed Skills |
 | `/cli todo` | Open the todo list book |
 | `!message` | Start with `!` to send normal chat messages, bypassing AI |
@@ -124,19 +134,22 @@ Tutorial: [![blog](https://img.shields.io/badge/MCP%20Setup%20Guide-Blog-blue)](
 | Command | Description | Default Permission |
 | :--- | :--- | :--- |
 | `/fancyhelper` | Main command (Aliases: `/cli`, `/fancy`) | `fancyhelper.cli` |
-| `/fancyhelper bind <key>` | Bind a FancyConsole API Key | OP |
+| `/fancyhelper init` | Run the setup wizard | `fancyhelper.init` |
+| `/fancyhelper bind <key>` | Bind a FancyConsole API Key | All players |
 | `/fancyhelper reload [target]` | Reload plugin config (`config` / `workspace` / `playerdata` / `skill` / `mcp` / `deeply`) | `fancyhelper.reload` |
-| `/fancyhelper status` | Show plugin status | `fancyhelper.cli` |
-| `/fancyhelper yolo` / `smart` / `normal` / `plan` | Switch conversation mode | `fancyhelper.cli` |
-| `/fancyhelper settings` | Open personal settings (streaming, display position, sound, etc.) | `fancyhelper.cli` |
-| `/fancyhelper tools` | Manage file tool permissions (read / write) | `fancyhelper.cli` |
-| `/fancyhelper memory` | Manage AI preference memory | `fancyhelper.cli` |
-| `/fancyhelper resume` | Resume a previous session | `fancyhelper.cli` |
-| `/fancyhelper todo` | Open the todo list | `fancyhelper.cli` |
+| `/fancyhelper status` | Show plugin status | All players |
+| `/fancyhelper yolo` / `smart` / `normal` / `plan` | Switch conversation mode | All players |
+| `/fancyhelper settings` | Open personal settings (streaming, display position, sound, etc.) | All players |
+| `/fancyhelper tools` | Manage file tool permissions (read / write) | All players |
+| `/fancyhelper memory` | Manage AI preference memory | All players |
+| `/fancyhelper new` | Start a fresh session (context cleared) | All players |
+| `/fancyhelper compact` | Compact the current session context | All players |
+| `/fancyhelper resume` | Resume a previous session | All players |
+| `/fancyhelper todo` | Open the todo list | All players |
 | `/fancyhelper skill <list\|info\|load>` | Skill list / details / load | `fancyhelper.skill.use` |
 | `/fancyhelper skill <reload\|install\|upgrade>` | Manage Skills (reload / install / update) | `fancyhelper.skill.admin` |
-| `/fancyhelper mcp tools` | View MCP external tools | `fancyhelper.cli` |
-| `/fancyhelper checkupdate` | Check for plugin updates | `fancyhelper.cli` |
+| `/fancyhelper mcp tools` | View MCP external tools | All players |
+| `/fancyhelper checkupdate` | Check for plugin updates | All players |
 | `/fancyhelper upgrade` | Download and install the new version | `fancyhelper.reload` |
 | `/fancyhelper notice` | View plugin announcements | `fancyhelper.notice` |
 | `/fancyhelper lib install protocollib` | Download and install ProtocolLib dependency | OP |
@@ -144,10 +157,12 @@ Tutorial: [![blog](https://img.shields.io/badge/MCP%20Setup%20Guide-Blog-blue)](
 | Permission | Description | Default |
 | :--- | :--- | :--- |
 | `fancyhelper.cli` | Allows usage of CLI mode | OP |
+| `fancyhelper.init` | Allows running the setup wizard (`/fancy init`) | OP |
 | `fancyhelper.reload` | Allows reloading configuration | OP |
 | `fancyhelper.notice` | Allows viewing plugin announcements | OP |
 | `fancyhelper.skill.use` | Allows using skill commands | OP |
 | `fancyhelper.skill.admin` | Allows managing skills | OP |
+| `fancyhelper.admin` | Allows writing server-level memory (server memory) | OP |
 
 ## FAQ
 
