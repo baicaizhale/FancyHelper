@@ -2,164 +2,142 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>FancyHelper preview</title>
+<title>FancyHelper preview — Voxel Mind</title>
 <style>
+  @font-face { font-family: "Bricolage Grotesque"; font-weight: 700;
+    src: url("fonts/BricolageGrotesque-Bold.ttf") format("truetype"); }
+  @font-face { font-family: "DM Mono"; font-weight: 400;
+    src: url("fonts/DMMono-Regular.ttf") format("truetype"); }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { width: 2560px; height: 1280px; overflow: hidden; }
   body {
     width: 1280px; height: 640px; overflow: hidden; zoom: 2;
-    font-family: "Noto Sans SC", "Noto Sans", "Microsoft YaHei", sans-serif;
-    background: #78A7FF; color: #fff; position: relative;
+    font-family: "Noto Sans SC", sans-serif;
+    background: #0B0E13; color: #E8EDF4; position: relative;
   }
-  #bg { position: absolute; inset: 0; width: 1280px; height: 640px; image-rendering: pixelated; }
-  /* 左侧压暗渐变（YEssential 式） */
-  .shade { position: absolute; inset: 0;
-    background: linear-gradient(90deg, rgba(7,11,17,.66) 0%, rgba(7,11,17,.42) 38%,
-      rgba(7,11,17,.14) 62%, rgba(7,11,17,0) 78%, rgba(7,11,17,.10) 100%);
-  }
-  .shade::after { content: ""; position: absolute; inset: 0;
-    background: linear-gradient(0deg, rgba(7,11,17,.32) 0%, transparent 26%); }
+  #bg { position: absolute; inset: 0; width: 1280px; height: 640px; }
 
-  /* ===== 左侧文案 ===== */
-  .left { position: absolute; left: 62px; top: 0; height: 100%; width: 660px;
-    display: flex; flex-direction: column; justify-content: center; z-index: 2; }
-  h1 { font-size: 108px; font-weight: 900; letter-spacing: -1px; line-height: 1;
-    text-shadow: 5px 5px 0 rgba(0,0,0,.38); }
-  h1 .y { color: #7ED957; }   /* 草绿点缀 */
-  .tagline { margin-top: 20px; font-size: 30px; font-weight: 700;
-    text-shadow: 3px 3px 0 rgba(0,0,0,.4); }
-  .tags { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; max-width: 620px; }
-  .tag {
-    display: inline-flex; align-items: center; height: 42px; padding: 0 20px;
-    border: 2px solid rgba(255,255,255,.92); border-radius: 5px;
-    background: rgba(8,12,18,.52); font-size: 17px; font-weight: 500;
-    text-shadow: 2px 2px 0 rgba(0,0,0,.45);
-  }
-  .tag.hl { border-color: #30AEE5; }
-  .foot { position: absolute; left: 62px; bottom: 38px; z-index: 2;
-    font-family: Consolas, "Noto Sans SC", monospace; font-size: 14px; color: rgba(255,255,255,.82);
-    text-shadow: 2px 2px 0 rgba(0,0,0,.5); }
-  .foot .sep { color: rgba(255,255,255,.45); margin: 0 8px; }
+  /* 顶部 GitHub 坐标 */
+  .repo { position: absolute; top: 34px; right: 44px; z-index: 3;
+    font-family: "DM Mono", monospace; font-size: 13px; letter-spacing: 2.5px;
+    color: #66717f; }
+  /* 底部细语条 */
+  .strip { position: absolute; bottom: 30px; left: 0; width: 100%; z-index: 3;
+    display: flex; justify-content: center; }
+  .strip span { font-family: "DM Mono", monospace; font-size: 13px; letter-spacing: 4.5px;
+    color: #66717f; }
+  .fig { position: absolute; bottom: 30px; left: 44px; z-index: 3;
+    font-family: "DM Mono", monospace; font-size: 11px; letter-spacing: 2px; color: #3d4654; }
 
-  /* ===== 右侧：游戏聊天 HUD（FancyHelper 真实样式） ===== */
-  .hud { position: absolute; right: 72px; bottom: 84px; width: 552px; z-index: 2;
-    display: flex; flex-direction: column; gap: 5px;
-    filter: drop-shadow(0 14px 26px rgba(0,0,0,.45)); }
-  .line {
-    background: rgba(4,8,14,.62); border-radius: 3px; padding: 9px 14px;
-    font-family: "Cascadia Mono", Consolas, "Noto Sans SC", monospace;
-    font-size: 15.5px; line-height: 1.55; color: #fff;
-    text-shadow: 2px 2px 0 rgba(0,0,0,.65); white-space: nowrap; overflow: hidden;
-  }
-  .line .bar { color: #30AEE5; font-weight: 700; }
-  .line .dash { color: #9fb0c3; }
-  .line .mk { color: #30AEE5; font-weight: 700; }
-  .line .ok { color: #7CFC9A; font-weight: 700; }
-  .line .dim { color: #b6c2d4; }
-  .line .cmd { color: #FFD966; }
+  .masthead { position: absolute; top: 0; left: 0; width: 100%; z-index: 2; text-align: center; }
+  h1 { margin-top: 118px; font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif;
+    font-weight: 700; font-size: 152px; letter-spacing: -2px; line-height: 1; color: #F2F6FB; }
+  .tagline { margin-top: 26px; font-size: 23px; font-weight: 300; letter-spacing: 7px;
+    color: #AEBAC8; text-indent: 7px; }
 </style>
 </head>
 <body>
   <canvas id="bg" width="2560" height="1280"></canvas>
-  <div class="shade"></div>
 
-  <div class="left">
-    <h1>Fancy<span class="y">Helper</span></h1>
+  <div class="repo">GITHUB.COM/BAICAIZHALE/FANCYHELPER</div>
+  <div class="masthead">
+    <h1>FancyHelper</h1>
     <div class="tagline">让 AI 住进你的 Minecraft 服务器</div>
-    <div class="tags">
-      <span class="tag hl">MCP 扩展</span>
-      <span class="tag">Skill 技能</span>
-      <span class="tag">多语言</span>
-      <span class="tag">原生工具调用</span>
-      <span class="tag">联网搜索</span>
-    </div>
   </div>
-
-  <div class="foot">
-    github.com/baicaizhale/FancyHelper<span class="sep">|</span>Paper 1.18+ · Java 17
-  </div>
-
-  <div class="hud">
-    <div class="line"><span class="bar">▌</span> FancyHelper <span class="dash">──</span> Chatting <span class="dim">[YOLO]</span></div>
-    <div class="line"><span class="mk">◆</span> 主人，Fancy 在这里喵！请问有什么可以帮您的吗喵？</div>
-    <div class="line"><span class="ok">✓</span> <span class="cmd">run</span> tps <span class="dim">→</span> TPS 19.98 <span class="dim">·</span> MSPT 3.2 <span class="dim">·</span> 在线 2 人</div>
-    <div class="line"><span class="ok">✓</span> <span class="cmd">read</span> plugins/FancyHelper/config.yml <span class="dim">→</span> 214 行</div>
-  </div>
+  <div class="strip"><span>PAPER 1.18+ &nbsp;·&nbsp; JAVA 17 &nbsp;·&nbsp; MCP &nbsp;·&nbsp; SKILL &nbsp;·&nbsp; I18N</span></div>
+  <div class="fig">FIG. 01 — SERVER-SIDE MIND</div>
 
 <script>
-// 程序化像素地形（种子固定，可复现）
+// ============ Voxel Mind ============
+// 暗线：黑暗方块海里唯一发光的方块，是住进服务器的心智；
+// 青色走线是它与玩家之间的信号。
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const rnd = mulberry32(20261004);
+const rnd = mulberry32(7);
 const cv = document.getElementById("bg"), ctx = cv.getContext("2d");
-const B = 32, COLS = 2560/B;                     // 方块 32 设备像素
-const jitter = (base, amt) => {
-  const v = (rnd()*2-1)*amt;
-  const ch = c => Math.max(0, Math.min(255, Math.round(c + v)));
-  return `rgb(${ch(base[0])},${ch(base[1])},${ch(base[2])})`;
-};
 
-// 天空
-const sky = ctx.createLinearGradient(0, 0, 0, 760);
-sky.addColorStop(0, "#5F9BE8"); sky.addColorStop(.7, "#8FBAF5"); sky.addColorStop(1, "#C6DCF9");
-ctx.fillStyle = sky; ctx.fillRect(0, 0, 2560, 780);
-// 太阳（方形，MC 风）
-ctx.fillStyle = "#FFF3C4"; ctx.fillRect(2100, 96, 88, 88);
-ctx.fillStyle = "rgba(255,243,196,.35)"; ctx.fillRect(2084, 80, 120, 120);
-// 像素云
-for (let i = 0; i < 9; i++) {
-  const w = 150 + rnd()*230, x = rnd()*2400, y = 50 + rnd()*260;
-  ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.fillRect(x, y, w, 34);
-  ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.fillRect(x + 40, y + 34, Math.max(90, w - 120), 30);
+ctx.fillStyle = "#0B0E13"; ctx.fillRect(0, 0, 2560, 1280);
+
+// 纸面网格（MC 方块网格作为纸张纹理）
+ctx.strokeStyle = "rgba(255,255,255,.022)"; ctx.lineWidth = 1;
+for (let x = 0; x <= 2560; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1280); ctx.stroke(); }
+for (let y = 0; y <= 1280; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(2560, y); ctx.stroke(); }
+
+// ============ 等距体素地形 ============
+const S = 34, HALf = S/2, QUAR = S/4;
+const NI = 46, NJ = 40, BASEX = 1280, BASEY = 700;
+const elev = (i, j) =>
+  Math.round(1.2*Math.sin(i*0.42) + 1.1*Math.cos(j*0.37+1.2) + 0.7*Math.sin((i+j)*0.21) + rnd()*0.9);
+const shade = (rgb, f) => `rgb(${Math.round(rgb[0]*f)},${Math.round(rgb[1]*f)},${Math.round(rgb[2]*f)})`;
+const AMBER = [255, 181, 71];
+const GLOW_I = 12, GLOW_J = 2;          // 发光方块的位置
+const cubes = [];
+for (let i = 0; i < NI; i++) for (let j = 0; j < NJ; j++) {
+  let e = elev(i, j);
+  const isGlow = (i === GLOW_I && j === GLOW_J);
+  if (isGlow) e += 2;                     // 心智高于旷野
+  const cx = BASEX + (i - j) * S;
+  const cy = BASEY + (i + j) * HALf - e * S;
+  const v = 0.92 + rnd()*0.16;
+  const top = isGlow ? AMBER : [Math.round(31*v+6), Math.round(40*v+8), Math.round(56*v+10)];
+  cubes.push({ cx, cy, top, glow: isGlow, depth: cy });
 }
-
-// 远近三层山脊（视差远景，避免"剖面图"感）
-function ridge(baseY, amp, colorTop, colorBody) {
-  const H = [];
-  let w = 0;
-  for (let c = 0; c <= COLS; c++) {
-    w += (rnd()*2-1)*30;
-    H[c] = Math.round(baseY + Math.sin(c*0.045)*amp + Math.sin(c*0.013+1.7)*amp*1.4 + w*0.3);
-  }
+cubes.sort((a, b) => a.depth - b.depth);
+function cube(cx, cy, top, fTop, fL, fR) {
+  ctx.fillStyle = shade(top, fTop);
   ctx.beginPath();
-  ctx.moveTo(0, H[0]);
-  for (let c = 1; c <= COLS; c++) ctx.lineTo(c*B, H[c]);
-  ctx.lineTo(2560, 1280); ctx.lineTo(0, 1280); ctx.closePath();
-  const g = ctx.createLinearGradient(0, baseY - amp*2, 0, 1280);
-  g.addColorStop(0, colorTop); g.addColorStop(1, colorBody);
-  ctx.fillStyle = g; ctx.fill();
-  return H;
+  ctx.moveTo(cx, cy - S - HALf); ctx.lineTo(cx + S, cy - HALf);
+  ctx.lineTo(cx, cy + HALf); ctx.lineTo(cx - S, cy - HALf); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = shade(top, fL);
+  ctx.beginPath();
+  ctx.moveTo(cx - S, cy - HALf); ctx.lineTo(cx, cy + HALf);
+  ctx.lineTo(cx, cy + S + HALf); ctx.lineTo(cx - S, cy + S); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = shade(top, fR);
+  ctx.beginPath();
+  ctx.moveTo(cx + S, cy - HALf); ctx.lineTo(cx, cy + HALf);
+  ctx.lineTo(cx, cy + S + HALf); ctx.lineTo(cx + S, cy + S); ctx.closePath(); ctx.fill();
 }
-// 远山（偏蓝灰，大气透视）
-ridge(520, 55, "#9DB6A8", "#7FA094");
-// 中景山脊
-const midH = ridge(645, 70, "#6FA854", "#4E7E3C");
-// 近景草坡
-const nearH = ridge(795, 62, "#79BE4C", "#3E6B2F");
-// 近景：方块感草皮顶 + 花
-for (let c = 0; c < COLS; c++) {
-  const x = c*B, top = nearH[c];
-  ctx.fillStyle = jitter([124,191,76], 22); ctx.fillRect(x, top, B, 14);
-  if (rnd() < .34) { ctx.fillStyle = jitter([110,175,66], 18); ctx.fillRect(x, top+14, B, 12); }
-  if (rnd() < .16) { ctx.fillStyle = rnd()<.6 ? "#E8D24A" : "#E0705A"; ctx.fillRect(x + rnd()*(B-8), top - 8, 7, 8); }
-}
-// 树（中景小树 + 近景大树）
-function tree(c, scale, HMap) {
-  const x = c*B, gy = HMap[Math.min(c, COLS)];
-  const th = 4*scale, bw = Math.max(14, Math.round(22*scale));
-  ctx.fillStyle = jitter([98,71,42], 15);
-  ctx.fillRect(x + B/2 - bw/2, gy - th*B, bw, th*B + 6*scale);
-  const lw = 5, lh = 4;
-  const lx = x + B/2 - Math.floor(lw*B*scale/2), ly = gy - th*B - (lh-1)*B*scale;
-  for (let r = 0; r < lh; r++) for (let q = 0; q < lw; q++) {
-    const edge = (r===0||r===lh-1) && (q===0||q===lw-1);
-    if (edge && rnd()<.75) continue;
-    ctx.fillStyle = jitter(r<2?[64,132,42]:[53,112,36], 20);
-    ctx.fillRect(lx + q*B*scale, ly + r*B*scale, B*scale, B*scale);
+for (const c of cubes) {
+  if (c.glow) {                           // 心智的辉光先铺在旷野上
+    const g = ctx.createRadialGradient(c.cx, c.cy - S, 8, c.cx, c.cy - S, 300);
+    g.addColorStop(0, "rgba(255,181,71,.34)"); g.addColorStop(1, "rgba(255,181,71,0)");
+    ctx.save(); ctx.globalCompositeOperation = "screen";
+    ctx.fillStyle = g; ctx.fillRect(c.cx - 320, c.cy - 400, 640, 640); ctx.restore();
   }
+  cube(c.cx, c.cy, c.top, 1.0, 0.58, 0.36);
 }
-[8, 19, 33, 47, 60, 73].forEach(c => tree(c, 1, nearH));
-[6, 27, 44, 67].forEach(c => tree(c, 0.62, midH));
+// 发光方块的微光顶面描边
+const g = cubes.find(c => c.glow);
+ctx.strokeStyle = "rgba(255,214,140,.75)"; ctx.lineWidth = 1.4;
+ctx.beginPath();
+ctx.moveTo(g.cx, g.cy - S - HALf); ctx.lineTo(g.cx + S, g.cy - HALf);
+ctx.lineTo(g.cx, g.cy + HALf); ctx.lineTo(g.cx - S, g.cy - HALf); ctx.closePath(); ctx.stroke();
 
+// 数据微尘：从心智升起
+[[0,-86,7,.85],[14,-158,5,.55],[-10,-224,4,.32]].forEach(([dx,dy,s,a]) => {
+  ctx.fillStyle = `rgba(255,199,102,${a})`;
+  ctx.fillRect(g.cx + dx - s/2, g.cy - S + dy, s, s);
+});
+
+// 信号走线：沿网格自心智升起，没入标题下方
+const T0 = { x: g.cx, y: g.cy - S - 26 };
+const path = [T0, { x: T0.x, y: T0.y - 152 }, { x: 2260, y: T0.y - 152 },
+              { x: 2260, y: 160 }];
+ctx.save();
+ctx.strokeStyle = "rgba(48,174,229,.85)"; ctx.lineWidth = 2;
+ctx.shadowColor = "rgba(48,174,229,.8)"; ctx.shadowBlur = 7;
+ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
+for (let k = 1; k < path.length; k++) ctx.lineTo(path[k].x, path[k].y);
+ctx.stroke();
+ctx.shadowBlur = 0;
+ctx.fillStyle = "rgba(48,174,229,.9)";
+for (const p of path.slice(1, -1)) ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+ctx.fillStyle = "#30AEE5"; ctx.fillRect(path[4].x - 5, path[4].y - 5, 10, 10);
+ctx.restore();
+
+// 暗角
+const vg = ctx.createRadialGradient(1280, 640, 640, 1280, 640, 1500);
+vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.34)");
+ctx.fillStyle = vg; ctx.fillRect(0, 0, 2560, 1280);
 </script>
 </body>
 </html>
