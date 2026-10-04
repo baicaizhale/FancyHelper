@@ -30,8 +30,12 @@
     font-family: "DM Mono", monospace; font-size: 11px; letter-spacing: 2px; color: #3d4654; }
 
   .masthead { position: absolute; top: 0; left: 0; width: 100%; z-index: 2; text-align: center; }
-  h1 { margin-top: 118px; font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif;
-    font-weight: 700; font-size: 152px; letter-spacing: -2px; line-height: 1; color: #F2F6FB; }
+  /* 品牌锁定：方块标 + 字标，对应游戏内「▌ FancyHelper」品牌头 */
+  .lockup { margin-top: 112px; display: flex; align-items: center; justify-content: center; gap: 32px; }
+  .mark { width: 66px; flex: none; transform: translateY(12px);
+    filter: drop-shadow(0 0 16px rgba(255,181,71,.55)) drop-shadow(0 0 46px rgba(255,181,71,.22)); }
+  h1 { font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif;
+    font-weight: 700; font-size: 140px; letter-spacing: -2px; line-height: 1; color: #F2F6FB; }
   .tagline { margin-top: 26px; font-size: 23px; font-weight: 300; letter-spacing: 7px;
     color: #AEBAC8; text-indent: 7px; }
 </style>
@@ -41,7 +45,15 @@
 
   <div class="repo">GITHUB.COM/BAICAIZHALE/FANCYHELPER</div>
   <div class="masthead">
-    <h1>FancyHelper</h1>
+    <div class="lockup">
+      <svg class="mark" viewBox="-2 -2 72 106" aria-hidden="true">
+        <polygon points="34,0 68,34 34,68 0,34" fill="rgb(255,181,71)"/>
+        <polygon points="0,34 34,68 34,102 0,85" fill="rgb(148,105,41)"/>
+        <polygon points="68,34 34,68 34,102 68,85" fill="rgb(92,65,26)"/>
+        <polygon points="34,0 68,34 34,68 0,34" fill="none" stroke="rgba(255,214,140,.8)" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+      <h1>FancyHelper</h1>
+    </div>
     <div class="tagline">让 AI 住进你的 Minecraft 服务器</div>
   </div>
   <div class="strip"><span>PAPER 1.18+ &nbsp;·&nbsp; JAVA 17 &nbsp;·&nbsp; MCP &nbsp;·&nbsp; SKILL &nbsp;·&nbsp; I18N</span></div>
@@ -120,8 +132,8 @@ ctx.lineTo(g.cx, g.cy + HALf); ctx.lineTo(g.cx - S, g.cy - HALf); ctx.closePath(
 
 // 信号走线：沿网格自心智升起，没入标题下方
 const T0 = { x: g.cx, y: g.cy - S - 26 };
-const path = [T0, { x: T0.x, y: T0.y - 152 }, { x: 2260, y: T0.y - 152 },
-              { x: 2260, y: 160 }];
+const path = [T0, { x: T0.x, y: T0.y - 152 }, { x: 2352, y: T0.y - 152 },
+              { x: 2352, y: 160 }];
 ctx.save();
 ctx.strokeStyle = "rgba(48,174,229,.85)"; ctx.lineWidth = 2;
 ctx.shadowColor = "rgba(48,174,229,.8)"; ctx.shadowBlur = 7;
