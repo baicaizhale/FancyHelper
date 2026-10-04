@@ -23,7 +23,7 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 ## Features
 
 - **Chat-based Management** — Type `/cli` to enter conversation mode. Manage your server as if you're chatting with a human co-admin.
-- **Setup Wizard** — The first `/cli` opens a card-based wizard: pick your language, AI provider, search and web fetch step by step. Answers are saved as you go, and it drops you straight into chat when done (rerun anytime with `/fancy init`).
+- **Setup Wizard** — The first `/cli` opens a card-based wizard: pick your language, AI provider, search and web fetch step by step. It saves your answers as you go and drops you straight into chat when it's done (rerun anytime with `/fancy init`).
 - **AI Command Generation** — Defaults to FancyConsole (keyless AI relay). Also supports OpenAI-compatible endpoints such as OpenAI, DeepSeek, and CloudFlare Workers AI (BYOK).
 - **Four Conversation Modes** — **Normal**: every command needs confirmation. **YOLO**: after agreeing to the terms, most commands run automatically, though high-risk ones like `op`, `ban`, and `stop` still ask. **SMART**: the AI judges risk and executes low-risk commands directly. **Plan**: plan first, then execute — great for complex tasks.
 - **Pre-execution Confirmation** — In Normal mode, AI-generated commands require manual confirmation (`y`/`n`) to prevent accidents.
@@ -82,8 +82,8 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 
 The plugin defaults to **FancyConsole** (a keyless AI relay service). It works out of the box, but you need to register and bind once. The easy path is the setup wizard:
 
-1. Type `/cli` (or `/fancy`) in-game. Without a bound key, the setup wizard prompt appears. Enter the wizard; if it doesn't, type `/fancy init`.
-2. Follow the cards: pick a language → bind your FancyConsole key (the card carries the registration link; register, then paste the key into chat) → choose search and web fetch options as needed.
+1. Type `/cli` (or `/fancy`) in-game. Without a bound key, you'll see the setup wizard prompt; open it. If it doesn't show up, type `/fancy init`.
+2. Follow the cards: pick a language → bind your FancyConsole key (the card has the registration link; register, then paste the key into chat) → choose search and web fetch options as needed.
 3. When the wizard finishes, you land directly in chat mode.
 
 Prefer the old manual flow?
