@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -955,15 +956,30 @@ public class ToolExecutor {
     /**
      * 执行 read 操作
      * 返回带行号的内容，方便 AI 知道每行对应的行号
+     * <p>
+     * 二进制防护：读前先对整份文件做严格 UTF-8 校验（文件已有 1MB 上限，整读开销毫秒级），
+     * 解码失败（二进制/GBK 等非 UTF-8）或含空字节(0x00) 时拒绝并给 AI 可理解的理由，
+     * 而不是让 MalformedInputException 一路炸出去（堆栈刷屏 + 被误当故障上报云端）。
+     * 含空字节但解码通过的文件可附加 force 参数强制读取，空字节以 ␀ 可见标记显示。
      */
     private String executeReadOperation(File root, String pathArg) throws IOException {
         String[] parts = pathArg.split("\\s+");
         String path = parts[0];
         int startLine = 1;
         int endLine = -1;
+        boolean forcedMode = false;
+        // force 大小写不敏感，与行号范围参数位置不限
+        List<String> restArgs = new ArrayList<>();
+        for (int i = 1; i < parts.length; i++) {
+            if ("force".equalsIgnoreCase(parts[i])) {
+                forcedMode = true;
+            } else {
+                restArgs.add(parts[i]);
+            }
+        }
 
-        if (parts.length > 1) {
-            String range = parts[1];
+        if (!restArgs.isEmpty()) {
+            String range = restArgs.get(0);
             try {
                 if (range.contains("-")) {
                     String[] rangeParts = range.split("-");
@@ -981,7 +997,7 @@ public class ToolExecutor {
         }
 
         File file = resolvePathCaseInsensitive(root, path);
-        
+
         if (!isWithinRoot(root, file)) {
             return "错误: 路径超出服务器目录限制";
         }
@@ -995,13 +1011,28 @@ public class ToolExecutor {
             return "错误: 文件过大 (" + (file.length() / 1024) + "KB)，无法读取。";
         }
 
+        byte[] allBytes = Files.readAllBytes(file.toPath());
+        String text = decodeStrictUtf8(allBytes);
+        if (text == null) {
+            return "错误: 这不是 UTF-8 编码的文本文件（可能是数据库/图片/插件包等二进制文件，或 GBK 等其他编码），无法按文本读取。请改用对应的专用工具查看，或让玩家自行处理。";
+        }
+
         StringBuilder content = new StringBuilder();
-        try (java.io.BufferedReader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
+        if (text.indexOf('\u0000') >= 0) {
+            if (!forcedMode) {
+                return "错误: 文件中含有空字节(0x00)，这是二进制文件（如数据库/世界数据），无法按普通文本读取。"
+                        + "如确需查看其中的文本片段，可重新调用 #read 并在参数中附加 force 强制读取（空字节会替换为 ␀ 显示，内容仅供参考）。";
+            }
+            content.append("⚠ 此文件混有二进制内容（空字节已替换为 ␀），以下文字可能不完整或被污染，仅供参考，不要当作真实配置/日志分析。\n");
+            text = text.replace("\u0000", "␀");
+        }
+
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new StringReader(text))) {
             String line;
             int currentLine = 1;
             int maxLines = 2000;
             int readCount = 0;
-            
+
             while ((line = reader.readLine()) != null) {
                 boolean inRange = true;
                 if (currentLine < startLine) inRange = false;
@@ -1020,6 +1051,20 @@ public class ToolExecutor {
             }
         }
         return content.toString();
+    }
+
+    /**
+     * 严格 UTF-8 解码：非法字节序列直接判失败，不做 � 替换。
+     * @return 解码后的文本；非 UTF-8（二进制/GBK/UTF-16 等）返回 null
+     */
+    static String decodeStrictUtf8(byte[] bytes) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .decode(java.nio.ByteBuffer.wrap(bytes))
+                    .toString();
+        } catch (java.nio.charset.CharacterCodingException e) {
+            return null;
+        }
     }
 
     /**
@@ -2732,6 +2777,13 @@ public class ToolExecutor {
     private void handleWebFetchTool(Player player, String args, DialogueSession session) {
         UUID uuid = player.getUniqueId();
         cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+
+        // provider.jina: none 表示用户显式关闭网页抓取（初始化向导可选"不开"）
+        if (!plugin.getConfigManager().isWebFetchEnabled()) {
+            player.sendMessage(I18n.t("tool.webfetch.disabled"));
+            cliManager.feedbackToAI(player, "#webfetch_result: error - 网页抓取服务已被服务器管理员关闭（provider.jina: none）。请告知用户可在 /fancy init 中重新开启。");
+            return;
+        }
 
         // 参数兼容 JSON 与裸 URL 两种写法；解析不出 URL 时给出引导反馈
         String url = extractWebFetchUrl(args);

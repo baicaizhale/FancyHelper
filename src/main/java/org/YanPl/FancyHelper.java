@@ -24,6 +24,7 @@ import org.YanPl.manager.SkillUpdateManager;
 import org.YanPl.manager.StatsManager;
 import org.YanPl.manager.FancyConsoleManager;
 import org.YanPl.manager.FancyHealthMonitor;
+import org.YanPl.manager.InitWizardManager;
 import org.YanPl.util.CloudErrorReport;
 import org.YanPl.util.ErrorHandler;
 import org.YanPl.util.I18n;
@@ -68,6 +69,7 @@ public final class FancyHelper extends JavaPlugin {
     private McpManager mcpManager;
     private FancyConsoleManager fancyConsoleManager;
     private FancyHealthMonitor fancyHealthMonitor;
+    private InitWizardManager initWizardManager;
 
     @Override
     public void onEnable() {
@@ -95,6 +97,9 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化验证管理器
             verificationManager = new VerificationManager(this);
+
+            // 初始化初始化向导管理器（/fancy init）
+            initWizardManager = new InitWizardManager(this);
 
             // 检查 ProtocolLib 依赖并初始化数据包捕获管理器
             Plugin protocolLib = getServer().getPluginManager().getPlugin("ProtocolLib");
@@ -562,6 +567,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public VerificationManager getVerificationManager() {
         return verificationManager;
+    }
+
+    public InitWizardManager getInitWizardManager() {
+        return initWizardManager;
     }
 
     public PacketCaptureManager getPacketCaptureManager() {

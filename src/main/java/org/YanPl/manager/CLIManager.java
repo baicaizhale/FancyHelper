@@ -2383,6 +2383,12 @@ public class CLIManager {
             }
         }
 
+        // 初始化向导：向导进行中优先接管输入（此时玩家不在 CLI 模式，消息被吞不会广播）
+        if (plugin.getInitWizardManager() != null
+                && plugin.getInitWizardManager().isActive(player)) {
+            return plugin.getInitWizardManager().handleChat(player, message);
+        }
+
         // 如果玩家在等待协议同意
         if (pendingAgreementPlayers.contains(uuid)) {
             if (plugin.getConfigManager().isDebug()) {
