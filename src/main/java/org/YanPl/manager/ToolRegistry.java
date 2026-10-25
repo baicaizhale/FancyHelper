@@ -88,8 +88,18 @@ public final class ToolRegistry {
 
         // 注意：force 键刻意不进 schema。它是命令被拦截（NORMAL/SMART 风险确认）后的二次尝试逃生通道，
         // 若声明为常规参数，模型可能随意带上 force 绕过全部确认；故仅在拦截反馈文案中示例引导，见 ToolExecutor.handleBlockedCommand。
-        addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
-                obj("command", str("string", "The single command to execute")));
+        // confirm/confirm_reason 仅 Smart 模式进 schema：是否先问玩家由模型结合上下文决定，
+        // 用户明确要求的操作（即使危险）不带 confirm，超出用户要求/不可逆/影响全服或他人的操作才带。
+        // NORMAL（一律确认）/YOLO（风险词表）的确认由固定规则驱动，模型说了不算，不暴露这两个键。
+        if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
+            addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
+                    obj("command", str("string", "The single command to execute"),
+                            "confirm", str("boolean", "Set true to ask the player for confirmation before executing. Judge from the conversation: the user explicitly requested this exact action -> omit it or false, even if it looks dangerous (e.g. 'place TNT at my feet'); the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players (stop server, delete data, change others' permissions) -> true. Ask via this flag instead of the ask tool; use ask only to clarify missing information."),
+                            "confirm_reason", str("string", "Short reason shown to the player when confirm is true")));
+        } else {
+            addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
+                    obj("command", str("string", "The single command to execute")));
+        }
         addTool(tools, "end", responsesFormat, "Mark the task as complete. Call only after replying to the player with a summary. Never call alone.", new JsonObject());
         addTool(tools, "exit", responsesFormat, "Call when the player asks to exit FancyHelper.", new JsonObject());
         if (planMode) {
@@ -227,6 +237,7 @@ public final class ToolRegistry {
     /**
      * 把结构化的原生 tool_call 桥接回现有 `#tool: args` 文本，复用 ToolExecutor 的 handler。
      * #write / #edit 输出 JSON 行格式（标准 JSON 转义），其余文本协议字段用 | 分隔，已在描述里提示模型避免。
+     * run 带 confirm/confirm_reason 键时输出 JSON 行格式（裸命令不包 JSON，保持旧协议不变）。
      */
     public static String bridgeToText(NativeToolCall call) {
         String name = call.name() == null ? "" : call.name().toLowerCase();
@@ -234,8 +245,21 @@ public final class ToolRegistry {
         String raw = call.argumentsJson() == null ? "" : call.argumentsJson().trim();
 
         switch (name) {
-            case "run":
-                return "#run: " + str(args, "command", raw);
+            case "run": {
+                String cmd = str(args, "command", raw);
+                if (args != null && args.has("confirm") && args.get("confirm").isJsonPrimitive()
+                        && args.get("confirm").getAsBoolean()) {
+                    JsonObject out = new JsonObject();
+                    out.addProperty("command", cmd);
+                    out.addProperty("confirm", true);
+                    String reason = str(args, "confirm_reason", "");
+                    if (!reason.isEmpty()) {
+                        out.addProperty("confirm_reason", reason);
+                    }
+                    return "#run: " + out;
+                }
+                return "#run: " + cmd;
+            }
             case "search":
                 return "#search: " + str(args, "query", raw);
             case "webfetch":

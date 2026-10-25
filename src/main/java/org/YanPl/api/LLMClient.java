@@ -38,8 +38,11 @@ public class LLMClient {
     public LLMClient(FancyHelper plugin) {
         this.plugin = plugin;
         int timeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+        // connectTimeout 只覆盖 TCP 连接阶段；直连端点被丢包过滤时靠它尽快触发 CF 回退，
+        // 因此收敛到 20s（响应级超时仍由每个请求的 timeout() 控制，不受影响）。
+        // trust() 附加组合信任：默认 CA ∪ 直连自签证书 SPKI 锁定。
+        this.httpClient = FancyDirect.trust(HttpClient.newBuilder())
+                .connectTimeout(Duration.ofSeconds(Math.min(timeoutSeconds, 20)))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .version(HttpClient.Version.HTTP_1_1) // 强制使用 HTTP/1.1 以避免某些 API (如阿里云) 的 HTTP/2 EOF 错误
                 .build();
@@ -79,28 +82,11 @@ public class LLMClient {
      * 解决 java.io.IOException: HTTP/1.1 header parser received no bytes 等偶发性网络问题
      */
     private HttpResponse<String> sendWithRetry(HttpRequest request) throws IOException, InterruptedException {
-        int maxRetries = 3;
-        for (int i = 0; i < maxRetries; i++) {
-            try {
-                return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            } catch (IOException e) {
-                String errorMsg = e.getMessage();
-                // 常见的偶发性网络错误，值得重试
-                if (errorMsg != null && (errorMsg.contains("header parser received no bytes") || 
-                    errorMsg.contains("Connection reset") || 
-                    errorMsg.contains("EOF reached"))) {
-                    
-                    plugin.getLogger().warning("[ReTry] 网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
-                    if (i < maxRetries - 1) {
-                        Thread.sleep(500 * (i + 1)); // 指数退避
-                        continue;
-                    }
-                }
-                throw e; // 达到最大重试次数或非偶发性错误，抛出异常
-            }
+        try {
+            return sendWithRetryLoop(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException e) {
+            return retryViaCfIfDirect(request, e, HttpResponse.BodyHandlers.ofString());
         }
-        // 理论上不会到达这里，除非 maxRetries <= 0
-        throw new IOException("请求失败：超过最大重试次数");
     }
 
     /**
@@ -111,6 +97,28 @@ public class LLMClient {
      * processStream，onErrorCallback 未触发，重试是安全的）。
      */
     private <T> HttpResponse<T> sendWithRetryStream(HttpRequest request, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        try {
+            return sendWithRetryLoop(request, handler);
+        } catch (IOException e) {
+            return retryViaCfIfDirect(request, e, handler);
+        }
+    }
+
+    /**
+     * 直连端点（FancyDirect）链路级失败时，改用 CF 隧道地址原样重发一次。
+     * 非直连请求或非链路级错误（如读超时，响应可能已产生，重发有重复计费风险）原样抛出。
+     */
+    private <T> HttpResponse<T> retryViaCfIfDirect(HttpRequest request, IOException cause,
+                                                   HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        HttpRequest cfRequest = FancyDirect.fallbackRequest(request, cause);
+        if (cfRequest == null) {
+            throw cause;
+        }
+        plugin.getLogger().warning("[FancyDirect] 直连链路失败，本次回退 CF 隧道: " + cause.getMessage());
+        return sendWithRetryLoop(cfRequest, handler);
+    }
+
+    private <T> HttpResponse<T> sendWithRetryLoop(HttpRequest request, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
         int maxRetries = 3;
         for (int i = 0; i < maxRetries; i++) {
             try {
@@ -121,7 +129,8 @@ public class LLMClient {
                 if (errorMsg != null && (errorMsg.contains("header parser received no bytes") ||
                     errorMsg.contains("Connection reset") ||
                     errorMsg.contains("EOF reached"))) {
-                    plugin.getLogger().warning("[ReTry] 流式网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
+
+                    plugin.getLogger().warning("[ReTry] 网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
                     if (i < maxRetries - 1) {
                         Thread.sleep(500 * (i + 1)); // 指数退避
                         continue;
@@ -1265,514 +1274,27 @@ public class LLMClient {
     }
 
     /**
-     * 使用 co-model 进行简单的单轮对话
+     * 简单的单轮对话方法（带系统提示），不使用会话历史、不挂工具、不带玩家上下文。
+     * 上下文压缩、风险评估等一次性轻量任务复用主模型。
      * @param systemPrompt 系统提示
      * @param userPrompt 用户提示
-     * @return AI响应内容
-     * @throws IOException 当 API 调用失败时
+     * @return AI响应
      */
-    public String chatWithCompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String provider = plugin.getConfigManager().getProvider();
-
-        if ("fancy".equalsIgnoreCase(provider)) {
-            return chatWithFancyConsoleCompressionModel(systemPrompt, userPrompt);
-        }
-        if ("openai".equalsIgnoreCase(provider)) {
-            return chatWithOpenAICompressionModel(systemPrompt, userPrompt);
-        } else {
-            return chatWithCloudFlareCompressionModel(systemPrompt, userPrompt);
-        }
-    }
-
-    /**
-     * 使用 CloudFlare co-model 进行对话
-     */
-    private String chatWithCloudFlareCompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
-        String model = plugin.getConfigManager().getCompressionCloudflareModel();
-
-        if (cfKey == null || cfKey.isEmpty()) {
-            throw new IOException("未配置 CloudFlare API Key");
-        }
-
-        String url = buildCloudflareApiUrl("chat/completions");
-
-        JsonArray messagesArray = new JsonArray();
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            JsonObject sysMsg = new JsonObject();
-            sysMsg.addProperty("role", "system");
-            sysMsg.addProperty("content", systemPrompt);
-            messagesArray.add(sysMsg);
-        }
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
-        messagesArray.add(userMsg);
-
-        JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("stream", true);
-        JsonObject reasoning = new JsonObject();
-        reasoning.addProperty("effort", "low");
-        bodyJson.add("reasoning", reasoning);
-
-        String bodyString = gson.toJson(bodyJson);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Authorization", "Bearer " + cfKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(60))
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<java.io.InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
-
-            if (response.statusCode() != 200) {
-                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-                plugin.getLogger().warning("[co-model] CloudFlare API 错误: " + response.statusCode() + " - " + errorBody);
-                throw new IOException("API调用失败: " + response.statusCode());
-            }
-
-            // 读取 SSE 流，累积 content
-            StringBuilder content = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.startsWith("data: ")) continue;
-                    String data = line.substring(6).trim();
-                    if ("[DONE]".equals(data)) break;
-                    try {
-                        JsonObject chunk = gson.fromJson(data, JsonObject.class);
-                        JsonArray choices = chunk.getAsJsonArray("choices");
-                        if (choices == null || choices.size() == 0) continue;
-                        JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
-                        if (delta != null && delta.has("content") && !delta.get("content").isJsonNull()) {
-                            content.append(delta.get("content").getAsString());
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            String result = content.toString().trim();
-            if (result.isEmpty()) {
-                throw new IOException("co-model 返回空内容");
-            }
-            return result;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("API调用被中断: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 使用 FancyConsole co-model 进行对话
-     */
-    private String chatWithFancyConsoleCompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
-        String apiKey = plugin.getFancyConsoleManager().getApiKey();
-        String model = plugin.getConfigManager().getFancyCoModel();
-
-        if (apiKey == null || apiKey.isEmpty()) {
-            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 §b/fancyhelper bind <API Key> §c绑定。");
-        }
-
-        if (!apiUrl.contains("/v1/chat/completions")) {
-            if (apiUrl.endsWith("/")) {
-                apiUrl += "v1/chat/completions";
-            } else {
-                apiUrl += "/v1/chat/completions";
-            }
-        }
-
-        JsonArray messagesArray = new JsonArray();
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            JsonObject sysMsg = new JsonObject();
-            sysMsg.addProperty("role", "system");
-            sysMsg.addProperty("content", systemPrompt);
-            messagesArray.add(sysMsg);
-        }
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
-        messagesArray.add(userMsg);
-
-        JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("stream", true);
-
-        String bodyString = gson.toJson(bodyJson);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(60))
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<java.io.InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
-
-            if (response.statusCode() != 200) {
-                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-                plugin.getLogger().warning("[co-model] FancyConsole API 错误: " + response.statusCode() + " - " + errorBody);
-                throw new IOException("API调用失败: " + response.statusCode());
-            }
-
-            // 读取 SSE 流，累积 content
-            StringBuilder content = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.startsWith("data: ")) continue;
-                    String data = line.substring(6).trim();
-                    if ("[DONE]".equals(data)) break;
-                    try {
-                        JsonObject chunk = gson.fromJson(data, JsonObject.class);
-                        JsonArray choices = chunk.getAsJsonArray("choices");
-                        if (choices == null || choices.size() == 0) continue;
-                        JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
-                        if (delta != null && delta.has("content") && !delta.get("content").isJsonNull()) {
-                            content.append(delta.get("content").getAsString());
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            String result = content.toString().trim();
-            if (result.isEmpty()) {
-                throw new IOException("co-model 返回空内容");
-            }
-            return result;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("API调用被中断: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 使用 OpenAI 兼容 co-model 进行对话
-     */
-    private String chatWithOpenAICompressionModel(String systemPrompt, String userPrompt) throws IOException {
-        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getCompressionOpenAiModel();
-
-        if (apiKey == null || apiKey.isEmpty()) {
-            throw new IOException("未配置 OpenAI API Key");
-        }
-
-        // 自动补全 API 路径
-        if (!apiUrl.contains("/chat/completions")) {
-            if (apiUrl.endsWith("/")) {
-                apiUrl += "chat/completions";
-            } else {
-                apiUrl += "/chat/completions";
-            }
-        }
-
-        // 构建消息数组
-        JsonArray messagesArray = new JsonArray();
-        JsonObject systemMsg = new JsonObject();
-        systemMsg.addProperty("role", "system");
-        systemMsg.addProperty("content", systemPrompt);
-        messagesArray.add(systemMsg);
-
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
-        messagesArray.add(userMsg);
-
-        // 构建请求体
-        JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("stream", true);
-        bodyJson.addProperty("reasoning_effort", "low");
-
-        String bodyString = gson.toJson(bodyJson);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(60))
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<java.io.InputStream> response = sendWithRetryStream(request, HttpResponse.BodyHandlers.ofInputStream());
-
-            if (response.statusCode() != 200) {
-                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-                plugin.getLogger().warning("[co-model] OpenAI API 错误: " + response.statusCode() + " - " + errorBody);
-                throw new IOException("API调用失败: " + response.statusCode());
-            }
-
-            StringBuilder content = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.startsWith("data: ")) continue;
-                    String data = line.substring(6).trim();
-                    if ("[DONE]".equals(data)) break;
-                    try {
-                        JsonObject chunk = gson.fromJson(data, JsonObject.class);
-                        JsonArray choices = chunk.getAsJsonArray("choices");
-                        if (choices == null || choices.size() == 0) continue;
-                        JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
-                        if (delta != null && delta.has("content") && !delta.get("content").isJsonNull()) {
-                            content.append(delta.get("content").getAsString());
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            String result = content.toString().trim();
-            if (result.isEmpty()) {
-                throw new IOException("co-model 返回空内容");
-            }
-            return result;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("API调用被中断: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 使用压缩模型对上下文进行智能压缩
-     * @param context 需要压缩的上下文内容
-     * @return 压缩后的摘要
-     * @throws IOException 当 API 调用失败时
-     */
-    public String compressContext(String context) throws IOException {
+    public AIResponse chatSimple(String systemPrompt, String userPrompt) throws IOException {
         checkConfigLoaded();
 
-        String provider = plugin.getConfigManager().getCompressionModelProvider();
-
-        if ("fancy".equalsIgnoreCase(provider)) {
-            return compressWithFancyConsole(context);
+        DialogueSession tempSession = new DialogueSession();
+        tempSession.addMessage("user", userPrompt);
+        List<String> prompts = (systemPrompt == null || systemPrompt.isEmpty())
+                ? java.util.Collections.singletonList("你是一个得力的助手。")
+                : java.util.Collections.singletonList(systemPrompt);
+        if (plugin.getConfigManager().isFancyConsoleAi()) {
+            return chatWithFancyConsole(null, tempSession, prompts);
         }
-        if ("openai".equalsIgnoreCase(provider)) {
-            return compressWithOpenAI(context);
-        } else {
-            return compressWithCloudFlare(context);
+        if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
+            return chatWithOpenAI(null, tempSession, prompts);
         }
-    }
-
-    /**
-     * 使用 CloudFlare 压缩模型进行上下文压缩
-     */
-    private String compressWithCloudFlare(String context) throws IOException {
-        String cfKey = plugin.getConfigManager().getCloudflareCfKey();
-        String model = plugin.getConfigManager().getCompressionCloudflareModel();
-
-        if (cfKey == null || cfKey.isEmpty()) {
-            throw new IOException("未配置 CloudFlare API Key");
-        }
-
-        String url = buildCloudflareApiUrl("chat/completions");
-
-        // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
-        String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
-
-        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
-        JsonArray messagesArray = new JsonArray();
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
-        messagesArray.add(userMsg);
-
-        // 构建请求体
-        JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 300);
-        bodyJson.addProperty("temperature", 0.3);
-
-        String bodyString = gson.toJson(bodyJson);
-
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Authorization", "Bearer " + cfKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<String> response = sendWithRetry(request);
-            String responseBody = response.body();
-
-            if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[压缩] CloudFlare API 错误: " + response.statusCode());
-                throw new IOException("压缩失败: " + response.statusCode());
-            }
-
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-            
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                return aiResponse.getContent().trim();
-            }
-
-            throw new IOException("无法解析压缩响应");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("压缩被中断: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 使用 FancyConsole 压缩模型进行上下文压缩
-     */
-    private String compressWithFancyConsole(String context) throws IOException {
-        String apiUrl = plugin.getConfigManager().getFancyApiUrl();
-        String apiKey = plugin.getFancyConsoleManager().getApiKey();
-        String model = plugin.getConfigManager().getFancyCoModel();
-
-        if (apiKey == null || apiKey.isEmpty()) {
-            throw new IOException("§zFancyHelper§b§r §7> §c未绑定 API Key。请先使用 /fancyhelper bind <API Key> 绑定。");
-        }
-
-        if (!apiUrl.contains("/v1/chat/completions")) {
-            if (apiUrl.endsWith("/")) {
-                apiUrl += "v1/chat/completions";
-            } else {
-                apiUrl += "/v1/chat/completions";
-            }
-        }
-
-        // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
-        String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
-
-        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
-        JsonArray messagesArray = new JsonArray();
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
-        messagesArray.add(userMsg);
-
-        // 构建请求体
-        JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 300);
-        bodyJson.addProperty("temperature", 0.3);
-
-        String bodyString = gson.toJson(bodyJson);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<String> response = sendWithRetry(request);
-            String responseBody = response.body();
-
-            if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[压缩] FancyConsole API 错误: " + response.statusCode() + " - " + responseBody);
-                throw new IOException("压缩失败: " + response.statusCode());
-            }
-
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                return aiResponse.getContent().trim();
-            }
-
-            throw new IOException("无法解析压缩响应");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("压缩被中断: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 使用 OpenAI 兼容 API 进行上下文压缩
-     * 使用主模型的 API URL 和 API Key，仅使用副模型的模型名称
-     */
-    private String compressWithOpenAI(String context) throws IOException {
-        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getCompressionOpenAiModel();
-
-        if (apiKey == null || apiKey.isEmpty()) {
-            throw new IOException("未配置 OpenAI API Key");
-        }
-
-        // 自动补全 API 路径
-        if (!apiUrl.contains("/chat/completions")) {
-            if (apiUrl.endsWith("/")) {
-                apiUrl += "chat/completions";
-            } else {
-                apiUrl += "/chat/completions";
-            }
-        }
-
-        // 构建压缩提示 - 使用单个 user prompt 避免模型输出思考过程
-        String userPrompt = "请将以下对话历史压缩成简洁的摘要，保留关键信息和用户意图。直接输出摘要内容，不要有任何解释、分析或编号。摘要应该简明扼要，不超过200字。\n\n对话历史：\n" + context + "\n\n摘要：";
-
-        // 构建消息数组 - 只使用 user message，避免模型输出思考过程
-        JsonArray messagesArray = new JsonArray();
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", userPrompt);
-        messagesArray.add(userMsg);
-
-        // 构建请求体
-        JsonObject bodyJson = new JsonObject();
-        bodyJson.addProperty("model", model);
-        bodyJson.add("messages", messagesArray);
-        bodyJson.addProperty("max_tokens", 300);
-        bodyJson.addProperty("temperature", 0.3);
-        bodyJson.addProperty("reasoning_effort", "low");
-
-        String bodyString = gson.toJson(bodyJson);
-
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .timeout(Duration.ofSeconds(30))
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyString, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<String> response = sendWithRetry(request);
-            String responseBody = response.body();
-
-            if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[压缩] OpenAI API 错误: " + response.statusCode());
-                throw new IOException("压缩失败: " + response.statusCode());
-            }
-
-            JsonObject responseJson = gson.fromJson(responseBody, JsonObject.class);
-            AIResponse aiResponse = responseParser.parseResponse(responseJson);
-            
-            if (aiResponse != null && aiResponse.getContent() != null) {
-                return aiResponse.getContent().trim();
-            }
-
-            throw new IOException("无法解析压缩响应");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("压缩被中断: " + e.getMessage(), e);
-        }
+        return chatWithCloudFlare(null, tempSession, prompts);
     }
 
     /**

@@ -26,8 +26,6 @@ public class ConfigManager {
     private String configLoadError = "";
     private boolean legacyPlayerListMigrationNeeded = false;
 
-    private static final String FANCY_API_URL = "https://api.fancy.baicaizhale.top";
-
     private static final String SKILL_PRIMARY_MIRROR = "https://fancy-skill.baicaizhale.top/";
     private static final String SKILL_REPO_BASE = "https://raw.githubusercontent.com/baicaizhale/FancySkillMarket/main/";
     private static final String SKILL_UPDATE_MIRROR = "https://ghproxy.vip/";
@@ -49,10 +47,11 @@ public class ConfigManager {
     // ============================================================
 
     /**
-     * 获取 FancyConsole API 地址
+     * 获取 FancyConsole API 地址（源站 8443 直连优先，链路失败自动回退 CF 隧道，
+     * 详见 {@link org.YanPl.api.FancyDirect}）
      */
     public String getFancyApiUrl() {
-        return FANCY_API_URL;
+        return org.YanPl.api.FancyDirect.baseUrl();
     }
 
     /**
@@ -60,13 +59,6 @@ public class ConfigManager {
      */
     public String getFancyModel() {
         return config.getString("fancy.model", "toter-claude-opus-4-5");
-    }
-
-    /**
-     * 获取 FancyConsole 副模型
-     */
-    public String getFancyCoModel() {
-        return config.getString("fancy.co-model", "default_co");
     }
 
     /**
@@ -244,21 +236,15 @@ public class ConfigManager {
                 plugin.getLogger().info("已迁移旧配置 settings.token_warning_threshold=" + oldVal + " 到 settings.context_window_warning_threshold=" + oldVal);
             }
 
-            // 迁移旧版 co-model 结构到 cloudflare.co-model / openai.co-model
-            if (oldValues.containsKey("co-model.cloudflare.model")) {
-                Object oldCfCo = oldValues.get("co-model.cloudflare.model");
-                newConfig.set("cloudflare.co-model", oldCfCo);
-                plugin.getLogger().info("已迁移旧配置 co-model.cloudflare.model=" + oldCfCo + " 到 cloudflare.co-model=" + oldCfCo);
-            }
-            if (oldValues.containsKey("co-model.openai.model")) {
-                Object oldOpenAiCo = oldValues.get("co-model.openai.model");
-                newConfig.set("openai.co-model", oldOpenAiCo);
-                plugin.getLogger().info("已迁移旧配置 co-model.openai.model=" + oldOpenAiCo + " 到 openai.co-model=" + oldOpenAiCo);
-            }
-            // 清理旧版 co-model 顶层段落
-            if (newConfig.contains("co-model")) {
-                newConfig.set("co-model", null);
-                plugin.getLogger().info("已清除旧版 co-model 配置段落");
+            // 副模型（co-model）与 SMART 风险阈值已移除：压缩、风险评估改由主模型在对话内承担。
+            // 新配置不含这些键，上方复制循环自动忽略旧值，这里只留一条丢弃说明。
+            boolean droppedCoModel = oldValues.keySet().stream().anyMatch(k -> k.startsWith("co-model") || k.endsWith(".co-model"));
+            boolean droppedRiskThreshold = oldValues.containsKey("settings.smart_risk_threshold");
+            if (droppedCoModel || droppedRiskThreshold) {
+                plugin.getLogger().info("已丢弃已废弃的旧配置项"
+                        + (droppedCoModel ? "（副模型 co-model，相关任务改由主模型承担）" : "")
+                        + (droppedCoModel && droppedRiskThreshold ? "、" : "")
+                        + (droppedRiskThreshold ? "（SMART 风险阈值 smart_risk_threshold，确认与否改由模型自判）" : ""));
             }
 
             // 迁移旧版 provider 字段（string → object）
@@ -427,30 +413,6 @@ public class ConfigManager {
 
     public String getAiModel() {
         return getCloudflareModel();
-    }
-
-    /**
-     * 获取压缩模型提供商（跟随主模型提供商）
-     * @return 压缩模型提供商 (cloudflare 或 openai)
-     */
-    public String getCompressionModelProvider() {
-        return getProvider();
-    }
-
-    /**
-     * 获取 CloudFlare 压缩模型名称
-     * @return CloudFlare 压缩模型名称
-     */
-    public String getCompressionCloudflareModel() {
-        return config.getString("cloudflare.co-model", "@cf/google/gemma-4b-it");
-    }
-
-    /**
-     * 获取 OpenAI 压缩模型名称
-     * @return OpenAI 压缩模型名称
-     */
-    public String getCompressionOpenAiModel() {
-        return config.getString("openai.co-model", "gpt-4o-mini");
     }
 
     /**
@@ -953,14 +915,6 @@ public class ConfigManager {
         String path = player.getUniqueId() + ".streaming";
         playerData.set(path, enabled);
         savePlayerData();
-    }
-
-    /**
-     * 获取 SMART 模式的风险阈值
-     * @return 风险阈值（0-100）
-     */
-    public int getSmartRiskThreshold() {
-        return config.getInt("settings.smart_risk_threshold", 50);
     }
 
     /**

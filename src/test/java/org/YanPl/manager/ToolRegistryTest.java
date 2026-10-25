@@ -183,6 +183,27 @@ class ToolRegistryTest {
     }
 
     @Test
+    @DisplayName("bridgeToText run 带 confirm 键输出 JSON 行")
+    void testBridgeRunConfirm() {
+        NativeToolCall call = new NativeToolCall("c1", "run",
+                "{\"command\":\"stop\",\"confirm\":true,\"confirm_reason\":\"stops the whole server\"}");
+        String bridged = ToolRegistry.bridgeToText(call);
+        assertTrue(bridged.startsWith("#run: {"), "confirm=true 时应输出 JSON 行: " + bridged);
+        JsonObject args = com.google.gson.JsonParser.parseString(bridged.substring("#run: ".length())).getAsJsonObject();
+        assertEquals("stop", args.get("command").getAsString());
+        assertTrue(args.get("confirm").getAsBoolean());
+        assertEquals("stops the whole server", args.get("confirm_reason").getAsString());
+    }
+
+    @Test
+    @DisplayName("bridgeToText run confirm=false 不输出 JSON 行")
+    void testBridgeRunConfirmFalse() {
+        NativeToolCall call = new NativeToolCall("c1", "run",
+                "{\"command\":\"give @p apple\",\"confirm\":false}");
+        assertEquals("#run: give @p apple", ToolRegistry.bridgeToText(call));
+    }
+
+    @Test
     @DisplayName("bridgeToText end/exit 无参工具")
     void testBridgeEndExit() {
         assertEquals("#end", ToolRegistry.bridgeToText(new NativeToolCall("c1", "end", "{}")));

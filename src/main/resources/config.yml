@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 4.4.0
+version: 4.4.1
 
 # 插件设置
 settings:
@@ -53,8 +53,6 @@ settings:
     similarity_threshold: 0.95
     # 单次对话中连续调用工具的最大次数
     max_chain_count: 100
-  # SMART 模式风险阈值 (0-100)，当风险值高于此值时需要玩家确认
-  smart_risk_threshold: 50
 # 日志保留天数，超过此天数的日志将被自动删除
   log_retention_days: 15
   # YOLO 模式下需要手动确认的风险命令列表（匹配前缀）
@@ -92,10 +90,8 @@ provider:
 # FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
 fancy:
   # 可在 https://console.fancy.baicaizhale.top/dashboard/models 中查看模型列表
-  # 主模型名称
+  # 模型名称
   model: default
-  # 副模型（用于压缩、标题生成等轻量级任务）
-  co-model: default_co
   # 主对话采样温度（0.0-2.0，越小越确定，越大越有创造性）
   # 工具调用/命令执行任务建议 0.3-0.7；纯聊天可调高。删除此行则不发送该字段（跟随模型默认）
   temperature: 0.4
@@ -110,8 +106,6 @@ cloudflare:
   proxy_url: "https://ptc.fancy.baicaizhale.top"
   # 使用的模型名称，理论上可以是任何一个Text-Generation模型；注意当原生函数调用开启时，模型必须支持函数调用
   model: "@cf/qwen/qwen3.8-27b"
-  # 副模型设置（用于压缩等轻量级任务，使用主模型的 cf_key）
-  co-model: "@cf/qwen/qwen3.8-27b"
 
 # OpenAI 兼容端点配置（provider 设为 openai 时使用）
 # 理论上支持所有兼容 OpenAI Chat Completions API 的服务商；注意当原生函数调用开启时，模型必须支持函数调用
@@ -123,8 +117,6 @@ openai:
   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   # 模型名称
   model: deepseek-flash
-  # 副模型设置（用于压缩等轻量级任务，使用主模型的 api_url 和 api_key）
-  co-model: deepseek-flash
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:

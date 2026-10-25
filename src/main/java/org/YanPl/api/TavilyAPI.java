@@ -33,7 +33,8 @@ public class TavilyAPI {
         this.plugin = plugin;
         this.configManager = plugin.getConfigManager();
         this.gson = new Gson();
-        this.httpClient = HttpClient.newBuilder()
+        // trust() 附加组合信任：默认 CA ∪ FancyConsole 直连自签证书 SPKI 锁定
+        this.httpClient = FancyDirect.trust(HttpClient.newBuilder())
                 .connectTimeout(Duration.ofSeconds(15))
                 .build();
     }
@@ -166,7 +167,7 @@ public class TavilyAPI {
                     .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody)))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = FancyDirect.sendWithFallback(httpClient, request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
                 return parseSearchResponse(response.body(), query);
