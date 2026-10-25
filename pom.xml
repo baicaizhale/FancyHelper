@@ -6,7 +6,8 @@
 
     <groupId>org.YanPl</groupId>
     <artifactId>FancyHelper</artifactId>
-    <version>4.4.1-SNAPSHOT</version>
+    <!-- 仅 Maven 内部用：CI 构建时 versions:set 会按 tag 号/短 SHA 覆盖此值，真实版本号看 plugin.yml 与 tag，勿手动同步 -->
+    <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>FancyHelper</name>
