@@ -38,8 +38,11 @@ public class LLMClient {
     public LLMClient(FancyHelper plugin) {
         this.plugin = plugin;
         int timeoutSeconds = plugin.getConfigManager().getApiTimeoutSeconds();
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+        // connectTimeout 只覆盖 TCP 连接阶段；直连端点被丢包过滤时靠它尽快触发 CF 回退，
+        // 因此收敛到 20s（响应级超时仍由每个请求的 timeout() 控制，不受影响）。
+        // trust() 附加组合信任：默认 CA ∪ 直连自签证书 SPKI 锁定。
+        this.httpClient = FancyDirect.trust(HttpClient.newBuilder())
+                .connectTimeout(Duration.ofSeconds(Math.min(timeoutSeconds, 20)))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .version(HttpClient.Version.HTTP_1_1) // 强制使用 HTTP/1.1 以避免某些 API (如阿里云) 的 HTTP/2 EOF 错误
                 .build();
@@ -79,28 +82,11 @@ public class LLMClient {
      * 解决 java.io.IOException: HTTP/1.1 header parser received no bytes 等偶发性网络问题
      */
     private HttpResponse<String> sendWithRetry(HttpRequest request) throws IOException, InterruptedException {
-        int maxRetries = 3;
-        for (int i = 0; i < maxRetries; i++) {
-            try {
-                return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            } catch (IOException e) {
-                String errorMsg = e.getMessage();
-                // 常见的偶发性网络错误，值得重试
-                if (errorMsg != null && (errorMsg.contains("header parser received no bytes") || 
-                    errorMsg.contains("Connection reset") || 
-                    errorMsg.contains("EOF reached"))) {
-                    
-                    plugin.getLogger().warning("[ReTry] 网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
-                    if (i < maxRetries - 1) {
-                        Thread.sleep(500 * (i + 1)); // 指数退避
-                        continue;
-                    }
-                }
-                throw e; // 达到最大重试次数或非偶发性错误，抛出异常
-            }
+        try {
+            return sendWithRetryLoop(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException e) {
+            return retryViaCfIfDirect(request, e, HttpResponse.BodyHandlers.ofString());
         }
-        // 理论上不会到达这里，除非 maxRetries <= 0
-        throw new IOException("请求失败：超过最大重试次数");
     }
 
     /**
@@ -111,6 +97,28 @@ public class LLMClient {
      * processStream，onErrorCallback 未触发，重试是安全的）。
      */
     private <T> HttpResponse<T> sendWithRetryStream(HttpRequest request, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        try {
+            return sendWithRetryLoop(request, handler);
+        } catch (IOException e) {
+            return retryViaCfIfDirect(request, e, handler);
+        }
+    }
+
+    /**
+     * 直连端点（FancyDirect）链路级失败时，改用 CF 隧道地址原样重发一次。
+     * 非直连请求或非链路级错误（如读超时，响应可能已产生，重发有重复计费风险）原样抛出。
+     */
+    private <T> HttpResponse<T> retryViaCfIfDirect(HttpRequest request, IOException cause,
+                                                   HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        HttpRequest cfRequest = FancyDirect.fallbackRequest(request, cause);
+        if (cfRequest == null) {
+            throw cause;
+        }
+        plugin.getLogger().warning("[FancyDirect] 直连链路失败，本次回退 CF 隧道: " + cause.getMessage());
+        return sendWithRetryLoop(cfRequest, handler);
+    }
+
+    private <T> HttpResponse<T> sendWithRetryLoop(HttpRequest request, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
         int maxRetries = 3;
         for (int i = 0; i < maxRetries; i++) {
             try {
@@ -121,7 +129,8 @@ public class LLMClient {
                 if (errorMsg != null && (errorMsg.contains("header parser received no bytes") ||
                     errorMsg.contains("Connection reset") ||
                     errorMsg.contains("EOF reached"))) {
-                    plugin.getLogger().warning("[ReTry] 流式网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
+
+                    plugin.getLogger().warning("[ReTry] 网络请求失败 (尝试 " + (i + 1) + "/" + maxRetries + "): " + errorMsg + "，正在重试...");
                     if (i < maxRetries - 1) {
                         Thread.sleep(500 * (i + 1)); // 指数退避
                         continue;

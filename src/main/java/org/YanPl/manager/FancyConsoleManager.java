@@ -3,6 +3,7 @@ package org.YanPl.manager;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.YanPl.FancyHelper;
+import org.YanPl.api.FancyDirect;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -21,7 +22,6 @@ import java.util.UUID;
  */
 public class FancyConsoleManager {
 
-    private static final String DEFAULT_CONSOLE_URL = "https://api.fancy.baicaizhale.top";
     private static final String CONFIG_FILE_NAME = "client-fancy.yml";
 
     private final FancyHelper plugin;
@@ -32,7 +32,8 @@ public class FancyConsoleManager {
 
     public FancyConsoleManager(FancyHelper plugin) {
         this.plugin = plugin;
-        this.httpClient = HttpClient.newBuilder()
+        // trust() 附加组合信任：默认 CA ∪ FancyConsole 直连自签证书 SPKI 锁定
+        this.httpClient = FancyDirect.trust(HttpClient.newBuilder())
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
@@ -126,10 +127,11 @@ public class FancyConsoleManager {
     }
 
     /**
-     * 获取 FancyConsole 基础 URL
+     * 获取 FancyConsole 基础 URL（源站 8443 直连优先，链路失败自动回退 CF 隧道，
+     * 详见 {@link org.YanPl.api.FancyDirect}；注册链接等浏览器入口不在此列）
      */
     public String getConsoleUrl() {
-        return DEFAULT_CONSOLE_URL;
+        return FancyDirect.baseUrl();
     }
 
     /**
@@ -145,7 +147,7 @@ public class FancyConsoleManager {
                     .GET()
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = FancyDirect.sendWithFallback(httpClient, request, HttpResponse.BodyHandlers.ofString());
             return response.statusCode() == 200;
         } catch (Exception e) {
             return false;
@@ -181,7 +183,7 @@ public class FancyConsoleManager {
                     .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = FancyDirect.sendWithFallback(httpClient, request, HttpResponse.BodyHandlers.ofString());
 
             // 服务不可用（5xx/网关错误）：fancyapi 宕机时网关常返回 502/503/504，
             // 这不是 key 无效，不得让上层误报"API Key 无效"。
@@ -283,7 +285,7 @@ public class FancyConsoleManager {
                     .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = FancyDirect.sendWithFallback(httpClient, request, HttpResponse.BodyHandlers.ofString());
             return response.statusCode() == 200;
         } catch (Exception e) {
             // 上报失败静默处理（后台任务，不打扰控制台）
