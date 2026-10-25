@@ -42,7 +42,6 @@ import java.util.UUID;
 public class ToolExecutor {
     private final FancyHelper plugin;
     private final CLIManager cliManager;
-    private final RiskAssessmentManager riskAssessmentManager;
 
     // 命令输出捕获的静默窗口：有输出后持续无新输出达该时长即收尾（捕获缓冲长度增长判定）
     private static final long CAPTURE_QUIET_MS = 2000L;
@@ -56,7 +55,6 @@ public class ToolExecutor {
     public ToolExecutor(FancyHelper plugin, CLIManager cliManager) {
         this.plugin = plugin;
         this.cliManager = cliManager;
-        this.riskAssessmentManager = new RiskAssessmentManager(plugin);
     }
 
     /**
@@ -335,7 +333,7 @@ public class ToolExecutor {
      * <ol>
      *   <li><b>命令存在性校验</b>（{@link #checkCommandExists}）：首词不在命令表但斜杠变体命中 → 疑似斜杠写错，拦截并教育。
      *       <code>force=true</code> 跳过本层（模型确信命令真实存在，如命令表未索引的懒注册命令，避免被技术性误拦）。</li>
-     *   <li><b>SMART 风险评估</b>：评分超阈值弹确认按钮。force 不生效。</li>
+     *   <li><b>SMART 模型自判</b>：模型在调用里用 confirm 键声明是否需要玩家确认（用户明确要求的操作不问），force 不生效。</li>
      *   <li><b>YOLO 风险词检查</b>（{@link #isRiskyCommand}）：op/ban 等风险词要求确认，递归检查 execute 子命令。force 不生效。</li>
      * </ol>
      * NORMAL/PLAN 模式所有命令一律弹确认按钮，force 同样不生效。
@@ -356,8 +354,29 @@ public class ToolExecutor {
         }
 
         UUID uuid = player.getUniqueId();
-        // 注释化：不再删除前导 /，命令保留原样执行（服务器端 dispatchCommand 会自行处理 /）
+        // 参数兼容 JSON 行格式：{"command":"...","confirm":true,"confirm_reason":"..."}（SMART 模型自判确认），
+        // 与裸命令字符串并存，#write/#edit 同款约定。MC 命令不以 { 开头，无歧义。
         String cleanCommand = command;
+        boolean askConfirm = false;
+        String confirmReason = null;
+        String trimmedArgs = command.trim();
+        if (trimmedArgs.startsWith("{")) {
+            try {
+                JsonObject argsJson = JsonParser.parseString(trimmedArgs).getAsJsonObject();
+                if (argsJson.has("command") && !argsJson.get("command").isJsonNull()) {
+                    cleanCommand = argsJson.get("command").getAsString();
+                }
+                if (argsJson.has("confirm") && argsJson.get("confirm").isJsonPrimitive()) {
+                    askConfirm = argsJson.get("confirm").getAsBoolean();
+                }
+                if (argsJson.has("confirm_reason") && !argsJson.get("confirm_reason").isJsonNull()) {
+                    confirmReason = argsJson.get("confirm_reason").getAsString();
+                }
+            } catch (Exception ignored) {
+                // 坏 JSON：整体按裸命令处理，由命令存在性校验/执行层兜底
+            }
+        }
+        // 注释化：不再删除前导 /，命令保留原样执行（服务器端 dispatchCommand 会自行处理 /）
         // String cleanCommand = command.startsWith("/") ? command.substring(1) : command;
 
         // 命令存在性校验：首词与命令表比对，疑似斜杠错误时拦截教育模型。
@@ -369,26 +388,17 @@ public class ToolExecutor {
             }
         }
 
-        // SMART 模式下评估风险
+        // SMART 模式：是否先询问玩家由模型在调用里用 confirm 键自判，不再单独调用评估模型。
+        // 用户明确要求的操作（即使危险，如"在我脚下放TNT"）confirm 缺省/false 直接执行；
+        // 超出用户要求、不可逆或影响全服/他人（停服、删档、改他人权限）时模型应带 confirm=true。
         if (session != null && session.getMode() == DialogueSession.Mode.SMART) {
-            player.sendMessage(I18n.t("tool.run.assessing"));
-            cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.THINKING);
-            
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                RiskAssessmentManager.RiskAssessment assessment = 
-                    riskAssessmentManager.assessRisk("run", cleanCommand);
-                
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    int threshold = plugin.getConfigManager().getSmartRiskThreshold();
-                    if (assessment.level >= threshold) {
-                        cliManager.sendSmartRiskConfirm(player, "run", cleanCommand, assessment);
-                    } else {
-                        player.sendMessage(I18n.t("tool.run.smart", cleanCommand));
-                        cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
-                        executeCommand(player, cleanCommand);
-                    }
-                });
-            });
+            if (askConfirm) {
+                cliManager.sendSmartRiskConfirm(player, "run", cleanCommand, confirmReason);
+                return true;
+            }
+            player.sendMessage(I18n.t("tool.run.smart", cleanCommand));
+            cliManager.setGenerating(uuid, false, CLIManager.GenerationStatus.EXECUTING_TOOL);
+            executeCommand(player, cleanCommand);
             return true;
         }
 

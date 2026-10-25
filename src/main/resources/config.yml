@@ -53,8 +53,6 @@ settings:
     similarity_threshold: 0.95
     # 单次对话中连续调用工具的最大次数
     max_chain_count: 100
-  # SMART 模式风险阈值 (0-100)，当风险值高于此值时需要玩家确认
-  smart_risk_threshold: 50
 # 日志保留天数，超过此天数的日志将被自动删除
   log_retention_days: 15
   # YOLO 模式下需要手动确认的风险命令列表（匹配前缀）

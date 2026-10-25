@@ -147,9 +147,11 @@ public class CLIManager {
     private static class PendingSmartAction {
         final String actionType;
         final String actionContent;
-        PendingSmartAction(String actionType, String actionContent, RiskAssessmentManager.RiskAssessment assessment) {
+        final String reason;
+        PendingSmartAction(String actionType, String actionContent, String reason) {
             this.actionType = actionType;
             this.actionContent = actionContent;
+            this.reason = reason;
         }
     }
 
@@ -2144,29 +2146,16 @@ public class CLIManager {
     }
 
     /**
-     * 发送SMART模式风险确认界面
+     * 发送SMART模式风险确认界面（confirm 由模型在工具调用里自判，reason 为模型给出的确认理由）
      */
-    public void sendSmartRiskConfirm(Player player, String actionType, String actionContent, 
-                                    RiskAssessmentManager.RiskAssessment assessment) {
+    public void sendSmartRiskConfirm(Player player, String actionType, String actionContent, String reason) {
         UUID uuid = player.getUniqueId();
-        
-        pendingSmartActions.put(uuid, new PendingSmartAction(actionType, actionContent, assessment));
+
+        pendingSmartActions.put(uuid, new PendingSmartAction(actionType, actionContent, reason));
         setGenerating(uuid, false, GenerationStatus.WAITING_CONFIRM);
-        
+
         player.sendMessage(I18n.t("clim.smart.risk.ask"));
-        
-        ChatColor riskColor;
-        if (assessment.level < 25) {
-            riskColor = ChatColor.GREEN;
-        } else if (assessment.level < 50) {
-            riskColor = ChatColor.YELLOW;
-        } else if (assessment.level < 75) {
-            riskColor = ChatColor.GOLD;
-        } else {
-            riskColor = ChatColor.RED;
-        }
-        player.sendMessage(I18n.t("clim.smart.risk.level", riskColor.toString() + assessment.level));
-        
+
         if ("run".equals(actionType)) {
             player.sendMessage(I18n.t("clim.smart.run.cmd", actionContent));
         } else if ("edit".equals(actionType)) {
@@ -2178,9 +2167,9 @@ public class CLIManager {
                 player.sendMessage(ChatColor.WHITE + "  To " + ChatColor.GRAY + parts[2]);
             }
         }
-        
-        if (assessment.reason != null && !assessment.reason.isEmpty()) {
-            player.sendMessage(I18n.t("clim.smart.reason", assessment.reason));
+
+        if (reason != null && !reason.isEmpty()) {
+            player.sendMessage(I18n.t("clim.smart.reason", reason));
         }
         
         TextComponent message = new TextComponent("  ");
