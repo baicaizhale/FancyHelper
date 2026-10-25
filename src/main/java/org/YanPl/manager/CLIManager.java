@@ -2174,17 +2174,17 @@ public class CLIManager {
         
         TextComponent message = new TextComponent("  ");
         
-        TextComponent allowBtn = new TextComponent(ChatColor.GREEN + "[ ✓ ]");
+        TextComponent allowBtn = new TextComponent(ChatColor.GREEN + "✔");
         allowBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_allow"));
         allowBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.smart.allow.hover"))));
         
-        TextComponent spacer1 = new TextComponent(" ");
-        
-        TextComponent denyBtn = new TextComponent(ChatColor.RED + "[ ✕ ]");
+        TextComponent spacer1 = new TextComponent(" / ");
+
+        TextComponent denyBtn = new TextComponent(ChatColor.RED + "✘");
         denyBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_deny"));
         denyBtn.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(I18n.t("clim.smart.deny.hover"))));
-        
-        TextComponent spacer2 = new TextComponent(" ");
+
+        TextComponent spacer2 = new TextComponent("   ");
         
         TextComponent neverAskBtn = new TextComponent(I18n.t("clim.smart.never"));
         neverAskBtn.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cli smart_never"));
