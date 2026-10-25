@@ -67,6 +67,17 @@ public class PromptManager {
      */
     public List<String> getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills, String currentMessage,
                                             boolean nativeTools) {
+        return getBaseSystemPrompt(player, loadedSkills, currentMessage, nativeTools, false);
+    }
+
+    /**
+     * 获取基础系统提示（完整形态）
+     * @param nativeTools true 时 [Tools] 段使用精简列表（原生调用为主，文本 #tool 兜底）
+     * @param smartMode true 时注入 SMART 确认自判指引（[Ask First] 行与示例，仅 Smart 模式需要）
+     * @return 系统提示消息列表（每个元素作为独立的 system 角色消息）
+     */
+    public List<String> getBaseSystemPrompt(org.bukkit.entity.Player player, List<Skill> loadedSkills, String currentMessage,
+                                            boolean nativeTools, boolean smartMode) {
         List<String> parts = new ArrayList<>();
 
         // ====================================================================
@@ -101,7 +112,8 @@ public class PromptManager {
         }
 
         // ====================================================================
-        //  段 1：核心约束 + 工具列表 + 使用指南（永远不变，但依赖 nativeTools 标志）
+        //  段 1：核心约束 + 工具列表 + 使用指南（依赖 nativeTools / smartMode 标志，
+        //  Smart 模式额外注入 run 确认自判指引；切换模式/native 开关会重建缓存，可接受）
         // ====================================================================
         {
             StringBuilder sb = new StringBuilder();
@@ -121,13 +133,17 @@ public class PromptManager {
 
             if (nativeTools) {
                 sb.append("3. [Single Command] The run function executes ONE command per call. Chaining with && or ; is prohibited.\n");
-                sb.append("   - [Ask First] In Smart mode, run's confirm flag is YOUR call: set true only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT set confirm — even when it looks dangerous (e.g. 'place TNT at my feet'). When you already decided to run the command but want the player's blessing, ask via confirm=true on the run call itself — NEVER via a separate ask tool call; reserve the ask tool for clarifying missing information.\n\n");
+                if (smartMode) {
+                    sb.append("   - [Ask First] In this mode, run's confirm flag is YOUR call: set true only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT set confirm — even when it looks dangerous (e.g. 'place TNT at my feet'). When you already decided to run the command but want the player's blessing, ask via confirm=true on the run call itself — NEVER via a separate ask tool call; reserve the ask tool for clarifying missing information.\n");
+                }
                 sb.append("4. [Tool Position] Function calls stand alone. Never embed a call inside body text.\n\n");
                 sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
             } else {
                 sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n");
                 sb.append("   - Multiple independent commands: output multiple #run calls, one per line.\n");
-                sb.append("   - [Ask First] In Smart mode, decide yourself whether to ask the player first: add \"confirm\":true (plus \"confirm_reason\") only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT add confirm — even when it looks dangerous (e.g. 'place TNT at my feet'). When you already decided to run the command but want the player's blessing, ask via confirm on the run call itself — NEVER via a separate #ask call; reserve #ask for clarifying missing information.\n\n");
+                if (smartMode) {
+                    sb.append("   - [Ask First] In this mode, decide yourself whether to ask the player first: add \"confirm\":true (plus \"confirm_reason\") only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT add confirm — even when it looks dangerous (e.g. 'place TNT at my feet'). When you already decided to run the command but want the player's blessing, ask via confirm on the run call itself — NEVER via a separate #ask call; reserve #ask for clarifying missing information.\n");
+                }
                 sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
                 sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
                 sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
@@ -137,7 +153,9 @@ public class PromptManager {
                 sb.append("Example:\n");
                 sb.append("  Correct: #run: {\"command\":\"give @p apple\"}\n");
                 sb.append("  Correct: #run: {\"command\":\"give @p apple\"}\\n#run: {\"command\":\"give @p oak_planks 2\"}  (multiple independent tools in one response are fine)\n");
-                sb.append("  Ask first (Smart mode, action beyond what the user asked): #run: {\"command\":\"stop\",\"confirm\":true,\"confirm_reason\":\"stops the whole server\"}\n");
+                if (smartMode) {
+                    sb.append("  Ask first (action beyond what the user asked): #run: {\"command\":\"stop\",\"confirm\":true,\"confirm_reason\":\"stops the whole server\"}\n");
+                }
                 sb.append("  Wrong:   #run: {\"command\":\"give @p apple && say hello\"}  (chained commands with && are forbidden)\n");
                 sb.append("\n");
             }
@@ -377,7 +395,9 @@ public class PromptManager {
         if (mode == org.YanPl.model.DialogueSession.Mode.PLAN) {
             return getPlanModeSystemPrompt(player, nativeTools);
         }
-        return getBaseSystemPrompt(player, loadedSkills, currentMessage, nativeTools);
+        // SMART 确认自判指引只在 Smart 模式注入；NORMAL/YOLO 的确认流程由固定规则驱动，模型无需知道
+        return getBaseSystemPrompt(player, loadedSkills, currentMessage, nativeTools,
+                mode == org.YanPl.model.DialogueSession.Mode.SMART);
     }
 
     /**
