@@ -39,19 +39,11 @@ public class RiskAssessmentManager {
         String userPrompt = buildRiskAssessmentPrompt(actionType, actionContent);
         
         try {
-            // 使用 co-model 进行风险评估
-            String response = ai.chatWithCompressionModel(systemPrompt, userPrompt);
-            return parseRiskAssessment(response);
+            AIResponse response = ai.chatSimple(systemPrompt, userPrompt);
+            return parseRiskAssessment(response.getContent());
         } catch (IOException e) {
             plugin.getLogger().warning("[Smart] 风险评估失败: " + e.getMessage());
-            // 回退到主模型
-            try {
-                AIResponse fallbackResponse = ai.chatSimple(userPrompt);
-                return parseRiskAssessment(fallbackResponse.getContent());
-            } catch (IOException fallbackError) {
-                plugin.getLogger().warning("[Smart] 主模型风险评估也失败: " + fallbackError.getMessage());
-                return new RiskAssessment(100, "评估失败，默认高风险");
-            }
+            return new RiskAssessment(100, "评估失败，默认高风险");
         }
     }
 

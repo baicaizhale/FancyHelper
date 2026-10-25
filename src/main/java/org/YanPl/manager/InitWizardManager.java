@@ -542,7 +542,6 @@ public class InitWizardManager {
         cm.set("openai.api_url", session.openAiUrl);
         cm.set("openai.api_key", session.openAiKey);
         cm.set("openai.model", trimmed);
-        cm.set("openai.co-model", trimmed);
         player.sendMessage(I18n.t("wizard.openai.saved", trimmed));
         session.providerSub = ProviderSub.CHOOSE;
         goTo(player, session, Step.SEARCH);

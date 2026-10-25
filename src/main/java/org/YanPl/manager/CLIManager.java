@@ -4057,7 +4057,8 @@ public class CLIManager {
 
                 String compactPrompt = fullPrompt.toString();
 
-                String summary = ai.chatWithCompressionModel(systemPrompt, compactPrompt);
+                AIResponse compactResp = ai.chatSimple(systemPrompt, compactPrompt);
+                String summary = compactResp != null ? compactResp.getContent() : null;
 
                 if (plugin.getConfigManager().isDebug()) {
                     String outputPreview = summary != null && summary.length() > 500 ? summary.substring(0, 500) + "..." : (summary != null ? summary : "null");

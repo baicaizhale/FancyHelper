@@ -63,13 +63,6 @@ public class ConfigManager {
     }
 
     /**
-     * 获取 FancyConsole 副模型
-     */
-    public String getFancyCoModel() {
-        return config.getString("fancy.co-model", "default_co");
-    }
-
-    /**
      * 获取主对话采样温度。
      * 返回 null 表示未配置（不发送 temperature 字段，跟随模型默认）；
      * 返回 0 表示真正传入 temperature=0（完全确定性输出）。
@@ -244,21 +237,10 @@ public class ConfigManager {
                 plugin.getLogger().info("已迁移旧配置 settings.token_warning_threshold=" + oldVal + " 到 settings.context_window_warning_threshold=" + oldVal);
             }
 
-            // 迁移旧版 co-model 结构到 cloudflare.co-model / openai.co-model
-            if (oldValues.containsKey("co-model.cloudflare.model")) {
-                Object oldCfCo = oldValues.get("co-model.cloudflare.model");
-                newConfig.set("cloudflare.co-model", oldCfCo);
-                plugin.getLogger().info("已迁移旧配置 co-model.cloudflare.model=" + oldCfCo + " 到 cloudflare.co-model=" + oldCfCo);
-            }
-            if (oldValues.containsKey("co-model.openai.model")) {
-                Object oldOpenAiCo = oldValues.get("co-model.openai.model");
-                newConfig.set("openai.co-model", oldOpenAiCo);
-                plugin.getLogger().info("已迁移旧配置 co-model.openai.model=" + oldOpenAiCo + " 到 openai.co-model=" + oldOpenAiCo);
-            }
-            // 清理旧版 co-model 顶层段落
-            if (newConfig.contains("co-model")) {
-                newConfig.set("co-model", null);
-                plugin.getLogger().info("已清除旧版 co-model 配置段落");
+            // 副模型（co-model）已移除：压缩、风险评估改由主模型承担。
+            // 新配置不含 co-model 键，上方复制循环自动忽略旧值，这里只留一条丢弃说明。
+            if (oldValues.keySet().stream().anyMatch(k -> k.startsWith("co-model") || k.endsWith(".co-model"))) {
+                plugin.getLogger().info("已丢弃旧版副模型配置（co-model），相关任务改由主模型承担");
             }
 
             // 迁移旧版 provider 字段（string → object）
@@ -427,30 +409,6 @@ public class ConfigManager {
 
     public String getAiModel() {
         return getCloudflareModel();
-    }
-
-    /**
-     * 获取压缩模型提供商（跟随主模型提供商）
-     * @return 压缩模型提供商 (cloudflare 或 openai)
-     */
-    public String getCompressionModelProvider() {
-        return getProvider();
-    }
-
-    /**
-     * 获取 CloudFlare 压缩模型名称
-     * @return CloudFlare 压缩模型名称
-     */
-    public String getCompressionCloudflareModel() {
-        return config.getString("cloudflare.co-model", "@cf/google/gemma-4b-it");
-    }
-
-    /**
-     * 获取 OpenAI 压缩模型名称
-     * @return OpenAI 压缩模型名称
-     */
-    public String getCompressionOpenAiModel() {
-        return config.getString("openai.co-model", "gpt-4o-mini");
     }
 
     /**
