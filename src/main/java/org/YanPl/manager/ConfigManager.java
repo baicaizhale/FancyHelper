@@ -236,10 +236,15 @@ public class ConfigManager {
                 plugin.getLogger().info("已迁移旧配置 settings.token_warning_threshold=" + oldVal + " 到 settings.context_window_warning_threshold=" + oldVal);
             }
 
-            // 副模型（co-model）已移除：压缩、风险评估改由主模型承担。
-            // 新配置不含 co-model 键，上方复制循环自动忽略旧值，这里只留一条丢弃说明。
-            if (oldValues.keySet().stream().anyMatch(k -> k.startsWith("co-model") || k.endsWith(".co-model"))) {
-                plugin.getLogger().info("已丢弃旧版副模型配置（co-model），相关任务改由主模型承担");
+            // 副模型（co-model）与 SMART 风险阈值已移除：压缩、风险评估改由主模型在对话内承担。
+            // 新配置不含这些键，上方复制循环自动忽略旧值，这里只留一条丢弃说明。
+            boolean droppedCoModel = oldValues.keySet().stream().anyMatch(k -> k.startsWith("co-model") || k.endsWith(".co-model"));
+            boolean droppedRiskThreshold = oldValues.containsKey("settings.smart_risk_threshold");
+            if (droppedCoModel || droppedRiskThreshold) {
+                plugin.getLogger().info("已丢弃已废弃的旧配置项"
+                        + (droppedCoModel ? "（副模型 co-model，相关任务改由主模型承担）" : "")
+                        + (droppedCoModel && droppedRiskThreshold ? "、" : "")
+                        + (droppedRiskThreshold ? "（SMART 风险阈值 smart_risk_threshold，确认与否改由模型自判）" : ""));
             }
 
             // 迁移旧版 provider 字段（string → object）
