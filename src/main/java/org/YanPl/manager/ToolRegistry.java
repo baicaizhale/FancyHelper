@@ -92,7 +92,7 @@ public final class ToolRegistry {
         // 用户明确要求的操作（即使危险）不带 confirm，超出用户要求/不可逆/影响全服或他人的操作才带。
         addTool(tools, "run", responsesFormat, "Execute a single Minecraft in-game command. Never chain multiple commands with && or ;. Do not include | characters in the parameter.",
                 obj("command", str("string", "The single command to execute"),
-                        "confirm", str("boolean", "Set true to ask the player for confirmation before executing. Judge from the conversation: the user explicitly requested this exact action -> omit it or false, even if it looks dangerous (e.g. 'place TNT at my feet'); the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players (stop server, delete data, change others' permissions) -> true."),
+                        "confirm", str("boolean", "Set true to ask the player for confirmation before executing. Judge from the conversation: the user explicitly requested this exact action -> omit it or false, even if it looks dangerous (e.g. 'place TNT at my feet'); the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players (stop server, delete data, change others' permissions) -> true. Ask via this flag instead of the ask tool; use ask only to clarify missing information."),
                         "confirm_reason", str("string", "Short reason shown to the player when confirm is true")));
         addTool(tools, "end", responsesFormat, "Mark the task as complete. Call only after replying to the player with a summary. Never call alone.", new JsonObject());
         addTool(tools, "exit", responsesFormat, "Call when the player asks to exit FancyHelper.", new JsonObject());

@@ -121,13 +121,13 @@ public class PromptManager {
 
             if (nativeTools) {
                 sb.append("3. [Single Command] The run function executes ONE command per call. Chaining with && or ; is prohibited.\n");
-                sb.append("   - [Ask First] In Smart mode, run's confirm flag is YOUR call: set true only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT set confirm — even when it looks dangerous (e.g. 'place TNT at my feet').\n\n");
+                sb.append("   - [Ask First] In Smart mode, run's confirm flag is YOUR call: set true only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT set confirm — even when it looks dangerous (e.g. 'place TNT at my feet'). When you already decided to run the command but want the player's blessing, ask via confirm=true on the run call itself — NEVER via a separate ask tool call; reserve the ask tool for clarifying missing information.\n\n");
                 sb.append("4. [Tool Position] Function calls stand alone. Never embed a call inside body text.\n\n");
                 sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
             } else {
                 sb.append("2. [Single Command] #run executes ONE command per call. Chaining with && or ; is prohibited.\n");
                 sb.append("   - Multiple independent commands: output multiple #run calls, one per line.\n");
-                sb.append("   - [Ask First] In Smart mode, decide yourself whether to ask the player first: add \"confirm\":true (plus \"confirm_reason\") only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT add confirm — even when it looks dangerous (e.g. 'place TNT at my feet').\n\n");
+                sb.append("   - [Ask First] In Smart mode, decide yourself whether to ask the player first: add \"confirm\":true (plus \"confirm_reason\") only when the action exceeds what the user asked, or is destructive / irreversible / affects the whole server or other players. If the user explicitly requested this exact action, do NOT add confirm — even when it looks dangerous (e.g. 'place TNT at my feet'). When you already decided to run the command but want the player's blessing, ask via confirm on the run call itself — NEVER via a separate #ask call; reserve #ask for clarifying missing information.\n\n");
                 sb.append("3. [Tool Position] Tool calls must be on their own line. Never embed in body text.\n\n");
                 sb.append("4. [Format] No space between tool name and colon. No leading slash / in arguments.\n\n");
                 sb.append("5. [Never Guess Commands] If no search result, do NOT execute commands. Search first.\n\n");
