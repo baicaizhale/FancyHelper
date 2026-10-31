@@ -147,11 +147,9 @@ public class CLIManager {
     private static class PendingSmartAction {
         final String actionType;
         final String actionContent;
-        final String reason;
         PendingSmartAction(String actionType, String actionContent, String reason) {
             this.actionType = actionType;
             this.actionContent = actionContent;
-            this.reason = reason;
         }
     }
 
@@ -4175,6 +4173,9 @@ public class CLIManager {
     private String getEffectiveModel() {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return plugin.getConfigManager().getFancyModel();
+        }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return plugin.getConfigManager().getDeepSeekModel();
         }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return plugin.getConfigManager().getOpenAiModel();

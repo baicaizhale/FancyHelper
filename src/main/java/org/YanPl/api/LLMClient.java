@@ -1771,6 +1771,9 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatStreamingWithFancyConsole(player, session, systemPrompts, streamingHandler, noThinking);
         }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatStreamingWithDeepSeek(player, session, systemPrompts, streamingHandler);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(player, session, systemPrompts, streamingHandler);
         }
@@ -1872,10 +1875,25 @@ public class LLMClient {
      * 使用 OpenAI 兼容 API 进行流式对话
      */
     private String chatStreamingWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
-        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getOpenAiModel();
+        return chatStreamingWithOpenAICompat(player, session, systemPrompts, streamingHandler,
+                plugin.getConfigManager().getOpenAiApiUrl(),
+                plugin.getConfigManager().getOpenAiApiKey(),
+                plugin.getConfigManager().getOpenAiModel());
+    }
 
+    /** DeepSeek 流式对话（OpenAI 兼容流式，换官方端点与 deepseek 段配置） */
+    private String chatStreamingWithDeepSeek(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
+        String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §f请先在配置文件中设置 deepseek.api_key。");
+        }
+        return chatStreamingWithOpenAICompat(player, session, systemPrompts, streamingHandler,
+                "https://api.deepseek.com/chat/completions",
+                apiKey, plugin.getConfigManager().getDeepSeekModel());
+    }
+
+    private String chatStreamingWithOpenAICompat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler,
+                                                 String apiUrl, String apiKey, String model) throws IOException {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("错误: 请先在配置文件中设置 openai.api_key。");
         }
