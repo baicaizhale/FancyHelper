@@ -283,7 +283,7 @@ public class ConfigManager {
             if (!newConfig.contains("provider.search")) newConfig.set("provider.search", "fancy-tavily");
             if (!newConfig.contains("provider.jina")) newConfig.set("provider.jina", "fancy");
 
-            // DeepSeek 一等公民迁移（v4.5.0）：从低版本升上来、AI 提供商为 openai 且端点指向
+            // DeepSeek 一等公民迁移（v4.4.2）：从低版本升上来、AI 提供商为 openai 且端点指向
             // api.deepseek.com 的旧配置，直接转成独立 deepseek 提供商，搜索/网页抓取一并切换，
             // 不询问。放在本块全部旧版 provider 归一化（openai.enabled→provider→provider.ai）之后、
             // save 之前执行，最终结果以此为准。
@@ -336,7 +336,7 @@ public class ConfigManager {
     /**
      * DeepSeek 独立提供商迁移的门槛版本：config.yml version 低于此值才参与迁移。
      */
-    static final String DEEPSEEK_MIGRATION_VERSION = "4.5.0";
+    static final String DEEPSEEK_MIGRATION_VERSION = "4.4.2";
 
     /**
      * 判断旧配置是否应迁移为独立 DeepSeek 提供商：
@@ -366,7 +366,9 @@ public class ConfigManager {
         if (!shouldMigrateOpenAiToDeepSeek(oldConfigVersion, cfg.getString("provider.ai", ""), apiUrl, apiKey)) {
             return false;
         }
-        if (cfg.getString("deepseek.api_key", "").isEmpty()) {
+        String existingDsKey = cfg.getString("deepseek.api_key", "");
+        // 出厂模板的 deepseek.api_key 是 sk-xxxx 占位符，非空但不是用户值，也要覆盖
+        if (existingDsKey.isEmpty() || existingDsKey.startsWith("sk-xxxx")) {
             cfg.set("deepseek.api_key", apiKey);
         }
         if (!model.isEmpty()) {

@@ -44,7 +44,7 @@ class ConfigManagerDeepSeekMigrationTest {
     @Test
     void skipsWhenConfigVersionCurrent() {
         YamlConfiguration cfg = legacyConfig();
-        assertFalse(ConfigManager.applyOpenAiToDeepSeekMigration(cfg, "4.5.0"));
+        assertFalse(ConfigManager.applyOpenAiToDeepSeekMigration(cfg, "4.4.2"));
         assertEquals("openai", cfg.getString("provider.ai"));
         assertEquals("fancy-tavily", cfg.getString("provider.search"));
     }
@@ -105,5 +105,14 @@ class ConfigManagerDeepSeekMigrationTest {
         assertFalse(ConfigManager.shouldMigrateOpenAiToDeepSeek("4.4.1", null, "https://api.deepseek.com", "sk-x"));
         assertFalse(ConfigManager.shouldMigrateOpenAiToDeepSeek("4.4.1", "openai", null, "sk-x"));
         assertFalse(ConfigManager.shouldMigrateOpenAiToDeepSeek("4.4.1", "openai", "https://api.deepseek.com", null));
+    }
+
+    @Test
+    void overwritesTemplatePlaceholderDeepSeekKey() {
+        // 出厂模板 deepseek.api_key 是 sk-xxxx 占位符：非空但不能挡住迁移复制
+        YamlConfiguration cfg = legacyConfig();
+        cfg.set("deepseek.api_key", "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        assertTrue(ConfigManager.applyOpenAiToDeepSeekMigration(cfg, "4.4.1"));
+        assertEquals("sk-real-key-123", cfg.getString("deepseek.api_key"));
     }
 }
