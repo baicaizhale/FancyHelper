@@ -41,6 +41,7 @@ public class InitWizardManager {
 
     private static final String CF_GUIDE_URL = "https://blog.baicaizhale.top/post/create-cf-key-for-fhai";
     private static final String OPENAI_EXAMPLE_URL = "https://api.deepseek.com/chat/completions";
+    private static final String DS_PRICING_URL = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing#%E7%BD%91%E9%A1%B5%E6%90%9C%E7%B4%A2%E4%B8%8E%E6%8A%93%E5%8F%96%E4%BB%B7%E6%A0%BC";
     /** 模型列表分页大小 */
     private static final int MODELS_PAGE_SIZE = 8;
     /** 无操作超时（毫秒），每答一步自动续期 */
@@ -988,7 +989,12 @@ public class InitWizardManager {
         sendCardTop(player, Step.SEARCH);
         player.sendMessage(I18n.t("wizard.deepseek.ask.question"));
         player.sendMessage("");
-        player.sendMessage(I18n.t("wizard.deepseek.ask.note"));
+        // 计费说明中的"价格见此"是可点链接，指向官方价格页的网页搜索与抓取部分
+        TextComponent note = new TextComponent();
+        note.addExtra(new TextComponent(TextComponent.fromLegacyText(I18n.t("wizard.deepseek.ask.note1"))));
+        note.addExtra(link(I18n.t("wizard.deepseek.ask.price"), DS_PRICING_URL, I18n.t("wizard.deepseek.ask.price.hover")));
+        note.addExtra(new TextComponent(TextComponent.fromLegacyText(I18n.t("wizard.deepseek.ask.note2"))));
+        player.spigot().sendMessage(note);
         player.sendMessage("");
         player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.deepseek.ask.yes"),
                 "/cli select 1", I18n.t("wizard.option.hint")));
