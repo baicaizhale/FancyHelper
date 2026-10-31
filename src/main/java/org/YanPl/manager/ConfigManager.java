@@ -283,6 +283,15 @@ public class ConfigManager {
             if (!newConfig.contains("provider.search")) newConfig.set("provider.search", "fancy-tavily");
             if (!newConfig.contains("provider.jina")) newConfig.set("provider.jina", "fancy");
 
+            // DeepSeek 一等公民迁移（v4.5.0）：从低版本升上来、AI 提供商为 openai 且端点指向
+            // api.deepseek.com 的旧配置，直接转成独立 deepseek 提供商，搜索/网页抓取一并切换，
+            // 不询问。放在本块全部旧版 provider 归一化（openai.enabled→provider→provider.ai）之后、
+            // save 之前执行，最终结果以此为准。
+            if (applyOpenAiToDeepSeekMigration(newConfig, configVersion)) {
+                plugin.getLogger().info("已把 openai 提供商（DeepSeek 端点）迁移为独立 deepseek 提供商，"
+                        + "搜索与网页抓取同步切换为 DeepSeek 官方 API（原 openai 段保留未动）");
+            }
+
             try {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
@@ -322,6 +331,51 @@ public class ConfigManager {
                 }
             }
         }
+    }
+
+    /**
+     * DeepSeek 独立提供商迁移的门槛版本：config.yml version 低于此值才参与迁移。
+     */
+    static final String DEEPSEEK_MIGRATION_VERSION = "4.5.0";
+
+    /**
+     * 判断旧配置是否应迁移为独立 DeepSeek 提供商：
+     * 配置版本低于门槛版本、AI 提供商为 openai、端点指向 api.deepseek.com，且密钥是用户真实填写的
+     * （排除出厂占位符 sk-xxxx）。
+     */
+    static boolean shouldMigrateOpenAiToDeepSeek(String configVersion, String providerAi, String apiUrl, String apiKey) {
+        return "openai".equals(providerAi)
+                && apiUrl != null && apiUrl.contains("api.deepseek.com")
+                && apiKey != null && !apiKey.isEmpty() && !apiKey.startsWith("sk-xxxx")
+                && ToolExecutor.compareVersions(configVersion, DEEPSEEK_MIGRATION_VERSION) < 0;
+    }
+
+    /**
+     * 执行 openai（DeepSeek 端点）→ 独立 deepseek 提供商迁移：
+     * 密钥与模型复制到 deepseek 段（deepseek.api_key 已有值时不覆盖），并把搜索/网页抓取源
+     * 一并切换为 deepseek，不询问。原 openai 段保留不动，便于回退。
+     *
+     * @param cfg              已合入旧值的新版配置（version 键此时是新模板值，不能用它判版本）
+     * @param oldConfigVersion 旧配置文件的 version（版本重写前读取的）
+     * @return 是否发生了迁移
+     */
+    static boolean applyOpenAiToDeepSeekMigration(FileConfiguration cfg, String oldConfigVersion) {
+        String apiUrl = cfg.getString("openai.api_url", "");
+        String apiKey = cfg.getString("openai.api_key", "");
+        String model = cfg.getString("openai.model", "");
+        if (!shouldMigrateOpenAiToDeepSeek(oldConfigVersion, cfg.getString("provider.ai", ""), apiUrl, apiKey)) {
+            return false;
+        }
+        if (cfg.getString("deepseek.api_key", "").isEmpty()) {
+            cfg.set("deepseek.api_key", apiKey);
+        }
+        if (!model.isEmpty()) {
+            cfg.set("deepseek.model", model);
+        }
+        cfg.set("provider.ai", "deepseek");
+        cfg.set("provider.search", "deepseek");
+        cfg.set("provider.jina", "deepseek");
+        return true;
     }
 
     /**
