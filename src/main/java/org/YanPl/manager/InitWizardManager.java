@@ -95,7 +95,7 @@ public class InitWizardManager {
      * 注册与 AI 提供商解耦：注册了也可以选 OpenAI/Cloudflare（此时 Fancy 搜索仍可用）。
      */
     private enum ProviderSub {
-        REGISTER_ASK, CHOOSE, FANCY_KEY, DS_KEY, OPENAI_URL, OPENAI_KEY, OPENAI_MODELS, OPENAI_MANUAL_MODEL, CF_KEY
+        REGISTER_ASK, CHOOSE, FANCY_KEY, DS_KEY, OPENAI_URL, OPENAI_KEY, OPENAI_NET_RETRY, OPENAI_MODELS, OPENAI_MANUAL_MODEL, CF_KEY
     }
 
     /**
@@ -318,6 +318,8 @@ public class InitWizardManager {
                 return handleOpenAiUrl(player, session, input);
             case OPENAI_KEY:
                 return handleOpenAiKey(player, session, input);
+            case OPENAI_NET_RETRY:
+                return handleModelsNetRetry(player, session, input);
             case OPENAI_MODELS:
                 return handleOpenAiModelPick(player, session, input);
             case OPENAI_MANUAL_MODEL:
@@ -469,8 +471,15 @@ public class InitWizardManager {
             return true;
         }
 
+        // key 先行入会话：网络失败转重试态后，retry 仍拿得到
+        session.openAiKey = input;
+        return startModelsFetch(player, session);
+    }
+
+    /** 异步拉取模型列表并在主线程渲染结果；网络类失败给出友好提示与 retry 重试入口 */
+    private boolean startModelsFetch(Player player, WizardSession session) {
         final String url = session.openAiUrl;
-        final String key = input;
+        final String key = session.openAiKey;
         session.pendingKey = key;
         player.sendMessage(I18n.t("wizard.openai.models.fetching"));
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -482,14 +491,20 @@ public class InitWizardManager {
                     return;
                 }
                 WizardSession current = sessions.get(player.getUniqueId());
-                if (current == null || current != session || current.providerSub != ProviderSub.OPENAI_KEY
-                        || !key.equals(current.pendingKey)) {
+                if (current == null || current != session || !key.equals(current.pendingKey)
+                        || (current.providerSub != ProviderSub.OPENAI_KEY
+                        && current.providerSub != ProviderSub.OPENAI_NET_RETRY)) {
                     return;
                 }
                 current.pendingKey = null;
                 current.openAiUrl = url;
                 current.openAiKey = key;
-                if (result.models != null && !result.models.isEmpty()) {
+                if (result.networkError) {
+                    plugin.getLogger().info("[Wizard] 模型列表拉取网络失败: " + result.error);
+                    player.sendMessage(I18n.t("wizard.openai.models.netfail"));
+                    player.sendMessage(I18n.t("wizard.openai.models.retryhint"));
+                    current.providerSub = ProviderSub.OPENAI_NET_RETRY;
+                } else if (result.models != null && !result.models.isEmpty()) {
                     current.openAiModels = result.models;
                     current.modelPage = 0;
                     current.providerSub = ProviderSub.OPENAI_MODELS;
@@ -502,6 +517,21 @@ public class InitWizardManager {
                 }
             });
         });
+        return true;
+    }
+
+    /** 模型列表网络失败后的等待态：retry 重拉、粘贴新 key 重填、其余文本按手动模型名处理 */
+    private boolean handleModelsNetRetry(Player player, WizardSession session, String input) {
+        String lower = input.toLowerCase();
+        if (lower.equals("retry") || input.equals("重试")) {
+            return startModelsFetch(player, session);
+        }
+        // sk- 开头的长串按重新粘贴的 Key 处理，避免被当模型名存错
+        if (lower.startsWith("sk-") && input.trim().length() >= 20) {
+            session.openAiKey = input.trim();
+            return startModelsFetch(player, session);
+        }
+        saveOpenAiConfig(player, session, input);
         return true;
     }
 
@@ -1271,10 +1301,21 @@ public class InitWizardManager {
     private static class FetchModelsResult {
         final List<String> models;
         final String error;
+        /** true=连接/超时类网络失败（区别于 401/403 这类 Key 权限问题），给用户友好提示并允许 retry */
+        final boolean networkError;
 
         FetchModelsResult(List<String> models, String error) {
+            this(models, error, false);
+        }
+
+        FetchModelsResult(List<String> models, String error, boolean networkError) {
             this.models = models;
             this.error = error;
+            this.networkError = networkError;
+        }
+
+        static FetchModelsResult network(String error) {
+            return new FetchModelsResult(null, error, true);
         }
     }
 
@@ -1332,6 +1373,10 @@ public class InitWizardManager {
                 return new FetchModelsResult(null, "响应中没有模型数据");
             }
             return new FetchModelsResult(models, null);
+        } catch (java.io.IOException | InterruptedException e) {
+            // 连接/超时类网络失败：与 Key 权限问题区分开，给可重试的友好提示
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return FetchModelsResult.network(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         } catch (Exception e) {
             return new FetchModelsResult(null, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         }
