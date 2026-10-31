@@ -94,7 +94,7 @@ public class InitWizardManager {
      * 注册与 AI 提供商解耦：注册了也可以选 OpenAI/Cloudflare（此时 Fancy 搜索仍可用）。
      */
     private enum ProviderSub {
-        REGISTER_ASK, CHOOSE, FANCY_KEY, OPENAI_URL, OPENAI_KEY, OPENAI_MODELS, OPENAI_MANUAL_MODEL, CF_KEY
+        REGISTER_ASK, CHOOSE, FANCY_KEY, DS_KEY, OPENAI_URL, OPENAI_KEY, OPENAI_MODELS, OPENAI_MANUAL_MODEL, CF_KEY
     }
 
     /**
@@ -109,7 +109,7 @@ public class InitWizardManager {
 
     /** SEARCH 步骤内的子流程状态 */
     private enum SearchSub {
-        CHOOSE, FANCY_KEY, METASO_KEY, TAVILY_KEY
+        CHOOSE, DEEPSEEK_ASK, DEEPSEEK_KEY, FANCY_KEY, METASO_KEY, TAVILY_KEY
     }
 
     private static class WizardSession {
@@ -127,12 +127,16 @@ public class InitWizardManager {
 
         // PROVIDER 子流程临时数据
         boolean declinedFancy;  // 仅当 2a 明确选择"不注册"时为 true（决定后续 Fancy 选项是否画删除线）
+        boolean deepSeekProvider; // 本次选的 AI 提供商是否 DeepSeek（复用 OpenAI 模型列表子流程时决定落库键）
         KeyFlowReturn keyFlowReturn;
         String pendingKey;      // 异步校验防竞态：回调仅处理与会话中一致的 key
         String openAiUrl;
         String openAiKey;
         List<String> openAiModels = new ArrayList<>();
         int modelPage = 0;
+
+        // 网页抓取源：DeepSeek 询问卡答"是"后置为 deepseek，webfetch 步据此落库
+        String fetchSource = "fancy";
     }
 
     // ============================================================
@@ -288,23 +292,10 @@ public class InitWizardManager {
                 return true;
             }
             case CHOOSE: {
-                if (lower.equals("1") || lower.equals("fancy")) {
-                    if (session.declinedFancy) {
-                        // 选项已画删除线，这里兜底拦截直接打字输入的情况
-                        player.sendMessage(I18n.t("wizard.fancyreg.needregister"));
-                        renderProviderChoose(player, session);
-                        return true;
-                    }
-                    if (plugin.getFancyConsoleManager().hasApiKey()) {
-                        session.providerLabel = I18n.t("wizard.provider.1");
-                        plugin.getConfigManager().set("provider.ai", "fancy");
-                        goTo(player, session, Step.SEARCH);
-                    } else {
-                        // 注册时跳过了 key：就地补绑，绑完（或再跳过）直接以 Fancy 落地
-                        session.keyFlowReturn = KeyFlowReturn.FINISH_PROVIDER;
-                        session.providerSub = ProviderSub.FANCY_KEY;
-                        renderFancyKey(player);
-                    }
+                if (lower.equals("1") || lower.equals("deepseek")) {
+                    session.providerLabel = I18n.t("wizard.provider.1");
+                    session.providerSub = ProviderSub.DS_KEY;
+                    renderDeepSeekKey(player);
                 } else if (lower.equals("2") || lower.equals("openai")) {
                     session.providerLabel = I18n.t("wizard.provider.2");
                     session.providerSub = ProviderSub.OPENAI_URL;
@@ -320,6 +311,8 @@ public class InitWizardManager {
             }
             case FANCY_KEY:
                 return handleFancyKeyInput(player, session, input);
+            case DS_KEY:
+                return handleDeepSeekKey(player, session, input);
             case OPENAI_URL:
                 return handleOpenAiUrl(player, session, input);
             case OPENAI_KEY:
@@ -419,9 +412,10 @@ public class InitWizardManager {
         return true;
     }
 
-    /** 玩家选定 Fancy 为 AI 提供商后的落地：写 provider.ai 并进搜索步（key 可能尚未绑定，已两次提示） */
+    /** 玩家选定 Fancy 为 AI 提供商后的落地。Fancy 选项暂时下架后此路径不可达，保留以便恢复。
+     *  写 provider.ai 并进搜索步（key 可能尚未绑定，已两次提示） */
     private void finishFancyProvider(Player player, WizardSession session) {
-        session.providerLabel = I18n.t("wizard.provider.1");
+        session.providerLabel = I18n.t("wizard.provider.2");
         plugin.getConfigManager().set("provider.ai", "fancy");
         session.providerSub = ProviderSub.CHOOSE;
         session.searchSub = SearchSub.CHOOSE;
@@ -452,6 +446,20 @@ public class InitWizardManager {
         session.providerSub = ProviderSub.OPENAI_KEY;
         renderOpenAiKey(player);
         return true;
+    }
+
+    /**
+     * DeepSeek 官方 API：只需粘贴 key，模型列表直接从官方端点拉取（复用 OpenAI 模型列表子流程，
+     * 落库键由 session.deepSeekProvider 在 saveOpenAiConfig 中区分）
+     */
+    private boolean handleDeepSeekKey(Player player, WizardSession session, String input) {
+        if (input.isEmpty() || input.toLowerCase().startsWith("/") || input.equalsIgnoreCase("yes")) {
+            player.sendMessage(I18n.t("wizard.invalid.input", input));
+            return true;
+        }
+        session.deepSeekProvider = true;
+        session.openAiUrl = "https://api.deepseek.com/chat/completions";
+        return handleOpenAiKey(player, session, input);
     }
 
     private boolean handleOpenAiKey(Player player, WizardSession session, String input) {
@@ -538,6 +546,17 @@ public class InitWizardManager {
             return;
         }
         ConfigManager cm = plugin.getConfigManager();
+        if (session.deepSeekProvider) {
+            cm.set("provider.ai", "deepseek");
+            cm.set("deepseek.api_key", session.openAiKey);
+            cm.set("deepseek.model", trimmed);
+            player.sendMessage(I18n.t("wizard.deepseek.saved", trimmed));
+            session.providerSub = ProviderSub.CHOOSE;
+            // DeepSeek 专属追问：是否把搜索/抓取也切到官方 API（答"否"落到普通搜索选择卡）
+            session.searchSub = SearchSub.DEEPSEEK_ASK;
+            goTo(player, session, Step.SEARCH);
+            return;
+        }
         cm.set("provider.ai", "openai");
         cm.set("openai.api_url", session.openAiUrl);
         cm.set("openai.api_key", session.openAiKey);
@@ -607,6 +626,29 @@ public class InitWizardManager {
     private boolean handleSearch(Player player, WizardSession session, String input) {
         String lower = input.toLowerCase();
         switch (session.searchSub) {
+            case DEEPSEEK_ASK: {
+                Boolean yes = parseYesNo(input);
+                if (yes == null) {
+                    player.sendMessage(I18n.t("wizard.invalid.input", input));
+                    return true;
+                }
+                if (yes) {
+                    // DeepSeek 一站式：搜索+抓取都走官方 API，跳过搜索选择卡与网页抓取卡
+                    ConfigManager cm = plugin.getConfigManager();
+                    cm.set("provider.search", "deepseek");
+                    cm.set("provider.jina", "deepseek");
+                    session.fetchSource = "deepseek";
+                    session.webfetchOn = true;
+                    session.searchLabel = I18n.t("wizard.deepseek.ask.saved");
+                    player.sendMessage(I18n.t("wizard.search.saved", session.searchLabel));
+                    session.searchSub = SearchSub.CHOOSE;
+                    goTo(player, session, Step.CHECKPOINT);
+                } else {
+                    session.searchSub = SearchSub.CHOOSE;
+                    renderSearch(player, session);
+                }
+                return true;
+            }
             case CHOOSE: {
                 if (lower.equals("1") || lower.equals("fancy")) {
                     if (session.declinedFancy) {
@@ -629,8 +671,20 @@ public class InitWizardManager {
                 } else if (lower.equals("3") || lower.equals("tavily")) {
                     session.searchSub = SearchSub.TAVILY_KEY;
                     renderSearchKey(player, false);
-                } else if (lower.equals("4") || lower.equals("skip")) {
-                    session.searchLabel = I18n.t("wizard.search.4");
+                } else if (lower.equals("4") || lower.equals("deepseek")) {
+                    if (!plugin.getConfigManager().getDeepSeekApiKey().isEmpty()) {
+                        // DeepSeek AI 提供商用户在询问卡答"否"后到此补选：key 已就位直接落库（仅搜索，抓取仍走后面询问）
+                        plugin.getConfigManager().set("provider.search", "deepseek");
+                        session.searchLabel = I18n.t("wizard.search.4");
+                        player.sendMessage(I18n.t("wizard.search.saved", session.searchLabel));
+                        session.searchSub = SearchSub.CHOOSE;
+                        goTo(player, session, Step.WEBFETCH);
+                    } else {
+                        session.searchSub = SearchSub.DEEPSEEK_KEY;
+                        renderDeepSeekSearchKey(player);
+                    }
+                } else if (lower.equals("5") || lower.equals("skip")) {
+                    session.searchLabel = I18n.t("wizard.search.5");
                     player.sendMessage(I18n.t("wizard.skip.step"));
                     goTo(player, session, Step.WEBFETCH);
                 } else {
@@ -680,6 +734,21 @@ public class InitWizardManager {
                 goTo(player, session, Step.WEBFETCH);
                 return true;
             }
+            case DEEPSEEK_KEY: {
+                if (lower.equals("skip")) {
+                    player.sendMessage(I18n.t("wizard.skip.step"));
+                    session.searchSub = SearchSub.CHOOSE;
+                    goTo(player, session, Step.WEBFETCH);
+                    return true;
+                }
+                plugin.getConfigManager().set("deepseek.api_key", input);
+                plugin.getConfigManager().set("provider.search", "deepseek");
+                session.searchLabel = I18n.t("wizard.search.4");
+                player.sendMessage(I18n.t("wizard.search.saved", session.searchLabel));
+                session.searchSub = SearchSub.CHOOSE;
+                goTo(player, session, Step.WEBFETCH);
+                return true;
+            }
             default:
                 return true;
         }
@@ -696,7 +765,8 @@ public class InitWizardManager {
             return true;
         }
         session.webfetchOn = enable;
-        plugin.getConfigManager().set("provider.jina", enable ? "fancy" : "none");
+        // 抓取源沿用会话内已确认的选择（DeepSeek 询问卡答"是"时为 deepseek），none 表示显式关闭
+        plugin.getConfigManager().set("provider.jina", enable ? session.fetchSource : "none");
         player.sendMessage(enable ? I18n.t("wizard.summary.enabled") : I18n.t("wizard.summary.disabled"));
         goTo(player, session, Step.CHECKPOINT);
         return true;
@@ -803,7 +873,8 @@ public class InitWizardManager {
         sendCardFooter(player, false);
     }
 
-    /** 第 2 步第 2 卡：选 AI 提供商；仅在 2a 明确"不注册"时 Fancy 选项画删除线禁用 */
+    /** 第 2 步第 2 卡：选 AI 提供商。Fancy 选项暂时下架（provider.ai=fancy 运行时仍受支持），
+     *  注册流程保留：绑的 key 仍可用于 Fancy 搜索与 /v1/reader */
     private void renderProviderChoose(Player player, WizardSession session) {
         sendCardTop(player, Step.PROVIDER);
         player.sendMessage(I18n.t("wizard.provider.question"));
@@ -811,13 +882,8 @@ public class InitWizardManager {
             player.sendMessage(I18n.t("wizard.fancyreg.note.bound"));
         }
         player.sendMessage("");
-        if (!session.declinedFancy) {
-            player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.provider.1") + " §7- " + I18n.t("wizard.provider.1.desc"),
-                    "/cli select 1", I18n.t("wizard.option.hint")));
-        } else {
-            player.spigot().sendMessage(disabledOption(" §7[1] §8§m" + I18n.t("wizard.provider.1")
-                    + I18n.t("wizard.provider.disabled.suffix"), I18n.t("wizard.provider.disabled.hover")));
-        }
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.provider.1") + " §7- " + I18n.t("wizard.provider.1.desc"),
+                "/cli select 1", I18n.t("wizard.option.hint")));
         player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.provider.2") + " §7- " + I18n.t("wizard.provider.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
         player.spigot().sendMessage(clickable(" §x[3] §f" + I18n.t("wizard.provider.3") + " §7- " + I18n.t("wizard.provider.3.desc"),
@@ -899,7 +965,43 @@ public class InitWizardManager {
         sendCardFooter(player, true);
     }
 
+    private void renderDeepSeekKey(Player player) {
+        sendCardTop(player, Step.PROVIDER);
+        player.sendMessage(I18n.t("wizard.deepseek.question"));
+        player.sendMessage("");
+        player.spigot().sendMessage(link(I18n.t("wizard.deepseek.click"), "https://platform.deepseek.com/api_keys", I18n.t("wizard.deepseek.hover")));
+        player.sendMessage(I18n.t("wizard.deepseek.paste"));
+        sendCardFooter(player, false);
+    }
+
+    /** DeepSeek AI 提供商专属追问：搜索+抓取是否连带切到官方 API */
+    private void renderDeepSeekAsk(Player player) {
+        sendCardTop(player, Step.SEARCH);
+        player.sendMessage(I18n.t("wizard.deepseek.ask.question"));
+        player.sendMessage("");
+        player.sendMessage(I18n.t("wizard.deepseek.ask.note"));
+        player.sendMessage("");
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.deepseek.ask.yes"),
+                "/cli select 1", I18n.t("wizard.option.hint")));
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.deepseek.ask.no"),
+                "/cli select 2", I18n.t("wizard.option.hint")));
+        sendCardFooter(player, false);
+    }
+
+    private void renderDeepSeekSearchKey(Player player) {
+        sendCardTop(player, Step.SEARCH);
+        player.sendMessage(I18n.t("wizard.search.deepseek.question"));
+        player.sendMessage("");
+        player.spigot().sendMessage(link(I18n.t("wizard.search.deepseek.click"), "https://platform.deepseek.com/api_keys", I18n.t("wizard.search.deepseek.hover")));
+        sendCardFooter(player, true);
+    }
+
     private void renderSearch(Player player, WizardSession session) {
+        // DeepSeek AI 提供商专属追问：是否连带搜索/抓取一起切到官方 API
+        if (session.searchSub == SearchSub.DEEPSEEK_ASK) {
+            renderDeepSeekAsk(player);
+            return;
+        }
         sendCardTop(player, Step.SEARCH);
         player.sendMessage(I18n.t("wizard.search.question"));
         player.sendMessage("");
@@ -916,6 +1018,8 @@ public class InitWizardManager {
                 "/cli select 3", I18n.t("wizard.option.hint")));
         player.spigot().sendMessage(clickable(" §x[4] §f" + I18n.t("wizard.search.4") + " §7- " + I18n.t("wizard.search.4.desc"),
                 "/cli select 4", I18n.t("wizard.option.hint")));
+        player.spigot().sendMessage(clickable(" §x[5] §f" + I18n.t("wizard.search.5") + " §7- " + I18n.t("wizard.search.5.desc"),
+                "/cli select 5", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
 

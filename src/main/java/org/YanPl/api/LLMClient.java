@@ -650,6 +650,10 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatWithFancyConsole(player, session, systemPrompts);
         }
+        // 检测是否启用 DeepSeek 官方 API
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatWithDeepSeek(player, session, systemPrompts);
+        }
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(player, session, systemPrompts);
@@ -750,6 +754,29 @@ public class LLMClient {
             plugin.getLogger().warning("[AI] OpenAI 模型名称为空，已回退到默认值: " + model);
         }
 
+        return chatWithOpenAICompat(player, session, systemPrompts, apiUrl, apiKey, model);
+    }
+
+    /**
+     * 使用 DeepSeek 官方 API 进行对话（OpenAI 兼容格式）
+     * 项目针对 DeepSeek 的优化（原生工具严格 schema、V4 思考模式 reasoning_content 回传、
+     * 上下文缓存统计等）均按模型名生效，走此分支自动继承
+     */
+    private AIResponse chatWithDeepSeek(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts) throws IOException {
+        String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §f请先在配置文件中设置 deepseek.api_key。");
+        }
+        String model = plugin.getConfigManager().getDeepSeekModel();
+        return chatWithOpenAICompat(player, session, systemPrompts,
+                "https://api.deepseek.com/chat/completions", apiKey, model);
+    }
+
+    /**
+     * OpenAI 兼容对话核心流程（openai / deepseek 分支共用）
+     */
+    private AIResponse chatWithOpenAICompat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts,
+                                            String apiUrl, String apiKey, String model) throws IOException {
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[AI 请求] 使用 OpenAI 兼容 API: " + apiUrl);
             plugin.getLogger().info("[AI 请求] 模型: " + model);

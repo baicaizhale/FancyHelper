@@ -79,7 +79,7 @@ public class ConfigManager {
 
     /**
      * 获取 AI 提供商
-     * @return fancy | openai | cloudflare
+     * @return fancy | openai | cloudflare | deepseek
      */
     public String getProvider() {
         // 新版结构: provider.ai
@@ -91,15 +91,15 @@ public class ConfigManager {
 
     /**
      * 获取搜索 API 提供商
-     * @return fancy-tavily | fancy-metaso | tavily | metaso
+     * @return fancy-tavily | fancy-metaso | tavily | metaso | deepseek
      */
     public String getSearchProvider() {
         return config.getString("provider.search", "fancy-tavily");
     }
 
     /**
-     * 获取 Jina 网页抓取提供商
-     * @return fancy | none
+     * 获取网页抓取提供商
+     * @return fancy | deepseek | none
      */
     public String getJinaProvider() {
         return config.getString("provider.jina", "fancy");
@@ -421,6 +421,66 @@ public class ConfigManager {
      */
     public String getOpenAiApiUrl() {
         return config.getString("openai.api_url", "https://api.openai.com/v1/chat/completions");
+    }
+
+    /**
+     * 是否使用 DeepSeek 官方 API 作为 AI 提供商
+     */
+    public boolean isDeepSeekAi() {
+        return "deepseek".equalsIgnoreCase(getProvider());
+    }
+
+    /**
+     * 获取 DeepSeek API 密钥
+     * @return DeepSeek API 密钥
+     */
+    public String getDeepSeekApiKey() {
+        return config.getString("deepseek.api_key", "");
+    }
+
+    /**
+     * 获取 DeepSeek 模型名称
+     * @return 模型名称（当前主模型为 deepseek-flash，deepseek-chat/deepseek-reasoner 已弃用）
+     */
+    public String getDeepSeekModel() {
+        return config.getString("deepseek.model", "deepseek-flash");
+    }
+
+    /**
+     * 是否使用 DeepSeek 官方 API 作为搜索源
+     */
+    public boolean isDeepSeekSearch() {
+        return "deepseek".equalsIgnoreCase(getSearchProvider());
+    }
+
+    /**
+     * 获取 DeepSeek 搜索返回条数（1-50）
+     * @return 结果条数
+     */
+    public int getDeepSeekSearchCount() {
+        return Math.max(1, Math.min(50, config.getInt("deepseek.search_count", 7)));
+    }
+
+    /**
+     * DeepSeek 搜索是否携带网页正文（need_content）
+     */
+    public boolean isDeepSeekSearchNeedContent() {
+        return config.getBoolean("deepseek.search_need_content", false);
+    }
+
+    /**
+     * 网页抓取是否走 DeepSeek Fetch API（provider.jina: deepseek）
+     */
+    public boolean isFetchSourceDeepSeek() {
+        return "deepseek".equalsIgnoreCase(getJinaProvider());
+    }
+
+    /**
+     * 获取 Jina Reader 代理地址
+     * @return 代理地址（留空则使用默认公共代理）
+     */
+    public String getJinaProxyUrl() {
+        return config.getString("jina.proxy_url", "https://jina.proxy.baicaizhale.top");
     }
 
     /**
