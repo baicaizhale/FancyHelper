@@ -78,7 +78,7 @@ settings:
     - say
     - title
 
-# 提供商选择 — fancy 走 FancyConsole，其余为 BYOK
+# 提供商选择
 provider:
   # AI: deepseek | fancy | openai | cloudflare
   ai: fancy
@@ -118,16 +118,16 @@ openai:
   # 模型名称
   model: deepseek-flash
 
-# DeepSeek 官方 API 配置（provider.ai 为 deepseek 时使用；搜索/抓取源选 deepseek 时也读取此段）
-# 项内已有大量针对性优化：原生函数调用严格 schema、V4 思考模式 reasoning_content 回传、上下文缓存统计等
+# DeepSeek API 配置
+# 我们非常推荐使用DeepSeek，并已有大量针对性优化
 deepseek:
   # API 密钥，从 https://platform.deepseek.com 获取
   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  # 模型名称（当前主模型为 deepseek-flash，deepseek-chat/deepseek-reasoner 已弃用）
+  # 模型名称
   model: deepseek-flash
-  # 搜索返回条数（1-50，每次成功搜索计费约 0.005 元，与条数无关）
-  search_count: 7
-  # 搜索结果是否携带网页正文（need_content，会显著增大响应体积，一般无需开启）
+  # 搜索返回条数（1-50，每次成功搜索计费 0.005 元）
+  search_count: 15
+  # 搜索结果是否携带网页正文（会显著增大响应体积，一般无需开启）
   search_need_content: false
 
 # Jina Reader 抓取配置（provider.jina 为 fancy 时使用的抓取端点）

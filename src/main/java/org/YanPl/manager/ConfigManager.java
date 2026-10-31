@@ -514,7 +514,7 @@ public class ConfigManager {
      * @return 结果条数
      */
     public int getDeepSeekSearchCount() {
-        return Math.max(1, Math.min(50, config.getInt("deepseek.search_count", 7)));
+        return Math.max(1, Math.min(50, config.getInt("deepseek.search_count", 15)));
     }
 
     /**
