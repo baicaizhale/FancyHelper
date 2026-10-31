@@ -1578,6 +1578,7 @@ public class LLMClient {
      */
     private String generateTitleFromOpenAI(String firstMessage) throws IOException {
         return generateTitleFromOpenAI(
+                firstMessage,
                 plugin.getConfigManager().getOpenAiApiUrl(),
                 plugin.getConfigManager().getOpenAiApiKey(),
                 plugin.getConfigManager().getOpenAiModel());
@@ -1591,7 +1592,7 @@ public class LLMClient {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("未配置 DeepSeek API Key");
         }
-        return generateTitleFromOpenAI("https://api.deepseek.com/chat/completions",
+        return generateTitleFromOpenAI(firstMessage, "https://api.deepseek.com/chat/completions",
                 apiKey, plugin.getConfigManager().getDeepSeekModel());
     }
 
@@ -1619,7 +1620,7 @@ public class LLMClient {
         return null;
     }
 
-    private String generateTitleFromOpenAI(String apiUrl, String apiKey, String model) throws IOException {
+    private String generateTitleFromOpenAI(String firstMessage, String apiUrl, String apiKey, String model) throws IOException {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("未配置 OpenAI API Key");
         }
