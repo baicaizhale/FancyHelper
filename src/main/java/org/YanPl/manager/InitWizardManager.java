@@ -867,9 +867,9 @@ public class InitWizardManager {
         sendCardTop(player, Step.PROVIDER);
         player.sendMessage(I18n.t("wizard.fancyreg.question"));
         player.sendMessage("");
-        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.fancyreg.1") + " §7- " + I18n.t("wizard.fancyreg.1.desc"),
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.fancyreg.1") + providerDescSuffix("wizard.fancyreg.1.desc"),
                 "/cli select 1", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.fancyreg.2") + " §7- " + I18n.t("wizard.fancyreg.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.fancyreg.2") + providerDescSuffix("wizard.fancyreg.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
     }
