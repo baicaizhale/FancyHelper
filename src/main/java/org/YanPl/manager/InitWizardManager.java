@@ -491,9 +491,9 @@ public class InitWizardManager {
                     return;
                 }
                 WizardSession current = sessions.get(player.getUniqueId());
-                if (current == null || current != session || !key.equals(current.pendingKey)
-                        || (current.providerSub != ProviderSub.OPENAI_KEY
-                        && current.providerSub != ProviderSub.OPENAI_NET_RETRY)) {
+                // 竞态保护只看会话一致与 pendingKey 相等；不能按 providerSub 过滤——
+                // DS 流整个拉取期间状态是 DS_KEY，按状态过滤会把回调静默吞掉（玩家卡在"正在获取模型列表"）
+                if (current == null || current != session || !key.equals(current.pendingKey)) {
                     return;
                 }
                 current.pendingKey = null;
