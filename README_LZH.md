@@ -118,7 +118,7 @@
 | `y` / `n` | 准奏 / 驳回 |
 | `agree` | 签契或开启放手模式 |
 | `/cli yolo` | 切至放手境（自动施行） |
-| `/cli smart` | 切至明智境（灵枢度险） |
+| `/cli smart` | 切至明智境（自度险，须则询） |
 | `/cli plan` | 进入图谋境 |
 | `/cli retry` | 重试上回之响应 |
 | `/cli exempt_anti_loop` | 暂关死循环检测 |

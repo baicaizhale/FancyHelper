@@ -25,7 +25,7 @@ FancyHelper is here to solve this problem. Once installed, you can talk directly
 - **Chat-based Management** — Type `/cli` to enter conversation mode. Manage your server as if you're chatting with a human co-admin.
 - **Setup Wizard** — The first `/cli` opens a card-based wizard: pick your language, AI provider, search and web fetch step by step. It saves your answers as you go and drops you straight into chat when it's done (rerun anytime with `/fancy init`).
 - **AI Command Generation** — Defaults to FancyConsole (keyless AI relay). Also supports OpenAI-compatible endpoints such as OpenAI, DeepSeek, and CloudFlare Workers AI (BYOK).
-- **Four Conversation Modes** — **Normal**: every command needs confirmation. **YOLO**: after agreeing to the terms, most commands run automatically, though high-risk ones like `op`, `ban`, and `stop` still ask. **SMART**: the AI judges risk and executes low-risk commands directly. **Plan**: plan first, then execute — great for complex tasks.
+- **Four Conversation Modes** — **Normal**: every command needs confirmation. **YOLO**: after agreeing to the terms, most commands run automatically, though high-risk ones like `op`, `ban`, and `stop` still ask. **SMART**: the AI decides from context whether to ask you first; actions you explicitly request run directly. **Plan**: plan first, then execute — great for complex tasks.
 - **Pre-execution Confirmation** — In Normal mode, AI-generated commands require manual confirmation (`y`/`n`) to prevent accidents.
 - **Real-time Status Bar** — The Action Bar displays what the AI is doing (Thinking / Executing / Waiting for confirmation), with streaming output word by word.
 - **Built-in Wiki Search** — Comes with documentation presets (Skills) for LuckPerms, EssentialsX, WorldEdit and other major plugins. Falls back to web search (Tavily / Metaso) if nothing is found.
@@ -118,7 +118,7 @@ Tutorial: [![blog](https://img.shields.io/badge/MCP%20Setup%20Guide-Blog-blue)](
 | `y` / `n` | Confirm / Cancel execution |
 | `agree` | Agree to terms or enable YOLO mode |
 | `/cli yolo` | Switch to YOLO mode (auto-execute) |
-| `/cli smart` | Switch to SMART mode (AI judges risk) |
+| `/cli smart` | Switch to SMART mode (AI decides when to ask) |
 | `/cli plan` | Enter Plan mode |
 | `/cli retry` | Retry the previous AI response |
 | `/cli exempt_anti_loop` | Temporarily disable anti-loop detection |
