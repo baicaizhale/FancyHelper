@@ -882,13 +882,22 @@ public class InitWizardManager {
             player.sendMessage(I18n.t("wizard.fancyreg.note.bound"));
         }
         player.sendMessage("");
-        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.provider.1") + " §7- " + I18n.t("wizard.provider.1.desc"),
+        player.spigot().sendMessage(clickable(" §x[1] §f" + I18n.t("wizard.provider.1") + providerDescSuffix("wizard.provider.1.desc"),
                 "/cli select 1", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.provider.2") + " §7- " + I18n.t("wizard.provider.2.desc"),
+        player.spigot().sendMessage(clickable(" §x[2] §f" + I18n.t("wizard.provider.2") + providerDescSuffix("wizard.provider.2.desc"),
                 "/cli select 2", I18n.t("wizard.option.hint")));
-        player.spigot().sendMessage(clickable(" §x[3] §f" + I18n.t("wizard.provider.3") + " §7- " + I18n.t("wizard.provider.3.desc"),
+        player.spigot().sendMessage(clickable(" §x[3] §f" + I18n.t("wizard.provider.3") + providerDescSuffix("wizard.provider.3.desc"),
                 "/cli select 3", I18n.t("wizard.option.hint")));
         sendCardFooter(player, false);
+    }
+
+    /** 选项行描述后缀：文案为空串时不渲染 " - " 分隔符（部分选项没有描述） */
+    private String providerDescSuffix(String key) {
+        String desc = I18n.t(key);
+        if (desc == null || desc.isEmpty() || desc.equals(key)) {
+            return "";
+        }
+        return " §7- " + desc;
     }
 
     private void renderFancyKey(Player player) {
