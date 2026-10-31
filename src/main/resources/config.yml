@@ -1,5 +1,5 @@
 # 配置版本，请勿修改
-version: 4.4.1
+version: 4.4.2
 
 # 插件设置
 settings:
@@ -78,13 +78,13 @@ settings:
     - say
     - title
 
-# 提供商选择 — fancy 走 FancyConsole，其余为 BYOK
+# 提供商选择
 provider:
-  # AI: fancy | openai | cloudflare
+  # AI: deepseek | fancy | openai | cloudflare
   ai: fancy
-  # 搜索: fancy-tavily | tavily | metaso
+  # 搜索: fancy-tavily | tavily | metaso | deepseek
   search: fancy-tavily
-  # Jina: fancy | none（关闭网页抓取）
+  # 网页抓取源: fancy | deepseek | none（none 关闭网页抓取）
   jina: fancy
 
 # FancyConsole 提供商配置（provider.ai 为 fancy 时使用）
@@ -117,6 +117,23 @@ openai:
   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   # 模型名称
   model: deepseek-flash
+
+# DeepSeek API 配置
+# 我们非常推荐使用DeepSeek，并已有大量针对性优化
+deepseek:
+  # API 密钥，从 https://platform.deepseek.com 获取
+  api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # 模型名称
+  model: deepseek-flash
+  # 搜索返回条数（1-50，每次成功搜索计费 0.005 元）
+  search_count: 15
+  # 搜索结果是否携带网页正文（会显著增大响应体积，一般无需开启）
+  search_need_content: false
+
+# Jina Reader 抓取配置（provider.jina 为 fancy 时使用的抓取端点）
+jina:
+  # 代理地址，留空则使用默认公共代理
+  proxy_url: "https://jina.proxy.baicaizhale.top"
 
 # Metaso AI 搜索配置（秘塔AI搜索API，提供更强大的AI网络搜索能力，开启时优先级最高）
 metaso:

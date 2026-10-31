@@ -650,6 +650,10 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatWithFancyConsole(player, session, systemPrompts);
         }
+        // 检测是否启用 DeepSeek 官方 API
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatWithDeepSeek(player, session, systemPrompts);
+        }
         // 检测是否启用 OpenAI 模式
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(player, session, systemPrompts);
@@ -750,6 +754,29 @@ public class LLMClient {
             plugin.getLogger().warning("[AI] OpenAI 模型名称为空，已回退到默认值: " + model);
         }
 
+        return chatWithOpenAICompat(player, session, systemPrompts, apiUrl, apiKey, model);
+    }
+
+    /**
+     * 使用 DeepSeek 官方 API 进行对话（OpenAI 兼容格式）
+     * 项目针对 DeepSeek 的优化（原生工具严格 schema、V4 思考模式 reasoning_content 回传、
+     * 上下文缓存统计等）均按模型名生效，走此分支自动继承
+     */
+    private AIResponse chatWithDeepSeek(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts) throws IOException {
+        String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §f请先在配置文件中设置 deepseek.api_key。");
+        }
+        String model = plugin.getConfigManager().getDeepSeekModel();
+        return chatWithOpenAICompat(player, session, systemPrompts,
+                "https://api.deepseek.com/chat/completions", apiKey, model);
+    }
+
+    /**
+     * OpenAI 兼容对话核心流程（openai / deepseek 分支共用）
+     */
+    private AIResponse chatWithOpenAICompat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts,
+                                            String apiUrl, String apiKey, String model) throws IOException {
         if (plugin.getConfigManager().isDebug()) {
             plugin.getLogger().info("[AI 请求] 使用 OpenAI 兼容 API: " + apiUrl);
             plugin.getLogger().info("[AI 请求] 模型: " + model);
@@ -1267,6 +1294,9 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatWithFancyConsole(null, tempSession, defaultPrompts);
         }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatWithDeepSeek(null, tempSession, defaultPrompts);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(null, tempSession, defaultPrompts);
         }
@@ -1291,6 +1321,9 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatWithFancyConsole(null, tempSession, prompts);
         }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatWithDeepSeek(null, tempSession, prompts);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(null, tempSession, prompts);
         }
@@ -1309,6 +1342,9 @@ public class LLMClient {
 
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return generateTitleWithFancyConsole(firstMessage);
+        }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return generateTitleWithDeepSeek(firstMessage);
         }
         if ("openai".equalsIgnoreCase(provider)) {
             return generateTitleWithOpenAI(firstMessage);
@@ -1541,10 +1577,50 @@ public class LLMClient {
      * 使用 OpenAI 兼容 API 生成标题（单次尝试，使用主模型）
      */
     private String generateTitleFromOpenAI(String firstMessage) throws IOException {
-        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getOpenAiModel(); // 使用主模型
+        return generateTitleFromOpenAI(
+                firstMessage,
+                plugin.getConfigManager().getOpenAiApiUrl(),
+                plugin.getConfigManager().getOpenAiApiKey(),
+                plugin.getConfigManager().getOpenAiModel());
+    }
 
+    /**
+     * DeepSeek 标题生成：与 OpenAI 兼容请求同构，换官方端点与 deepseek 段配置
+     */
+    private String generateTitleFromDeepSeek(String firstMessage) throws IOException {
+        String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未配置 DeepSeek API Key");
+        }
+        return generateTitleFromOpenAI(firstMessage, "https://api.deepseek.com/chat/completions",
+                apiKey, plugin.getConfigManager().getDeepSeekModel());
+    }
+
+    /** DeepSeek 标题重试循环（与 OpenAI 路径同构） */
+    private String generateTitleWithDeepSeek(String firstMessage) throws IOException {
+        int maxRetries = 4;
+        boolean reachedApi = false;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String title = generateTitleFromDeepSeek(firstMessage);
+                if (title != null) {
+                    return title;
+                }
+                reachedApi = true;
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试 JSON 解析失败");
+            } catch (Exception e) {
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试失败: " + e.getMessage());
+            }
+        }
+
+        if (reachedApi) {
+            return "";
+        }
+        return null;
+    }
+
+    private String generateTitleFromOpenAI(String firstMessage, String apiUrl, String apiKey, String model) throws IOException {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("未配置 OpenAI API Key");
         }
@@ -1695,6 +1771,9 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatStreamingWithFancyConsole(player, session, systemPrompts, streamingHandler, noThinking);
         }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatStreamingWithDeepSeek(player, session, systemPrompts, streamingHandler);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(player, session, systemPrompts, streamingHandler);
         }
@@ -1796,10 +1875,25 @@ public class LLMClient {
      * 使用 OpenAI 兼容 API 进行流式对话
      */
     private String chatStreamingWithOpenAI(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
-        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getOpenAiModel();
+        return chatStreamingWithOpenAICompat(player, session, systemPrompts, streamingHandler,
+                plugin.getConfigManager().getOpenAiApiUrl(),
+                plugin.getConfigManager().getOpenAiApiKey(),
+                plugin.getConfigManager().getOpenAiModel());
+    }
 
+    /** DeepSeek 流式对话（OpenAI 兼容流式，换官方端点与 deepseek 段配置） */
+    private String chatStreamingWithDeepSeek(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
+        String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("§zFancyHelper§b§r §7> §f请先在配置文件中设置 deepseek.api_key。");
+        }
+        return chatStreamingWithOpenAICompat(player, session, systemPrompts, streamingHandler,
+                "https://api.deepseek.com/chat/completions",
+                apiKey, plugin.getConfigManager().getDeepSeekModel());
+    }
+
+    private String chatStreamingWithOpenAICompat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler,
+                                                 String apiUrl, String apiKey, String model) throws IOException {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("错误: 请先在配置文件中设置 openai.api_key。");
         }

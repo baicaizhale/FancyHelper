@@ -1,5 +1,6 @@
 package org.YanPl;
 
+import org.YanPl.api.DeepSeekSearchAPI;
 import org.YanPl.api.MetasoAPI;
 import org.YanPl.api.TavilyAPI;
 import org.YanPl.command.CLICommand;
@@ -59,6 +60,7 @@ public final class FancyHelper extends JavaPlugin {
     private FileWatcherManager fileWatcherManager;
     private TavilyAPI tavilyAPI;
     private MetasoAPI metasoAPI;
+    private DeepSeekSearchAPI deepSeekSearchAPI;
     private ErrorHandler errorHandler;
     private InstructionManager instructionManager;
     private ServerMemoryManager serverMemoryManager;
@@ -162,6 +164,9 @@ public final class FancyHelper extends JavaPlugin {
 
             // 初始化 Metaso API
             metasoAPI = new MetasoAPI(this);
+
+            // 初始化 DeepSeek 搜索/抓取 API
+            deepSeekSearchAPI = new DeepSeekSearchAPI(this);
 
             // 初始化 MCP 管理器
             mcpManager = new McpManager(this);
@@ -591,6 +596,10 @@ public final class FancyHelper extends JavaPlugin {
 
     public MetasoAPI getMetasoAPI() {
         return metasoAPI;
+    }
+
+    public DeepSeekSearchAPI getDeepSeekSearchAPI() {
+        return deepSeekSearchAPI;
     }
 
     public ErrorHandler getErrorHandler() {

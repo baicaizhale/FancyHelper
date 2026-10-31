@@ -79,7 +79,7 @@ public class ConfigManager {
 
     /**
      * 获取 AI 提供商
-     * @return fancy | openai | cloudflare
+     * @return fancy | openai | cloudflare | deepseek
      */
     public String getProvider() {
         // 新版结构: provider.ai
@@ -91,15 +91,15 @@ public class ConfigManager {
 
     /**
      * 获取搜索 API 提供商
-     * @return fancy-tavily | fancy-metaso | tavily | metaso
+     * @return fancy-tavily | fancy-metaso | tavily | metaso | deepseek
      */
     public String getSearchProvider() {
         return config.getString("provider.search", "fancy-tavily");
     }
 
     /**
-     * 获取 Jina 网页抓取提供商
-     * @return fancy | none
+     * 获取网页抓取提供商
+     * @return fancy | deepseek | none
      */
     public String getJinaProvider() {
         return config.getString("provider.jina", "fancy");
@@ -283,6 +283,15 @@ public class ConfigManager {
             if (!newConfig.contains("provider.search")) newConfig.set("provider.search", "fancy-tavily");
             if (!newConfig.contains("provider.jina")) newConfig.set("provider.jina", "fancy");
 
+            // DeepSeek 一等公民迁移（v4.4.2）：从低版本升上来、AI 提供商为 openai 且端点指向
+            // api.deepseek.com 的旧配置，直接转成独立 deepseek 提供商，搜索/网页抓取一并切换，
+            // 不询问。放在本块全部旧版 provider 归一化（openai.enabled→provider→provider.ai）之后、
+            // save 之前执行，最终结果以此为准。
+            if (applyOpenAiToDeepSeekMigration(newConfig, configVersion)) {
+                plugin.getLogger().info("已把 openai 提供商（DeepSeek 端点）迁移为独立 deepseek 提供商，"
+                        + "搜索与网页抓取同步切换为 DeepSeek 官方 API（原 openai 段保留未动）");
+            }
+
             try {
                 newConfig.save(configFile);
                 // 删除旧的 lib JAR，再释放最新的 ReloadService JAR
@@ -322,6 +331,53 @@ public class ConfigManager {
                 }
             }
         }
+    }
+
+    /**
+     * DeepSeek 独立提供商迁移的门槛版本：config.yml version 低于此值才参与迁移。
+     */
+    static final String DEEPSEEK_MIGRATION_VERSION = "4.4.2";
+
+    /**
+     * 判断旧配置是否应迁移为独立 DeepSeek 提供商：
+     * 配置版本低于门槛版本、AI 提供商为 openai、端点指向 api.deepseek.com，且密钥是用户真实填写的
+     * （排除出厂占位符 sk-xxxx）。
+     */
+    static boolean shouldMigrateOpenAiToDeepSeek(String configVersion, String providerAi, String apiUrl, String apiKey) {
+        return "openai".equals(providerAi)
+                && apiUrl != null && apiUrl.contains("api.deepseek.com")
+                && apiKey != null && !apiKey.isEmpty() && !apiKey.startsWith("sk-xxxx")
+                && ToolExecutor.compareVersions(configVersion, DEEPSEEK_MIGRATION_VERSION) < 0;
+    }
+
+    /**
+     * 执行 openai（DeepSeek 端点）→ 独立 deepseek 提供商迁移：
+     * 密钥与模型复制到 deepseek 段（deepseek.api_key 已有值时不覆盖），并把搜索/网页抓取源
+     * 一并切换为 deepseek，不询问。原 openai 段保留不动，便于回退。
+     *
+     * @param cfg              已合入旧值的新版配置（version 键此时是新模板值，不能用它判版本）
+     * @param oldConfigVersion 旧配置文件的 version（版本重写前读取的）
+     * @return 是否发生了迁移
+     */
+    static boolean applyOpenAiToDeepSeekMigration(FileConfiguration cfg, String oldConfigVersion) {
+        String apiUrl = cfg.getString("openai.api_url", "");
+        String apiKey = cfg.getString("openai.api_key", "");
+        String model = cfg.getString("openai.model", "");
+        if (!shouldMigrateOpenAiToDeepSeek(oldConfigVersion, cfg.getString("provider.ai", ""), apiUrl, apiKey)) {
+            return false;
+        }
+        String existingDsKey = cfg.getString("deepseek.api_key", "");
+        // 出厂模板的 deepseek.api_key 是 sk-xxxx 占位符，非空但不是用户值，也要覆盖
+        if (existingDsKey.isEmpty() || existingDsKey.startsWith("sk-xxxx")) {
+            cfg.set("deepseek.api_key", apiKey);
+        }
+        if (!model.isEmpty()) {
+            cfg.set("deepseek.model", model);
+        }
+        cfg.set("provider.ai", "deepseek");
+        cfg.set("provider.search", "deepseek");
+        cfg.set("provider.jina", "deepseek");
+        return true;
     }
 
     /**
@@ -421,6 +477,66 @@ public class ConfigManager {
      */
     public String getOpenAiApiUrl() {
         return config.getString("openai.api_url", "https://api.openai.com/v1/chat/completions");
+    }
+
+    /**
+     * 是否使用 DeepSeek 官方 API 作为 AI 提供商
+     */
+    public boolean isDeepSeekAi() {
+        return "deepseek".equalsIgnoreCase(getProvider());
+    }
+
+    /**
+     * 获取 DeepSeek API 密钥
+     * @return DeepSeek API 密钥
+     */
+    public String getDeepSeekApiKey() {
+        return config.getString("deepseek.api_key", "");
+    }
+
+    /**
+     * 获取 DeepSeek 模型名称
+     * @return 模型名称（当前主模型为 deepseek-flash，deepseek-chat/deepseek-reasoner 已弃用）
+     */
+    public String getDeepSeekModel() {
+        return config.getString("deepseek.model", "deepseek-flash");
+    }
+
+    /**
+     * 是否使用 DeepSeek 官方 API 作为搜索源
+     */
+    public boolean isDeepSeekSearch() {
+        return "deepseek".equalsIgnoreCase(getSearchProvider());
+    }
+
+    /**
+     * 获取 DeepSeek 搜索返回条数（1-50）
+     * @return 结果条数
+     */
+    public int getDeepSeekSearchCount() {
+        return Math.max(1, Math.min(50, config.getInt("deepseek.search_count", 15)));
+    }
+
+    /**
+     * DeepSeek 搜索是否携带网页正文（need_content）
+     */
+    public boolean isDeepSeekSearchNeedContent() {
+        return config.getBoolean("deepseek.search_need_content", false);
+    }
+
+    /**
+     * 网页抓取是否走 DeepSeek Fetch API（provider.jina: deepseek）
+     */
+    public boolean isFetchSourceDeepSeek() {
+        return "deepseek".equalsIgnoreCase(getJinaProvider());
+    }
+
+    /**
+     * 获取 Jina Reader 代理地址
+     * @return 代理地址（留空则使用默认公共代理）
+     */
+    public String getJinaProxyUrl() {
+        return config.getString("jina.proxy_url", "https://jina.proxy.baicaizhale.top");
     }
 
     /**

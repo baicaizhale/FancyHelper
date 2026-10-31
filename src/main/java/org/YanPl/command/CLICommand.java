@@ -460,6 +460,10 @@ public class CLICommand implements CommandExecutor, TabCompleter {
      */
     private boolean isAnyByokConfigured() {
         String provider = plugin.getConfigManager().getProvider();
+        if ("deepseek".equals(provider)) {
+            String key = plugin.getConfigManager().getDeepSeekApiKey();
+            if (key != null && !key.isEmpty() && !key.startsWith("sk-xxxx")) return true;
+        }
         if ("openai".equals(provider)) {
             String key = plugin.getConfigManager().getOpenAiApiKey();
             if (key != null && !key.isEmpty() && !"your-openai-api-key".equals(key)) return true;

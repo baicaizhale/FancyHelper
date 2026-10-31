@@ -2428,6 +2428,10 @@ public class ToolExecutor {
      */
     private String performWideSearch(String query) {
         String q = query.replace("widely", "").trim();
+        // provider.search 显式选了 deepseek：优先走 DeepSeek 官方搜索
+        if (plugin.getConfigManager().isDeepSeekSearch()) {
+            return plugin.getDeepSeekSearchAPI().search(q);
+        }
         if (plugin.getMetasoAPI().isAvailable()) {
             return plugin.getMetasoAPI().search(q);
         } else if (plugin.getConfigManager().isTavilyEnabled()) {
@@ -2444,6 +2448,9 @@ public class ToolExecutor {
         // 两种失败都要回退：没搜到条目（正常空结果）与请求异常（网络/TLS 问题，如生产服 PKIX）——
         // 异常不回退的话错误原文直接丢给 AI，Metaso 明明可用却拿不到结果
         if (result.equals("未找到相关 Wiki 条目。") || result.startsWith("Wiki 搜索出错")) {
+            if (plugin.getConfigManager().isDeepSeekSearch()) {
+                return plugin.getDeepSeekSearchAPI().search(query);
+            }
             if (plugin.getMetasoAPI().isAvailable()) {
                 return plugin.getMetasoAPI().search(query);
             } else if (plugin.getConfigManager().isTavilyEnabled()) {
@@ -2875,8 +2882,9 @@ public class ToolExecutor {
 
     /**
      * 获取网页内容并解析
-     * 优先使用 r.jina.ai 代理获取纯文本内容
-     * 如果失败则回退到直接获取并清理HTML
+     * 抓取链按 provider.jina 决定顺序：deepseek 模式先走 DeepSeek Fetch API（jina 兜底），
+     * fancy 模式先走 r.jina.ai 代理；均失败则回退到直接获取并清理 HTML。
+     * 反向不做兜底（fancy 模式不尝试 DeepSeek），避免用户未选择时产生计费。
      */
     protected String fetchWebPage(String url) throws Exception {
         // 验证URL格式
@@ -2884,34 +2892,18 @@ public class ToolExecutor {
             throw new IllegalArgumentException("URL必须以http://或https://开头");
         }
 
-        // 首先尝试使用 r.jina.ai 代理
-        try {
-            String jinaUrl = "https://jina.proxy.baicaizhale.top/" + url;
-            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
-                    .connectTimeout(java.time.Duration.ofSeconds(15))
-                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-                    .build();
-
-            java.net.http.HttpRequest jinaRequest = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(jinaUrl))
-                    .timeout(java.time.Duration.ofSeconds(20))
-                    .header("Accept", "text/plain, text/html, */*")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .GET()
-                    .build();
-
-            java.net.http.HttpResponse<String> jinaResponse = httpClient.send(jinaRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-            if (jinaResponse.statusCode() == 200) {
-                String jinaText = jinaResponse.body().trim();
-                if (jinaText.length() > 8000) {
-                    jinaText = jinaText.substring(0, 8000) + "\n... (内容已截断)";
-                }
-                return jinaText;
+        // provider.jina: deepseek — 首选 DeepSeek Fetch API（返回 Markdown 正文）
+        if (plugin.getConfigManager().isFetchSourceDeepSeek()) {
+            String deepSeekText = plugin.getDeepSeekSearchAPI().fetchPage(url);
+            if (deepSeekText != null) {
+                return deepSeekText;
             }
-        } catch (Exception e) {
-            if (plugin.getConfigManager().isDebug()) {
-                plugin.getLogger().info("[WebFetch] Jina.ai 请求失败，回退到直接获取: " + e.getMessage());
-            }
+        }
+
+        // Jina Reader 代理（deepseek 模式下作为兜底，fancy 模式下首选）
+        String jinaText = fetchViaJina(url);
+        if (jinaText != null) {
+            return jinaText;
         }
 
         // 回退到原有的直接获取逻辑
@@ -3020,6 +3012,47 @@ public class ToolExecutor {
         result.append(bodyText);
 
         return result.toString();
+    }
+
+    /**
+     * 通过 Jina Reader 代理抓取网页（FancyJinaProxy CF Worker 转发 r.jina.ai）
+     * @return 纯文本内容；非 200 或异常返回 null（由调用方决定回退）
+     */
+    private String fetchViaJina(String url) {
+        try {
+            String jinaUrl = plugin.getConfigManager().getJinaProxyUrl();
+            if (jinaUrl.endsWith("/")) {
+                jinaUrl = jinaUrl.substring(0, jinaUrl.length() - 1);
+            }
+            jinaUrl = jinaUrl + "/" + url;
+
+            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(15))
+                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                    .build();
+
+            java.net.http.HttpRequest jinaRequest = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(jinaUrl))
+                    .timeout(java.time.Duration.ofSeconds(20))
+                    .header("Accept", "text/plain, text/html, */*")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .GET()
+                    .build();
+
+            java.net.http.HttpResponse<String> jinaResponse = httpClient.send(jinaRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (jinaResponse.statusCode() == 200) {
+                String jinaText = jinaResponse.body().trim();
+                if (jinaText.length() > 8000) {
+                    jinaText = jinaText.substring(0, 8000) + "\n... (内容已截断)";
+                }
+                return jinaText;
+            }
+        } catch (Exception e) {
+            if (plugin.getConfigManager().isDebug()) {
+                plugin.getLogger().info("[WebFetch] Jina.ai 请求失败: " + e.getMessage());
+            }
+        }
+        return null;
     }
 
     /**
