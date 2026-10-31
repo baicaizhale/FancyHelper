@@ -1294,6 +1294,9 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatWithFancyConsole(null, tempSession, defaultPrompts);
         }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatWithDeepSeek(null, tempSession, defaultPrompts);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(null, tempSession, defaultPrompts);
         }
@@ -1318,6 +1321,9 @@ public class LLMClient {
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return chatWithFancyConsole(null, tempSession, prompts);
         }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return chatWithDeepSeek(null, tempSession, prompts);
+        }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatWithOpenAI(null, tempSession, prompts);
         }
@@ -1336,6 +1342,9 @@ public class LLMClient {
 
         if (plugin.getConfigManager().isFancyConsoleAi()) {
             return generateTitleWithFancyConsole(firstMessage);
+        }
+        if (plugin.getConfigManager().isDeepSeekAi()) {
+            return generateTitleWithDeepSeek(firstMessage);
         }
         if ("openai".equalsIgnoreCase(provider)) {
             return generateTitleWithOpenAI(firstMessage);
@@ -1568,10 +1577,49 @@ public class LLMClient {
      * 使用 OpenAI 兼容 API 生成标题（单次尝试，使用主模型）
      */
     private String generateTitleFromOpenAI(String firstMessage) throws IOException {
-        String apiUrl = plugin.getConfigManager().getOpenAiApiUrl();
-        String apiKey = plugin.getConfigManager().getOpenAiApiKey();
-        String model = plugin.getConfigManager().getOpenAiModel(); // 使用主模型
+        return generateTitleFromOpenAI(
+                plugin.getConfigManager().getOpenAiApiUrl(),
+                plugin.getConfigManager().getOpenAiApiKey(),
+                plugin.getConfigManager().getOpenAiModel());
+    }
 
+    /**
+     * DeepSeek 标题生成：与 OpenAI 兼容请求同构，换官方端点与 deepseek 段配置
+     */
+    private String generateTitleFromDeepSeek(String firstMessage) throws IOException {
+        String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IOException("未配置 DeepSeek API Key");
+        }
+        return generateTitleFromOpenAI("https://api.deepseek.com/chat/completions",
+                apiKey, plugin.getConfigManager().getDeepSeekModel());
+    }
+
+    /** DeepSeek 标题重试循环（与 OpenAI 路径同构） */
+    private String generateTitleWithDeepSeek(String firstMessage) throws IOException {
+        int maxRetries = 4;
+        boolean reachedApi = false;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String title = generateTitleFromDeepSeek(firstMessage);
+                if (title != null) {
+                    return title;
+                }
+                reachedApi = true;
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试 JSON 解析失败");
+            } catch (Exception e) {
+                plugin.getLogger().warning("[标题生成] 第 " + attempt + " 次尝试失败: " + e.getMessage());
+            }
+        }
+
+        if (reachedApi) {
+            return "";
+        }
+        return null;
+    }
+
+    private String generateTitleFromOpenAI(String apiUrl, String apiKey, String model) throws IOException {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("未配置 OpenAI API Key");
         }
