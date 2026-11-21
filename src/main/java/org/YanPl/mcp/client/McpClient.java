@@ -72,6 +72,9 @@ public class McpClient {
 
     public boolean connect() {
         running = true;
+        // 每次连接都重新握手：sessionId 存在复用的 McpClientConfig 上，
+        // 服务器重启/会话过期后若带着旧 id 重连，会一直被 404，自动重连永远失败
+        config.setSessionId(null);
         try {
             boolean isSse = "sse".equalsIgnoreCase(config.getTransport());
 
@@ -289,6 +292,7 @@ public class McpClient {
         connected = false;
         tools = new ArrayList<>();
         postEndpoint = null;
+        config.setSessionId(null);
         failAllPending("客户端已断开");
         InputStream stream = sseStream;
         sseStream = null;
@@ -354,7 +358,7 @@ public class McpClient {
 
             JsonRpcMessage.Response resp = future.get(config.getCallTimeout(), TimeUnit.SECONDS);
             // 会话 id 也可能在响应体中返回（部分实现）
-            if (resp != null && config.getSessionId() == null && resp.result != null
+            if (resp != null && resp.result != null
                     && resp.result.isJsonObject() && resp.result.getAsJsonObject().has("sessionId")) {
                 config.setSessionId(resp.result.getAsJsonObject().get("sessionId").getAsString());
             }
@@ -401,7 +405,8 @@ public class McpClient {
     }
 
     private void captureSessionId(HttpResponse<?> response) {
-        if (config.getSessionId() != null) return;
+        // 服务器下发新会话 id 时必须覆盖旧值：MCP 服务器重启/会话过期后会重新
+        // 分配 id，旧的 != null 守卫会导致永远拿不到新会话
         response.headers().firstValue("Mcp-Session-Id").ifPresent(config::setSessionId);
     }
 
