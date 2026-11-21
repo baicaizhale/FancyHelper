@@ -1231,9 +1231,24 @@ public class CLIManager {
      * @param player 玩家
      * @param sessionUUID 会话UUID
      */
+    /**
+     * 会话 ID 必须是标准 UUID。
+     * 该字符串会被直接拼进 sessions/&lt;玩家名&gt;/&lt;id&gt;.json 路径，若不校验，
+     * 构造 ../xxx 即可恢复/删除自己目录外的任意 json（含其他玩家的会话）。
+     */
+    public boolean isValidSessionId(String sessionId) {
+        return sessionId != null && sessionId.matches(
+                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+    }
+
     public void resumeSession(Player player, String sessionUUID) {
         UUID playerUUID = player.getUniqueId();
         String playerName = player.getName();
+
+        if (!isValidSessionId(sessionUUID)) {
+            player.sendMessage(I18n.t("cli.resume.invalid.id"));
+            return;
+        }
 
         try {
             // 读取会话文件
@@ -1324,6 +1339,10 @@ public class CLIManager {
      * @param sessionUUID 会话UUID
      */
     public synchronized void deleteSession(UUID playerUUID, String sessionUUID) {
+        if (!isValidSessionId(sessionUUID)) {
+            plugin.getLogger().warning("[CLI] 拒绝删除非法会话 ID: " + sessionUUID);
+            return;
+        }
         try {
             // 获取玩家名
             Player player = Bukkit.getPlayer(playerUUID);
