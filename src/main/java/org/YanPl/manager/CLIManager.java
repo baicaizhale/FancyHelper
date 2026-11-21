@@ -4884,10 +4884,34 @@ public class CLIManager {
      * 串行批量执行器（批次屏障）：
      * 1. 队列非空 → 串行执行下一个工具（不重入模型）。
      * 2. 队列耗尽 → 合并全部结果，一次真实模型重入。
+     * <p>
+     * 线程约定：批次推进必须在主线程（executeTool 走 Bukkit API）。打字类回复
+     * （#ask 打字回答 / 批次确认打 y / 打 n 取消）从异步聊天线程进入本方法，
+     * 此前此处直接 return：反馈已进 pendingToolResults 队列却无人消费 → 批次
+     * 永久冻结，且看门狗只查 EXECUTING_TOOL 状态（等确认/等选择时不触发），
+     * 玩家只能 /cli new 逃生。现改为调度回主线程推进，而不是丢弃。
      */
     private void executeNativeBatch(Player player, DialogueSession session) {
         UUID uuid = player.getUniqueId();
-        if (!Bukkit.isPrimaryThread() || !plugin.isEnabled()) {
+        if (!Bukkit.isPrimaryThread()) {
+            if (!plugin.isEnabled()) {
+                return;
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!plugin.isEnabled() || !player.isOnline()) {
+                    return;
+                }
+                // 会话已退出/重建（引用不同）或批次已被超时兜底终结时不再推进：
+                // 避免对旧会话执行工具，或与 forceFinalizeBatch 双重重入模型
+                DialogueSession current = sessions.get(player.getUniqueId());
+                if (current == null || current != session || !session.isBatchInProgress()) {
+                    return;
+                }
+                executeNativeBatch(player, session);
+            });
+            return;
+        }
+        if (!plugin.isEnabled()) {
             return;
         }
 
