@@ -31,9 +31,14 @@ public class GuiManager implements Listener {
      */
     private static final class FancyGuiHolder implements InventoryHolder {
         private final boolean modeSelection;
+        private Inventory inventory;
 
         private FancyGuiHolder(boolean modeSelection) {
             this.modeSelection = modeSelection;
+        }
+
+        private void setInventory(Inventory inventory) {
+            this.inventory = inventory;
         }
 
         private boolean isModeSelection() {
@@ -42,7 +47,9 @@ public class GuiManager implements Listener {
 
         @Override
         public Inventory getInventory() {
-            throw new UnsupportedOperationException("FancyGuiHolder 仅用于识别 GUI");
+            // 返回真实 inventory 而不是抛异常：第三方插件/序列化器可能调用
+            // holder.getInventory()，抛异常会把一次正常打开菜单变成报错
+            return inventory;
         }
     }
 
@@ -54,7 +61,9 @@ public class GuiManager implements Listener {
      * 打开模式选择菜单
      */
     public void openModeSelectionMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(new FancyGuiHolder(true), 9, I18n.t("gui.mode.title"));
+        FancyGuiHolder holder = new FancyGuiHolder(true);
+        Inventory inv = Bukkit.createInventory(holder, 9, I18n.t("gui.mode.title"));
+        holder.setInventory(inv);
 
         // 填充背景板
         ItemStack bg = createItem(Material.BLACK_STAINED_GLASS_PANE, " ");
@@ -109,7 +118,9 @@ public class GuiManager implements Listener {
      * 打开设置菜单
      */
     public void openSettingsMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(new FancyGuiHolder(false), 27, I18n.t("gui.settings.title"));
+        FancyGuiHolder holder = new FancyGuiHolder(false);
+        Inventory inv = Bukkit.createInventory(holder, 27, I18n.t("gui.settings.title"));
+        holder.setInventory(inv);
 
         // 填充背景板
         ItemStack bg = createItem(Material.BLACK_STAINED_GLASS_PANE, " ");
