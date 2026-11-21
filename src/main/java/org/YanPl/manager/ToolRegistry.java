@@ -109,9 +109,11 @@ public final class ToolRegistry {
         if (readEnabled) {
             addTool(tools, "list", responsesFormat, "List directory contents. Result is not visible to the player.",
                     obj("path", str("string", "Directory path")));
+            JsonObject readParams = obj("path", str("string", "File path"),
+                    "range", str("string", "Line range, e.g. 1-50; omit to read the whole file"));
+            readParams.add("force", bool("Set true to force reading a file that contains NUL bytes (binary guard escape hatch)"));
             addTool(tools, "read", responsesFormat, "Read a file (with line numbers). Line numbers are used to precisely locate #edit later. Result is not visible to the player.",
-                    obj("path", str("string", "File path"),
-                            "range", str("string", "Line range, e.g. 1-50; omit to read the whole file")));
+                    readParams);
         }
         if (writeEnabled) {
             addTool(tools, "edit", responsesFormat, "Edit a file by matching original text. #read first, then #edit. Parameters are sent as structured JSON, no delimiter escaping needed. Format: path + original + replacement, optional range (10-10 or auto).",
@@ -223,6 +225,14 @@ public final class ToolRegistry {
         return o;
     }
 
+    /** 布尔类型 schema */
+    private static JsonElement bool(String description) {
+        JsonObject o = new JsonObject();
+        o.addProperty("type", "boolean");
+        o.addProperty("description", description);
+        return o;
+    }
+
     /** 数组类型 schema：{"type":"array","description":"...","items":{"type":"..."}} */
     private static JsonElement arr(String description, String itemsType) {
         JsonObject o = new JsonObject();
@@ -271,7 +281,12 @@ public final class ToolRegistry {
             case "read": {
                 String path = str(args, "path", "");
                 String range = str(args, "range", "");
-                return range.isEmpty() ? "#read: " + path : "#read: " + path + " " + range;
+                // force 是 #read 二进制防护的逃生通道：模型按结构化方式重试时，
+                // 此前该键在桥接层被丢弃，导致含 NUL 的文件永远读不了、反复撞同一错误。
+                boolean force = args.has("force") && !args.get("force").isJsonNull()
+                        && args.get("force").getAsBoolean();
+                String base = range.isEmpty() ? "#read: " + path : "#read: " + path + " " + range;
+                return force ? base + " force" : base;
             }
             case "skill": {
                 String id = str(args, "id", "");
