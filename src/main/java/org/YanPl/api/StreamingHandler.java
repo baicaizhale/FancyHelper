@@ -466,6 +466,25 @@ public class StreamingHandler {
      * @return 原始文本
      */
     public String feedCompletedText(String fullText) {
+        return feedCompletedResponse(fullText, null);
+    }
+
+    /**
+     * 非流式（伪流式）响应回放：先固化原生工具调用，再触发文本与完成回调。
+     * <p>
+     * gpt-oss 等走 Responses API 非流式请求的模型，结构化 tool_calls 不在正文里；
+     * 此前只回放正文，tool_calls 被丢弃，而下游只从 {@link #getNativeToolCalls()}
+     * 取调用 —— 模型"调了工具"却永远不会执行。必须在触发完成回调前写入，
+     * 因为完成回调里就会消费该列表。
+     *
+     * @param fullText 完整响应文本（可为空）
+     * @param calls    解析出的原生工具调用（可为 null/空）
+     * @return 原始文本
+     */
+    public String feedCompletedResponse(String fullText, List<NativeToolCall> calls) {
+        if (calls != null && !calls.isEmpty()) {
+            nativeToolCalls = List.copyOf(calls);
+        }
         if (fullText != null && !fullText.isEmpty() && !isCancelled.get() && onChunkCallback != null) {
             try {
                 onChunkCallback.accept(fullText);

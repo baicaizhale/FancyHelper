@@ -2051,7 +2051,10 @@ public class LLMClient {
                 JsonObject responseJson = gson.fromJson(response.body(), JsonObject.class);
                 AIResponse aiResponse = responseParser.parseResponse(responseJson);
                 String fullText = aiResponse != null ? aiResponse.getContent() : "";
-                streamingHandler.feedCompletedText(fullText);
+                // 非流式回放必须把结构化 tool_calls 一并交给 handler：下游只从
+                // getNativeToolCalls() 取调用，只回放正文会让工具调用静默丢失
+                streamingHandler.feedCompletedResponse(fullText,
+                        aiResponse != null ? aiResponse.getToolCalls() : null);
                 return fullText;
             }
 
