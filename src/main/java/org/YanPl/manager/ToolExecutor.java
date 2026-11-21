@@ -1327,24 +1327,30 @@ public class ToolExecutor {
         }
 
         // 插入修改后的内容（行内替换，保留行内其他部分）
-        String[] replacementLines = replacement.split("\n");
+        // replacement 为空视为删除整段匹配内容；replacement 行数少于 original 时，
+        // 多出的 original 行按删除处理（此前是『原样保留』却回灌『修改成功』，
+        // 模型以为删掉了、实际文件没变，后续操作全建立在错误状态上）。
+        String[] replacementLines = replacement.trim().isEmpty()
+                ? new String[0]
+                : replacement.split("\n");
+        int deletedLineCount = Math.max(0, originalLineCount - replacementLines.length);
+        List<String> appliedLines = new java.util.ArrayList<>();
         for (int j = 0; j < originalLineCount; j++) {
             String originalLine = lines.get(matchStartIndex + j);
-            String newLine;
 
             if (j < replacementLines.length) {
                 // 行内子串替换：将匹配到的内容替换为新内容，缩进和注释等其余部分自动保留
-                newLine = originalLine.replace(originalLines[j], replacementLines[j]);
-            } else {
-                // 如果 replacement 行数少于 original 行数，保留原始行
-                newLine = originalLine;
+                String newLine = originalLine.replace(originalLines[j], replacementLines[j]);
+                appliedLines.add(newLine);
+                newLines.add(newLine);
             }
-            newLines.add(newLine);
+            // 删除语义：replacement 行数不足的尾部 original 行直接丢弃，不加入 newLines
         }
 
         // 如果 replacement 行数多于 original 行数，添加剩余的行
         for (int j = originalLineCount; j < replacementLines.length; j++) {
             newLines.add(replacementLines[j]);
+            appliedLines.add(replacementLines[j]);
         }
 
         // 复制匹配位置之后的行
@@ -1357,14 +1363,17 @@ public class ToolExecutor {
             Files.write(file.toPath(), newLines, StandardCharsets.UTF_8);
         }
 
-        // 返回修改前后的对比
+        // 返回修改前后的对比（修改后展示实际落地内容，含删除结果）
         int actualStartLine = matchStartIndex + 1;
         int actualEndLine = matchEndIndex;
         StringBuilder result = new StringBuilder();
         result.append("成功修改文件: ").append(path).append("\n");
         result.append("行号范围: ").append(actualStartLine).append("-").append(actualEndLine).append("\n");
         result.append("修改前:\n").append(original).append("\n");
-        result.append("修改后:\n").append(replacement);
+        if (deletedLineCount > 0) {
+            result.append("已删除 ").append(deletedLineCount).append(" 行\n");
+        }
+        result.append("修改后:\n").append(joinLines(appliedLines));
 
         out.success = true;
         out.path = path;
