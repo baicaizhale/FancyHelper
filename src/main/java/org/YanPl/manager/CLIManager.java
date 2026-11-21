@@ -2280,6 +2280,9 @@ public class CLIManager {
             isGenerating.put(uuid, false);
             generationStates.put(uuid, GenerationStatus.CANCELLED);
             generationStartTimes.put(uuid, System.currentTimeMillis());
+            // 与 SMART 拒绝路径（handleSmartDeny）对齐：取消同样要作为工具结果回灌模型，
+            // 否则模型永远等不到该工具的反馈，对话静默挂起，玩家只能再发一条消息续命。
+            feedbackToAI(player, "#error: 用户取消了该命令。");
         }
     }
 
