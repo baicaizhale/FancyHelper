@@ -23,6 +23,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class DialogueSession {
 
+    /**
+     * 上下文压缩摘要的专用角色。
+     * 此前摘要以 "system" 角色入历史，被 LLMClient.buildMessagesArray 的
+     * "跳过历史 system 消息"过滤整条吞掉——模型从未见过摘要，压缩等于白做。
+     * 专属角色既能在出站时被识别放行，也不会与 Skill Reference 等展示类
+     * system 消息混淆；SessionRecord 按 role 原样序列化/恢复，跨存档兼容。
+     */
+    public static final String ROLE_COMPACT_SUMMARY = "compact_summary";
+
     private final Set<String> loadedSkillIds = new LinkedHashSet<>();
     /**
      * 对话模式

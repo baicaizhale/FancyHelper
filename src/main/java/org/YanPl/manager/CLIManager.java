@@ -3991,9 +3991,14 @@ public class CLIManager {
                 String oldSummaryText = null;
                 if (oldCount > 0) {
                     DialogueSession.Message first = session.getHistory().get(0);
-                    if ("system".equals(first.getRole()) && first.getContent() != null
+                    boolean isNewSummary = DialogueSession.ROLE_COMPACT_SUMMARY.equals(first.getRole())
+                            && first.getContent() != null && !first.getContent().isEmpty();
+                    // 兼容旧存档：修复前摘要以 system 角色入档（出站被过滤，模型从未见过）。
+                    // 迁移路径：旧格式摘要仍按旧逻辑折叠进新摘要，新摘要落盘后即为新角色。
+                    boolean isLegacySummary = "system".equals(first.getRole()) && first.getContent() != null
                             && !first.getContent().isEmpty()
-                            && !first.getContent().startsWith("[Skill Reference:")) {
+                            && !first.getContent().startsWith("[Skill Reference:");
+                    if (isNewSummary || isLegacySummary) {
                         hasOldSummary = true;
                         oldSummaryText = first.getContent().length() > 300 ? first.getContent().substring(0, 300) + "..." : first.getContent();
                     }
@@ -4105,7 +4110,7 @@ public class CLIManager {
                     }
 
                     List<DialogueSession.Message> newHistory = new ArrayList<>();
-                    newHistory.add(new DialogueSession.Message("system", compactText));
+                    newHistory.add(new DialogueSession.Message(DialogueSession.ROLE_COMPACT_SUMMARY, compactText));
                     int startIdx = Math.max(0, session.getHistory().size() - keepRecent);
                     for (int i = startIdx; i < session.getHistory().size(); i++) {
                         newHistory.add(session.getHistory().get(i));

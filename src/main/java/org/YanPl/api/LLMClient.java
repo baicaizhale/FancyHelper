@@ -373,7 +373,9 @@ public class LLMClient {
         // 的非法序列。若最后一条 system 后首条历史不是 user，垫一条 user 占位兜底（不写回 history）。
         if (!historyCopy.isEmpty()) {
             String firstRole = historyCopy.get(0).getRole();
-            if (firstRole != null && !"user".equalsIgnoreCase(firstRole.trim())) {
+            // 压缩摘要出站时以 user 角色发出（见下方过滤段），不需要垫占位
+            if (firstRole != null && !"user".equalsIgnoreCase(firstRole.trim())
+                    && !DialogueSession.ROLE_COMPACT_SUMMARY.equalsIgnoreCase(firstRole.trim())) {
                 JsonObject placeholder = new JsonObject();
                 placeholder.addProperty("role", "user");
                 placeholder.addProperty("content", "Continue");
@@ -405,7 +407,8 @@ public class LLMClient {
                 continue;
             }
 
-            if ("system".equalsIgnoreCase(role)) {
+            boolean isCompactSummary = DialogueSession.ROLE_COMPACT_SUMMARY.equalsIgnoreCase(role);
+            if ("system".equalsIgnoreCase(role) && !isCompactSummary) {
                 if (plugin.getConfigManager().isDebug()) {
                     plugin.getLogger().info("[AI 请求] 跳过重复的 system 消息");
                 }
@@ -413,8 +416,17 @@ public class LLMClient {
             }
 
             JsonObject m = new JsonObject();
-            m.addProperty("role", role);
-            m.addProperty("content", content);
+            if (isCompactSummary) {
+                // 压缩摘要出站：此前摘要以 system 角色入档后被上面的过滤整条跳过，
+                // 模型从未收到过摘要（压缩等于白做）。以 user 角色、带说明包装发出，
+                // 同时规避"system 只能是第一条且必须紧跟 user"的严格网关（reka-flash 等）。
+                m.addProperty("role", "user");
+                m.addProperty("content", "[系统提示] 以下是本次会话较早对话的压缩摘要（系统自动生成），"
+                        + "供你保持上下文连续性：\n" + content);
+            } else {
+                m.addProperty("role", role);
+                m.addProperty("content", content);
+            }
             if (includeReasoningContent && "assistant".equalsIgnoreCase(role)) {
                 String thought = msg.getThought();
                 if (thought != null && !thought.trim().isEmpty()) {
