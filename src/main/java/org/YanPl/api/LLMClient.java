@@ -1784,7 +1784,7 @@ public class LLMClient {
             return chatStreamingWithFancyConsole(player, session, systemPrompts, streamingHandler, noThinking);
         }
         if (plugin.getConfigManager().isDeepSeekAi()) {
-            return chatStreamingWithDeepSeek(player, session, systemPrompts, streamingHandler);
+            return chatStreamingWithDeepSeek(player, session, systemPrompts, streamingHandler, noThinking);
         }
         if ("openai".equalsIgnoreCase(plugin.getConfigManager().getProvider())) {
             return chatStreamingWithOpenAI(player, session, systemPrompts, streamingHandler);
@@ -1894,18 +1894,30 @@ public class LLMClient {
     }
 
     /** DeepSeek 流式对话（OpenAI 兼容流式，换官方端点与 deepseek 段配置） */
-    private String chatStreamingWithDeepSeek(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler) throws IOException {
+    private String chatStreamingWithDeepSeek(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler, boolean noThinking) throws IOException {
         String apiKey = plugin.getConfigManager().getDeepSeekApiKey();
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("§zFancyHelper§b§r §7> §f请先在配置文件中设置 deepseek.api_key。");
         }
         return chatStreamingWithOpenAICompat(player, session, systemPrompts, streamingHandler,
                 "https://api.deepseek.com/chat/completions",
-                apiKey, plugin.getConfigManager().getDeepSeekModel());
+                apiKey, plugin.getConfigManager().getDeepSeekModel(), noThinking);
     }
 
     private String chatStreamingWithOpenAICompat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler,
                                                  String apiUrl, String apiKey, String model) throws IOException {
+        return chatStreamingWithOpenAICompat(player, session, systemPrompts, streamingHandler,
+                apiUrl, apiKey, model, false);
+    }
+
+    /**
+     * @param disableThinking 思考循环降级重试的第 3 档：DeepSeek 官方通过
+     *                        {@code "thinking": {"type": "disabled"}} 关闭思考模式
+     *                        （https://api-docs.deepseek.com/zh-cn/guides/thinking_mode）。
+     *                        此前该标志在 provider 分发处被丢弃，降级轮与上一轮完全相同。
+     */
+    private String chatStreamingWithOpenAICompat(org.bukkit.entity.Player player, DialogueSession session, List<String> systemPrompts, StreamingHandler streamingHandler,
+                                                 String apiUrl, String apiKey, String model, boolean disableThinking) throws IOException {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IOException("错误: 请先在配置文件中设置 openai.api_key。");
         }
@@ -1932,7 +1944,11 @@ public class LLMClient {
         attachTemperature(bodyJson);
         attachNativeTools(bodyJson, player, session, model, false);
 
-        if (model.contains("reasoner") || model.contains("o1") || model.contains("deepseek") || model.contains("qwen")) {
+        if (disableThinking) {
+            // 第 3 档降级：关闭思考，让循环的「内心戏」不再续命
+            JsonObject thinking = new JsonObject();
+            thinking.addProperty("type", "disabled");
+            bodyJson.add("thinking", thinking);
         }
 
         String bodyString = gson.toJson(bodyJson);
