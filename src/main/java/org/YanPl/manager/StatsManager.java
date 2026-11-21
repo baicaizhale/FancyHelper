@@ -12,6 +12,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -66,7 +71,7 @@ public class StatsManager {
 
     private void load() {
         if (!dataFile.exists()) return;
-        try (FileReader reader = new FileReader(dataFile)) {
+        try (FileReader reader = new FileReader(dataFile, StandardCharsets.UTF_8)) {
             JsonObject json = gson.fromJson(reader, JsonObject.class);
             if (json != null) {
                 if (json.has("totalInputTokens")) totalInputTokens.set(json.get("totalInputTokens").getAsLong());
@@ -83,13 +88,23 @@ public class StatsManager {
                 if (json.has("searchCount")) searchCount.set(json.get("searchCount").getAsLong());
                 if (json.has("fetchCount")) fetchCount.set(json.get("fetchCount").getAsLong());
             }
-        } catch (IOException e) {
-            plugin.getLogger().warning("[StatsManager] 加载统计数据失败: " + e.getMessage());
+        } catch (Exception e) {
+            // 坏 JSON / 字段类型不符 / 读取失败：隔离坏文件后按空统计继续。
+            // 此前只 catch IOException，JsonSyntaxException 会穿透构造函数 →
+            // onEnable 兜底 catch → 整个插件拒绝启用；坏文件又不会被替换，
+            // 形成每次重启都启动失败的崩溃循环。
+            File broken = new File(dataFile.getParentFile(),
+                    dataFile.getName() + ".broken-" + System.currentTimeMillis());
+            boolean backedUp = dataFile.renameTo(broken);
+            plugin.getLogger().warning("[StatsManager] 统计数据损坏，已"
+                    + (backedUp ? "备份为 " + broken.getName() : "无法备份（继续使用空统计）")
+                    + "，本次按空统计启动: " + e.getMessage());
         }
     }
 
     public void save() {
         synchronized (saveLock) {
+            Path tmp = null;
             try {
                 if (!dataFile.getParentFile().exists()) {
                     dataFile.getParentFile().mkdirs();
@@ -108,11 +123,22 @@ public class StatsManager {
                 json.addProperty("responseCount", responseCount.get());
                 json.addProperty("searchCount", searchCount.get());
                 json.addProperty("fetchCount", fetchCount.get());
-                try (FileWriter writer = new FileWriter(dataFile)) {
+                tmp = new File(dataFile.getParentFile(), dataFile.getName() + ".tmp").toPath();
+                try (FileWriter writer = new FileWriter(tmp.toFile(), StandardCharsets.UTF_8)) {
                     gson.toJson(json, writer);
+                }
+                // 原子替换：崩溃/断电发生在写盘中途时，不再留下截断 JSON
+                try {
+                    Files.move(tmp, dataFile.toPath(),
+                            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(tmp, dataFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException e) {
                 plugin.getLogger().warning("[StatsManager] 保存统计数据失败: " + e.getMessage());
+                if (tmp != null) {
+                    try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+                }
             }
         }
     }
