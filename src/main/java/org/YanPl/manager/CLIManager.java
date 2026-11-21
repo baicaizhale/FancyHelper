@@ -57,6 +57,10 @@ public class CLIManager {
     private final Set<UUID> planModePlayers = new HashSet<>();
     private final Set<UUID> pendingPlanContextClear = new HashSet<>();
     private final Set<UUID> pendingPlanStartMode = new HashSet<>();
+    /** 正在压缩上下文的玩家：压缩期间禁止继续聊天。
+     *  压缩任务在异步线程按旧快照生成摘要，期间追加的新消息既不在摘要里、
+     *  也不在保留区里，压缩结束后会被整段丢弃。 */
+    private final Set<UUID> compactingPlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, PendingSmartAction> pendingSmartActions = new ConcurrentHashMap<>();
     private final Map<UUID, DialogueSession> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> isGenerating = new ConcurrentHashMap<>();
@@ -1815,6 +1819,9 @@ public class CLIManager {
         pendingYoloAgreementPlayers.remove(uuid);
         pendingPlanContextClear.remove(uuid);
         pendingPlanStartMode.remove(uuid);
+        // 退出时解除压缩拦截：在途压缩任务完成时会因会话身份不符直接 return，
+        // 若不在这里清掉，玩家重新进入后会被"压缩中"提示挡住（直到任务结束）
+        compactingPlayers.remove(uuid);
         sessions.remove(uuid);
         isGenerating.remove(uuid);
         generationStates.remove(uuid);
@@ -2396,6 +2403,13 @@ public class CLIManager {
         if (plugin.getInitWizardManager() != null
                 && plugin.getInitWizardManager().isActive(player)) {
             return plugin.getInitWizardManager().handleChat(player, message);
+        }
+
+        // 压缩期间禁止继续聊天：压缩在异步线程按旧快照生成摘要，期间新追加的
+        // 消息既不在摘要里也不在保留区里，压缩完成后会被整段丢弃。
+        if (compactingPlayers.contains(uuid)) {
+            player.sendMessage(I18n.t("clim.compact.busy"));
+            return true;
         }
 
         // 如果玩家在等待协议同意
@@ -4005,9 +4019,17 @@ public class CLIManager {
             plugin.getLogger().info("[CLI] 触发自动压缩 - Token: " + estimatedTokens + "/" + maxTokens + ", 压缩 " + oldCount + " 条旧消息");
         }
 
+        // 压缩期间禁止玩家继续聊天：本任务按当前快照生成摘要，期间追加的新消息
+        // 既不会被摘要覆盖、也不在保留区里，替换历史时会被整段丢弃。
+        UUID compactUuid = player.getUniqueId();
+        compactingPlayers.add(compactUuid);
+
         // 异步执行压缩，不阻塞主线程
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
+        try {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                java.util.concurrent.atomic.AtomicBoolean handoffToMainThread =
+                        new java.util.concurrent.atomic.AtomicBoolean(false);
+                try {
                 // 检查是否有之前的压缩摘要
                 boolean hasOldSummary = false;
                 String oldSummaryText = null;
@@ -4088,84 +4110,100 @@ public class CLIManager {
 
                 // 在主线程中替换历史
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!plugin.isEnabled() || !player.isOnline()) return;
-                    DialogueSession currentSession = sessions.get(player.getUniqueId());
-                    if (currentSession == null || currentSession != session) return;
-
-                    // 尝试解析 JSON，失败则用原始文本
-                    String compactText;
-                    boolean jsonParseSuccess = false;
                     try {
-                        Gson gson = new Gson();
-                        JsonObject json = gson.fromJson(summary.trim(), JsonObject.class);
-                        StringBuilder pretty = new StringBuilder();
-                        if (json.has("summary")) pretty.append(json.get("summary").getAsString()).append("\n");
-                        if (json.has("needs")) {
-                            JsonArray arr = json.getAsJsonArray("needs");
-                            if (arr.size() > 0) {
-                                pretty.append("Needs:\n");
-                                for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                        if (!plugin.isEnabled() || !player.isOnline()) return;
+                        DialogueSession currentSession = sessions.get(player.getUniqueId());
+                        if (currentSession == null || currentSession != session) return;
+
+                        // 尝试解析 JSON，失败则用原始文本
+                        String compactText;
+                        boolean jsonParseSuccess = false;
+                        try {
+                            Gson gson = new Gson();
+                            JsonObject json = gson.fromJson(summary.trim(), JsonObject.class);
+                            StringBuilder pretty = new StringBuilder();
+                            if (json.has("summary")) pretty.append(json.get("summary").getAsString()).append("\n");
+                            if (json.has("needs")) {
+                                JsonArray arr = json.getAsJsonArray("needs");
+                                if (arr.size() > 0) {
+                                    pretty.append("Needs:\n");
+                                    for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                                }
                             }
-                        }
-                        if (json.has("done")) {
-                            JsonArray arr = json.getAsJsonArray("done");
-                            if (arr.size() > 0) {
-                                pretty.append("Done:\n");
-                                for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                            if (json.has("done")) {
+                                JsonArray arr = json.getAsJsonArray("done");
+                                if (arr.size() > 0) {
+                                    pretty.append("Done:\n");
+                                    for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                                }
                             }
-                        }
-                        if (json.has("pending")) {
-                            JsonArray arr = json.getAsJsonArray("pending");
-                            if (arr.size() > 0) {
-                                pretty.append("Pending:\n");
-                                for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                            if (json.has("pending")) {
+                                JsonArray arr = json.getAsJsonArray("pending");
+                                if (arr.size() > 0) {
+                                    pretty.append("Pending:\n");
+                                    for (int i = 0; i < arr.size(); i++) pretty.append("- ").append(arr.get(i).getAsString()).append("\n");
+                                }
                             }
+                            compactText = pretty.toString().trim();
+                            jsonParseSuccess = true;
+                        } catch (Exception e) {
+                            compactText = summary.trim();
                         }
-                        compactText = pretty.toString().trim();
-                        jsonParseSuccess = true;
-                    } catch (Exception e) {
-                        compactText = summary.trim();
-                    }
 
-                    if (plugin.getConfigManager().isDebug()) {
-                        plugin.getLogger().info("[CLI] JSON 解析" + (jsonParseSuccess ? "成功" : "失败，使用原始文本") + ", 最终摘要长度: " + compactText.length());
-                    }
+                        if (plugin.getConfigManager().isDebug()) {
+                            plugin.getLogger().info("[CLI] JSON 解析" + (jsonParseSuccess ? "成功" : "失败，使用原始文本") + ", 最终摘要长度: " + compactText.length());
+                        }
 
-                    List<DialogueSession.Message> newHistory = new ArrayList<>();
-                    newHistory.add(new DialogueSession.Message(DialogueSession.ROLE_COMPACT_SUMMARY, compactText));
-                    int startIdx = Math.max(0, session.getHistory().size() - keepRecent);
-                    for (int i = startIdx; i < session.getHistory().size(); i++) {
-                        newHistory.add(session.getHistory().get(i));
-                    }
+                        List<DialogueSession.Message> newHistory = new ArrayList<>();
+                        newHistory.add(new DialogueSession.Message(DialogueSession.ROLE_COMPACT_SUMMARY, compactText));
+                        int startIdx = Math.max(0, session.getHistory().size() - keepRecent);
+                        for (int i = startIdx; i < session.getHistory().size(); i++) {
+                            newHistory.add(session.getHistory().get(i));
+                        }
 
-                    session.replaceHistory(newHistory);
+                        session.replaceHistory(newHistory);
 
-                    // 异步保存到磁存
-                    UUID uuid = player.getUniqueId();
-                    Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                        saveSessionToHistory(uuid, session);
-                    });
+                        // 异步保存到磁存
+                        UUID uuid = player.getUniqueId();
+                        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                            saveSessionToHistory(uuid, session);
+                        });
 
-                    player.sendMessage(ColorUtil.translateCustomColors(
-                            "§zFancyHelper§b§r §7> §f上下文已压缩，保留了最近 " + keepRecent + " 条对话"));
+                        player.sendMessage(ColorUtil.translateCustomColors(
+                                "§zFancyHelper§b§r §7> §f上下文已压缩，保留了最近 " + keepRecent + " 条对话"));
 
-                    if (plugin.getConfigManager().isDebug()) {
-                        String historyPreview = session.getHistory().stream()
-                            .limit(1)
-                            .map(m -> m.getContent())
-                            .filter(c -> c != null)
-                            .findFirst().orElse("");
-                        if (historyPreview.length() > 300) historyPreview = historyPreview.substring(0, 300) + "...";
-                        plugin.getLogger().info("[CLI] 自动压缩完成 - 新历史大小: " + session.getHistory().size() + " 条, 首条摘要:\n" + historyPreview);
+                        if (plugin.getConfigManager().isDebug()) {
+                            String historyPreview = session.getHistory().stream()
+                                .limit(1)
+                                .map(m -> m.getContent())
+                                .filter(c -> c != null)
+                                .findFirst().orElse("");
+                            if (historyPreview.length() > 300) historyPreview = historyPreview.substring(0, 300) + "...";
+                            plugin.getLogger().info("[CLI] 自动压缩完成 - 新历史大小: " + session.getHistory().size() + " 条, 首条摘要:\n" + historyPreview);
+                        }
+                    } finally {
+                        // 无论成功、提前 return 还是异常，都解除聊天拦截
+                        compactingPlayers.remove(compactUuid);
                     }
                 });
+                handoffToMainThread.set(true);
             } catch (Exception e) {
                 plugin.getLogger().warning("[CLI] 自动压缩失败: " + e.getMessage());
                 if (plugin.getConfigManager().isDebug()) {
                     e.printStackTrace();
                 }
+            } finally {
+                // 异常 / 空摘要提前返回 / 主线程任务调度失败时自行解除拦截；
+                // 成功交接后由主线程任务的 finally 负责解除
+                if (!handoffToMainThread.get()) {
+                    compactingPlayers.remove(compactUuid);
+                }
             }
-        });
+            });
+        } catch (Exception scheduleFailure) {
+            compactingPlayers.remove(compactUuid);
+            plugin.getLogger().warning("[CLI] 无法调度上下文压缩任务: " + scheduleFailure.getMessage());
+        }
     }
 
     /**
