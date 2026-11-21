@@ -11,6 +11,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -21,8 +22,29 @@ import java.util.UUID;
 public class GuiManager implements Listener {
 
     private final FancyHelper plugin;
-    private final String SETTINGS_TITLE = I18n.t("gui.settings.title");
-    private final String MODE_SELECTION_TITLE = I18n.t("gui.mode.title");
+
+    /**
+     * 自定义 InventoryHolder：按「这个菜单是我创建的」识别 GUI，
+     * 不再用标题字符串比对。标题随语言实时变化，且其他插件可能开同名菜单；
+     * 旧实现把标题在构造期固化成 final，切语言后点击处理永远匹配不上
+     * （点击不被取消，菜单物品还能被玩家拿走）。
+     */
+    private static final class FancyGuiHolder implements InventoryHolder {
+        private final boolean modeSelection;
+
+        private FancyGuiHolder(boolean modeSelection) {
+            this.modeSelection = modeSelection;
+        }
+
+        private boolean isModeSelection() {
+            return modeSelection;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            throw new UnsupportedOperationException("FancyGuiHolder 仅用于识别 GUI");
+        }
+    }
 
     public GuiManager(FancyHelper plugin) {
         this.plugin = plugin;
@@ -32,7 +54,7 @@ public class GuiManager implements Listener {
      * 打开模式选择菜单
      */
     public void openModeSelectionMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 9, MODE_SELECTION_TITLE);
+        Inventory inv = Bukkit.createInventory(new FancyGuiHolder(true), 9, I18n.t("gui.mode.title"));
 
         // 填充背景板
         ItemStack bg = createItem(Material.BLACK_STAINED_GLASS_PANE, " ");
@@ -87,7 +109,7 @@ public class GuiManager implements Listener {
      * 打开设置菜单
      */
     public void openSettingsMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 27, SETTINGS_TITLE);
+        Inventory inv = Bukkit.createInventory(new FancyGuiHolder(false), 27, I18n.t("gui.settings.title"));
 
         // 填充背景板
         ItemStack bg = createItem(Material.BLACK_STAINED_GLASS_PANE, " ");
@@ -235,20 +257,27 @@ public class GuiManager implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        String title = event.getView().getTitle();
-        if (!title.equals(SETTINGS_TITLE) && !title.equals(MODE_SELECTION_TITLE)) {
+        // 按 InventoryHolder 识别自己的菜单（标题实时随语言变化，不能缓存；
+        // 同名第三方 GUI 也不应误触发）
+        InventoryHolder holder = event.getView().getTopInventory().getHolder();
+        if (!(holder instanceof FancyGuiHolder guiHolder)) {
             return;
         }
 
         event.setCancelled(true);
-        
+
         if (!(event.getWhoClicked() instanceof Player)) return;
+        // 只处理上层菜单的点击：玩家自己背包的第 10/12/14/16/18/26 格
+        // 会命中同样的 slot 序号，旧实现会误触发功能并 setItem 覆盖玩家物品
+        if (event.getClickedInventory() != event.getView().getTopInventory()) return;
+
         Player player = (Player) event.getWhoClicked();
         ItemStack clickedItem = event.getCurrentItem();
 
         if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
         int slot = event.getSlot();
+        Inventory topInventory = event.getView().getTopInventory();
 
         // 模式切换
         if (slot == 10) {
@@ -266,7 +295,7 @@ public class GuiManager implements Listener {
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
             }
             // 刷新图标
-            updateModeItem(event.getClickedInventory(), player);
+            updateModeItem(topInventory, player);
             player.playSound(player.getLocation(), "ui.button.click", 1, 1);
         }
         // 记忆管理
@@ -285,13 +314,13 @@ public class GuiManager implements Listener {
         else if (slot == 16) {
             player.performCommand("cli display");
             // 刷新图标
-            updateDisplayPosItem(event.getClickedInventory(), player);
+            updateDisplayPosItem(topInventory, player);
             player.playSound(player.getLocation(), "ui.button.click", 1, 1);
         }
         // 声音开关
         else if (slot == 18) {
             player.performCommand("cli sound");
-            updateSoundItem(event.getClickedInventory(), player);
+            updateSoundItem(topInventory, player);
             player.playSound(player.getLocation(), "ui.button.click", 1, 1);
         }
         // 关闭
@@ -300,8 +329,8 @@ public class GuiManager implements Listener {
             player.playSound(player.getLocation(), "ui.button.click", 1, 1);
         }
         
-        // 模式选择菜单处理
-        if (event.getView().getTitle().equals(MODE_SELECTION_TITLE)) {
+        // 模式选择菜单处理（按 holder 识别，不能用标题）
+        if (guiHolder.isModeSelection()) {
             if (slot == 1) {
                 // Normal 模式
                 plugin.getCliManager().switchMode(player, DialogueSession.Mode.NORMAL);
