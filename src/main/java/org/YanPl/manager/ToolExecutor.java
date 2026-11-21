@@ -1233,8 +1233,15 @@ public class ToolExecutor {
         int originalLineCount = originalLines.length;
 
         // 去掉每行的行号前缀（格式：数字: ）
+        // 记录是否真的剥到了行号：replacement 是否也要剥取决于此，
+        // 避免把正常正文里 "12: value" 这样的内容误当成行号。
+        boolean originalHadLineNumberPrefix = false;
         for (int j = 0; j < originalLines.length; j++) {
-            originalLines[j] = removeLineNumberPrefix(originalLines[j]);
+            String stripped = removeLineNumberPrefix(originalLines[j]);
+            if (!stripped.equals(originalLines[j])) {
+                originalHadLineNumberPrefix = true;
+            }
+            originalLines[j] = stripped;
         }
 
         // 在给定行号范围内查找所有匹配位置
@@ -1333,6 +1340,17 @@ public class ToolExecutor {
         String[] replacementLines = replacement.trim().isEmpty()
                 ? new String[0]
                 : replacement.split("\n");
+        // original 是从 #read 输出复制的（带行号）时，replacement 通常同源也带行号。
+        // 此前只剥 original 不剥 replacement，行号会被当成内容写回文件
+        // （如 "12: enabled: false"），.json/.txt 等扩展名静默写坏。
+        if (originalHadLineNumberPrefix) {
+            for (int j = 0; j < replacementLines.length; j++) {
+                String stripped = removeLineNumberPrefix(replacementLines[j]);
+                if (!stripped.equals(replacementLines[j])) {
+                    replacementLines[j] = stripped;
+                }
+            }
+        }
         int deletedLineCount = Math.max(0, originalLineCount - replacementLines.length);
         List<String> appliedLines = new java.util.ArrayList<>();
         for (int j = 0; j < originalLineCount; j++) {
