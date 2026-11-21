@@ -324,6 +324,8 @@ public class I18n {
         Map.entry("cli.mcp.disable.hover", "点击禁用此工具"),
         Map.entry("cli.mcp.enable.hover", "点击启用此工具"),
         Map.entry("cli.mcp.enabled.summary", "§7已启用: {0}/{1}  服务器: {2} ({3})"),
+        Map.entry("cli.mcp.enabled", "§a已启用"),
+        Map.entry("cli.mcp.disabled", "§c已禁用"),
         Map.entry("cli.mcp.manager.uninit", "§zFancyHelper§b§r §7> §cMCP Client Manager 未初始化。"),
         Map.entry("cli.mcp.toggled", "§zFancyHelper§b§r §7> §fMCP 工具 §e{0}.{1}§f {2}"),
         // ---- 公告 / 库管理 ----
@@ -1068,6 +1070,8 @@ public class I18n {
         Map.entry("cli.mcp.disable.hover", "Click to disable this tool"),
         Map.entry("cli.mcp.enable.hover", "Click to enable this tool"),
         Map.entry("cli.mcp.enabled.summary", "§7Enabled: {0}/{1}  Server: {2} ({3})"),
+        Map.entry("cli.mcp.enabled", "§aEnabled"),
+        Map.entry("cli.mcp.disabled", "§cDisabled"),
         Map.entry("cli.mcp.manager.uninit", "§zFancyHelper§b§r §7> §cMCP Client Manager is not initialized."),
         Map.entry("cli.mcp.toggled", "§zFancyHelper§b§r §7> §fMCP tool §e{0}.{1}§f {2}"),
         // ---- 公告 / 库管理 ----
@@ -1812,6 +1816,8 @@ public class I18n {
         Map.entry("cli.mcp.disable.hover", "点此废此具"),
         Map.entry("cli.mcp.enable.hover", "点此启此具"),
         Map.entry("cli.mcp.enabled.summary", "§7已启: {0}/{1}  伺服: {2} ({3})"),
+        Map.entry("cli.mcp.enabled", "§a已启"),
+        Map.entry("cli.mcp.disabled", "§c已废"),
         Map.entry("cli.mcp.manager.uninit", "§zFancyHelper§b§r §7> §cMCP Client Manager 未启。"),
         Map.entry("cli.mcp.toggled", "§zFancyHelper§b§r §7> §fMCP 之具 §e{0}.{1}§f {2}"),
         // ---- 公告 / 库管理 ----
