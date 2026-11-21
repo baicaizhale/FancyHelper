@@ -429,11 +429,19 @@ public class CLICommand implements CommandExecutor, TabCompleter {
                 return true;
             case "resume_confirm":
                 if (args.length > 1) {
+                    if (!plugin.getCliManager().isValidSessionId(args[1])) {
+                        player.sendMessage(I18n.t("cli.resume.invalid.id"));
+                        return true;
+                    }
                     plugin.getCliManager().resumeSession(player, args[1]);
                 }
                 return true;
             case "resume_delete":
                 if (args.length > 1) {
+                    if (!plugin.getCliManager().isValidSessionId(args[1])) {
+                        player.sendMessage(I18n.t("cli.resume.invalid.id"));
+                        return true;
+                    }
                     int returnPage = 0;
                     if (args.length > 2) {
                         try { returnPage = Integer.parseInt(args[2]) - 1; } catch (NumberFormatException e) {}
